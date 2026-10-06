@@ -96,8 +96,7 @@ const M4 = {
     ]
 };
 
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const lerp = (a, b, t) => a + (b - a) * t;
+const { clamp, lerp } = Common;
 const smooth01 = (x) => x * x * (3 - 2 * x);
 const easeOutBack = (x) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
 const easeOutCubic = (x) => 1 - Math.pow(1 - x, 3);

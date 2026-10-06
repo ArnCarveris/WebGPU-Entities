@@ -7,15 +7,10 @@
 // camera, gallery, IPTV) and its render targets.
 
 Features.define('gui', (engine) => {
-const { GpuChoice } = engine;
 const {
-    V3, M4, clamp, lerp, smooth01, easeOutBack, easeOutCubic, wrapIndex,
-    deg, rad, col, mixRGB, fitRect, timeText, clipTime, pad3,
-    cardinal, bearingOf, hitIn, MATERIAL_PATTERNS, MATERIAL_SIGNALS, MATERIAL_FLOATS, MaterialTable, MeshBuilder,
-    GuiSurface, SCENE_SHADER, VIDEO_SHADER, BLIT_SHADER, UNIFORM_FLOATS, MAX_LIGHTS, INSTANCE_FLOATS, GUI_STRIDE,
-    DEPTH_FORMAT, CLEAR_COLOR, WORLD_VERTEX_LAYOUT, GUI_VERTEX_LAYOUT, ALPHA_BLEND, Renderer, RenderView, RenderTarget,
-    ScenePass, FONT_PX, GLYPH, GLYPH_CHARS, GuiAtlas, GuiModel, DeviceContext, EntityGUI,
-    IOS, PHONE_NAV_H, PHONE_TRANSITION_MS, TEXT_CELL, PhoneGUI, PhoneApp
+    V3, M4, clamp, lerp, smooth01, wrapIndex, deg, rad, col, fitRect, timeText, clipTime, pad3, cardinal, bearingOf,
+    MaterialTable, MeshBuilder, BLIT_SHADER, MAX_LIGHTS, CLEAR_COLOR, ALPHA_BLEND, Renderer, RenderTarget, GuiAtlas,
+    DeviceContext, EntityGUI, IOS, PHONE_NAV_H, PhoneApp
 } = GuiKit;
 
 // ------------------------------------------------------------------------------------------------ js/core/audio.js
@@ -1834,7 +1829,7 @@ class IptvPlayer {
                 this.renderer.device.queue.copyExternalImageToTexture({ source: v }, { texture: this.tex }, [this.texW, this.texH]);
                 this.hasFrame = true;
                 this.newFrame = false;
-            } catch (e) {
+            } catch {
                 this.fail(this.channel, 'Blocked (no CORS)');
             }
         }

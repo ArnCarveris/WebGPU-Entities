@@ -168,7 +168,7 @@ class Host {
     async createWorlds(scenario) {
         const roots = ScenarioFormat.roots(scenario);
         if (!roots.length) throw new Error(`Scenario "${scenario.name}" has no feature world (an entity of type ${Object.keys(ScenarioFormat.SCHEMAS).join(' / ')})`);
-        const engine = { Expr, GpuChoice, CamMath, LayerFrame, host: this };
+        const engine = { Expr, GpuChoice, Common, CamMath, LayerFrame, host: this };
         this.composed = roots.length > 1;
         for (const root of roots) {
             const module = await Features.load(root.feature, engine);

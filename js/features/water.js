@@ -5,7 +5,11 @@
 // builds its scenario from entities ("water.*", see js/engine/scenario-format.js).
 
 Features.define('water', (engine) => {
-const { GpuChoice } = engine;
+const { Common } = engine;
+const {
+    DEG, clamp, lerp, smoothstep, v3, m4, yawPitch, mulberry32, fbm, polylineLengths, polylineNearest, polylineBox, makeBuffer, gridIndices,
+    PointerInput, TerrainFlyCamera, Toast, LabelLayer,
+} = Common;
 
 // =====================================================================================================
 // Entity Water: a GPU shallow-water river simulation over a heightmap, after Filip Strugar's RiverSim
@@ -24,7 +28,6 @@ const { GpuChoice } = engine;
 // =====================================================================================================
 
 // ------------------------------------------------------------------------------------------------ config
-const DEG = Math.PI / 180;
 const NEAR = 0.5;
 const MAX_SOURCES = 128;
 const MAX_LAYERS = 4;
@@ -39,106 +42,6 @@ const SIM_DEFAULTS = {
 };
 const WAVE_DEFAULTS = { speed: 5, damping: 0.985, noise: 1, foam: 1, layers: [] };
 const WATER_DEFAULTS = { deep: [0.03, 0.085, 0.08], absorb: [0.38, 0.13, 0.11], refraction: 0.035, foam: 1, detail: 1, flowScale: 3 };
-
-// -------------------------------------------------------------------------------------------------- math
-const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
-const lerp = (a, b, t) => a + (b - a) * t;
-const smoothstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
-
-const v3 = {
-    add: (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]],
-    sub: (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]],
-    mul: (a, s) => [a[0] * s, a[1] * s, a[2] * s],
-    dot: (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2],
-    cross: (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]],
-    len: a => Math.hypot(a[0], a[1], a[2]),
-    norm: a => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; },
-};
-
-// column-major 4x4
-const m4 = {
-    mul(a, b) {
-        const o = new Float32Array(16);
-        for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) {
-            let s = 0;
-            for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k];
-            o[c * 4 + r] = s;
-        }
-        return o;
-    },
-    // rows: right, up, back
-    view(eye, r, u, f) {
-        const b = [-f[0], -f[1], -f[2]];
-        return new Float32Array([r[0], u[0], b[0], 0, r[1], u[1], b[1], 0, r[2], u[2], b[2], 0,
-            -v3.dot(r, eye), -v3.dot(u, eye), -v3.dot(b, eye), 1]);
-    },
-    // reversed-Z, infinite far plane: depth = near / view distance
-    reversedInfinite(fovy, aspect, near) {
-        const f = 1 / Math.tan(fovy / 2);
-        return new Float32Array([f / aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, 0, -1, 0, 0, near, 0]);
-    },
-    project(m, p) {
-        return [0, 1, 2, 3].map(r => m[r] * p[0] + m[4 + r] * p[1] + m[8 + r] * p[2] + m[12 + r]);
-    },
-};
-
-function mulberry32(seed) {
-    let a = seed >>> 0;
-    return () => {
-        a = (a + 0x6D2B79F5) >>> 0;
-        let t = a;
-        t = Math.imul(t ^ (t >>> 15), t | 1);
-        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-}
-
-// -------------------------------------------------------------------------------------------------- noise
-function hash2(ix, iy, seed) {
-    let h = (Math.imul(ix, 374761393) + Math.imul(iy, 668265263) + Math.imul(seed, 1442695041)) | 0;
-    h = Math.imul(h ^ (h >>> 13), 1274126177);
-    h ^= h >>> 16;
-    return (h >>> 0) / 4294967296;
-}
-
-function vnoise(x, y, seed) {
-    const ix = Math.floor(x), iy = Math.floor(y), fx = x - ix, fy = y - iy;
-    const ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy);
-    const a = hash2(ix, iy, seed), b = hash2(ix + 1, iy, seed), c = hash2(ix, iy + 1, seed), d = hash2(ix + 1, iy + 1, seed);
-    return lerp(lerp(a, b, ux), lerp(c, d, ux), uy) * 2 - 1;
-}
-
-// fractal noise in about [-1, 1]; ridged gives sharp crests in [0, 1]
-function fbm(x, y, { octaves = 5, seed = 1, ridged = false, gain = 0.5 } = {}) {
-    let sum = 0, amp = 1, norm = 0, f = 1;
-    for (let o = 0; o < octaves; o++) {
-        const n = vnoise(x * f + o * 17.3, y * f - o * 9.1, seed + o * 31);
-        sum += (ridged ? 1 - Math.abs(n) : n) * amp;
-        norm += amp;
-        amp *= gain;
-        f *= 2.03;
-    }
-    return sum / norm;
-}
-
-// nearest point on a polyline: { dist, s (arc length at that point), total }
-function polylineNearest(pts, lens, x, z) {
-    let best = Infinity, bs = 0;
-    for (let k = 0; k < pts.length - 1; k++) {
-        const [ax, az] = pts[k], [bx, bz] = pts[k + 1], dx = bx - ax, dz = bz - az;
-        const l2 = dx * dx + dz * dz || 1;
-        const t = clamp(((x - ax) * dx + (z - az) * dz) / l2, 0, 1);
-        const px = ax + dx * t - x, pz = az + dz * t - z, d = px * px + pz * pz;
-        if (d < best) { best = d; bs = lens[k] + t * Math.sqrt(l2); }
-    }
-    return { dist: Math.sqrt(best), s: bs };
-}
-
-function polylineLengths(pts) {
-    const lens = [0];
-    for (let k = 1; k < pts.length; k++) lens.push(lens[k - 1] + Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]));
-    return lens;
-}
 
 // ----------------------------------------------------------------------------------------- heightfield
 // CPU copy of the terrain: authored by entities, edited by tools, uploaded to the GPU by dirty rectangle.
@@ -979,23 +882,6 @@ function makeTex(device, w, h, format, usage, layers = 1) {
     return device.createTexture({ size: [w, h, layers], format, usage });
 }
 
-function makeBuffer(device, size, usage, data) {
-    const b = device.createBuffer({ size: Math.max(16, Math.ceil(size / 4) * 4), usage, mappedAtCreation: !!data });
-    if (data) { new data.constructor(b.getMappedRange()).set(data); b.unmap(); }
-    return b;
-}
-
-function gridIndices(w) {
-    const idx = new Uint32Array((w - 1) * (w - 1) * 6);
-    let o = 0;
-    for (let j = 0; j < w - 1; j++) for (let i = 0; i < w - 1; i++) {
-        const a = j * w + i, b = a + 1, c = a + w, d = c + 1;
-        idx[o++] = a; idx[o++] = c; idx[o++] = b;
-        idx[o++] = b; idx[o++] = c; idx[o++] = d;
-    }
-    return idx;
-}
-
 // =====================================================================================================
 // Entities
 // =====================================================================================================
@@ -1065,8 +951,7 @@ class Valley extends Entity {
         const d = this.def, pts = d.path, lens = polylineLengths(pts), total = lens[lens.length - 1] || 1;
         const halfW = (d.width || 20) / 2, bank = d.bank ?? d.width * 3, ch = d.channel ?? 2, pad = halfW + bank;
         const [a, b] = d.levels, wig = d.wiggle || 0, ws = d.wiggleScale || 140, seed = d.seed || 11;
-        const xs = pts.map(p => p[0]), zs = pts.map(p => p[1]);
-        f.each(Math.min(...xs) - pad - wig, Math.min(...zs) - pad - wig, Math.max(...xs) + pad + wig, Math.max(...zs) + pad + wig, (idx, x, z) => {
+        f.each(...polylineBox(pts, pad + wig), (idx, x, z) => {
             const px = x + wig * fbm(x / ws, z / ws, { octaves: 3, seed }), pz = z + wig * fbm(x / ws, z / ws, { octaves: 3, seed: seed + 7 });
             const { dist, s } = polylineNearest(pts, lens, px, pz);
             if (dist >= pad) return;
@@ -1620,91 +1505,6 @@ class Renderer {
 // =====================================================================================================
 // Game
 // =====================================================================================================
-class Input {
-    constructor(io) {
-        const el = io.canvas;
-        this.el = el;
-        this.keys = new Set();
-        this.pressed = [];
-        this.dx = this.dy = this.wheel = 0;
-        this.mouse = [0, 0];
-        this.looking = false;
-        this.acting = false;
-        io.listen(el, 'contextmenu', e => e.preventDefault());
-        io.listen(el, 'pointerdown', e => {
-            el.setPointerCapture(e.pointerId);
-            if (e.button === 2 || (e.button === 0 && e.ctrlKey)) this.acting = true;
-            else if (e.button === 0) { this.looking = true; el.classList.add('drag'); }
-        });
-        io.listen(el, 'pointermove', e => {
-            this.mouse = [e.clientX, e.clientY];
-            if (this.looking) { this.dx += e.movementX; this.dy += e.movementY; }
-        });
-        const up = () => { this.looking = this.acting = false; el.classList.remove('drag'); };
-        io.listen(el, 'pointerup', up);
-        io.listen(el, 'pointercancel', up);
-        io.listen(el, 'wheel', e => { e.preventDefault(); this.wheel += Math.sign(e.deltaY); }, { passive: false });
-        io.listen(window, 'keydown', e => {
-            if (['Space', 'Tab'].includes(e.code)) e.preventDefault();
-            if (!e.repeat) this.pressed.push(e.code);
-            this.keys.add(e.code);
-        });
-        io.listen(window, 'keyup', e => this.keys.delete(e.code));
-        io.listen(window, 'blur', () => { this.keys.clear(); up(); });
-    }
-
-    consume() {
-        const r = { dx: this.dx, dy: this.dy, wheel: this.wheel, pressed: this.pressed };
-        this.dx = this.dy = this.wheel = 0;
-        this.pressed = [];
-        return r;
-    }
-}
-
-class FlyCamera {
-    constructor() {
-        this.pos = [0, 200, 0];
-        this.yaw = 0;
-        this.pitch = 0;
-        this.fov = 60 * DEG;
-        this.speed = 80;
-    }
-
-    basis() {
-        const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw), cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
-        const fwd = [-sy * cp, sp, -cy * cp], right = [cy, 0, -sy];
-        return { fwd, right, up: v3.cross(right, fwd) };
-    }
-
-    lookAt(target) {
-        const d = v3.norm(v3.sub(target, this.pos));
-        this.yaw = Math.atan2(-d[0], -d[2]);
-        this.pitch = Math.asin(clamp(d[1], -1, 1));
-    }
-
-    update(dt, io, input, field) {
-        this.yaw -= io.dx * 0.0025;
-        this.pitch = clamp(this.pitch - io.dy * 0.0025, -1.55, 1.55);
-        if (io.wheel) this.speed = clamp(this.speed * Math.pow(1.2, -io.wheel), 2, 2000);
-        const k = input.keys, { fwd, right } = this.basis();
-        let m = [0, 0, 0];
-        if (k.has('KeyW')) m = v3.add(m, fwd);
-        if (k.has('KeyS')) m = v3.sub(m, fwd);
-        if (k.has('KeyD')) m = v3.add(m, right);
-        if (k.has('KeyA')) m = v3.sub(m, right);
-        if (k.has('Space')) m[1] += 1;
-        if (k.has('KeyC')) m[1] -= 1;
-        const mul = (k.has('ShiftLeft') || k.has('ShiftRight') ? 5 : 1) * (k.has('AltLeft') ? 0.2 : 1);
-        this.pos = v3.add(this.pos, v3.mul(m, this.speed * mul * dt));
-        this.pos[1] = Math.max(this.pos[1], field.sample(this.pos[0], this.pos[2]) + 2);
-    }
-
-    ray(mx, my, w, h) {
-        const { fwd, right, up } = this.basis(), t = Math.tan(this.fov / 2), a = w / h;
-        const x = (mx / w * 2 - 1) * t * a, y = (1 - my / h * 2) * t;
-        return v3.norm(v3.add(fwd, v3.add(v3.mul(right, x), v3.mul(up, y))));
-    }
-}
 
 // --------------------------------------------------------------------------------------------- tools
 // Applied with the right mouse button (or Ctrl + left) where the cursor ray meets the terrain.
@@ -1751,19 +1551,13 @@ function fmtNum(x, unit = '') {
 class Hud {
     constructor(ui) {
         this.lines = [];
-        this.toastEl = ui.$('toast');
-        this.labels = ui.$('labels');
-        this.lctx = this.labels.getContext('2d');
+        this.toaster = new Toast(ui.$('toast'));
+        this.labels = new LabelLayer(ui.$('labels'));
         this.showLabels = true;
         this.last = 0;
     }
 
-    toast(msg, ms = 2200) {
-        this.toastEl.textContent = msg;
-        this.toastEl.style.display = 'block';
-        clearTimeout(this.tid);
-        this.tid = setTimeout(() => { this.toastEl.style.display = 'none'; }, ms);
-    }
+    toast(msg, ms) { this.toaster.show(msg, ms); }
 
     update(app, now) {
         if (now - this.last < 150) return;
@@ -1788,30 +1582,18 @@ class Hud {
     }
 
     drawLabels(app) {
-        const c = this.labels, dpr = Math.min(window.devicePixelRatio || 1, 2);
-        const W = Math.floor(c.clientWidth * dpr), H = Math.floor(c.clientHeight * dpr);
-        if (c.width !== W || c.height !== H) { c.width = W; c.height = H; }
-        const g = this.lctx;
-        g.clearRect(0, 0, W, H);
+        const L = this.labels;
+        L.begin();
         if (!this.showLabels) return;
-        g.font = `${11 * dpr}px 'Share Tech Mono', monospace`;
-        g.textBaseline = 'middle';
+        L.font();
         for (const e of app.world.entities) {
             if (!e.label) continue;
-            const p = e.anchor;
-            if (!p) continue;
-            const clip = m4.project(app.viewProj, p);
-            if (clip[3] <= 0) continue;
-            const x = (clip[0] / clip[3] * 0.5 + 0.5) * W, y = (0.5 - clip[1] / clip[3] * 0.5) * H;
-            if (x < -50 || x > W + 50 || y < -20 || y > H + 20) continue;
+            const p = e.anchor, at = p && L.place(app.viewProj, p);
+            if (!at) continue;
             const d = v3.len(v3.sub(p, app.camera.pos));
-            g.strokeStyle = g.fillStyle = e instanceof Spring || e instanceof Lake || e instanceof Sea ? 'rgba(110,220,255,0.9)' : 'rgba(255,201,74,0.9)';
-            g.lineWidth = dpr;
-            g.beginPath();
-            g.moveTo(x, y - 4 * dpr); g.lineTo(x + 4 * dpr, y); g.lineTo(x, y + 4 * dpr); g.lineTo(x - 4 * dpr, y); g.closePath();
-            g.stroke();
             const extra = e instanceof Spring ? ` ${(e.def.rate * (app.world.boost ? (e.def.boost ?? 8) : 1)).toFixed(0)} m³/s` : '';
-            g.fillText(`${e.label}${extra}  ${d < 1000 ? d.toFixed(0) + ' m' : (d / 1000).toFixed(2) + ' km'}`, x + 8 * dpr, y);
+            L.mark(at, e instanceof Spring || e instanceof Lake || e instanceof Sea ? 'rgba(110,220,255,0.9)' : 'rgba(255,201,74,0.9)',
+                `${e.label}${extra}  ${d < 1000 ? d.toFixed(0) + ' m' : (d / 1000).toFixed(2) + ' km'}`);
         }
     }
 }
@@ -1822,9 +1604,9 @@ class App {
         this.fx = fx;
         this.canvas = fx.canvas;
         this.renderer = new Renderer(fx);
-        this.input = new Input(fx.io);
+        this.input = new PointerInput(fx.io);
         this.hud = new Hud(fx.ui);
-        this.camera = new FlyCamera();
+        this.camera = new TerrainFlyCamera();
         this.time = 0;
         this.paused = false;
         this.fps = 60;
@@ -1987,7 +1769,6 @@ class App {
     }
 }
 
-
 // ------------------------------------------------------------------------------------- feature world
 // This demo as one world of the engine (js/engine/host.js calls these).
 const HUD_HTML = `<canvas class="labels" data-hud="labels"></canvas><div data-hud="toast" class="panel"></div>`;
@@ -2020,8 +1801,7 @@ class FeatureWorld {
     setView(v) {
         const c = this.app.camera;
         c.pos = [...v.pos];
-        c.yaw = Math.atan2(-v.fwd[0], -v.fwd[2]);
-        c.pitch = Math.asin(clamp(v.fwd[1], -1, 1));
+        Object.assign(c, yawPitch(v.fwd));
         if (v.fov) c.fov = v.fov;
     }
 

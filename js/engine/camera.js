@@ -12,12 +12,7 @@
 // between composition space and each world's own space with that transform.
 
 const CamMath = {
-    add: (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]],
-    sub: (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]],
-    mul: (a, s) => [a[0] * s, a[1] * s, a[2] * s],
-    dot: (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2],
-    cross: (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]],
-    norm: a => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; },
+    ...Common.v3,
     // quaternions [x, y, z, w]
     qAxis(axis, rad) { const s = Math.sin(rad / 2); return [axis[0] * s, axis[1] * s, axis[2] * s, Math.cos(rad / 2)]; },
     qMul(a, b) {
@@ -82,9 +77,7 @@ class FlyCamera {
     }
 
     lookAt(target) {
-        const d = CamMath.norm(CamMath.sub(target, this.pos));
-        this.yaw = Math.atan2(-d[0], -d[2]);
-        this.pitch = Math.asin(Math.max(-1, Math.min(1, d[1])));
+        Object.assign(this, Common.yawPitch(CamMath.norm(CamMath.sub(target, this.pos))));
     }
 
     basis() {
@@ -117,8 +110,7 @@ class FlyCamera {
 
     set view(v) {
         this.pos = [...v.pos];
-        this.yaw = Math.atan2(-v.fwd[0], -v.fwd[2]);
-        this.pitch = Math.asin(Math.max(-1, Math.min(1, v.fwd[1])));
+        Object.assign(this, Common.yawPitch(v.fwd));
         if (v.fov) this.fov = v.fov;
     }
 }

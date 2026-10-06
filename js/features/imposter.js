@@ -5,7 +5,8 @@
 // entities ("imposter.*", see js/engine/scenario-format.js).
 
 Features.define('imposter', (engine) => {
-const { GpuChoice } = engine;
+const { Common } = engine;
+const { DEG, clamp, lerp, smoothstep, v3, mulberry32, yawPitch, Toast } = Common;
 
 // =====================================================================================================
 // Entity Imposter // WebGPU
@@ -46,11 +47,7 @@ const LOD_MODES = ['auto', 'mesh', 'imposter'];
 const ATLAS_VIEWS = ['off', 'albedo', 'normal', 'depth', 'ao', 'surface', 'emissive'];
 const GRID_CHOICES = [4, 6, 8, 10, 12, 16, 20, 24, 32];
 const RES_CHOICES = [64, 128, 192, 256, 384, 512];
-const DEG = Math.PI / 180;
 
-const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
-const lerp = (a, b, t) => a + (b - a) * t;
-const smoothstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 const sgn = x => (x >= 0 ? 1 : -1);
 // yield to the browser (lets a toast paint); the timer covers background tabs, where rAF is paused
 const nextFrame = () => new Promise(r => { requestAnimationFrame(r); setTimeout(r, 50); });
@@ -67,17 +64,7 @@ function hexToSrgb(h) {
 const lin = h => srgbToLinear(hexToSrgb(h));
 
 // ================================================================ math (column-major matrices, WebGPU depth 0..1)
-const v3 = {
-    add: (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]],
-    sub: (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]],
-    mul: (a, s) => [a[0] * s, a[1] * s, a[2] * s],
-    madd: (a, b, s) => [a[0] + b[0] * s, a[1] + b[1] * s, a[2] + b[2] * s],
-    dot: (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2],
-    cross: (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]],
-    len: a => Math.hypot(a[0], a[1], a[2]),
-    norm: a => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; },
-};
-
+// v3 and the m4 basics are js/engine/common.js's
 const quat = {
     identity: () => [0, 0, 0, 1],
     axis(axis, rad) { const a = v3.norm(axis), s = Math.sin(rad / 2); return [a[0] * s, a[1] * s, a[2] * s, Math.cos(rad / 2)]; },
@@ -96,25 +83,7 @@ const quat = {
 };
 
 const m4 = {
-    identity() { const m = new Float64Array(16); m[0] = m[5] = m[10] = m[15] = 1; return m; },
-    mul(a, b) {
-        const o = new Float64Array(16);
-        for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) {
-            let s = 0; for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k];
-            o[c * 4 + r] = s;
-        }
-        return o;
-    },
-    // reversed Z with an infinite far plane: depth 1 at `near`, 0 at infinity
-    perspective(fovy, aspect, near) {
-        const f = 1 / Math.tan(fovy / 2);
-        return new Float64Array([f / aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, 0, -1, 0, 0, near, 0]);
-    },
-    lookAt(eye, target, up) {
-        const z = v3.norm(v3.sub(eye, target)), x = v3.norm(v3.cross(up, z)), y = v3.cross(z, x);
-        return new Float64Array([x[0], y[0], z[0], 0, x[1], y[1], z[1], 0, x[2], y[2], z[2], 0,
-            -v3.dot(x, eye), -v3.dot(y, eye), -v3.dot(z, eye), 1]);
-    },
+    ...Common.m4,
     fromTRS(p, q, s) {
         const [x, y, z, w] = q, [sx, sy, sz] = Array.isArray(s) ? s : [s, s, s];
         const xx = x * x, yy = y * y, zz = z * z, xy = x * y, xz = x * z, yz = y * z, wx = w * x, wy = w * y, wz = w * z;
@@ -124,26 +93,6 @@ const m4 = {
     },
     compose(pos, rot, scale) { return m4.fromTRS(pos || [0, 0, 0], quat.euler(rot), scale ?? 1); },
     det3(m) { return v3.dot([m[0], m[1], m[2]], v3.cross([m[4], m[5], m[6]], [m[8], m[9], m[10]])); },
-    invert(a) {
-        const o = new Float64Array(16);
-        const a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3], a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7];
-        const a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11], a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15];
-        const b00 = a00 * a11 - a01 * a10, b01 = a00 * a12 - a02 * a10, b02 = a00 * a13 - a03 * a10, b03 = a01 * a12 - a02 * a11;
-        const b04 = a01 * a13 - a03 * a11, b05 = a02 * a13 - a03 * a12, b06 = a20 * a31 - a21 * a30, b07 = a20 * a32 - a22 * a30;
-        const b08 = a20 * a33 - a23 * a30, b09 = a21 * a32 - a22 * a31, b10 = a21 * a33 - a23 * a31, b11 = a22 * a33 - a23 * a32;
-        let det = b00 * b11 - b01 * b10 + b02 * b09 + b03 * b08 - b04 * b07 + b05 * b06;
-        if (!det) return m4.identity();
-        det = 1 / det;
-        o[0] = (a11 * b11 - a12 * b10 + a13 * b09) * det; o[1] = (a02 * b10 - a01 * b11 - a03 * b09) * det;
-        o[2] = (a31 * b05 - a32 * b04 + a33 * b03) * det; o[3] = (a22 * b04 - a21 * b05 - a23 * b03) * det;
-        o[4] = (a12 * b08 - a10 * b11 - a13 * b07) * det; o[5] = (a00 * b11 - a02 * b08 + a03 * b07) * det;
-        o[6] = (a32 * b02 - a30 * b05 - a33 * b01) * det; o[7] = (a20 * b05 - a22 * b02 + a23 * b01) * det;
-        o[8] = (a10 * b10 - a11 * b08 + a13 * b06) * det; o[9] = (a01 * b08 - a00 * b10 - a03 * b06) * det;
-        o[10] = (a30 * b04 - a31 * b02 + a33 * b00) * det; o[11] = (a21 * b02 - a20 * b04 - a23 * b00) * det;
-        o[12] = (a11 * b07 - a10 * b09 - a12 * b06) * det; o[13] = (a00 * b09 - a01 * b07 + a02 * b06) * det;
-        o[14] = (a31 * b01 - a30 * b03 - a32 * b00) * det; o[15] = (a20 * b03 - a21 * b01 + a22 * b00) * det;
-        return o;
-    },
 };
 
 // Frustum planes (inside: dot(n, p) + d >= 0). Reversed infinite Z has no far plane: the 6th never culls.
@@ -158,15 +107,7 @@ function frustumPlanes(m) {
 }
 
 // ================================================================ noise (seeded)
-function rng(seed) {
-    let a = (seed * 2654435761) >>> 0 || 1;
-    return () => {
-        a = (a + 0x6D2B79F5) | 0;
-        let t = Math.imul(a ^ (a >>> 15), 1 | a);
-        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-}
+const rng = seed => mulberry32((seed * 2654435761) >>> 0 || 1);
 function hash3(x, y, z, s) {
     let h = (Math.imul(x, 0x27d4eb2d) + Math.imul(y, 0x165667b1) + Math.imul(z, 0x9e3779b1) + Math.imul(s, 0x85ebca6b)) | 0;
     h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d);
@@ -2077,7 +2018,7 @@ class Renderer {
 
     writeGlobals(cam, env, st, time) {
         const g = this.globals, W = this.width, H = this.height;
-        const vp = m4.mul(m4.perspective(cam.fov * DEG, W / H, 0.1), cam.view());
+        const vp = m4.mul(m4.reversedInfinite(cam.fov * DEG, W / H, 0.1), cam.view());
         g.set(vp, 0);
         g.set([...cam.pos, time], 16);
         g.set([...env.sunDir, env.exposure], 20);
@@ -2729,20 +2670,14 @@ class Hud {
     constructor(game) {
         this.game = game;
         this.lines = [];
-        this.toastEl = game.ui.$('toast');
+        this.toaster = new Toast(game.ui.$('toast'));
         this.next = 0;
         this.frames = 0;
         this.prev = 0;
         this.fps = 0;
     }
 
-    toast(msg, ms = 2200) {
-        const t = this.toastEl;
-        t.textContent = msg;
-        t.style.display = 'block';
-        clearTimeout(this.toastTimer);
-        if (ms > 0) this.toastTimer = setTimeout(() => { t.style.display = 'none'; }, ms);
-    }
+    toast(msg, ms) { this.toaster.show(msg, ms); }
 
     update(now) {
         this.frames++;
@@ -3077,8 +3012,7 @@ class FeatureWorld {
     setView(v) {
         const c = this.game.camera;
         c.pos = [...v.pos];
-        c.yaw = Math.atan2(-v.fwd[0], -v.fwd[2]);
-        c.pitch = Math.asin(clamp(v.fwd[1], -1, 1));
+        Object.assign(c, yawPitch(v.fwd));
         if (v.fov) c.fov = v.fov / DEG;
     }
 

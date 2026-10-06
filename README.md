@@ -168,6 +168,7 @@ index.html                  the page: canvas, the feature HUD root (labels, toas
 css/entities.css            shell, chip and toasts, what the features still draw on the screen (.fhud[data-feature])
 js/engine/
     host.js                 boot, GPU device, worlds, the frame, links
+    common.js               helpers the features share (scalars, v3 / m4, noise, polylines, buffers, toasts, labels)
     scenario-format.js      schemas, entities <-> each feature's native scenario, includes
     features.js             feature registry and on-demand script loading
     compositor.js           depth linearize + nearest-wins merge, the atmosphere's inject target
@@ -180,7 +181,7 @@ js/engine/
     audio.js                sound.* entities (WebAudio synthesis)
     expr.js                 the expression language
     gpu-choice.js           GPU adapter choice
-js/features/<feature>.js    each original engine, in one function scope (Features.define), plus its FeatureWorld:
+js/features/<feature>.js    each original engine, in one function scope (Features.define, sharing js/engine/common.js), plus its FeatureWorld:
                             the host's interface (init, frame, depth, view, stats, set, anchor, handheld)
 scenarios/*.json            the scenarios (index.json and embedded.js are generated)
 tools/embed-scenarios.mjs   catalog + embedded copy

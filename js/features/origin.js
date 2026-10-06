@@ -4,7 +4,8 @@
 // target, input and HUD root, and builds its scenario from entities ("origin.*", see js/engine/scenario-format.js).
 
 Features.define('origin', (engine) => {
-const { GpuChoice } = engine;
+const { Common } = engine;
+const { DEG, clamp, v3, mulberry32, Toast, LabelLayer } = Common;
 
 // =====================================================================================================
 // Entity Origin: a Floating Origin in WebGPU with O(1) rebasing.
@@ -31,24 +32,12 @@ const FRAME_FLOATS = 44;
 const VERTEX_FLOATS = 7;            // pos, normal, material
 const SAMPLES = 4;
 const NEAR = 0.05;                  // near plane, origin units
-const DEG = Math.PI / 180;
 const AU = 1.495978707e11;
 const PATTERNS = { flat: 0, panels: 1, rock: 2, blink: 3, windows: 4, solar: 5, hazard: 6, regolith: 7 };
 const SURFACES = { star: 0, rocky: 1, earth: 2, gas: 3, ice: 4, mars: 5 };
 
 // -------------------------------------------------------------------------------------------- core/math
-// Doubles on the CPU; only origin-relative values ever reach the GPU as f32.
-const v3 = {
-    add: (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]],
-    sub: (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]],
-    mul: (a, s) => [a[0] * s, a[1] * s, a[2] * s],
-    madd: (a, b, s) => [a[0] + b[0] * s, a[1] + b[1] * s, a[2] + b[2] * s],
-    dot: (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2],
-    cross: (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]],
-    len: a => Math.hypot(a[0], a[1], a[2]),
-    norm: a => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; },
-    lerp: (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t],
-};
+// Doubles on the CPU; only origin-relative values ever reach the GPU as f32 (v3 and the m4 basics: js/engine/common.js).
 
 // Quaternions [x, y, z, w]
 const quat = {
@@ -103,40 +92,15 @@ const quat = {
     },
 };
 
-// Column-major 4x4 (Float64Array), WebGPU clip space
+// Column-major 4x4 (Float64Array), WebGPU clip space; view from an orientation and a position
 const m4 = {
-    mul(a, b) {
-        const o = new Float64Array(16);
-        for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) {
-            let s = 0; for (let k = 0; k < 4; k++) s += a[k * 4 + r] * b[c * 4 + k];
-            o[c * 4 + r] = s;
-        }
-        return o;
-    },
-    // reversed Z, infinite far plane: depth = near / viewDepth (1 at the near plane, 0 at infinity)
-    reversedInfinite(fovy, aspect, near) {
-        const f = 1 / Math.tan(fovy / 2);
-        return new Float64Array([f / aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, 0, -1, 0, 0, near, 0]);
-    },
+    ...Common.m4,
     view(q, p) {
         const [X, Y, Z] = quat.axes(q);
         return new Float64Array([X[0], Y[0], Z[0], 0, X[1], Y[1], Z[1], 0, X[2], Y[2], Z[2], 0, -v3.dot(X, p), -v3.dot(Y, p), -v3.dot(Z, p), 1]);
     },
-    project(m, p) {
-        return [m[0] * p[0] + m[4] * p[1] + m[8] * p[2] + m[12], m[1] * p[0] + m[5] * p[1] + m[9] * p[2] + m[13], m[2] * p[0] + m[6] * p[1] + m[10] * p[2] + m[14], m[3] * p[0] + m[7] * p[1] + m[11] * p[2] + m[15]];
-    },
 };
 
-function mulberry32(seed) {
-    return function () {
-        seed |= 0; seed = seed + 0x6D2B79F5 | 0;
-        let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
-        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
-        return ((t ^ t >>> 14) >>> 0) / 4294967296;
-    };
-}
-
-const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
 const f32Step = x => 2 ** (Math.floor(Math.log2(Math.max(Math.abs(x), 2 ** -126))) - 23);   // spacing of f32 values near x
 const vec3Of = s => Array.isArray(s) ? s : [s, s, s];
 
@@ -1270,19 +1234,13 @@ class CameraController {
 class Hud {
     constructor(ui) {
         this.lines = [];
-        this.toastEl = ui.$('toast');
-        this.labels = ui.$('labels');
-        this.lctx = this.labels.getContext('2d');
+        this.toaster = new Toast(ui.$('toast'));
+        this.labels = new LabelLayer(ui.$('labels'));
         this.showLabels = true;
         this.last = 0;
     }
 
-    toast(msg, ms = 2200) {
-        this.toastEl.textContent = msg;
-        this.toastEl.style.display = 'block';
-        clearTimeout(this.tid);
-        this.tid = setTimeout(() => { this.toastEl.style.display = 'none'; }, ms);
-    }
+    toast(msg, ms) { this.toaster.show(msg, ms); }
 
     update(app, prox, now) {
         if (now - this.last < 100) return;
@@ -1313,34 +1271,24 @@ class Hud {
 
     // names of bodies and landmarks, projected in doubles
     drawLabels(app) {
-        const c = this.labels, dpr = Math.min(window.devicePixelRatio || 1, 2);
-        const W = Math.floor(c.clientWidth * dpr), H = Math.floor(c.clientHeight * dpr);
-        if (c.width !== W || c.height !== H) { c.width = W; c.height = H; }
-        const g = this.lctx;
-        g.clearRect(0, 0, W, H);
+        const L = this.labels;
+        L.begin();
         if (!this.showLabels) return;
-        g.font = `${11 * dpr}px 'Share Tech Mono', monospace`;
-        g.textBaseline = 'middle';
-        const o = app.floating.origin, cam = app.camera, vp = app.viewProj;
+        L.font();
+        const dpr = L.dpr, o = app.floating.origin, cam = app.camera, vp = app.viewProj;
         const items = [...app.world.bodies, ...app.world.landmarks], placed = [];
         for (const e of items) {
             if (!e.label) continue;
             const d = v3.len(cam.pos.sub(e.pos));
             if (d < e.radius * 1.5 && !(e instanceof Body)) continue;
             if (e instanceof Body && d - e.radius < e.radius * 0.05) continue;
-            const clip = m4.project(vp, o.toLocal(e.pos));
-            if (clip[3] <= 0) continue;
-            const x = (clip[0] / clip[3] * 0.5 + 0.5) * W, y = (0.5 - clip[1] / clip[3] * 0.5) * H;
-            if (x < -50 || x > W + 50 || y < -20 || y > H + 20) continue;
+            const at = L.place(vp, o.toLocal(e.pos));
+            if (!at) continue;
+            const [x, y] = at;
             if (placed.some(p => Math.abs(p[0] - x) < 140 * dpr && Math.abs(p[1] - y) < 13 * dpr)) continue;
-            placed.push([x, y]);
+            placed.push(at);
             const body = e instanceof Body;
-            g.strokeStyle = g.fillStyle = body ? 'rgba(110,220,255,0.85)' : 'rgba(255,201,74,0.85)';
-            g.lineWidth = dpr;
-            g.beginPath();
-            g.moveTo(x, y - 4 * dpr); g.lineTo(x + 4 * dpr, y); g.lineTo(x, y + 4 * dpr); g.lineTo(x - 4 * dpr, y); g.closePath();
-            g.stroke();
-            g.fillText(`${e.label}  ${fmtDist(body ? d - e.radius : d)}`, x + 8 * dpr, y);
+            L.mark(at, body ? 'rgba(110,220,255,0.85)' : 'rgba(255,201,74,0.85)', `${e.label}  ${fmtDist(body ? d - e.radius : d)}`);
         }
     }
 }
@@ -1472,7 +1420,6 @@ class App {
         this.hud.update(this, prox, now);
     }
 }
-
 
 // ------------------------------------------------------------------------------------- feature world
 // This demo as one world of the engine (js/engine/host.js calls these).
