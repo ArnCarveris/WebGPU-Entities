@@ -1,0 +1,181 @@
+{
+    "name": "Sector 07",
+    "group": "Entity GUI",
+    "entities": [
+        {"type":"gui"},
+        {
+            "type": "gui.player", "start": {"pos":[-0.75,1.6,-1.35],"yaw":0.02,"pitch":-0.03}, "fovDeg": 60, "walkSpeed": 2.6, "runSpeed": 5,
+            "stride": {"walk":0.72,"run":0.95}, "bounds": {"x":[-3.7,3.7],"z":[-3.3,5.6]}, "doorway": {"door":"hatchB","x":[1.15,2.45],"enterZ":-3.35,"minZ":-7.6}
+        },
+        {"type":"gui.facility","log":["BOOT SEQUENCE COMPLETE","LIFE SUPPORT: NOMINAL","MAINT: HATCH B LOCKED - CODE ON FILE","TIP: [TAB] TOGGLES YOUR HANDHELD"]},
+        {"type":"gui.cctv","resolution":[512,384],"fovY":1.2,"initial":2},
+        {
+            "type": "gui.media", "photo": {"size":[384,512],"atlas":2048,"capacity":20,"fovY":0.95},
+            "video": {"size":[192,256],"fps":12,"pool":180,"maxSeconds":10},
+            "seedShots": [{"label":"Main hall","pos":[1.5,2.2,5.3],"target":[-1,1.2,-3]},{"label":"Hatch B","pos":[0.9,1.65,-1.2],"target":[1.9,1.3,-4]},{"label":"Ops terminal","pos":[-0.3,1.6,-2.3],"target":[-1.3,1.5,-3.84]}]
+        },
+        {
+            "type": "gui.iptv", "hlsScript": "https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js", "cardTitle": "SECTOR 07 · ENGINEERING",
+            "channels": [{"name":"Test Card","sub":"Sector 07 engineering","kind":"card","color":[142,142,147]},{"name":"Sector 07 CCTV","sub":"Security feed · terminal camera","kind":"cctv","color":[52,199,89]},{"name":"Big Buck Bunny","sub":"Mux test stream · VOD","url":"https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8","color":[255,149,0]},{"name":"Live Test Feed","sub":"Unified Streaming · live","url":"https://demo.unified-streaming.com/k8s/live/stable/live.isml/.m3u8","live":true,"color":[255,59,48]},{"name":"Tears of Steel","sub":"Unified Streaming · VOD","url":"https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8","color":[0,122,255]},{"name":"Angel One","sub":"Shaka Player demo · VOD","url":"https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8","color":[175,82,222]},{"name":"Bip-Bop","sub":"Apple test stream · VOD","url":"https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8","color":[48,176,199]}]
+        },
+        {
+            "type": "gui.waves", "step": {"speed":5,"life":0.9,"color":[120,255,150]}, "drone": {"speed":4,"life":1.4,"color":[255,70,55]},
+            "alarm": {"speed":6,"life":1.3,"color":[255,154,46]}, "door": {"speed":5,"life":1.2,"color":[255,200,90]}
+        },
+        {
+            "type": "gui.radar", "range": 9,
+            "tracked": [{"name":"Patrol drone","entity":"drone","color":[255,59,48],"shape":"pulse"},{"name":"Ops terminal","entity":"terminal","color":[90,200,250],"shape":"diamond"},{"name":"Hatch B","entity":"hatchB","color":[255,149,0],"shape":"bar"},{"nearest":"securityCamera","prefix":"Nearest ","color":[255,214,10],"shape":"camera"}]
+        },
+        {
+            "type": "gui.places", "zones": [{"name":"Corridor B","zBelow":-4.1}],
+            "spots": [{"name":"Ops terminal","at":[-1.2,-2.84]},{"name":"Hatch B","at":[1.8,-3]},{"name":"Storage bay","at":[3,1.5]},{"name":"Main hall","at":[0,3]}]
+        },
+        {
+            "type": "gui.phone", "model": "phone", "screen": [0.068,0.1435], "virtual": [270,570], "zOffset": 0.0047, "fovDeg": 60, "startShown": true,
+            "showSeconds": 0.38,
+            "pose": {"hidden":{"offset":[0.08,-0.2],"yaw":-0.45,"tilt":0.95},"shown":{"offset":[0.062,-0.012,-0.2],"yaw":-0.14,"tilt":0.04},"landscape":{"offset":[0,0,-0.16]}},
+            "links": {"door":"hatchB","terminal":"terminal","easel":"easel"},
+            "pages": {"root":{"title":"Debug Sheet","sections":[{"header":"TOOLS","cells":[{"type":"nav","page":"radar","title":"Radar","sub":"Compass, tracking, noise","icon":[[52,199,89],"R"]},{"type":"nav","page":"camera","title":"Camera","sub":"Photos & video of the facility","icon":[[142,142,147],"C"]},{"type":"nav","page":"tv","title":"IPTV","subBind":"iptv.summary","icon":[[255,59,48],"TV"]},{"type":"nav","page":"photos","title":"Photos","subBind":"media.summary","icon":[[175,82,222],"P"]},{"type":"nav","page":"airlock","title":"Airlock","sub":"Hatch & CCTV overrides","icon":[[255,149,0],"A"]},{"type":"nav","page":"rendering","title":"Rendering","sub":"View & lighting","icon":[[0,122,255],"V"]},{"type":"nav","page":"audio","title":"Audio","sub":"Sound & footsteps","icon":[[255,45,85],"S"]}]},{"header":"QUICK TOGGLES","cells":[{"type":"switch","bind":"lights","title":"Room lights"},{"type":"switch","bind":"alarm","title":"Alarm"},{"type":"switch","bind":"stencil","title":"Stencil GUI mask"}]},{"header":"PLAYER","cells":[{"type":"label","title":"Position","bind":"player.position"},{"type":"label","title":"Heading","bind":"player.heading"},{"type":"label","title":"Noise","bind":"player.noise"},{"type":"label","title":"Frame rate","bind":"stats.fps"}]},{"header":"INFO","cells":[{"type":"nav","page":"controls","title":"Controls","icon":[[99,99,102],"K"]},{"type":"nav","page":"stats","title":"Render stats","icon":[[48,176,199],"#"]},{"type":"nav","page":"about","title":"About this demo","icon":[[0,122,255],"i"]}]}]},"airlock":{"title":"Airlock","sections":[{"header":"HATCH B","cells":[{"type":"label","title":"Status","bind":"hatch.status"},{"type":"action","action":"toggleHatch","titleBind":"hatch.action"},{"type":"label","title":"Access code","bind":"hatch.code"}]},{"header":"SECURITY","cells":[{"type":"picker","bind":"cctv","page":"pick:cctv","title":"CCTV camera"},{"type":"action","action":"showCctvOnTerminal","title":"Show on terminal"}],"footer":"Switches the wall terminal to its CCTV tab."}]},"rendering":{"title":"Rendering","sections":[{"header":"VIEW","cells":[{"type":"slider","bind":"fov","title":"Field of view"},{"type":"slider","bind":"lamp","title":"Lamp intensity"}]},{"header":"GUI SURFACES","cells":[{"type":"switch","bind":"stencil","title":"Stencil GUI mask"}],"footerBind":"stencil.description"}]},"audio":{"title":"Audio","sections":[{"header":"OUTPUT","cells":[{"type":"switch","bind":"sound","title":"Sound"},{"type":"slider","bind":"stepVolume","title":"Footstep volume"}]}]},"controls":{"title":"Controls","sections":[{"header":"MOVEMENT","cells":[{"type":"label","title":"Move","value":"W A S D"},{"type":"label","title":"Run","value":"Shift"},{"type":"label","title":"Look","value":"Drag"},{"type":"label","title":"Step","value":"Scroll wheel"}]},{"header":"SCREENS","cells":[{"type":"label","title":"Use a screen","value":"Aim + click"},{"type":"label","title":"Scroll a list","value":"Scroll wheel"},{"type":"label","title":"Drag a slider","value":"Click + drag"},{"type":"label","title":"Paint (easel)","value":"Drag · wheel = size"},{"type":"label","title":"Phone","value":"Tab / Esc"}],"footer":"Wall screens only react within 3.6 m, like Doom 3. The phone always does."}]},"stats":{"title":"Render stats","sections":[{"header":"FRAME","cells":[{"type":"label","title":"Frame rate","bind":"stats.fps"},{"type":"label","title":"Resolution","bind":"stats.resolution"},{"type":"label","title":"GUI mask","bind":"stats.guiMask"},{"type":"label","title":"GUI surfaces","bind":"stats.guiSurfaces"}]},{"header":"GUI MODELS","cells":[{"type":"label","title":"Terminal","bind":"stats.terminal"},{"type":"label","title":"Easel","bind":"stats.easel"},{"type":"label","title":"Phone","bind":"stats.phone"}]},{"header":"RENDER TARGETS","cells":[{"type":"label","title":"CCTV feed","bind":"stats.cctv"},{"type":"label","title":"Phone camera","bind":"stats.camera"},{"type":"label","title":"Photos stored","bind":"stats.photos"},{"type":"label","title":"Video frames","bind":"stats.videoFrames"},{"type":"label","title":"IPTV texture","bind":"stats.iptv"}],"footer":"Render targets only render while a screen is showing them."}]},"about":{"title":"About","sections":[{"header":"ENTITY GUI // WEBGPU","cells":[{"type":"text","text":"Every screen here is an EntityGUI: a Doom 3-style GUI surface that emits textured quads in its own virtual screen space and is placed on its entity through the surface's texture axes."},{"type":"text","text":"Each surface writes its own stencil value, so a GUI never z-fights, stays hidden behind things in front of it and can't draw through another GUI."},{"type":"text","text":"The whole facility, including these pages, is described by data in js/scenario.js."}]}]},"pick:cctv":{"title":"CCTV camera","sections":[{"optionsBind":"cctv"}]},"radar":{"title":"Radar","app":"radar"},"camera":{"title":"Camera","app":"camera"},"photos":{"title":"Photos","app":"photos"},"tv":{"title":"IPTV","app":"tv"}}
+        },
+        {"type":"gui.material","id":"wall","pattern":"panels","albedo":[0.16,0.17,0.18],"spec":0.35,"shin":28},
+        {"type":"gui.material","id":"floorGrate","pattern":"grating","albedo":[0.24,0.23,0.21],"spec":0.7,"shin":40},
+        {"type":"gui.material","id":"copper","pattern":"mottled","albedo":[0.4,0.24,0.12],"spec":0.8,"shin":36},
+        {"type":"gui.material","id":"door","pattern":"door","albedo":[0.3,0.32,0.34],"spec":0.5,"shin":32},
+        {"type":"gui.material","id":"bulb","albedo":[0,0,0],"emissive":{"color":[1,1,1],"signal":"light0","base":0.08,"gain":0.5}},
+        {"type":"gui.material","id":"darkMetal","pattern":"plates","albedo":[0.1,0.11,0.12],"spec":0.45,"shin":30},
+        {"type":"gui.material","id":"glass","albedo":[0.004,0.012,0.014],"spec":1.2,"shin":110},
+        {"type":"gui.material","id":"redGlow","albedo":[0.05,0.05,0.05],"emissive":{"color":[1,0.07,0.02],"signal":"wave","base":1.1,"gain":0.25,"rate":2.3}},
+        {"type":"gui.material","id":"ceiling","pattern":"tiles","albedo":[0.085,0.09,0.095],"spec":0.2,"shin":16},
+        {"type":"gui.material","id":"hazard","pattern":"hazard","albedo":[0.75,0.55,0.04],"spec":0.4,"shin":24},
+        {
+            "type": "gui.material", "id": "led", "albedo": [0.02,0.02,0.02],
+            "emissive": {"color":[0.15,1,0.35],"signal":"blink","base":0.3,"gain":1.7,"rate":0.6,"spread":3.7,"duty":0.35}
+        },
+        {"type":"gui.material","id":"lightMetal","albedo":[0.18,0.2,0.16],"spec":0.7,"shin":40},
+        {"type":"gui.material","id":"beacon","albedo":[0.08,0.01,0.01],"emissive":{"color":[1,0.08,0.03],"signal":"alarm","base":0.12,"gain":3}},
+        {
+            "type": "gui.material", "id": "tally", "albedo": [0.05,0,0],
+            "emissive": {"color":[1,0.06,0.03],"signal":"blink","base":0.2,"gain":3,"rate":1.5,"duty":0.5,"idle":0.35}
+        },
+        {"type":"gui.material","id":"armour","pattern":"bands","albedo":[0.15,0.19,0.12],"spec":0.5,"shin":30},
+        {"type":"gui.material","id":"phoneBody","albedo":[0.035,0.037,0.042],"spec":0.9,"shin":70,"emissive":{"color":[0.012,0.013,0.015]}},
+        {"type":"gui.material","id":"wood","pattern":"wood","albedo":[0.36,0.23,0.12],"spec":0.25,"shin":20},
+        {
+            "type": "gui.model", "id": "level",
+            "parts": [{"box":[-4,-0.1,-4.2,4,0,6],"mat":"floorGrate"},{"box":[-4,3.5,-4.2,4,3.6,6],"mat":"ceiling"},{"box":[-4.2,0,-4.2,-4,3.5,6],"mat":"wall"},{"box":[4,0,-4.2,4.2,3.5,6],"mat":"wall"},{"box":[-4.2,0,6,4.2,3.5,6.2],"mat":"wall"},{"box":[-4,0,-4.2,0.8,3.5,-4],"mat":"wall"},{"box":[2.8,0,-4.2,4,3.5,-4],"mat":"wall"},{"box":[0.8,2.6,-4.2,2.8,3.5,-4],"mat":"wall"},{"box":[0.6,0,-4,0.8,2.8,-3.88],"mat":"hazard"},{"box":[2.8,0,-4,3,2.8,-3.88],"mat":"hazard"},{"box":[0.6,2.6,-4,3,2.8,-3.88],"mat":"hazard"},{"box":[1.62,2.86,-4,1.98,3.02,-3.82],"mat":"beacon"},{"box":[0.8,-0.1,-8,2.8,0,-4.2],"mat":"floorGrate"},{"box":[0.8,2.6,-8,2.8,2.7,-4.2],"mat":"ceiling"},{"box":[0.6,0,-8,0.8,2.6,-4.2],"mat":"wall"},{"box":[2.8,0,-8,3,2.6,-4.2],"mat":"wall"},{"box":[0.8,0,-8.2,2.8,2.6,-8],"mat":"wall"},{"box":[1.3,0.7,-8,2.3,2,-7.95],"mat":"redGlow"},{"box":[-4,0,-2.15,-3.8,3.5,-1.85],"mat":"darkMetal"},{"box":[3.8,0,-2.15,4,3.5,-1.85],"mat":"darkMetal"},{"box":[-4,3.3,-2.15,4,3.5,-1.85],"mat":"darkMetal"},{"box":[-4,0,-0.15,-3.8,3.5,0.15],"mat":"darkMetal"},{"box":[3.8,0,-0.15,4,3.5,0.15],"mat":"darkMetal"},{"box":[-4,3.3,-0.15,4,3.5,0.15],"mat":"darkMetal"},{"box":[-4,0,1.85,-3.8,3.5,2.15],"mat":"darkMetal"},{"box":[3.8,0,1.85,4,3.5,2.15],"mat":"darkMetal"},{"box":[-4,3.3,1.85,4,3.5,2.15],"mat":"darkMetal"},{"box":[-4,0,3.85,-3.8,3.5,4.15],"mat":"darkMetal"},{"box":[3.8,0,3.85,4,3.5,4.15],"mat":"darkMetal"},{"box":[-4,3.3,3.85,4,3.5,4.15],"mat":"darkMetal"},{"cylinder":[-3.6,3,1],"r":0.1,"len":10,"axis":"z","mat":"copper"},{"cylinder":[-3.35,3.08,1],"r":0.06,"len":10,"axis":"z","mat":"copper"},{"cylinder":[3.55,2.9,1],"r":0.13,"len":10,"axis":"z","mat":"copper"},{"cylinder":[-2.6,1.75,-3.88],"r":0.08,"len":3.5,"axis":"y","mat":"copper"},{"box":[2.6,0,1,3.6,1,2],"mat":"darkMetal"},{"box":[2.9,1,1.3,3.5,1.6,1.9],"mat":"darkMetal"},{"box":[-3.6,0,2.5,-2.8,0.8,3.3],"mat":"darkMetal"}]
+        },
+        {
+            "type": "gui.model", "id": "terminal",
+            "parts": [{"box":[-1,-0.8,-0.16,1,0.8,-0.01],"mat":"darkMetal"},{"box":[-1,0.6,-0.01,1,0.8,0.12],"mat":"darkMetal"},{"box":[-1,-0.8,-0.01,1,-0.6,0.12],"mat":"darkMetal"},{"box":[-1,-0.6,-0.01,-0.8,0.6,0.12],"mat":"darkMetal"},{"box":[0.8,-0.6,-0.01,1,0.6,0.12],"mat":"darkMetal"},{"box":[-1.1,-0.88,-0.16,1.1,-0.8,0.29],"mat":"hazard"},{"box":[-0.9,-1.5,-0.16,0.9,-0.88,0.14],"mat":"darkMetal"},{"box":[-0.85,-0.73,0.119,-0.8,-0.68,0.125],"mat":"led"},{"box":[-0.75,-0.73,0.119,-0.7000000000000001,-0.68,0.125],"mat":"led"},{"box":[-0.6499999999999999,-0.73,0.119,-0.6000000000000001,-0.68,0.125],"mat":"led"},{"box":[-0.5499999999999999,-0.73,0.119,-0.5,-0.68,0.125],"mat":"led"},{"box":[-0.44999999999999996,-0.73,0.119,-0.4,-0.68,0.125],"mat":"led"},{"box":[-0.35,-0.73,0.119,-0.30000000000000004,-0.68,0.125],"mat":"led"},{"cylinder":[0,1.4,-0.09],"r":0.05,"len":1.2,"axis":"y","mat":"darkMetal"},{"cylinder":[0.3,1.4,-0.09],"r":0.035,"len":1.2,"axis":"y","mat":"darkMetal"}]
+        },
+        {"type":"gui.model","id":"doorPanel","parts":[{"box":[-0.5,-1.3,-0.06,0.5,1.3,0.06],"mat":"door"}]},
+        {
+            "type": "gui.model", "id": "lamp",
+            "parts": [{"box":[-0.012,-1.6,-0.012,0.012,0,0.012],"mat":"darkMetal"},{"cylinder":[0,-1.58,0],"r":0.07,"len":0.08,"axis":"y","mat":"lightMetal","seg":12},{"cylinder":[0,-1.7,0],"r":0.22,"len":0.2,"axis":"y","mat":"lightMetal","seg":20},{"cylinder":[0,-1.82,0],"r":0.07,"len":0.1,"axis":"y","mat":"bulb","seg":12}]
+        },
+        {
+            "type": "gui.model", "id": "securityCamera",
+            "parts": [{"box":[-0.08,-0.07,-0.05,0.08,0.07,0.28],"mat":"lightMetal"},{"box":[-0.1,0.07,-0.13,0.1,0.09,0.3],"mat":"darkMetal"},{"cylinder":[0,0,-0.1],"r":0.045,"len":0.1,"axis":"z","mat":"glass","seg":12},{"box":[0.045,0.03,-0.056,0.065,0.05,-0.05],"mat":"tally"},{"box":[-0.02,0.09,0.18,0.02,0.32,0.22],"mat":"darkMetal"}]
+        },
+        {
+            "type": "gui.model", "id": "drone",
+            "parts": [{"box":[-0.14,-0.06,-0.14,0.14,0.06,0.14],"mat":"darkMetal"},{"box":[-0.08,0.06,-0.08,0.08,0.1,0.08],"mat":"lightMetal"},{"box":[-0.045,-0.025,-0.152,0.045,0.025,-0.14],"mat":"tally"},{"box":[-0.32,0,-0.015,0.32,0.02,0.015],"mat":"lightMetal"},{"box":[-0.015,0,-0.32,0.015,0.02,0.32],"mat":"lightMetal"},{"cylinder":[-0.3,0.03,0],"r":0.09,"len":0.012,"axis":"y","mat":"glass","seg":14},{"cylinder":[0.3,0.03,0],"r":0.09,"len":0.012,"axis":"y","mat":"glass","seg":14},{"cylinder":[0,0.03,-0.3],"r":0.09,"len":0.012,"axis":"y","mat":"glass","seg":14},{"cylinder":[0,0.03,0.3],"r":0.09,"len":0.012,"axis":"y","mat":"glass","seg":14}]
+        },
+        {
+            "type": "gui.model", "id": "avatar",
+            "parts": [{"box":[-0.2,0,-0.1,-0.03,0.8,0.1],"mat":"armour"},{"box":[0.03,0,-0.1,0.2,0.8,0.1],"mat":"armour"},{"box":[-0.25,0.8,-0.15,0.25,1.45,0.15],"mat":"armour"},{"box":[-0.36,0.85,-0.1,-0.26,1.4,0.1],"mat":"darkMetal"},{"box":[0.26,0.85,-0.1,0.36,1.4,0.1],"mat":"darkMetal"},{"box":[-0.12,1.48,-0.13,0.12,1.76,0.13],"mat":"armour"},{"box":[-0.09,1.58,-0.14,0.09,1.66,-0.13],"mat":"glass"}]
+        },
+        {
+            "type": "gui.model", "id": "phone",
+            "parts": [{"box":[-0.0385,-0.079,-0.0045,0.0385,0.079,0.0045],"mat":"phoneBody"},{"box":[0.0385,0.018,-0.002,0.0395,0.042,0.002],"mat":"lightMetal"},{"box":[-0.0395,0.03,-0.002,-0.0385,0.04,0.002],"mat":"lightMetal"},{"box":[-0.0395,0.015,-0.002,-0.0385,0.025,0.002],"mat":"lightMetal"},{"box":[0.006,0.048,-0.0068,0.032,0.074,-0.0045],"mat":"darkMetal"}]
+        },
+        {
+            "type": "gui.model", "id": "easel",
+            "parts": [{"box":[-0.64,-0.49,-0.035,0.64,0.49,0],"mat":"wood"},{"box":[-0.66,-0.58,-0.04,0.66,-0.52,0.13],"mat":"wood"},{"box":[-0.66,-0.52,0.1,0.66,-0.47,0.13],"mat":"wood"},{"box":[-0.56,-1.45,-0.08,-0.5,0.62,-0.035],"mat":"wood"},{"box":[0.5,-1.45,-0.08,0.56,0.62,-0.035],"mat":"wood"},{"box":[-0.03,-1.45,-0.72,0.03,0.55,-0.66],"mat":"wood"},{"box":[-0.03,0.5,-0.68,0.03,0.56,-0.035],"mat":"wood"},{"box":[-0.5,-1.1,-0.08,0.5,-1.05,-0.035],"mat":"wood"},{"cylinder":[-0.46,-0.47,0.04],"r":0.035,"len":0.1,"axis":"y","mat":"copper","seg":12},{"cylinder":[-0.36,-0.48,0.05],"r":0.03,"len":0.08,"axis":"y","mat":"lightMetal","seg":12},{"box":[0.2,-0.515,0.02,0.46,-0.5,0.035],"mat":"wood"},{"box":[0.44,-0.52,0.015,0.5,-0.495,0.04],"mat":"darkMetal"}]
+        },
+        {"type":"gui.static","id":"level","model":"level"},
+        {
+            "type": "gui.lamp", "id": "lamp", "model": "lamp", "pivot": [-0.8,3.3,-2], "bulbLength": 1.85, "intensity": 3.2, "color": [1,0.82,0.58],
+            "swing": {"amp":0.34,"freq":1.05,"amp2":0.05,"freq2":2.7}
+        },
+        {"type":"gui.light","id":"screenGlow","pos":[-1.2,1.5,-3.39],"color":[0.3,0.75,1],"alarmColor":[1,0.25,0.2],"intensity":1.5},
+        {
+            "type": "gui.alarmBeacon", "id": "beacon", "pos": [1.8,2.75,-3.6], "color": [1,0.1,0.04], "intensity": 4, "wave": [1.8,-3.8], "toneEvery": 0.45,
+            "waveEvery": 0.9, "tones": [660,520]
+        },
+        {"type":"gui.light","id":"corridorLight","pos":[1.8,1.8,-7.3],"color":[1,0.12,0.05],"intensity":2.5,"door":{"id":"hatchB","min":0.15}},
+        {"type":"gui.light","id":"fillLight","pos":[0.5,3.1,3],"color":[0.55,0.6,0.72],"intensity":0.4,"roomLights":true},
+        {
+            "type": "gui.drone", "id": "drone", "model": "drone", "center": [0.2,2,1.4], "radius": [2.3,2.6], "speed": 0.3, "bob": {"amp":0.12,"freq":1.7},
+            "pingEvery": 3, "eyeLight": {"ahead":0.25,"intensity":0.35,"color":[1,0.12,0.08]}
+        },
+        {
+            "type": "gui.door", "id": "hatchB", "name": "Hatch B", "model": "doorPanel", "pos": [1.8,1.3,-4], "travel": 1, "speed": 0.7,
+            "panels": [{"pos":[1.3,1.3,-4.1],"slide":[-1,0,0]},{"pos":[2.3,1.3,-4.1],"slide":[1,0,0]}]
+        },
+        {"type":"gui.avatar","id":"avatar","model":"avatar"},
+        {
+            "type": "gui.securityCamera", "id": "cam01", "label": "CAM-01", "name": "AIRLOCK HATCH", "loc": "SECTOR 07 / EAST CORNER", "model": "securityCamera",
+            "pos": [3.3,2.6,-3.75], "target": [0.6,1,-2], "sweep": 0.3, "speed": 0.35
+        },
+        {
+            "type": "gui.securityCamera", "id": "cam02", "label": "CAM-02", "name": "CORRIDOR B", "loc": "BEHIND HATCH B", "model": "securityCamera",
+            "pos": [2.5,2.4,-7.7], "target": [1.6,1,-3.8], "sweep": 0, "speed": 0
+        },
+        {
+            "type": "gui.securityCamera", "id": "cam03", "label": "CAM-03", "name": "OPS TERMINAL", "loc": "SECTOR 07 / WEST WALL", "model": "securityCamera",
+            "pos": [-3.3,2.6,-0.6], "target": [-1.2,1.3,-3.6], "sweep": 0.12, "speed": 0.5
+        },
+        {
+            "type": "gui.securityCamera", "id": "cam04", "label": "CAM-04", "name": "STORAGE BAY", "loc": "SECTOR 07 / SOUTH-EAST", "model": "securityCamera",
+            "pos": [3.3,2.6,5.7], "target": [2.2,0.5,1.4], "sweep": 0.4, "speed": 0.28
+        },
+        {
+            "type": "gui.securityCamera", "id": "cam05", "label": "CAM-05", "name": "MAIN HALL", "loc": "SECTOR 07 / SOUTH-WEST", "model": "securityCamera",
+            "pos": [-3.3,2.6,5.7], "target": [0.4,0.8,-2], "sweep": 0.45, "speed": 0.22
+        },
+        {
+            "type": "gui.securityCamera", "id": "cam06", "label": "CAM-06", "name": "LAMP RIG", "loc": "CEILING / OVERHEAD", "model": "securityCamera",
+            "pos": [0.6,3.25,-0.4], "target": [-0.9,0.2,-2.6], "sweep": 0.2, "speed": 0.6
+        },
+        {
+            "type": "gui.securityCamera", "id": "cam07", "label": "CAM-07", "name": "MAINT DUCT", "loc": "SUBLEVEL 2 / DUCT 14", "model": "securityCamera",
+            "pos": [-3.7,0.4,5.8], "target": [-2,0.2,3], "sweep": 0, "speed": 0, "offline": true
+        },
+        {
+            "type": "gui.terminal", "id": "terminal", "model": "terminal", "pos": [-1.2,1.5,-3.84], "yaw": 0,
+            "gui": {"id":"terminal","size":[1.6,1.2],"virtual":[640,480],"crt":true,"range":3.6,"anchorMaterial":"glass","maxVerts":24000},
+            "content": {"door":"hatchB","hatchCode":"396","titles":{"main":"SECTOR 07 // AIRLOCK CONTROL","cctv":"SECTOR 07 // SECURITY","keypad":"AUTHORIZATION REQUIRED"},"scopeLabel":"REACTOR FEED // CH-2","memo":["PDA MEMO: 'hatch code is 3-9-6,","  somebody change it already'","                    - maint."]}
+        },
+        {
+            "type": "gui.easel", "id": "easel", "model": "easel", "pos": [-2.95,1.45,-2.3], "yaw": 1.13, "collider": 0.75,
+            "gui": {"id":"easel","size":[1.2,0.9],"virtual":[640,480],"zOffset":0.004,"range":3.6,"anchorMaterial":"darkMetal","maxVerts":12000},
+            "paint": {"resolution":[1016,912],"area":{"x":120,"y":12,"w":508,"h":456},"paper":[0.95,0.93,0.88],"maxDabs":4096,"size":{"min":2,"max":60,"initial":14},"initialColor":3,"palette":[[28,28,30],[245,243,238],[128,128,132],[220,38,38],[249,115,22],[250,204,21],[34,197,94],[20,184,166],[37,99,235],[79,70,229],[168,85,247],[120,72,40]],"brushes":[{"name":"ROUND BRUSH","type":0,"sizeMul":1,"spacing":0.15,"flow":0.35,"preview":"soft"},{"name":"INK PEN","type":1,"sizeMul":0.35,"spacing":0.12,"flow":1,"preview":"zigzag"},{"name":"AIRBRUSH","type":2,"sizeMul":2.2,"spacing":0.2,"flow":0.25,"preview":"spray","spray":true},{"name":"MARKER","type":3,"sizeMul":1.2,"spacing":0.08,"flow":0.1,"angle":0.6,"preview":"chisel"},{"name":"CHARCOAL","type":4,"sizeMul":0.9,"spacing":0.15,"flow":0.7,"preview":"grain"},{"name":"ERASER","type":5,"sizeMul":1.4,"spacing":0.12,"flow":1,"preview":"eraser","eraser":true}]}
+        },
+        {"type":"hud.panel","id":"gui-keys","of":"gui","anchor":"bottom-left","class":"small muted","lines":[
+            "<b>WASD</b> walk   <b>Shift</b> run   <b>drag</b> look   <b>wheel</b> step   <b>click</b> a screen to use it   <b>TAB</b> handheld   <b>Esc</b> put it away"]},
+
+        {"$comment":"every effect is an event of this world; these cues are what they sound like"},
+        {"type":"sound.bed","id":"hum","source":"osc","wave":"sawtooth","freq":50,"filters":[["lowpass",160,0.7]],"gain":"gui.lightsOn ? 0.014 : 0.006","smooth":0.5},
+        {"type":"sound.bed","id":"air","source":"brown","filters":[["bandpass",260,0.6]],"gain":0.02},
+        {"type":"sound.cue","on":"door","parts":[{"tone":[80,1.4,"sawtooth",0.05,45]},{"tone":[160,0.25,"square",0.03,90]}]},
+        {"type":"sound.cue","on":"step","parts":[
+            {"noise":{"filter":"bandpass","freq":"rand(700, 1600)","q":1.1,"vol":"vol * (run ? 0.3 : 0.18)","dur":0.11,"offset":"rand(0, 0.15)"}},
+            {"tone":["rand(65, 85)",0.1,"sine","vol * (run ? 0.3 : 0.18) * 0.9",38]},
+            {"tone":["rand(2300, 2800)",0.06,"triangle","vol * (run ? 0.3 : 0.18) * 0.07"]}]},
+        {"type":"sound.cue","on":"shutter","parts":[{"noise":{"filter":"highpass","freq":4000,"vol":0.12,"dur":0.05}},
+            {"noise":{"filter":"highpass","freq":2500,"vol":0.12,"dur":0.05},"delay":0.07}]},
+        {"type":"sound.cue","on":"chime","parts":[{"tone":["up ? 880 : 1320",0.08,"sine",0.04]},{"tone":["up ? 1320 : 880",0.1,"sine",0.04],"delay":0.09}]},
+        {"type":"sound.cue","on":"phone","parts":[{"tone":["on ? 700 : 520",0.07,"sine",0.03,"on ? 1100 : 300"]}]},
+        {"type":"sound.cue","on":"easel","parts":[{"tone":[1300,0.03,"sine",0.025]}]},
+        {"type":"sound.cue","on":"delete","parts":[{"tone":[300,0.12,"sine",0.03,120]}]},
+        {"type":"sound.cue","on":"tap","parts":[{"tone":[1500,0.02,"sine",0.03]}]},
+        {"type":"sound.cue","on":"hover","parts":[{"tone":[1800,0.025,"square",0.012]}]},
+        {"type":"sound.cue","on":"miss","parts":[{"tone":[240,0.05,"square",0.02]}]},
+        {"type":"sound.cue","on":"press","parts":[{"tone":[1200,0.06,"square",0.04]}]},
+        {"type":"sound.cue","on":"granted","parts":[{"tone":[880,0.1,"square",0.04],"delay":0.09},{"tone":[1320,0.18,"square",0.04],"delay":0.2}]},
+        {"type":"sound.cue","on":"denied","parts":[{"tone":[140,0.4,"sawtooth",0.06]}]},
+        {"type":"sound.cue","on":"cctv","parts":[{"tone":[320,0.09,"sawtooth",0.02,1400]}]},
+        {"type":"sound.cue","on":"alarm","parts":[{"tone":["freq",0.42,"sawtooth",0.025]}]}
+    ]
+}

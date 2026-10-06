@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGPU Entities</title>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@500;700&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="css/entities.css">
+</head>
+<body>
+    <canvas id="view"></canvas>
+    <!-- each world's own HUD (built by its feature), then the engine's -->
+    <div id="feature-huds"></div>
+    <div id="engine-hud"></div>
+    <div id="engine-toast" class="panel"></div>
+    <div id="engine-bar" class="engine-ui"></div>
+    <div id="fallback">
+        <div class="card">
+            <div class="tag">SYSTEM FAULT</div>
+            <h1>Could not start</h1>
+            <p class="desc">WebGPU Entities needs WebGPU (Chrome/Edge 113+, or Brave with WebGPU enabled in brave://flags).
+                Another scenario or GPU can still be picked above.</p>
+            <pre id="error-message">navigator.gpu is undefined</pre>
+        </div>
+    </div>
+
+    <!-- Classic scripts (not ES modules) so the page also runs opened straight from disk. Feature scripts
+         (js/features/*.js) load on demand, only those the scenario uses. -->
+    <script src="js/engine/expr.js"></script>
+    <script src="js/engine/scenario-format.js"></script>
+    <script src="js/engine/gpu-choice.js"></script>
+    <script src="js/engine/features.js"></script>
+    <script src="js/engine/input.js"></script>
+    <script src="js/engine/audio.js"></script>
+    <script src="js/engine/hud.js"></script>
+    <script src="js/engine/camera.js"></script>
+    <script src="js/engine/compositor.js"></script>
+    <!-- every scenario, for pages opened from disk (generated: node tools/embed-scenarios.mjs) -->
+    <script src="scenarios/embedded.js"></script>
+    <script src="js/engine/host.js"></script>
+</body>
+</html>

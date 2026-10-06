@@ -1,0 +1,41 @@
+{
+    "name": "Imposter Valley weather",
+    "group": "Compositions",
+    "order": 2,
+    "description": "Entity Imposter's valley (15k trees, rocks and homesteads as octahedral imposters) out on Entity Cloud's High Plains: its forests under volumetric clouds, storm shafts and lightning, lit by the plains' sun.",
+    "entities": [
+        {"type":"include","scenario":"cloud-high-plains","as":"sky","skip":["cloud.view"],
+            "root":{"label":"Cloud · High Plains","layer":{"role":"atmosphere"}}},
+        {"type":"cloud.render","radar":false},
+        {"type":"cloud.clearing","label":"","pos":[14000,-2000],"size":[3200,3200],"level":1395,"blend":300,"inset":true},
+        {"type":"cloud.weather","start":"fair cumulus"},
+
+        {"type":"include","scenario":"imposter-valley","as":"valley",
+            "root":{"label":"Imposter · Valley","layer":{"transform":{"offset":[14000,1438,-2000]},"focus":true}}},
+        {"$comment":"the plains' sun (Cloud azimuths run the other way round: imposter azimuth = 180 - cloud azimuth)"},
+        {"type":"imposter.light","id":"plains afternoon","sun":{"azimuth":118,"elevation":14,"color":"#ffd2a8","intensity":2.6},
+            "sky":{"top":"#4a6fa8","horizon":"#c8cdd2"},"ambient":{"sky":"#9fb6d6","ground":"#6a604c","strength":0.5},
+            "fog":{"color":"#c4ccd6","density":0.00008},"exposure":1,"emission":0.05},
+        {"type":"imposter.light","id":"plains golden","sun":{"azimuth":255,"elevation":7,"color":"#ffa860","intensity":2.4},
+            "sky":{"top":"#44609a","horizon":"#f0b27a"},"ambient":{"sky":"#8a95c0","ground":"#5a4a3a","strength":0.45},
+            "fog":{"color":"#d9a987","density":0.00008},"exposure":1.1,"emission":0.4},
+        {"type":"imposter.light","id":"plains noon","sun":{"azimuth":10,"elevation":62,"color":"#fff1dc","intensity":2.9},
+            "sky":{"top":"#3d6fb6","horizon":"#bfd3e4"},"ambient":{"sky":"#a8c4e6","ground":"#6a604c","strength":0.55},
+            "fog":{"color":"#bccfde","density":0.00008},"exposure":1,"emission":0.05},
+        {"type":"imposter.light","id":"plains night","sun":{"azimuth":20,"elevation":40,"color":"#9fb4ff","intensity":0.22},
+            "sky":{"top":"#050a18","horizon":"#1a2440"},"ambient":{"sky":"#3a4e7a","ground":"#1c1c20","strength":0.3},
+            "fog":{"color":"#141c2e","density":0.0002},"exposure":1.7,"emission":1},
+        {"type":"imposter.environment","value":"plains afternoon"},
+        {"type":"imposter.camera","pos":[-60,6,260],"yaw":160,"pitch":4,"fov":60,"speed":14},
+
+        {"type":"camera","from":"valley"},
+        {"type":"link","to":"valley.light","value":"sky.light == 'golden' || sky.light == 'storm dusk' || sky.light == 'morning' ? 'plains golden' : sky.light == 'noon' ? 'plains noon' : contains(sky.light, 'moon') || sky.light == 'crescent' ? 'plains night' : 'plains afternoon'"},
+
+        {"type":"hud.panel","id":"composition","anchor":"left","class":"small","lines":[
+            "<span class=\"t\">IMPOSTER VALLEY WEATHER</span>",
+            "weather   <b>{sky.weather}</b> · {sky.light} → {valley.light}",
+            "rain here {sky.rain|pct} · {sky.cells} cells · {sky.flashes} flashes",
+            "valley    {valley.instances|int} instances: {valley.meshes} meshes, {valley.imposters} imposters",
+            "<span class=\"m\">keys: {focus} (` cycles: the sky takes 1-9 weather, T lighting)</span>"]}
+    ]
+}

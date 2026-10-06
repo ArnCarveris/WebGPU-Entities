@@ -1,0 +1,140 @@
+{
+    "name": "Imposter Valley",
+    "group": "Entity Imposter",
+    "entities": [
+        {"type":"imposter","name":"Imposter Valley"},
+        {"type":"imposter.camera","pos":[0,2.6,24],"yaw":0,"pitch":-3,"fov":60,"speed":14},
+        {"type":"imposter.environment","value":"noon"},
+        {"type":"imposter.lod","mode":"auto","distance":40,"fade":0.25,"far":2400},
+        {"type":"imposter.shadows","enabled":true,"distance":1200,"resolution":2048,"lambda":0.85},
+        {"type":"imposter.imposter","grid":12,"res":128,"mode":"hemi","ao":1,"blend":true,"parallax":true,"depthOffset":true},
+        {
+            "type": "imposter.drop", "fit": 8, "imposter": {"grid":12,"res":256,"mode":"hemi"}, "replace": ["compare"],
+            "field": {"type":"scatter","id":"imported","count":300,"inner":40,"outer":300,"spacing":5,"scale":[0.8,1.2],"seed":9}
+        },
+        {
+            "type": "imposter.light", "id": "noon", "sun": {"azimuth":36,"elevation":42,"color":"#fff1dc","intensity":2.9},
+            "sky": {"top":"#3d6fb6","horizon":"#bfd3e4"}, "ambient": {"sky":"#a8c4e6","ground":"#6a604c","strength":0.55},
+            "fog": {"color":"#bccfde","density":0.0006}, "exposure": 1, "emission": 0.05
+        },
+        {
+            "type": "imposter.light", "id": "golden hour", "sun": {"azimuth":250,"elevation":9,"color":"#ffb070","intensity":2.5},
+            "sky": {"top":"#44609a","horizon":"#f0b27a"}, "ambient": {"sky":"#8a95c0","ground":"#5a4a3a","strength":0.45},
+            "fog": {"color":"#d9a987","density":0.0005}, "exposure": 1.1, "emission": 0.4
+        },
+        {
+            "type": "imposter.light", "id": "overcast", "sun": {"azimuth":60,"elevation":70,"color":"#dfe6ee","intensity":0.45},
+            "sky": {"top":"#8e9aa6","horizon":"#c5ccd2"}, "ambient": {"sky":"#c9d2dc","ground":"#707060","strength":1.3},
+            "fog": {"color":"#b8c0c6","density":0.0012}, "exposure": 1.1, "emission": 0.1
+        },
+        {
+            "type": "imposter.light", "id": "night", "sun": {"azimuth":200,"elevation":35,"color":"#9fb4ff","intensity":0.22},
+            "sky": {"top":"#050a18","horizon":"#1a2440"}, "ambient": {"sky":"#3a4e7a","ground":"#1c1c20","strength":0.3},
+            "fog": {"color":"#141c2e","density":0.0011}, "exposure": 1.7, "emission": 1
+        },
+        {"type":"imposter.material","id":"grass","pattern":"grass","colors":["#56702f","#6c8a3b","#445c26","#7d9444"],"uvScale":0.25,"spec":0.05,"gloss":0.2},
+        {"type":"imposter.material","id":"ground","pattern":"grass","colors":["#cfcfcf","#e4e4e4","#b2b2b2","#d9d9d9"],"uvScale":0.25,"spec":0.06,"gloss":0.25,"seed":5},
+        {"type":"imposter.material","id":"bark","pattern":"bark","colors":["#5c4633","#3a2b1f","#77604a"],"spec":0.05,"gloss":0.2},
+        {"type":"imposter.material","id":"pineBark","pattern":"bark","colors":["#6e4c37","#43301f","#8a6a50"],"seed":2,"spec":0.05,"gloss":0.2},
+        {"type":"imposter.material","id":"birchBark","pattern":"birch","colors":["#e4e0d6","#2a2622","#b8b2a6"],"spec":0.1,"gloss":0.35},
+        {"type":"imposter.material","id":"needles","pattern":"needles","colors":["#23402a","#2f5534","#1a3120","#3f6a3c"],"wrap":0.3,"spec":0.1,"gloss":0.3},
+        {
+            "type": "imposter.material", "id": "leaves", "pattern": "leaves", "colors": ["#4e7d2c","#679a36","#3b6423","#80a844"], "alphaCutoff": 0.5,
+            "doubleSided": true, "backfaceFlip": false, "wrap": 0.6, "spec": 0.2, "gloss": 0.4
+        },
+        {
+            "type": "imposter.material", "id": "autumn", "pattern": "leaves", "colors": ["#d0772a","#e0a838","#b0482a","#c99a2e"], "alphaCutoff": 0.5,
+            "doubleSided": true, "backfaceFlip": false, "wrap": 0.6, "seed": 11, "spec": 0.2, "gloss": 0.4
+        },
+        {"type":"imposter.material","id":"rock","pattern":"rock","colors":["#77736c","#5a5751","#8c877e"],"uvScale":0.7,"spec":0.12,"gloss":0.3},
+        {"type":"imposter.material","id":"stone","pattern":"rock","colors":["#a19b90","#857f75","#b5afa4"],"uvScale":0.8,"seed":3,"spec":0.2,"gloss":0.45},
+        {"type":"imposter.material","id":"plaster","pattern":"plaster","colors":["#ddd3bf","#bfb39b"],"uvScale":0.5,"spec":0.05,"gloss":0.2},
+        {"type":"imposter.material","id":"brick","pattern":"bricks","colors":["#94503a","#7a3e2d","#cfc6b4"],"uvScale":0.8,"spec":0.08,"gloss":0.25},
+        {"type":"imposter.material","id":"roof","pattern":"tiles","colors":["#8a3f2c","#6d3022","#a4533a"],"uvScale":0.6,"spec":0.25,"gloss":0.5},
+        {"type":"imposter.material","id":"wood","pattern":"planks","colors":["#7e5c3d","#6a4b31","#8e6b48"],"uvScale":0.8,"spec":0.1,"gloss":0.35},
+        {
+            "type": "imposter.material", "id": "window", "pattern": "window", "colors": ["#34495a","#e8e2d4"], "uvScale": 0.83, "spec": 0.9, "gloss": 0.85,
+            "emissive": {"color":"#ffc46b","strength":2.5}
+        },
+        {"type":"imposter.material","id":"lamp","pattern":"flat","colors":["#fff3d0"],"emissive":{"color":"#ffd28a","strength":8}},
+        {"type":"imposter.material","id":"bronze","pattern":"metal","colors":["#b3843e","#7d5a28","#d4a95e"],"uvScale":1.2,"spec":0.9,"gloss":0.65},
+        {
+            "type": "imposter.model", "id": "pine", "imposter": {"grid":10,"res":128},
+            "parts": [{"shape":"cylinder","r0":0.32,"r1":0.06,"h":11.5,"seg":8,"mat":"pineBark"},{"shape":"cone","r":3.1,"h":3.4,"seg":16,"jag":0.28,"pos":[0,1.5,0],"mat":"needles","array":{"count":6,"pos":[0,1.9,0],"rot":[0,17,0],"scale":0.82}}]
+        },
+        {
+            "type": "imposter.model", "id": "oak", "imposter": {"grid":12,"res":192},
+            "parts": [{"shape":"cylinder","r0":0.5,"r1":0.32,"h":3.4,"seg":10,"mat":"bark"},{"shape":"cylinder","r0":0.3,"r1":0.12,"h":3.4,"seg":8,"pos":[0,3.2,0],"mat":"bark"},{"shape":"cylinder","r0":0.26,"r1":0.09,"h":3.6,"seg":7,"pos":[0,2.8,0],"rot":[0,0,40],"mat":"bark","array":{"count":5,"rot":[0,72,0]}},{"shape":"foliage","radius":[2.1,1.7,2.1],"count":120,"card":1.25,"pos":[-2.4,5.6,0],"mat":"leaves","seed":3,"array":{"count":5,"rot":[0,72,0]}},{"shape":"foliage","radius":[2.7,2.1,2.7],"count":160,"card":1.35,"pos":[0,7.2,0],"mat":"leaves","seed":9}]
+        },
+        {
+            "type": "imposter.model", "id": "birch", "imposter": {"grid":12,"res":128},
+            "parts": [{"shape":"cylinder","r0":0.2,"r1":0.07,"h":10,"seg":8,"mat":"birchBark"},{"shape":"cylinder","r0":0.09,"r1":0.03,"h":2.4,"seg":5,"pos":[0,4.2,0],"rot":[0,0,48],"mat":"birchBark","array":{"count":4,"pos":[0,1.3,0],"rot":[0,137,0],"scale":0.9}},{"shape":"foliage","radius":[1.7,3.4,1.7],"count":190,"card":1,"pos":[0,7.4,0],"mat":"autumn","seed":5}]
+        },
+        {
+            "type": "imposter.model", "id": "rock", "lodBias": 2, "imposter": {"grid":8,"res":128},
+            "parts": [{"shape":"sphere","r":1,"subdiv":3,"noise":0.32,"freq":1.7,"seed":4,"pos":[0,0.25,0],"scale":[1.5,0.85,1.15],"mat":"rock"}]
+        },
+        {
+            "type": "imposter.model", "id": "pedestal", "imposter": {"grid":8,"res":128},
+            "parts": [{"shape":"lathe","seg":32,"mat":"stone","profile":[[0,0],[1.6,0],[1.6,0.35],[1.25,0.35],[1.25,0.5],[0.85,0.62],[0.7,1.5],[1,1.62],[1,1.85],[0,1.85]]}]
+        },
+        {
+            "type": "imposter.model", "id": "knot", "imposter": {"grid":12,"res":192,"mode":"full"},
+            "parts": [{"shape":"knot","p":2,"q":3,"R":1.3,"tube":0.42,"seg":240,"rad":20,"mat":"bronze"}]
+        },
+        {
+            "type": "imposter.model", "id": "cottage", "imposter": false,
+            "parts": [{"shape":"box","size":[8.2,0.5,6.2],"pos":[0,0.25,0],"mat":"stone"},{"shape":"box","size":[8,3.6,6],"pos":[0,2.3,0],"mat":"plaster"},{"shape":"roof","size":[9,2.8,7.4],"pos":[0,4.1,0],"mat":"roof"},{"shape":"box","size":[0.9,2.6,0.9],"pos":[2.3,5.5,-1.3],"mat":"brick"},{"shape":"box","size":[1.3,2.3,0.14],"pos":[0,1.65,3.02],"mat":"wood"},{"shape":"box","size":[1.2,1.2,0.12],"pos":[-2.4,2.6,3.02],"mat":"window","array":{"count":2,"pos":[4.8,0,0]}},{"shape":"box","size":[1.2,1.2,0.12],"pos":[-2.4,2.6,-3.02],"mat":"window","array":{"count":2,"pos":[4.8,0,0]}},{"shape":"box","size":[0.12,1.2,1.2],"pos":[4.02,2.6,0],"mat":"window","array":{"count":2,"pos":[-8.04,0,0]}}]
+        },
+        {
+            "type": "imposter.model", "id": "homestead", "imposter": {"grid":12,"res":192},
+            "parts": [{"shape":"model","model":"cottage"},{"shape":"model","model":"oak","pos":[-8.5,0,-4],"scale":0.8},{"shape":"model","model":"birch","pos":[7.5,0,-5.5],"rot":[0,40,0]},{"shape":"box","size":[3,2.2,2.6],"pos":[8,1.1,3.5],"mat":"wood"},{"shape":"roof","size":[3.4,1,3],"pos":[8,2.2,3.5],"rot":[0,90,0],"mat":"roof"},{"shape":"cylinder","r":0.08,"h":1.1,"seg":5,"pos":[-10,0,8],"mat":"wood","array":{"count":14,"pos":[1.5,0,0]}},{"shape":"box","size":[19.5,0.1,0.06],"pos":[-0.25,0.55,8],"mat":"wood","array":{"count":2,"pos":[0,0.4,0]}},{"shape":"model","model":"rock","pos":[-4,0,6],"scale":0.6},{"shape":"cylinder","r":0.07,"h":2.4,"seg":6,"pos":[2,0,5.2],"mat":"wood"},{"shape":"box","size":[0.32,0.4,0.32],"pos":[2,2.6,5.2],"mat":"lamp"},{"shape":"box","size":[0.42,0.06,0.42],"pos":[2,2.83,5.2],"mat":"roof"}]
+        },
+        {
+            "type": "imposter.terrain", "id": "ground", "size": 3200, "res": 384, "chunks": 8, "height": 26, "frequency": 0.0035, "flat": [0,0,60,200],
+            "mat": "ground", "seed": 7, "mountains": {"inner":650,"outer":1350,"height":330,"frequency":0.0021},
+            "peaks": [[-420,-1250,560,430],[680,-1120,460,330],[1180,260,520,370],[-1220,120,560,310],[180,1320,500,290],[-80,-820,300,160]],
+            "layers": {"grass":"#5d7a34","dry":"#8c8a4c","rock":"#6f675f","snow":"#e3e7ee","rockSlope":[0.2,0.34],"snowLine":[330,430]}
+        },
+        {"type":"imposter.compare","id":"compare","model":"oak","pos":[0,0,0],"gap":16,"footprint":7},
+        {"type":"imposter.prop","id":"pedestal","model":"pedestal","pos":[0,0,-24],"footprint":4},
+        {"type":"imposter.prop","id":"showcase","model":"knot","pos":[0,4.4,-24],"spin":{"axis":[0.35,1,0.2],"speed":24}},
+        {"type":"imposter.scatter","id":"village","model":"homestead","count":12,"inner":55,"outer":190,"spacing":16,"seed":2},
+        {
+            "type": "imposter.scatter", "id": "oaks", "model": "oak", "count": 1600, "inner": 32, "outer": 760, "spacing": 4.5, "scale": [0.75,1.3],
+            "maxSlope": 0.25, "maxHeight": 90, "seed": 3
+        },
+        {
+            "type": "imposter.scatter", "id": "birches", "model": "birch", "count": 1400, "inner": 28, "outer": 700, "spacing": 2.6, "scale": [0.8,1.3],
+            "maxSlope": 0.25, "maxHeight": 110, "seed": 4
+        },
+        {
+            "type": "imposter.scatter", "id": "pines", "model": "pine", "count": 9500, "inner": 90, "outer": 1500, "spacing": 2.6, "scale": [0.75,1.45],
+            "maxSlope": 0.4, "maxHeight": 200, "seed": 5
+        },
+        {
+            "type": "imposter.scatter", "id": "rocks", "model": "rock", "count": 2600, "inner": 14, "outer": 1500, "spacing": 1.6, "scale": [0.4,2.4], "tilt": 25,
+            "sink": 0.3, "maxSlope": 0.6, "seed": 6
+        },
+
+        {"type":"hud.help","of":"imposter","lines":[
+            "<b>drag</b> look   <b>WASD</b> move   <b>Q/E</b> down/up   <b>Shift</b> fast   <b>wheel</b> speed",
+            "<b>1 2 3</b> LOD auto / mesh / imposter   <b>[ ]</b> LOD distance",
+            "<b>B</b> frame blend   <b>P</b> parallax   <b>O</b> depth offset   <b>T</b> LOD tint   <b>G</b> shadows",
+            "<b>K</b> next lighting   <b>V</b> atlas view   <b>N</b> next model   <b>R</b> reset camera   <b>L</b> load   <b>H</b> hide UI",
+            "drop a .glb / .gltf / .obj to bake it, or a scenario .json"]},
+        {"type":"sound.bed","id":"wind","source":"brown","filters":[["bandpass",420,0.8]],
+            "gain":"0.03 + 0.05 * smoothstep(5, 400, imposter.height)","filter":[0,"300 + 160 * sin(time * 0.41) * sin(time * 0.17 + 0.7)"],"smooth":1.0},
+        {"type":"sound.bed","id":"leaves","source":"white","filters":[["highpass",2500,0.7],["lowpass",8000,0.7]],
+            "gain":"imposter.light == 'night' ? 0.004 : 0.012 * (0.6 + 0.4 * sin(time * 0.53)) * (1 - smoothstep(20, 300, imposter.height))","smooth":0.8},
+        {"type":"sound.cue","every":[2.5,9],"when":"imposter.light != 'night' && imposter.height < 120","parts":[
+            {"tone":["rand(2600, 3400)",0.09,"sine",0.012,"rand(3600, 4400)"]},
+            {"tone":["rand(2600, 3400)",0.07,"sine",0.01,"rand(3600, 4400)"],"delay":0.14},
+            {"tone":["rand(3000, 3800)",0.12,"sine",0.008,"rand(2200, 2800)"],"delay":"rand(0.3, 0.5)"}]},
+        {"type":"sound.cue","every":[4,12],"when":"imposter.light == 'night'","parts":[
+            {"tone":[4200,0.03,"square",0.004]},{"tone":[4200,0.03,"square",0.004],"delay":0.06},{"tone":[4200,0.03,"square",0.004],"delay":0.12}]},
+        {"type":"sound.cue","on":"toggle","parts":[{"tone":["on ? 660 : 880",0.07,"sine",0.03,"on ? 990 : 440"]}]},
+        {"type":"sound.cue","on":"relight","parts":[{"tone":[520,0.25,"sine",0.025,780]}]},
+        {"type":"sound.cue","on":"baked","parts":[{"tone":[880,0.08,"sine",0.03]},{"tone":[1320,0.12,"sine",0.03],"delay":0.09}]}
+    ]
+}
