@@ -1,6 +1,6 @@
 'use strict';
 // GuiKit: the Doom 3-style GUI toolkit of WebGPU Entities, shared by the engine's handheld (js/engine/handheld.js) and the
-// gui feature's world-space screens (js/features/gui.js): math, the world material table, meshes and GUI surfaces, the WGSL
+// gui feature's world-space screens (js/features/gui/): math, the world material table, meshes and GUI surfaces, the WGSL
 // scene / GUI shaders, the Renderer (views, render targets, scene passes), the baked font atlas, the DeviceContext that
 // turns drawing calls into GUI models, EntityGUI, and the data-driven PhoneGUI with its PhoneApp base.
 

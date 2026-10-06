@@ -147,7 +147,7 @@ an infinite far plane, classic 0..1 with a far plane, multisampled, depth-stenci
 the nearest world per pixel. Where a world draws only sky, the others show through.
 
 A world with `layer.role: "atmosphere"` (cloud) does not take part in the merge: the merged picture and its depth go into
-its scene before its volumetrics (`Renderer.encodeInject` in `js/features/cloud.js`: depth as reversed-Z, colour back to
+its scene before its volumetrics (`Renderer.encodeInject` in `js/features/cloud/gpu/renderer.js`: depth as reversed-Z, colour back to
 scene radiance through the inverse of its display transform), so its clouds, rain, haze, lightning, bloom and
 tonemapping cover the other worlds too.
 
@@ -181,8 +181,11 @@ js/engine/
     audio.js                sound.* entities (WebAudio synthesis)
     expr.js                 the expression language
     gpu-choice.js           GPU adapter choice
-js/features/<feature>.js    each original engine, in one function scope (Features.define, sharing js/engine/common.js), plus its FeatureWorld:
-                            the host's interface (init, frame, depth, view, stats, set, anchor, handheld)
+js/features/<feature>/      each original engine, split into parts with one responsibility each (config, shaders,
+                            entities, world, renderer, HUD, app...), loaded in the order of Features.PARTS
+                            (Features.part, sharing js/engine/common.js); phone-pages.js builds the world's handheld
+                            pages, and feature.js is its FeatureWorld, the host's interface (init, frame, depth,
+                            view, stats, set, anchor, handheld)
 scenarios/*.json            the scenarios (index.json and embedded.js are generated)
 tools/embed-scenarios.mjs   catalog + embedded copy
 tools/import-native.mjs     import a scenario of the original demos

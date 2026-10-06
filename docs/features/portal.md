@@ -1,5 +1,5 @@
 > **In WebGPU Entities** this is the README of the original [WebGPU-EntityPortal](https://github.com/ArnCarveris/WebGPU-EntityPortal) demo, kept as the
-> feature's technical reference. Its engine now lives in [`js/features/portal.js`](../../js/features/portal.js) (one function scope, run by the
+> feature's technical reference. Its engine now lives in [`js/features/portal/`](../../js/features/portal/) (one part per responsibility, run by the
 > host in [`js/engine/host.js`](../../js/engine/host.js)), and its scenario is [`scenarios/portal-bunker-compound.json`](../../scenarios/portal-bunker-compound.json) as a list of
 > entities: every native key below is an entity of type `portal.<key>` (see the main [README](../../README.md#everything-is-an-entity)).
 > Paths and run instructions below refer to the original repository.

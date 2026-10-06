@@ -1,5 +1,5 @@
 > **In WebGPU Entities** this is the README of the original [WebGPU-EntityCloud](https://github.com/ArnCarveris/WebGPU-EntityCloud) demo, kept as the
-> feature's technical reference. Its engine now lives in [`js/features/cloud.js`](../../js/features/cloud.js) (one function scope, run by the
+> feature's technical reference. Its engine now lives in [`js/features/cloud/`](../../js/features/cloud/) (one part per responsibility, run by the
 > host in [`js/engine/host.js`](../../js/engine/host.js)), and its scenario is [`scenarios/cloud-high-plains.json`](../../scenarios/cloud-high-plains.json) as a list of
 > entities: every native key below is an entity of type `cloud.<key>` (see the main [README](../../README.md#everything-is-an-entity)).
 > Paths and run instructions below refer to the original repository.

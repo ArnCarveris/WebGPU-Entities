@@ -1,5 +1,5 @@
 > **In WebGPU Entities** this is the README of the original [WebGPU-EntityOrigin](https://github.com/ArnCarveris/WebGPU-EntityOrigin) demo, kept as the
-> feature's technical reference. Its engine now lives in [`js/features/origin.js`](../../js/features/origin.js) (one function scope, run by the
+> feature's technical reference. Its engine now lives in [`js/features/origin/`](../../js/features/origin/) (one part per responsibility, run by the
 > host in [`js/engine/host.js`](../../js/engine/host.js)), and its scenario is [`scenarios/origin-sol-transit.json`](../../scenarios/origin-sol-transit.json) as a list of
 > entities: every native key below is an entity of type `origin.<key>` (see the main [README](../../README.md#everything-is-an-entity)).
 > Paths and run instructions below refer to the original repository.

@@ -1,5 +1,5 @@
 > **In WebGPU Entities** this is the README of the original [WebGPU-EntityWater](https://github.com/ArnCarveris/WebGPU-EntityWater) demo, kept as the
-> feature's technical reference. Its engine now lives in [`js/features/water.js`](../../js/features/water.js) (one function scope, run by the
+> feature's technical reference. Its engine now lives in [`js/features/water/`](../../js/features/water/) (one part per responsibility, run by the
 > host in [`js/engine/host.js`](../../js/engine/host.js)), and its scenario is [`scenarios/water-riverlands.json`](../../scenarios/water-riverlands.json) as a list of
 > entities: every native key below is an entity of type `water.<key>` (see the main [README](../../README.md#everything-is-an-entity)).
 > Paths and run instructions below refer to the original repository.

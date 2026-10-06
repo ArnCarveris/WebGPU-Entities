@@ -1,5 +1,5 @@
 > **In WebGPU Entities** this is the README of the original [WebGPU-EntityGUI](https://github.com/ArnCarveris/WebGPU-EntityGUI) demo, kept as the
-> feature's technical reference. Its engine now lives in [`js/features/gui.js`](../../js/features/gui.js) (one function scope, run by the
+> feature's technical reference. Its engine now lives in [`js/features/gui/`](../../js/features/gui/) (one part per responsibility, run by the
 > host in [`js/engine/host.js`](../../js/engine/host.js)), and its scenario is [`scenarios/gui-sector-07.json`](../../scenarios/gui-sector-07.json) as a list of
 > entities: every native key below is an entity of type `gui.<key>` (see the main [README](../../README.md#everything-is-an-entity)).
 > Paths and run instructions below refer to the original repository.
