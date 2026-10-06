@@ -75,12 +75,6 @@
         {"type":"water.debris","label":"","pos":[390,-500],"radius":20,"count":300,"size":1.8,"color":[0.3,0.34,0.16],"life":900},
         {"type":"water.debris","label":"","pos":[200,520],"radius":24,"count":400,"size":2.2,"color":[0.4,0.28,0.16],"life":900},
 
-        {"type":"hud.help","of":"water","lines":[
-            "<b>drag</b> look   <b>WASD</b> move   <b>Space/C</b> up/down   <b>Shift</b> ×5   <b>wheel</b> speed",
-            "<b>right drag</b> (or Ctrl + drag) use tool   <b>[ ]</b> brush size",
-            "<b>B</b> boost springs   <b>R</b> rain   <b>X</b> breach / rebuild dams   <b>N</b> reset water",
-            "<b>M</b> render mode   <b>V</b> next view   <b>G</b> lighting   <b>, .</b> sim steps / frame",
-            "<b>L</b> labels   <b>P</b> pause   <b>H</b> help   drop a scenario .json on the page"]},
         {"type":"sound.bed","id":"river","source":"white","filters":[["bandpass",900,0.6],["lowpass",3000,0.7]],
             "gain":"0.3 * clamp(water.maxSpeed / 8) * (1 - smoothstep(20, 700, water.height))","smooth":0.6},
         {"type":"sound.bed","id":"rain","source":"white","filters":[["highpass",500,0.7],["lowpass",7000,0.7]],
@@ -91,6 +85,7 @@
         {"type":"sound.cue","on":"breach","parts":[{"shot":{"source":"brown","filter":"lowpass","freq":140,"q":1,"env":[[0.1,"on ? 1.2 : 0.6"],[2.5,0.5],[6,0]],"rate":0.6}}]},
         {"type":"sound.cue","on":"toggle","parts":[{"tone":["on ? 660 : 880",0.07,"sine",0.03,"on ? 990 : 440"]}]},
         {"type":"sound.cue","on":"reset","parts":[{"noise":{"filter":"lowpass","freq":800,"vol":0.2,"dur":0.6}}]},
-        {"type":"sound.cue","on":"tool","parts":[{"tone":[1500,0.03,"sine",0.03]}]}
+        {"type":"sound.cue","on":"tool","parts":[{"tone":[1500,0.03,"sine",0.03]}]},
+        {"type":"handheld.page","id":"controls","of":"water","title":"Controls","nav":{"icon":[[0,122,255],"W"]},"sections":[{"header":"MOVE","cells":[{"type":"label","title":"Look","value":"drag"},{"type":"label","title":"Move","value":"W A S D"},{"type":"label","title":"Up / down","value":"Space / C"},{"type":"label","title":"Faster","value":"Shift ×5"},{"type":"label","title":"Speed","value":"wheel"}]},{"header":"TOOLS","cells":[{"type":"label","title":"Use the tool","value":"right drag"},{"type":"label","title":"Brush size","value":"[ ]"}]},{"header":"WATER","cells":[{"type":"label","title":"Boost springs","value":"B"},{"type":"label","title":"Rain","value":"R"},{"type":"label","title":"Breach / rebuild dams","value":"X"},{"type":"label","title":"Reset water","value":"N"},{"type":"label","title":"Sim steps / frame","value":", ."}]},{"header":"VIEW","cells":[{"type":"label","title":"Render mode","value":"M"},{"type":"label","title":"Next view","value":"V"},{"type":"label","title":"Lighting","value":"G"},{"type":"label","title":"Labels","value":"L"},{"type":"label","title":"Pause","value":"P"}],"footer":"Or drop a scenario .json on the page."}]}
     ]
 }

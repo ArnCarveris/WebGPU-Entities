@@ -66,6 +66,15 @@ js/main.js      entry point
   pages with `app` are drawn by a `PhoneApp` (`js/gui/phone-apps.js`).
 - **Systems**: `cctv`, `media`, `iptv` (channels), `radar` (tracked objects), `waves`, `places`.
 
+### The phone is the engine's handheld (WebGPU Entities)
+
+In WebGPU Entities the phone is not this world's: it is the engine's handheld ([`js/engine/handheld.js`](../../js/engine/handheld.js)),
+in every scenario, and `EntityGUI`, `PhoneGUI` and the rest of the toolkit live in [`js/engine/gui-kit.js`](../../js/engine/gui-kit.js).
+This facility lends it its `phone.pages` (their root sections lead the root page), its `Bindings`, its apps (radar,
+camera, gallery, viewer, IPTV) and its render targets, and, while its player has the camera, its stride and lights.
+`gui.phone` keeps `links` and `pages`; the handheld's own look (model, screen, pose, `startShown`) is the `handheld`
+entity. A scenario's HUD is `handheld.page` entities (see the main [README](../../README.md#engine-entities)).
+
 ## Adding a new kind of screen
 
 1. Subclass `EntityGUI` and implement `draw(dc, now)` (+ `onPress` etc.).

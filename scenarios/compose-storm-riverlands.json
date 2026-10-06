@@ -29,14 +29,6 @@
         {"$comment":"what joins them"},
         {"type":"link","to":"river.rain","value":"sky.rain > 0.05"},
         {"type":"link","to":"river.light","value":"sky.light == 'golden' || sky.light == 'storm dusk' ? 'plains golden' : contains(sky.light, 'moon') || sky.light == 'crescent' ? 'plains night' : 'plains day'"},
-
-        {"type":"hud.panel","id":"composition","anchor":"right","class":"small","lines":[
-            "<span class=\"t\">STORM OVER RIVERLANDS</span>",
-            "weather   <b>{sky.weather}</b> · {sky.light}",
-            "rain here {sky.rain|pct} → river rain {river.rain|onoff}",
-            "storms    {sky.cells} cells · {sky.flashes} flashes",
-            "river     {river.volume|num: m³} · {river.maxSpeed|1} m/s",
-            "<span class=\"m\">keys: {focus} (` cycles: the sky takes</span>",
-            "<span class=\"m\">1-9 weather, T lighting, K lightning)</span>"]}
+        {"type":"handheld.page","id":"storm","title":"Storm","nav":{"section":"SCENARIO","sub":"Weather and the river","icon":[[0,122,255],"S"]},"sections":[{"header":"WEATHER","cells":[{"type":"label","title":"Weather","expr":"{sky.weather}"},{"type":"label","title":"Light","expr":"{sky.light}"},{"type":"label","title":"Rain here","expr":"{sky.rain|pct}"},{"type":"label","title":"Storm cells","expr":"{sky.cells}"},{"type":"label","title":"Flashes","expr":"{sky.flashes}"}]},{"header":"RIVER","cells":[{"type":"label","title":"Rain","expr":"{river.rain ? 'on' : 'off'}"},{"type":"label","title":"Volume","expr":"{river.volume|num: m³}"},{"type":"label","title":"Fastest flow","expr":"{river.maxSpeed|1} m/s"}],"footer":"` cycles the keys: the sky takes 1-9 weather, T lighting, K lightning."}]}
     ]
 }

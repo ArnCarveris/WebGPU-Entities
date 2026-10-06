@@ -24,8 +24,11 @@ The scenario picker (top right) lists every original demo's scenario, rendered b
 | Grand tour of the plains | cloud (atmosphere) + water + imposter + portal, with the engine's free camera and viewpoints |
 | High Plains · Riverlands · Sol Transit · Imposter Valley · Bunker compound · Sector 07 | each original demo on its own |
 
-In a composition the bar shows each world: untick one to see the others without it, Alt+click its name to see it alone,
-click its name (or press <kbd>`</kbd>) to give it the keys.
+The screen shows the worlds and nothing else (their in-world labels, toasts, a corner chip). Every option and readout is
+on the **handheld**, a phone the engine holds in every scenario: <kbd>TAB</kbd> (or the chip) takes it out, <kbd>Esc</kbd>
+puts it away. Its root page has a section per world (its status, its options, its controls), the scenario's pages, and
+the engine's options: scenario, worlds (in a composition: show / hide each one, give one the keys, or press
+<kbd>`</kbd>), viewpoint, sound, GPU.
 
 ## Running
 
@@ -65,7 +68,8 @@ A scenario is one flat list of entities:
         { "type": "water.light", "id": "day", "sun": { "azimuth": 150, "elevation": 38 } },
         { "type": "water.tool", "tool": "pour", "key": "1", "rate": 40 },
         { "type": "water.view", "name": "Overview", "pos": [-820, 420, 1020], "look": [60, 40, -60] },
-        { "type": "hud.help", "of": "water", "lines": ["<b>drag</b> look   <b>WASD</b> move"] },
+        { "type": "handheld.page", "id": "controls", "of": "water", "title": "Controls", "nav": { "section": "CONTROLS" },
+          "sections": [{ "header": "MOVE", "cells": [{ "type": "label", "title": "Look", "value": "drag" }] }] },
         { "type": "sound.bed", "source": "white", "filters": [["bandpass", 900, 0.6]], "gain": "0.3 * clamp(water.maxSpeed / 8)" },
         { "type": "sound.cue", "on": "breach", "parts": [{ "shot": { "source": "brown", "freq": 140, "env": [[0.1, 1.2], [6, 0]] } }] }
     ]
@@ -77,7 +81,8 @@ A scenario is one flat list of entities:
 - **Everything that world is made of** is an entity of type `<feature>.<kind>`: terrain stamps, lakes, storm cells,
   bodies, props, areas and portals, materials, models, lighting presets, views, tools, config blocks. With several
   worlds of one feature in a scenario, `of` names the world an entity belongs to.
-- **The engine's own entities** are plain types: `camera`, `view`, `link`, `include`, `hud.*`, `sound.*`.
+- **The engine's own entities** are plain types: `camera`, `view`, `link`, `include`, `handheld`, `handheld.page`,
+  `hud.toast`, `sound.*`.
 
 Each feature's engine still reads its own layout (materials as a map, views as a list...). `js/engine/scenario-format.js`
 holds a schema per feature that maps its entities onto that layout and back, without per-feature code:
@@ -104,11 +109,11 @@ the engines work) are the original READMEs, in [docs/features](docs/features).
 | Type | Fields | |
 |---|---|---|
 | `camera` | `from: "<world>"` or `["a", "b"]`, `carry` · or `controller: "fly"`, `pos`, `look`, `fov`, `speed` | which world's camera drives the others, or the engine's free camera (WASD, drag, wheel, Space / C) |
-| `view` | `name`, `pos`, `look`, `fov` | a viewpoint in composition space, in the bar's view picker |
+| `view` | `name`, `pos`, `look`, `fov` | a viewpoint in composition space, picked on the handheld |
 | `link` | `to: "<world>.<param>"`, `value: expr` | sets a world's parameter from an expression every frame (when it changes) |
 | `include` | `scenario`, `as`, `skip`, `only`, `root` | splices another scenario's entities: `as` renames its world (and its name in expressions), `skip` / `only` filter by type (`"cloud.view"`, `"sound.*"`), `root` merges fields into its root |
-| `hud.panel` | `anchor`, `lines`, `title`, `of`, `when`, `every`, `class` | a HUD panel of templated lines: `"rain {sky.rain\|pct} · {fps\|0} fps"` |
-| `hud.help` | `of`, `lines` | a world's help text (its <kbd>H</kbd> toggles it) |
+| `handheld` | `startShown`, `title`, `fovDeg`, `pose`, `screen`, `model`, `materials`, `lighting`, `sounds` | the engine's handheld, in every scenario (<kbd>TAB</kbd> / <kbd>Esc</kbd>, or the corner chip): merged over its defaults, later entities winning |
+| `handheld.page` | `id`, `of`, `title`, `nav: { section, sub, icon }`, `sections` | a page of the handheld, the scenario's HUD: cells `label` `text` `nav` `switch` `slider` `picker` `action`; `label` / `text` take `expr`, a template of the frame scope (`"{sky.rain\|pct}"`); `nav` lists it in that section of the root page, `of` ties it to a world |
 | `hud.toast` | `text`, `ms`, `delay` | a message once the scenario starts |
 | `sound.master` | `gain`, `muted` | |
 | `sound.bed` | `source` (`white` `brown` `osc`), `wave`, `freq`, `filters` `[[type, Hz, Q]]`, `gain`, `filter: [index, Hz]`, `pitch`, `pan`, `when`, `smooth` | a looped sound whose level, filter and pitch follow expressions |
@@ -129,7 +134,7 @@ a digit count, `num` (k / M / G, `num: m³` adds a unit), `dist`, `pct`, `int`, 
 | origin | speed fromZero body altitude near rebases reason scale translate rotate scaling everyFrame instances draws density sunAt fps | paused translate rotate scale everyFrame labels | rebase jump toggle |
 | imposter | loading baking bakes lod lodDistance shadows light instances meshes imposters height fps | light lod shadows sunDir | toggle relight baked |
 | portal | area outdoor onShip state swimming driving culling mode draws tris shipSpeed shipDist drones fps | any of its options (culling walk map help...) | door step |
-| gui | lightsOn alarm phone moving running noise gui sound fps | lights alarm phone | door step shutter chime phone easel delete tap hover miss press granted denied cctv alarm |
+| gui | lightsOn alarm phone moving running noise gui sound fps | lights alarm phone | door step shutter chime easel delete hover miss press granted denied cctv alarm (the handheld: `handheld.shown` `handheld.tap`) |
 
 The sounds the original demos synthesised in code are now data: the weather's beds and thunder (cloud), the GUI's
 beeps and footsteps, plus new ambience for every world.
@@ -159,8 +164,8 @@ presets match the other worlds' suns to the sky's; links carry state across (`sk
 ## Layout
 
 ```
-index.html                  the page: canvas, HUD roots, the bar
-css/entities.css            shell, engine HUD, each feature's HUD (scoped by .fhud[data-feature])
+index.html                  the page: canvas, the feature HUD root (labels, toasts), the corner chip
+css/entities.css            shell, chip and toasts, what the features still draw on the screen (.fhud[data-feature])
 js/engine/
     host.js                 boot, GPU device, worlds, the frame, links
     scenario-format.js      schemas, entities <-> each feature's native scenario, includes
@@ -168,12 +173,15 @@ js/engine/
     compositor.js           depth linearize + nearest-wins merge, the atmosphere's inject target
     camera.js               composition transforms, the engine's fly camera
     input.js                input routing between worlds
-    hud.js                  the bar, hud.* entities
+    hud.js                  the corner chip, toasts (and the pickers, when the page could not start)
+    handheld.js             the engine's handheld (handheld, handheld.page): every option and readout, in every
+                            scenario; worlds offer theirs through handheld()
+    gui-kit.js              the Doom 3-style GUI toolkit (renderer, font atlas, DeviceContext, EntityGUI, PhoneGUI)
     audio.js                sound.* entities (WebAudio synthesis)
     expr.js                 the expression language
     gpu-choice.js           GPU adapter choice
 js/features/<feature>.js    each original engine, in one function scope (Features.define), plus its FeatureWorld:
-                            the host's interface (init, frame, depth, view, stats, set, anchor)
+                            the host's interface (init, frame, depth, view, stats, set, anchor, handheld)
 scenarios/*.json            the scenarios (index.json and embedded.js are generated)
 tools/embed-scenarios.mjs   catalog + embedded copy
 tools/import-native.mjs     import a scenario of the original demos

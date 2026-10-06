@@ -20,12 +20,6 @@
         {"$comment":"the valley's sun is the Sun as seen from the site"},
         {"type":"link","to":"valley.sunDir","value":"sol.sunAt['valley-site']"},
         {"type":"link","to":"valley.light","value":"sol.sunAt['valley-site'][1] < 0.03 ? 'night' : 'noon'"},
-
-        {"type":"hud.panel","id":"composition","anchor":"right","class":"small","lines":[
-            "<span class=\"t\">PLANETFALL</span>",
-            "near      {sol.body} · altitude {sol.altitude|dist}",
-            "origin    s = {sol.scale} m/unit · {sol.rebases} rebases",
-            "valley    {valley.light} · {valley.instances|int} instances",
-            "<span class=\"m\">8 the valley · 9 above it · 1 Gateway Station</span>"]}
+        {"type":"handheld.page","id":"planetfall","title":"Planetfall","nav":{"section":"SCENARIO","sub":"Where the valley stands","icon":[[88,86,214],"P"]},"sections":[{"header":"ORIGIN","cells":[{"type":"label","title":"Near","expr":"{sol.body}"},{"type":"label","title":"Altitude","expr":"{sol.altitude|dist}"},{"type":"label","title":"Scale","expr":"{sol.scale} m/unit"},{"type":"label","title":"Rebases","expr":"{sol.rebases}"}]},{"header":"VALLEY","cells":[{"type":"label","title":"Light","expr":"{valley.light}"},{"type":"label","title":"Instances","expr":"{valley.instances|int}"}],"footer":"8 the valley · 9 above it · 1 Gateway Station."}]}
     ]
 }

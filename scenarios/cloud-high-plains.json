@@ -169,11 +169,6 @@
             "type": "cloud.spawner", "id": "plains-cells", "area": [-40000,-40000,40000,40000], "rate": 9, "max": 22, "initial": 9, "seed": 12,
             "template": {"radius":[2200,5200],"top":[5500,11000],"precip":[0.25,0.95],"core":[0.35,0.6],"grow":[500,1000],"mature":[900,2400],"decay":[700,1400],"lightning":[0,4],"virga":[0,0.6],"drift":[0.8,1.2]}
         },
-        {"type":"hud.help","of":"cloud","lines":[
-            "<b>drag</b> look   <b>WASD</b> move   <b>Space/C</b> up/down   <b>Shift</b> ×5   <b>wheel</b> speed   <b>right click</b> (or Ctrl + click) grow a storm cell there",
-            "<b>1-9</b> weather   <b>0</b> auto   <b>N</b> rain   <b>J</b> cloud   <b>K</b> lightning   <b>, .</b> weather time scale   <b>T</b> lighting   <b>arrows</b> move the sun",
-            "<b>Q</b> quality   <b>M</b> render   <b>F</b> froxels   <b>G</b> tiles   <b>O</b> bloom   <b>V</b> view   <b>B</b> bus   <b>hold Z</b> buses ×10   <b>R</b> radar   <b>L</b> flashlight   <b>I</b> labels   <b>U</b> sound   <b>P</b> pause   <b>H</b> help",
-            "<b>X</b> walk / fly   <b>E</b> open / shut a door, sit / stand (aboard)   on foot: <b>WASD</b> walk, <b>Shift</b> run   ·   drop a scenario .json on the page"]},
 
         {"$comment":"the sound of the weather around the camera: the beds follow this world's stats, the cues its events"},
         {"type":"sound.bed","id":"rain","source":"white","filters":[["highpass",500,0.7],["lowpass",7000,0.7]],
@@ -197,6 +192,7 @@
             {"shot":{"source":"brown","filter":"lowpass","freq":140,"q":1,"env":[[0.01,"0.525 / (1 + dist / 5)"],[0.2,0]]},"delay":0.9}]},
         {"type":"sound.cue","on":"step","parts":[
             {"shot":{"source":"brown","filter":"lowpass","freq":300,"q":1,"env":[[0.01,"(run ? 0.32 : 0.22) * rand(0.8, 1.2)"],[0.12,0]]}},
-            {"shot":{"source":"white","filter":"wet ? 'bandpass' : 'highpass'","freq":"wet ? 1800 : 2500","q":"wet ? 1.2 : 0.5","env":[[0.005,"(run ? 0.16 : 0.11) * (wet ? 0.6 : 0.3)"],["wet ? 0.18 : 0.07",0]]}}]}
+            {"shot":{"source":"white","filter":"wet ? 'bandpass' : 'highpass'","freq":"wet ? 1800 : 2500","q":"wet ? 1.2 : 0.5","env":[[0.005,"(run ? 0.16 : 0.11) * (wet ? 0.6 : 0.3)"],["wet ? 0.18 : 0.07",0]]}}]},
+        {"type":"handheld.page","id":"controls","of":"cloud","title":"Controls","nav":{"icon":[[48,176,199],"C"]},"sections":[{"header":"MOVE","cells":[{"type":"label","title":"Look","value":"drag"},{"type":"label","title":"Move","value":"W A S D"},{"type":"label","title":"Up / down","value":"Space / C"},{"type":"label","title":"Faster","value":"Shift ×5"},{"type":"label","title":"Speed","value":"wheel"},{"type":"label","title":"Walk / fly","value":"X"},{"type":"label","title":"Door, sit / stand","value":"E"}]},{"header":"WEATHER","cells":[{"type":"label","title":"Weather","value":"1 - 9"},{"type":"label","title":"Auto weather","value":"0"},{"type":"label","title":"Rain","value":"N"},{"type":"label","title":"Cloud","value":"J"},{"type":"label","title":"Lightning","value":"K"},{"type":"label","title":"Weather time","value":", ."},{"type":"label","title":"Storm cell here","value":"right click"}]},{"header":"SKY & LIGHT","cells":[{"type":"label","title":"Lighting","value":"T"},{"type":"label","title":"Move the sun","value":"arrows"},{"type":"label","title":"Flashlight","value":"L"}]},{"header":"RENDERING","cells":[{"type":"label","title":"Quality","value":"Q"},{"type":"label","title":"Render mode","value":"M"},{"type":"label","title":"Froxels","value":"F"},{"type":"label","title":"Tiles","value":"G"},{"type":"label","title":"Bloom","value":"O"}]},{"header":"TOOLS","cells":[{"type":"label","title":"View","value":"V"},{"type":"label","title":"Bus","value":"B"},{"type":"label","title":"Buses ×10","value":"hold Z"},{"type":"label","title":"Radar","value":"R"},{"type":"label","title":"Labels","value":"I"},{"type":"label","title":"Sound","value":"U"}],"footer":"Or drop a scenario .json on the page."}]}
     ]
 }

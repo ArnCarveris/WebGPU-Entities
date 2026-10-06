@@ -2973,13 +2973,12 @@ class InputSystem {
 }
 
 // -------------------------------------------------------------------------------------------------- js/game/hud.js
-// Hud: the stats / traversal panel, toasts and the help panel (DOM overlays).
+// Hud: the stats / traversal readout (lines, shown on the engine's handheld, FeatureWorld.handheld) and toasts.
 
 class Hud {
     constructor(game) {
         this.game = game;
-        this.el = game.ui.$('hud');
-        this.help = game.ui.$('help');
+        this.lines = [];
         this.toastEl = game.ui.$('toast');
         this.toastUntil = 0;
         this.last = 0;
@@ -3032,39 +3031,40 @@ class Hud {
             lines.push('');
             lines.push(`<span class="t">DRONE</span> in ${drone.owners.map(i => w.areas[i].name).join(' + ')} → ${drone.target >= 0 ? w.areas[drone.target].name : '-'}`);
         }
-        this.el.innerHTML = lines.join('\n');
-        this.help.style.display = o.help ? 'block' : 'none';
+        this.lines = lines;
     }
 }
 
 // ---------------------------------------------------------------------------------------------- js/game/minimap.js
 // Minimap: top-down view centred on the player (areas, portals by state, view cones through the portals,
-// occluders, the ship and its route, drones). Click to teleport. Spans come from the scenario's `minimap`.
+// occluders, the ship and its route, drones). Click to teleport. Spans come from the scenario's `minimap`. It draws
+// into an off-screen canvas that the engine's handheld shows (and passes clicks back from).
 
 class Minimap {
+    static SIZE = 240;          // css px; the canvas is twice that
+
     constructor(game, canvas) {
         this.game = game;
         this.canvas = canvas;
+        canvas.width = canvas.height = Minimap.SIZE * 2;
         this.xf = null;
-        canvas.addEventListener('click', e => this.click(e));
     }
 
     get spans() { return Object.assign({ near: 110, far: 420 }, this.game.world.scn.minimap); }
 
     // teleport to the clicked spot: an indoor floor, or the ground / deck under it
-    click(e) {
-        const r = this.canvas.getBoundingClientRect(), m = this.xf, g = this.game;
+    click(u, v) {
+        const m = this.xf, g = this.game;
         if (!m || !g.world) return;
-        const x = m.ix(e.clientX - r.left), z = m.iz(e.clientY - r.top);
+        const x = m.ix(u * Minimap.SIZE), z = m.iz(v * Minimap.SIZE);
         const w = g.world, a = w.areas[w.areaAt([x, 1.0, z])];
         const y = !a.outdoor && !a.vehicle ? a.y : w.groundAt([x, 60, z], 0).y;
         g.player.teleport([x, y + g.player.cfg.eyeHeight, z]);
     }
 
     draw(vis) {
-        const game = this.game, w = game.world, cvs = this.canvas, dpr = Math.min(window.devicePixelRatio || 1, 2);
-        const cw = cvs.clientWidth, ch = cvs.clientHeight;
-        if (cvs.width !== cw * dpr) { cvs.width = cw * dpr; cvs.height = ch * dpr; }
+        const game = this.game, w = game.world, cvs = this.canvas, dpr = 2;
+        const cw = Minimap.SIZE, ch = Minimap.SIZE;
         const g = cvs.getContext('2d');
         g.setTransform(dpr, 0, 0, dpr, 0, 0);
         g.clearRect(0, 0, cw, ch);
@@ -3166,7 +3166,7 @@ const MASK_MODES = ['stencil', 'scissor', 'none'];
 
 class Game {
     constructor(fx) {
-        const mapCanvas = fx.ui.$('map');
+        const mapCanvas = document.createElement('canvas');
         this.fx = fx;
         this.ui = fx.ui;
         this.canvas = fx.canvas;
@@ -3220,7 +3220,6 @@ class Game {
             case 'Digit5': o.volumes = !o.volumes; break;
             case 'Digit6': o.occluders = !o.occluders; hud.toast(`Occluders ${o.occluders ? 'ON' : 'OFF'}`); break;
             case 'KeyM': o.map = !o.map; break;
-            case 'KeyH': o.help = !o.help; break;
             case 'KeyR': if (P.driving) hud.toast(P.toggleHelm()); P.cam.reset(); P.reset(P.cam.pos); break;
             case 'KeyV': if (P.driving) hud.toast(P.toggleHelm()); o.walk = !o.walk; if (o.walk) P.reset(P.cam.pos); hud.toast(o.walk ? 'Walk mode' : 'Fly mode (noclip)'); break;
             case 'KeyN': o.island = !o.island; break;
@@ -3300,7 +3299,6 @@ class Game {
         R.render({ globals: this.globals(viewProj, eye, t, W, H, mode === 'stencil'), areas: w.lightingTable(t), draws: fr.draws, cmds: fr.cmds, polys: fr.polys, stencil: mode === 'stencil', lines: lines.data, lineDepthCount: lines.depthCount });
 
         if (o.map) this.minimap.draw(vis);
-        this.mapCanvas.style.display = o.map ? 'block' : 'none';
         this.hud.tick(now, vis);
     }
 
@@ -3322,9 +3320,7 @@ class Game {
 
 // ------------------------------------------------------------------------------------- feature world
 // This demo as one world of the engine (js/engine/host.js calls these).
-const HUD_HTML = `<div data-hud="crosshair"></div><div data-hud="hud" class="panel"></div>
-    <canvas data-hud="map" title="Minimap: click to teleport"></canvas>
-    <div data-hud="help" class="panel"></div><div data-hud="toast" class="panel"></div>`;
+const HUD_HTML = `<div data-hud="crosshair"></div><div data-hud="toast" class="panel"></div>`;
 
 class FeatureWorld {
     constructor(fx) {
@@ -3371,6 +3367,36 @@ class FeatureWorld {
             shipSpeed: ship ? ship.v : 0, shipDist: ship ? Math.hypot(ship.M[12] - cam[0], ship.M[14] - cam[2]) : 1e9,
             drones: w.drones.length,
         };
+    }
+
+    // the readout, the minimap and every option, on the engine's handheld (js/engine/handheld.js)
+    handheld() {
+        const g = this.game, o = g.opts, P = g.player;
+        if (!g.world || !P) return [];
+        const key = code => () => g.onKey(code);
+        return [
+            { id: 'map', title: 'Map', sub: `${o.island ? 'the island' : 'around you'} · tap to teleport`, icon: [[52, 199, 89], 'M'], sections: [
+                { cells: [
+                    o.map ? { image: g.mapCanvas, aspect: 1, click: (u, v) => g.minimap.click(u, v) } : { text: 'The minimap is off.' },
+                    { toggle: 'Minimap', on: o.map, set: v => { o.map = v; } },
+                    { toggle: 'Whole island', on: o.island, set: v => { o.island = v; } }],
+                  footer: 'Portals: green passed, cyan sky only, amber culled, red closed, violet occluder.' }] },
+            { id: 'status', title: 'Status', sub: 'Visibility, traversal, player', icon: [[255, 149, 0], 'P'], sections: Handheld.panel(g.hud.lines) },
+            { id: 'options', title: 'Portals', sub: `culling ${o.culling ? 'on' : 'off'} · ${o.mode} · ${o.walk ? 'walk' : 'fly'}`, icon: [[48, 176, 199], 'V'], sections: [
+                { header: 'VISIBILITY', cells: [
+                    { toggle: 'Portal culling', on: o.culling, set: key('Digit1') },
+                    { toggle: 'Freeze visibility', on: o.freeze, set: key('Digit2') },
+                    { choice: 'Masking', options: MASK_MODES, index: MASK_MODES.indexOf(o.mode), pick: i => { o.mode = MASK_MODES[i]; } },
+                    { toggle: 'Occluders', on: o.occluders, set: key('Digit6') }] },
+                { header: 'DEBUG LINES', cells: [
+                    { toggle: 'Portal lines', on: o.portals, set: v => { o.portals = v; } },
+                    { toggle: 'Area volumes', on: o.volumes, set: v => { o.volumes = v; } }] },
+                { header: 'PLAYER', cells: [
+                    { toggle: 'Walk (off: fly)', on: o.walk, set: key('KeyV') },
+                    { action: 'Door at hand / the helm', run: key('KeyF') },
+                    { action: 'Reset', run: key('KeyR') }] },
+            ] },
+        ];
     }
 
     set(key, v) {

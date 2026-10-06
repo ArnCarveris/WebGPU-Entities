@@ -2,7 +2,8 @@
 // ScenarioFormat: everything is an entity.
 //
 // A scenario is one flat list of entities: { name, group, description, entities: [ { type, id?, ...fields } ] }.
-// Engine entities have plain types (camera, layer settings live on feature roots, hud.*, sound.*, link). A feature
+// Engine entities have plain types (camera, layer settings live on feature roots, hud.toast, handheld, handheld.page,
+// sound.*, link). A feature
 // world is a root entity whose type is the feature's name ({ type: "water", id: "river" }); everything that world
 // is made of is an entity of type "<feature>.<kind>": terrain stamps, lakes, storm cells, materials, models,
 // views, lighting presets, config blocks. Children belong to the only world of their feature, or to the one named
@@ -193,7 +194,7 @@ const ScenarioFormat = (() => {
     }
 
     // ------------------------------------------------------------------------------------------- includes
-    const ENGINE_TYPES = /^(hud\.|sound\.|link$|camera$)/;
+    const ENGINE_TYPES = /^(hud\.|sound\.|handheld(\.|$)|link$|camera$)/;
     const glob = pat => new RegExp(`^${pat.split('*').map(x => x.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`);
     const rename = (v, from, to) => {
         if (typeof v === 'string') return v === from ? to : v.replace(new RegExp(`(^|[^\\w.$'"])${from}(?=\\s*[.\\[])`, 'g'), `$1${to}`);

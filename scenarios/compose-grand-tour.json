@@ -9,7 +9,7 @@
         {"type":"cloud.render","radar":false},
         {"type":"cloud.weather","start":"fair cumulus"},
 
-        {"type":"include","scenario":"water-riverlands","as":"river","skip":["hud.help","sound.*"],
+        {"type":"include","scenario":"water-riverlands","as":"river","skip":["sound.*"],
             "root":{"label":"Water · Riverlands","layer":{"transform":{"offset":[6000,1395,6000]}}}},
         {"type":"cloud.clearing","label":"","pos":[6000,6000],"size":[2048,2048],"level":1370,"blend":260,"inset":true},
         {"type":"cloud.lake","label":"","pos":[5300,7900],"radius":1300,"level":1397},
@@ -18,7 +18,7 @@
             "sky":{"top":[0.3,0.45,0.72],"horizon":[0.72,0.74,0.78]},"ground":[0.24,0.22,0.18],"ambient":0.55,"fog":0.000004,"exposure":0.62},
         {"type":"water.lighting","start":"plains day"},
 
-        {"type":"include","scenario":"imposter-valley","as":"valley","skip":["hud.help","sound.*"],
+        {"type":"include","scenario":"imposter-valley","as":"valley","skip":["sound.*"],
             "root":{"label":"Imposter · Valley","layer":{"transform":{"offset":[14000,1438,-2000]}}}},
         {"type":"cloud.clearing","label":"","pos":[14000,-2000],"size":[3200,3200],"level":1395,"blend":300,"inset":true},
         {"type":"imposter.light","id":"plains afternoon","sun":{"azimuth":118,"elevation":14,"color":"#ffd2a8","intensity":2.6},
@@ -26,7 +26,7 @@
             "fog":{"color":"#c4ccd6","density":0.00008},"exposure":1,"emission":0.05},
         {"type":"imposter.environment","value":"plains afternoon"},
 
-        {"type":"include","scenario":"portal-bunker-compound","as":"bunker","skip":["hud.help","sound.*"],
+        {"type":"include","scenario":"portal-bunker-compound","as":"bunker","skip":["sound.*"],
             "root":{"label":"Portal · Bunker","layer":{"transform":{"offset":[-11000,1521.2,15000]}}}},
         {"type":"portal.outdoor","fog":[0.62,0.66,0.72,0.0012],"sunDir":[0.857,0.242,-0.456],"sunColor":[1.1,0.95,0.8]},
 
@@ -38,18 +38,8 @@
         {"type":"view","name":"Bunker island","pos":[-10930,1540,15120],"look":[-11000,1523,14990]},
         {"type":"view","name":"Above the anvils","pos":[12000,13800,18000],"look":[0,7000,-4000]},
 
-        {"type":"hud.help","of":"sky","lines":[
-            "<b>engine camera</b>: <b>drag</b> look   <b>WASD</b> move   <b>Space/C</b> up/down   <b>Shift</b> ×5   <b>wheel</b> speed   <b>view…</b> in the bar jumps",
-            "<b>`</b> gives the keys to the next world (the sky: <b>1-9</b> weather, <b>T</b> lighting, <b>K</b> lightning; the river: <b>R</b> rain, <b>X</b> dam...)",
-            "untick a world in the bar to see the others without it, Alt+click its name to see it alone"]},
         {"type":"link","to":"river.rain","value":"sky.rain > 0.05"},
-
-        {"type":"hud.panel","id":"composition","anchor":"right","class":"small","lines":[
-            "<span class=\"t\">GRAND TOUR</span>",
-            "weather   <b>{sky.weather}</b> · {sky.cells} cells",
-            "river     {river.volume|num: m³} · rain {river.rain|onoff}",
-            "valley    {valley.instances|int} instances",
-            "bunker    {bunker.area}",
-            "<span class=\"m\">keys: {focus} · {fps|0} fps</span>"]}
+        {"type":"handheld.page","id":"tour","title":"Grand Tour","nav":{"section":"SCENARIO","sub":"Every world at a glance","icon":[[255,45,85],"G"]},"sections":[{"header":"WORLDS","cells":[{"type":"label","title":"Weather","expr":"{sky.weather}"},{"type":"label","title":"Storm cells","expr":"{sky.cells}"},{"type":"label","title":"River volume","expr":"{river.volume|num: m³}"},{"type":"label","title":"River rain","expr":"{river.rain ? 'on' : 'off'}"},{"type":"label","title":"Valley instances","expr":"{valley.instances|int}"},{"type":"label","title":"Bunker area","expr":"{bunker.area}"}]}]},
+        {"type":"handheld.page","id":"flight","title":"Engine camera","nav":{"section":"SCENARIO","sub":"The free camera of this tour","icon":[[142,142,147],"E"]},"sections":[{"header":"MOVE","cells":[{"type":"label","title":"Look","value":"drag"},{"type":"label","title":"Move","value":"W A S D"},{"type":"label","title":"Up / down","value":"Space / C"},{"type":"label","title":"Faster","value":"Shift ×5"},{"type":"label","title":"Speed","value":"wheel"},{"type":"label","title":"Viewpoints","value":"view… in the bar"}]},{"header":"WORLDS","cells":[{"type":"label","title":"Keys to the next world","value":"`"},{"type":"label","title":"Hide a world","value":"untick it in the bar"},{"type":"label","title":"One world alone","value":"Alt+click its name"}],"footer":"The sky takes 1-9 weather, T lighting, K lightning; the river R rain, X dams. Each world's own page under Controls."}]}
     ]
 }

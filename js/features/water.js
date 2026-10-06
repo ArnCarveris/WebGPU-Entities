@@ -1746,20 +1746,16 @@ function fmtNum(x, unit = '') {
     return `${x.toFixed(a < 10 ? 1 : 0)}${unit}`;
 }
 
+// The screen keeps the in-world labels and toasts; the readout (lines) and every option are on the engine's handheld
+// (FeatureWorld.handheld)
 class Hud {
     constructor(ui) {
-        this.el = ui.$('hud');
-        this.help = ui.$('help');
-        this.toolsEl = ui.$('tools');
+        this.lines = [];
         this.toastEl = ui.$('toast');
         this.labels = ui.$('labels');
         this.lctx = this.labels.getContext('2d');
         this.showLabels = true;
         this.last = 0;
-    }
-
-    setTools(tools, current, brush) {
-        this.toolsEl.innerHTML = tools.map(t => `<b>${t.key}</b> <span class="${t === current ? 'sel' : ''}">${t.name}</span>`).join('   ') + `\nbrush ${brush.toFixed(0)} m`;
     }
 
     toast(msg, ms = 2200) {
@@ -1788,7 +1784,7 @@ class Hud {
         ];
         if (sim.warmupLeft > 0) lines.push(`<span class="w">settling water... ${Math.round(100 * (1 - sim.warmupLeft / c.warmup))}%</span>`);
         if (app.renderer.lastError) lines.push(`<span class="off">${app.renderer.lastError.slice(0, 90)}</span>`);
-        this.el.innerHTML = lines.join('\n');
+        this.lines = lines;
     }
 
     drawLabels(app) {
@@ -1853,7 +1849,6 @@ class App {
         this.water = { ...WATER_DEFAULTS, ...(scenario.water || {}) };
         this.tools = (scenario.tools || []).filter(t => TOOL_TYPES[t.type]).map(t => TOOL_TYPES[t.type](t));
         this.tool = this.tools[0] || null;
-        this.hud.setTools(this.tools, this.tool, this.brush);
         const L = scenario.lighting || {};
         this.lightNames = Object.keys(L).filter(k => typeof L[k] === 'object');
         this.setLight(L.start && L[L.start] ? L.start : this.lightNames[0]);
@@ -1884,11 +1879,10 @@ class App {
         const w = this.world;
         for (const code of pressed) {
             const t = this.tools.find(t => code === `Digit${t.key}` || code === `Numpad${t.key}`);
-            if (t) { this.tool = t; this.hud.setTools(this.tools, t, this.brush); this.fx.emit('tool', { name: t.name }); continue; }
+            if (t) { this.tool = t; this.fx.emit('tool', { name: t.name }); continue; }
             switch (code) {
                 case 'BracketLeft': case 'BracketRight':
                     this.brush = clamp(this.brush * (code === 'BracketRight' ? 1.25 : 0.8), 4, 200);
-                    this.hud.setTools(this.tools, this.tool, this.brush);
                     break;
                 case 'KeyB': w.boost = !w.boost; this.fx.emit('toggle', { on: w.boost }); this.hud.toast(w.boost ? 'Springs boosted' : 'Springs normal'); break;
                 case 'KeyR': w.rainOn = !w.rainOn; this.fx.emit('toggle', { on: w.rainOn }); this.hud.toast(w.rainOn ? 'Rain' : 'Rain stopped'); break;
@@ -1915,7 +1909,6 @@ class App {
                     break;
                 case 'KeyL': this.hud.showLabels = !this.hud.showLabels; break;
                 case 'KeyP': this.paused = !this.paused; break;
-                case 'KeyH': this.hud.help.style.display = this.hud.help.style.display === 'none' ? '' : 'none'; break;
             }
         }
     }
@@ -1997,9 +1990,7 @@ class App {
 
 // ------------------------------------------------------------------------------------- feature world
 // This demo as one world of the engine (js/engine/host.js calls these).
-const HUD_HTML = `<canvas class="labels" data-hud="labels"></canvas>
-    <div data-hud="hud" class="panel"></div><div data-hud="help" class="panel"></div>
-    <div data-hud="tools" class="panel"></div><div data-hud="toast" class="panel"></div>`;
+const HUD_HTML = `<canvas class="labels" data-hud="labels"></canvas><div data-hud="toast" class="panel"></div>`;
 
 class FeatureWorld {
     constructor(fx) {
@@ -2045,6 +2036,36 @@ class FeatureWorld {
             light: a.lightName, mode: RENDER_MODES[a.mode], tool: a.tool ? a.tool.name : '', acting: a.acting,
             height: cam[1] - Math.max(ground, w.seaLevel ?? -1e4), debris: a.debris.count, steps: a.stepsPerFrame,
         };
+    }
+
+    // the readout and every option, on the engine's handheld (js/engine/handheld.js)
+    handheld() {
+        const a = this.app, w = a.world;
+        if (!w) return [];
+        const key = code => () => a.handleKeys([code]);
+        const dams = w.entities.filter(e => e instanceof Dam);
+        return [
+            { id: 'status', title: 'Status', sub: 'Flow sim, water, waves, debris', icon: [[0, 122, 255], 'W'], sections: Handheld.panel(a.hud.lines) },
+            { id: 'options', title: 'Options', sub: `${a.tool ? a.tool.name : 'no tool'} · ${RENDER_MODES[a.mode]} · ${a.lightName}`, icon: [[48, 176, 199], 'O'], sections: [
+                { header: 'TOOL', cells: [
+                    a.tools.length && { choice: 'Tool', options: a.tools.map(t => ({ label: t.name, sub: `key ${t.key}` })), index: a.tools.indexOf(a.tool),
+                        pick: i => a.handleKeys([`Digit${a.tools[i].key}`]) },
+                    { slider: 'Brush', value: a.brush, min: 4, max: 200, fmt: v => `${v.toFixed(0)} m`, set: v => { a.brush = v; } }],
+                    footer: 'Right drag (or Ctrl + drag) on the terrain uses the tool; [ ] sizes the brush.' },
+                { header: 'WATER', cells: [
+                    { toggle: 'Boost springs', on: w.boost, set: key('KeyB') },
+                    { toggle: 'Rain', on: w.rainOn, set: key('KeyR') },
+                    dams.length && { toggle: 'Dams breached', on: dams.some(d => d.target), set: key('KeyX') },
+                    { action: 'Reset water', run: key('KeyN') },
+                    { slider: 'Sim steps / frame', value: a.stepsPerFrame, min: 0, max: 256, fmt: v => v.toFixed(0), set: v => { a.stepsPerFrame = Math.round(v); } },
+                    { toggle: 'Paused', on: a.paused, set: v => { a.paused = v; } }] },
+                { header: 'VIEW', cells: [
+                    { choice: 'Render', options: RENDER_MODES, index: a.mode, pick: i => { a.mode = i; } },
+                    a.lightNames.length > 1 && { choice: 'Lighting', options: a.lightNames, index: a.lightNames.indexOf(a.lightName), pick: i => a.setLight(a.lightNames[i]) },
+                    a.views.length && { choice: 'View', options: a.views.map(v => v.name), index: a.viewIndex, pick: i => { a.viewIndex = i; a.jump(a.views[i]); } },
+                    { toggle: 'Labels', on: a.hud.showLabels, set: v => { a.hud.showLabels = v; } }] },
+            ] },
+        ];
     }
 
     set(key, v) {

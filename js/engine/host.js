@@ -4,12 +4,14 @@
 //   1. catalog + scenario (scenarios/*.json over HTTP, or the embedded copies when opened from disk; a dropped file)
 //   2. one GPU device for everything (GpuChoice adapter), one canvas
 //   3. a world per feature root entity, each built by its feature script (Features) from its entities
-//      (ScenarioFormat.toNative), with its own HUD root and input scope
+//      (ScenarioFormat.toNative), with its own HUD root (in-world labels, toasts) and input scope; its options and
+//      readouts go on the handheld (world.handheld(), see handheld.js)
 //   4. the frame: the camera's world first, the camera passed to the others, each world renders (into the canvas when
 //      it is alone, else into its layer); the Compositor merges the layers (or hands them to the atmosphere world);
-//      then links, sound and HUD entities read the frame's stats
+//      then links and sound read the frame's stats, and the handheld draws over the finished frame
 //
-// Engine entities: camera, view, link, hud.*, sound.* (see camera.js, audio.js, hud.js). A link sets a world's parameter
+// Engine entities: camera, view, link, hud.toast, handheld, handheld.page, sound.* (see camera.js, audio.js, hud.js,
+// handheld.js). A link sets a world's parameter
 // from an expression every frame: { type: "link", to: "<world id>.<param>", value: expr }.
 //
 // Switching scenario reloads the page (?scenario=<id>): every world starts from a clean page and GPU device.
@@ -29,6 +31,7 @@ class Host {
         this.router = new InputRouter(this.canvas);
         this.audio = new AudioEngine();
         this.hud = new EngineHud(this);
+        this.handheld = new Handheld(this);
         this.instances = [];
         this.links = [];
         this.width = this.height = 0;
@@ -126,8 +129,8 @@ class Host {
     // ------------------------------------------------------------------------------------------- boot
     async boot() {
         await this.loadCatalog();
-        const id = this.scenarioId;
-        this.hud.buildBar(this.catalog, id, []);
+        const id = this.currentId = this.scenarioId;
+        this.hud.buildBar();
         window.addEventListener('dragover', e => e.preventDefault());
         window.addEventListener('drop', e => {
             e.preventDefault();
@@ -140,8 +143,8 @@ class Host {
         const scenario = this.scenario = await this.loadScenario(id);
         document.title = `${scenario.name} · WebGPU Entities`;
         await this.initGpu();
+        await this.handheld.init(scenario);
         await this.createWorlds(scenario);
-        this.hud.buildBar(this.catalog, id, this.instances);
         this.configure(scenario);
         this.last = performance.now();
         requestAnimationFrame(t => this.frame(t));
@@ -209,7 +212,7 @@ class Host {
             target: () => this.targetFor(inst),
             emit: (name, payload) => this.emit(root.id, name, payload),
             toast: (msg, ms) => this.hud.toast(msg, ms),
-            sound: { toggle: () => { const on = this.audio.toggle(); this.hud.paintSound?.(); return on; } },
+            sound: { toggle: () => this.audio.toggle() },
             fail: err => showFallback(err),
         };
         inst.world = module.create(ctx);
@@ -250,6 +253,7 @@ class Host {
             this.links.push({ inst, param: param.join('.'), value: Expr.compile(e.value), last: undefined });
         }
         this.hud.configure(ents);
+        this.handheld.rebuild();
         this.audio.configure(ents);
         if (this.composed) this.compositor = new Compositor(this.device, this.format);
         this.refreshHuds();
@@ -304,7 +308,6 @@ class Host {
             i.ui.root.classList.toggle('hidden', !i.visible);
             i.ui.root.classList.toggle('unfocused', this.composed && !focused);
         }
-        this.hud.refreshLayers();
     }
 
     // the frame of a world in composition space (anchors resolved against the world they ride on)
@@ -387,7 +390,7 @@ class Host {
             if (!this.failed) { this.failed = true; showFallback(err); }
             return;
         }
-        // links, sound, HUD read what the worlds did
+        // links, sound and the handheld read what the worlds did
         const scope = this.scope = this.buildScope();
         for (const l of this.links) {
             let v;
@@ -395,7 +398,11 @@ class Host {
             if (!Host.same(v, l.last)) { l.last = Array.isArray(v) ? [...v] : v; l.inst.world.set?.(l.param, v); }
         }
         this.audio.update(scope);
-        this.hud.update(scope, now);
+        try {
+            this.handheld.frame(now, dt);
+        } catch (err) {
+            if (!this.failed) { this.failed = true; showFallback(err); }
+        }
     }
 
     frameWorlds(now, dt) {
@@ -447,6 +454,7 @@ class Host {
 
 function showFallback(e) {
     console.error(e);
+    window.entities?.hud.buildFallbackBar();
     document.getElementById('error-message').textContent = String(e && (e.stack || e.message) || e);
     document.getElementById('fallback').classList.add('show');
 }

@@ -117,12 +117,6 @@
             "sink": 0.3, "maxSlope": 0.6, "seed": 6
         },
 
-        {"type":"hud.help","of":"imposter","lines":[
-            "<b>drag</b> look   <b>WASD</b> move   <b>Q/E</b> down/up   <b>Shift</b> fast   <b>wheel</b> speed",
-            "<b>1 2 3</b> LOD auto / mesh / imposter   <b>[ ]</b> LOD distance",
-            "<b>B</b> frame blend   <b>P</b> parallax   <b>O</b> depth offset   <b>T</b> LOD tint   <b>G</b> shadows",
-            "<b>K</b> next lighting   <b>V</b> atlas view   <b>N</b> next model   <b>R</b> reset camera   <b>L</b> load   <b>H</b> hide UI",
-            "drop a .glb / .gltf / .obj to bake it, or a scenario .json"]},
         {"type":"sound.bed","id":"wind","source":"brown","filters":[["bandpass",420,0.8]],
             "gain":"0.03 + 0.05 * smoothstep(5, 400, imposter.height)","filter":[0,"300 + 160 * sin(time * 0.41) * sin(time * 0.17 + 0.7)"],"smooth":1.0},
         {"type":"sound.bed","id":"leaves","source":"white","filters":[["highpass",2500,0.7],["lowpass",8000,0.7]],
@@ -135,6 +129,7 @@
             {"tone":[4200,0.03,"square",0.004]},{"tone":[4200,0.03,"square",0.004],"delay":0.06},{"tone":[4200,0.03,"square",0.004],"delay":0.12}]},
         {"type":"sound.cue","on":"toggle","parts":[{"tone":["on ? 660 : 880",0.07,"sine",0.03,"on ? 990 : 440"]}]},
         {"type":"sound.cue","on":"relight","parts":[{"tone":[520,0.25,"sine",0.025,780]}]},
-        {"type":"sound.cue","on":"baked","parts":[{"tone":[880,0.08,"sine",0.03]},{"tone":[1320,0.12,"sine",0.03],"delay":0.09}]}
+        {"type":"sound.cue","on":"baked","parts":[{"tone":[880,0.08,"sine",0.03]},{"tone":[1320,0.12,"sine",0.03],"delay":0.09}]},
+        {"type":"handheld.page","id":"controls","of":"imposter","title":"Controls","nav":{"icon":[[52,199,89],"I"]},"sections":[{"header":"MOVE","cells":[{"type":"label","title":"Look","value":"drag"},{"type":"label","title":"Move","value":"W A S D"},{"type":"label","title":"Down / up","value":"Q / E"},{"type":"label","title":"Fast","value":"Shift"},{"type":"label","title":"Speed","value":"wheel"},{"type":"label","title":"Reset camera","value":"R"}]},{"header":"LOD","cells":[{"type":"label","title":"Auto / mesh / imposter","value":"1 2 3"},{"type":"label","title":"LOD distance","value":"[ ]"},{"type":"label","title":"LOD tint","value":"T"}]},{"header":"IMPOSTERS","cells":[{"type":"label","title":"Frame blend","value":"B"},{"type":"label","title":"Parallax","value":"P"},{"type":"label","title":"Depth offset","value":"O"},{"type":"label","title":"Shadows","value":"G"},{"type":"label","title":"Atlas view","value":"V"}]},{"header":"SCENE","cells":[{"type":"label","title":"Next lighting","value":"K"},{"type":"label","title":"Next model","value":"N"},{"type":"label","title":"Load a model","value":"L"},{"type":"label","title":"Hide the UI","value":"H"}],"footer":"Drop a .glb / .gltf / .obj to bake it, or a scenario .json."}]}
     ]
 }

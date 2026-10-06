@@ -18,12 +18,6 @@
 
         {"type":"camera","from":"bunker"},
         {"type":"link","to":"sky.indoors","value":"!bunker.outdoor"},
-
-        {"type":"hud.panel","id":"composition","anchor":"right","class":"small","lines":[
-            "<span class=\"t\">BUNKER ON THE RESERVOIR</span>",
-            "area      <b>{bunker.area}</b>{bunker.outdoor ? '' : ' · <span class=\"w\">indoors: the rain stays out</span>'}",
-            "weather   <b>{sky.weather}</b> · rain here {sky.rain|pct}",
-            "storms    {sky.cells} cells · {sky.flashes} flashes",
-            "<span class=\"m\">keys: {focus} (` cycles: the sky takes 1-9 weather)</span>"]}
+        {"type":"handheld.page","id":"reservoir","title":"Reservoir","nav":{"section":"SCENARIO","sub":"Area, weather, storms","icon":[[255,149,0],"B"]},"sections":[{"header":"BUNKER","cells":[{"type":"label","title":"Area","expr":"{bunker.area}"},{"type":"label","title":"Rain","expr":"{bunker.outdoor ? 'falls here' : 'stays out (indoors)'}"}]},{"header":"WEATHER","cells":[{"type":"label","title":"Weather","expr":"{sky.weather}"},{"type":"label","title":"Rain here","expr":"{sky.rain|pct}"},{"type":"label","title":"Storm cells","expr":"{sky.cells}"},{"type":"label","title":"Flashes","expr":"{sky.flashes}"}],"footer":"` cycles the keys: the sky takes 1-9 weather."}]}
     ]
 }

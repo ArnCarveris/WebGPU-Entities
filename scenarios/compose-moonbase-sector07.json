@@ -9,21 +9,18 @@
         {"type":"origin.bookmark","key":"8","name":"Sector 07, Shackleton Base","at":{"parent":"sector07-site","offset":[14,6,18]},"look":"sector07-site"},
         {"type":"origin.start","value":"8"},
 
-        {"type":"include","scenario":"gui-sector-07","as":"sector",
+        {"type":"include","scenario":"gui-sector-07","as":"sector","skip":["hud.toast"],
             "root":{"label":"GUI · Sector 07","layer":{"transform":{"anchor":"sol:sector07-site","offset":[0,0.12,0]}}}},
         {"$comment":"seen from outside, the facility needs a far plane past its 100 m; the handheld waits in the pocket"},
         {"type":"gui.player","far":4000},
-        {"type":"gui.phone","startShown":false},
+        {"type":"handheld","startShown":false},
         {"$comment":"out on the Moon the facility doesn't fade into its room's darkness, and the sunlit ground lights its walls a little"},
         {"type":"gui.facility","fog":0.0005,"ambient":0.12},
 
         {"$comment":"the camera: sol's flight, or (` gives it the keys) the facility's player, each going on from where it was"},
         {"type":"camera","from":["sol","sector"],"carry":false},
 
-        {"type":"hud.panel","id":"composition","anchor":"right","class":"small","lines":[
-            "<span class=\"t\">SECTOR 07 ON THE MOON</span>",
-            "keys      <b>{focus}</b>{focus == 'sector' ? ' · TAB handheld · click the screens' : ' · ` enters the facility'}",
-            "near      {sol.body} · altitude {sol.altitude|dist}",
-            "facility  lights {sector.lightsOn|onoff} · alarm {sector.alarm|onoff}"]}
+        {"type":"hud.toast","text":"` enters the facility · TAB: the handheld","ms":5000},
+        {"type":"handheld.page","id":"moon","title":"Moon","nav":{"section":"SCENARIO","sub":"Where the facility stands","icon":[[88,86,214],"M"]},"sections":[{"header":"SECTOR 07 ON THE MOON","cells":[{"type":"label","title":"Near","expr":"{sol.body}"},{"type":"label","title":"Altitude","expr":"{sol.altitude|dist}"},{"type":"label","title":"Facility lights","expr":"{sector.lightsOn ? 'on' : 'off'}"},{"type":"label","title":"Alarm","expr":"{sector.alarm ? 'on' : 'off'}"}],"footer":"` hands the keys and the camera between Entity Origin's flight and the facility's player."}]}
     ]
 }

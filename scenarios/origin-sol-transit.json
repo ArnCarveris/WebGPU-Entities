@@ -138,17 +138,12 @@
             "size": [3,90], "seed": 8
         },
 
-        {"type":"hud.help","of":"origin","lines":[
-            "<b>drag</b> look   <b>WASD</b> move   <b>Space/C</b> up/down (origin +Y)   <b>Q/E</b> roll",
-            "<b>Shift</b> ×10   <b>Ctrl</b> ×0.1   <b>wheel</b> speed",
-            "<b>T R G</b> origin translation / rotation / scale rebasing on/off",
-            "<b>O</b> rebase every frame   <b>[ ]</b> field density   <b>L</b> labels   <b>P</b> pause   <b>H</b> help",
-            "drop a scenario .json on the page"]},
         {"type":"sound.bed","id":"drive","source":"brown","filters":[["lowpass",220,0.7]],
             "gain":"min(0.16, 0.014 * log(1 + origin.speed) / log(10))","filter":[0,"160 + 70 * log(1 + origin.speed) / log(10)"],"smooth":0.4},
         {"type":"sound.bed","id":"hum","source":"osc","wave":"sine","freq":52,"filters":[["lowpass",300,0.7]],"gain":0.018},
         {"type":"sound.cue","on":"rebase","parts":[{"tone":[2400,0.025,"sine","reason == 'T' ? 0.006 : 0.014"]}]},
         {"type":"sound.cue","on":"toggle","parts":[{"tone":["on ? 660 : 880",0.07,"sine",0.03,"on ? 990 : 440"]}]},
-        {"type":"sound.cue","on":"jump","parts":[{"shot":{"source":"white","filter":"bandpass","freq":300,"q":2,"env":[[0.15,0.18],[0.6,0.08],[1.0,0]],"sweep":[3200,0.9]}}]}
+        {"type":"sound.cue","on":"jump","parts":[{"shot":{"source":"white","filter":"bandpass","freq":300,"q":2,"env":[[0.15,0.18],[0.6,0.08],[1.0,0]],"sweep":[3200,0.9]}}]},
+        {"type":"handheld.page","id":"controls","of":"origin","title":"Controls","nav":{"icon":[[88,86,214],"O"]},"sections":[{"header":"MOVE","cells":[{"type":"label","title":"Look","value":"drag"},{"type":"label","title":"Move","value":"W A S D"},{"type":"label","title":"Up / down (origin +Y)","value":"Space / C"},{"type":"label","title":"Roll","value":"Q / E"},{"type":"label","title":"×10 / ×0.1","value":"Shift / Ctrl"},{"type":"label","title":"Speed","value":"wheel"}]},{"header":"ORIGIN","cells":[{"type":"label","title":"Translation rebasing","value":"T"},{"type":"label","title":"Rotation rebasing","value":"R"},{"type":"label","title":"Scale rebasing","value":"G"},{"type":"label","title":"Rebase every frame","value":"O"},{"type":"label","title":"Field density","value":"[ ]"}]},{"header":"VIEW","cells":[{"type":"label","title":"Labels","value":"L"},{"type":"label","title":"Pause","value":"P"},{"type":"label","title":"Bookmarks","value":"1 - 9"}],"footer":"Or drop a scenario .json on the page."}]}
     ]
 }

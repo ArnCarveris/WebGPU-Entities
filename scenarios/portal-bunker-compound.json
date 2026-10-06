@@ -459,15 +459,6 @@
         {"type":"portal.light","pos":[55,10.9,-1],"color":[0.7,0.85,1],"intensity":1.6,"radius":5,"model":"coldLamp"},
         {"type":"portal.light","pos":[55,9.2,2.2],"color":[0.2,1,0.6],"intensity":1,"radius":3},
         {"type":"portal.drone","model":"drone","pos":[0,1.8,5],"speed":3.2,"light":{"color":[1,0.25,0.15],"intensity":1.6,"radius":4}},
-        {"type":"hud.help","of":"portal","lines":[
-            "<b>click</b> mouse look   <b>WASD</b> move   <b>Space</b> jump   <b>Shift</b> run   <b>V</b> walk / fly",
-            "ladders: <b>W/S</b> climb   fly mode: <b>E/Q</b> up/down   <b>N</b> map: near / island",
-            "<b>F</b> at the ship's wheel: take the helm (<b>W/S</b> throttle, <b>A/D</b> steer, <b>X</b> stop, <b>F</b> leave)",
-            "<b>F</b> door status   <b>R</b> reset   <b>minimap click</b> teleport",
-            "<b>1</b> portal culling   <b>2</b> freeze vis   <b>3</b> masking: stencil / scissor / none",
-            "<b>4</b> portal lines   <b>5</b> area volumes   <b>6</b> occluders   <b>M</b> map   <b>H</b> help",
-            "drop a scenario .json on the page",
-            "portals: <span class=\"on\">passed</span>  <span class=\"t\">sky only</span>  <span class=\"w\">culled</span>  <span class=\"d\">closed</span>  <span class=\"p\">occluder</span>"]},
         {"type":"sound.bed","id":"wind","source":"brown","filters":[["bandpass",380,0.9]],"smooth":0.8,
             "gain":"portal.outdoor ? 0.05 + 0.02 * sin(time * 0.4) : 0.006","filter":[0,"300 + 120 * sin(time * 0.31)"]},
         {"type":"sound.bed","id":"surf","source":"white","filters":[["lowpass",900,0.7]],"smooth":1.5,
@@ -481,6 +472,7 @@
             {"noise":{"filter":"lowpass","freq":600,"vol":"result == 'locked' ? 0 : 0.08","dur":0.6}}]},
         {"type":"sound.cue","on":"step","parts":[
             {"shot":{"source":"brown","filter":"lowpass","freq":"swim ? 500 : 280","q":1,"env":[[0.01,"(run ? 0.28 : 0.18) * rand(0.8, 1.2)"],[0.12,0]]}},
-            {"noise":{"filter":"swim ? 'bandpass' : 'highpass'","freq":"swim ? 1400 : 2600","q":0.7,"vol":"swim ? 0.05 : 0.02","dur":"swim ? 0.25 : 0.06"}}]}
+            {"noise":{"filter":"swim ? 'bandpass' : 'highpass'","freq":"swim ? 1400 : 2600","q":0.7,"vol":"swim ? 0.05 : 0.02","dur":"swim ? 0.25 : 0.06"}}]},
+        {"type":"handheld.page","id":"controls","of":"portal","title":"Controls","nav":{"icon":[[255,149,0],"P"]},"sections":[{"header":"MOVE","cells":[{"type":"label","title":"Mouse look","value":"click"},{"type":"label","title":"Move","value":"W A S D"},{"type":"label","title":"Jump","value":"Space"},{"type":"label","title":"Run","value":"Shift"},{"type":"label","title":"Walk / fly","value":"V"},{"type":"label","title":"Ladders","value":"W / S"},{"type":"label","title":"Fly up / down","value":"E / Q"}]},{"header":"SHIP","cells":[{"type":"label","title":"Take / leave the helm","value":"F"},{"type":"label","title":"Throttle","value":"W / S"},{"type":"label","title":"Steer","value":"A / D"},{"type":"label","title":"Stop","value":"X"}]},{"header":"WORLD","cells":[{"type":"label","title":"Door at hand","value":"F"},{"type":"label","title":"Reset","value":"R"},{"type":"label","title":"Teleport","value":"minimap click"},{"type":"label","title":"Map near / island","value":"N"},{"type":"label","title":"Map","value":"M"}]},{"header":"PORTALS","cells":[{"type":"label","title":"Portal culling","value":"1"},{"type":"label","title":"Freeze visibility","value":"2"},{"type":"label","title":"Masking","value":"3"},{"type":"label","title":"Portal lines","value":"4"},{"type":"label","title":"Area volumes","value":"5"},{"type":"label","title":"Occluders","value":"6"}],"footer":"Portal lines: green passed, cyan sky only, amber culled, red closed, violet occluder. Or drop a scenario .json on the page."}]}
     ]
 }

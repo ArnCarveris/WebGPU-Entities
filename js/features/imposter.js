@@ -2724,11 +2724,11 @@ class InputSystem {
 }
 
 // ================================================================ HUD + control panel
+// The screen keeps toasts; the readout (lines) and every control are on the engine's handheld (FeatureWorld.handheld)
 class Hud {
     constructor(game) {
         this.game = game;
-        this.el = game.ui.$('hud');
-        this.help = game.ui.$('help');
+        this.lines = [];
         this.toastEl = game.ui.$('toast');
         this.next = 0;
         this.frames = 0;
@@ -2783,100 +2783,25 @@ class Hud {
             if (f) L.push(`focus ${f.name}: frames ${f.sel.cells.map((c, k) => `(${c[0]},${c[1]}) ${f.sel.w[k].toFixed(2)}`).join('  ')}`);
             if (w.warnings.length) L.push(`<span class="d">${w.warnings.length} warning(s), see console</span>`);
         }
-        this.el.innerHTML = L.join('\n');
+        this.lines = L;
     }
 }
 
+// What the bake controls are set to (the handheld's Bake page): they follow the focused model
 class ControlPanel {
     constructor(game) {
         this.game = game;
-        const el = this.el = game.ui.$('controls');
-        const seg = (k, vals) => `<div class="seg" data-k="${k}">${vals.map(v => `<button data-v="${v}">${v}</button>`).join('')}</div>`;
-        const range = (k, label, min, max, step) => `<label class="row"><span>${label}</span><input type="range" data-k="${k}" min="${min}" max="${max}" step="${step}"><b data-o="${k}"></b></label>`;
-        const chk = (k, label) => `<label class="row chk"><input type="checkbox" data-k="${k}">${label}</label>`;
-        const sel = (k, vals) => `<select data-b="${k}">${vals.map(v => `<option value="${v}">${v}</option>`).join('')}</select>`;
-        el.innerHTML = `
-            <div class="t">RUNTIME</div>
-            <div class="row"><span>LOD</span>${seg('lodMode', LOD_MODES)}</div>
-            ${range('lodDistance', 'LOD dist', 2, 300, 1)}
-            ${range('fade', 'fade band', 0, 0.8, 0.01)}
-            ${range('far', 'far', 100, 3000, 10)}
-            ${chk('blend', 'blend 3 frames')}
-            ${chk('parallax', 'depth parallax')}
-            ${chk('depthOffset', 'pixel depth offset')}
-            ${chk('tint', 'LOD tint + billboards')}
-            <div class="row"><span>atlas</span><select data-k="atlasView">${ATLAS_VIEWS.map(v => `<option value="${v}">${v}</option>`).join('')}</select></div>
-            <div class="t">SHADOWS</div>
-            ${chk('shadows', `${CASCADES} cascades, imposters cast + receive`)}
-            ${range('shadowDistance', 'distance', 40, 2500, 10)}
-            ${chk('cascadeTint', 'tint by cascade')}
-            <div class="t">LIGHTING <span class="muted">(runtime only, never rebakes)</span></div>
-            <div class="row"><span>preset</span><select data-l="preset"></select></div>
-            <label class="row"><span>sun az</span><input type="range" data-l="azimuth" min="0" max="360" step="1"><b data-lo="azimuth"></b></label>
-            <label class="row"><span>sun el</span><input type="range" data-l="elevation" min="2" max="90" step="1"><b data-lo="elevation"></b></label>
-            <label class="row"><span>lights</span><input type="range" data-l="emission" min="0" max="2" step="0.01"><b data-lo="emission"></b></label>
-            <div class="t">BAKE</div>
-            <div class="row"><span>model</span><select data-b="focus"></select></div>
-            <div class="row"><span>frames</span>${sel('grid', GRID_CHOICES)}${sel('res', RES_CHOICES)}${sel('mode', ['hemi', 'full'])}</div>
-            <div class="row"><button class="act" data-a="rebake">Rebake</button></div>
-            <div class="row muted" data-o="bakeInfo"></div>
-            <div class="t">DATA</div>
-            <div class="row"><button class="act" data-a="load">Load model / scenario…</button></div>
-            <div class="row"><button class="act" data-a="export">Export scenario JSON</button></div>`;
-        el.addEventListener('click', e => {
-            const b = e.target.closest('button');
-            if (!b) return;
-            const s = b.closest('.seg');
-            if (s) this.game.set(s.dataset.k, b.dataset.v);
-            else this.game.action(b.dataset.a);
-            b.blur();
-        });
-        const value = t => (t.type === 'checkbox' ? t.checked : t.type === 'range' ? +t.value : t.value);
-        el.addEventListener('input', e => {
-            const t = e.target;
-            if (t.dataset.k) this.game.set(t.dataset.k, value(t));
-            else if (t.dataset.l && t.type === 'range') this.game.relight(t.dataset.l, value(t));
-        });
-        el.addEventListener('change', e => {
-            const t = e.target;
-            if (t.dataset.b === 'focus') this.game.set('focus', t.value);
-            if (t.dataset.l === 'preset') this.game.relight('preset', t.value);
-            t.blur();
-        });
+        this.bake = { grid: 8, res: 256, mode: 'hemi' };
+        this.focus = null;
     }
 
-    field(sel) { return this.el.querySelector(sel); }
-
     sync() {
-        const st = this.game.settings, el = this.el;
-        el.querySelectorAll('.seg').forEach(s => s.querySelectorAll('button').forEach(b => b.classList.toggle('on', st[s.dataset.k] === b.dataset.v)));
-        el.querySelectorAll('input[data-k], select[data-k]').forEach(i => { if (i.type === 'checkbox') i.checked = !!st[i.dataset.k]; else i.value = st[i.dataset.k]; });
-        const L = this.game.lighting, ps = this.field('[data-l=preset]');
-        if (ps.dataset.names !== L.names.join('|')) { ps.innerHTML = L.names.map(n => `<option>${n}</option>`).join(''); ps.dataset.names = L.names.join('|'); }
-        ps.value = L.name;
-        el.querySelectorAll('input[data-l]').forEach(i => { i.value = L.target[i.dataset.l]; });
-        el.querySelectorAll('b[data-lo]').forEach(b => { const v = L.target[b.dataset.lo]; b.textContent = b.dataset.lo === 'emission' ? v.toFixed(2) : v.toFixed(0); });
-        el.querySelectorAll('b[data-o]').forEach(b => {
-            const v = st[b.dataset.o];
-            b.textContent = b.dataset.o === 'fade' ? v.toFixed(2) : v.toFixed(0);
-        });
-        const w = this.game.world, f = this.field('[data-b=focus]');
-        const names = w ? w.list.filter(a => a.asset.settings.enabled).map(a => a.name) : [];
-        if (f.dataset.names !== names.join('|')) { f.innerHTML = names.map(n => `<option>${n}</option>`).join(''); f.dataset.names = names.join('|'); }
-        f.value = st.focus;
-        const a = w && w.archetypes.get(st.focus), s = a && a.asset.settings, at = a && a.asset.atlas;
-        if (s && s.enabled && document.activeElement?.tagName !== 'SELECT') {
-            this.field('[data-b=grid]').value = s.grid;
-            this.field('[data-b=res]').value = s.res;
-            this.field('[data-b=mode]').value = s.mode;
-        }
-        this.field('[data-o=bakeInfo]').textContent = at
-            ? `${at.grid * at.res}px atlas, ${at.levels} mips, ${a.asset.mesh.triangles} tris, baked in ${at.bakeMs.toFixed(0)} ms`
-            : '';
+        const g = this.game, st = g.settings, a = g.world && g.world.archetypes.get(st.focus), s = a && a.asset.settings;
+        if (s && s.enabled && st.focus !== this.focus) { this.focus = st.focus; this.bake = { grid: s.grid, res: s.res, mode: s.mode }; }
     }
 
     bakeSettings() {
-        return { grid: +this.field('[data-b=grid]').value, res: +this.field('[data-b=res]').value, mode: this.field('[data-b=mode]').value };
+        return { ...this.bake };
     }
 }
 
@@ -3042,7 +2967,6 @@ class Game {
             case 'KeyR': this.camera.reset(this.scenario.camera, this.world); break;
             case 'KeyL': this.ui.$('file').click(); break;
             case 'KeyK': this.lighting.cycle(); this.toast(`Lighting: ${this.lighting.name} (no rebake)`, 1200); this.panel.sync(); this.fx.emit('relight', { name: this.lighting.name }); break;
-            case 'KeyH': this.ui.root.classList.toggle('hidden-ui'); break;
         }
     }
 
@@ -3089,10 +3013,8 @@ class Game {
         if (best < 0) { this.focusInfo = null; return; }
         const inst = a.instance(best), c = v3.add(inst.pos, quat.rotate(inst.rot, v3.mul(at.center, inst.scale)));
         const dir = quat.rotate(quat.conj(inst.rot), v3.norm(v3.sub(this.camera.pos, c)));
-        const panel = this.ui.root.classList.contains('hidden-ui') ? null : this.panel.el.getBoundingClientRect();
         this.focusInfo = {
-            name: a.name, atlas: at, sel: Oct.select(dir, at.grid, at.full, this.settings.blend), view: this.settings.atlasView,
-            rightInset: panel && panel.width && panel.width < window.innerWidth * 0.6 ? window.innerWidth - panel.left : 0,
+            name: a.name, atlas: at, sel: Oct.select(dir, at.grid, at.full, this.settings.blend), view: this.settings.atlasView, rightInset: 0,
         };
     }
 
@@ -3122,8 +3044,7 @@ class Game {
 
 // ------------------------------------------------------------------------------------- feature world
 // This demo as one world of the engine (js/engine/host.js calls these).
-const HUD_HTML = `<div data-hud="hud" class="panel"></div><div data-hud="controls" class="panel"></div>
-    <div data-hud="help" class="panel"></div><div data-hud="toast" class="panel"></div>
+const HUD_HTML = `<div data-hud="toast" class="panel"></div>
     <input data-hud="file" type="file" multiple accept=".glb,.gltf,.bin,.obj,.mtl,.json,.png,.jpg,.jpeg,.webp" hidden>`;
 
 class FeatureWorld {
@@ -3170,6 +3091,56 @@ class FeatureWorld {
             lod: st.lodMode, lodDistance: st.lodDistance, shadows: st.shadows, light: g.lighting.name,
             instances: inst, meshes, imposters, height: w ? cam[1] - w.heightAt(cam[0], cam[2]) : 0,
         };
+    }
+
+    // the readout and every control, on the engine's handheld (js/engine/handheld.js)
+    handheld() {
+        const g = this.game, st = g.settings, L = g.lighting, w = g.world, P = g.panel;
+        if (!st) return [];
+        const set = k => v => g.set(k, v);
+        const names = w ? w.list.filter(a => a.asset.settings.enabled).map(a => a.name) : [];
+        const a = w && w.archetypes.get(st.focus), at = a && a.asset.atlas;
+        const pick = (list, k) => ({ options: list.map(String), index: list.indexOf(P.bake[k]), pick: i => { P.bake[k] = list[i]; } });
+        return [
+            { id: 'status', title: 'Status', sub: 'Frame, LOD, models and atlases', icon: [[52, 199, 89], 'I'], sections: Handheld.panel(g.hud.lines) },
+            { id: 'runtime', title: 'Runtime', sub: `LOD ${st.lodMode} · ${st.lodDistance.toFixed(0)} m · shadows ${st.shadows ? 'on' : 'off'}`, icon: [[0, 122, 255], 'R'], sections: [
+                { header: 'LOD', cells: [
+                    { choice: 'LOD', options: LOD_MODES, index: LOD_MODES.indexOf(st.lodMode), pick: i => g.set('lodMode', LOD_MODES[i]) },
+                    { slider: 'LOD distance', value: st.lodDistance, min: 2, max: 300, fmt: v => `${v.toFixed(0)} m`, set: v => g.set('lodDistance', Math.round(v)) },
+                    { slider: 'Fade band', value: st.fade, min: 0, max: 0.8, fmt: v => v.toFixed(2), set: set('fade') },
+                    { slider: 'Far', value: st.far, min: 100, max: 3000, fmt: v => `${v.toFixed(0)} m`, set: v => g.set('far', Math.round(v / 10) * 10) }] },
+                { header: 'IMPOSTERS', cells: [
+                    { toggle: 'Blend 3 frames', on: st.blend, set: set('blend') },
+                    { toggle: 'Depth parallax', on: st.parallax, set: set('parallax') },
+                    { toggle: 'Pixel depth offset', on: st.depthOffset, set: set('depthOffset') },
+                    { toggle: 'LOD tint + billboards', on: st.tint, set: set('tint') },
+                    { choice: 'Atlas view', options: ATLAS_VIEWS, index: ATLAS_VIEWS.indexOf(st.atlasView), pick: i => g.set('atlasView', ATLAS_VIEWS[i]) }] },
+                { header: 'SHADOWS', cells: [
+                    { toggle: `${CASCADES} cascades`, key: 'shadows', on: st.shadows, set: set('shadows') },
+                    { slider: 'Distance', value: st.shadowDistance, min: 40, max: 2500, fmt: v => `${v.toFixed(0)} m`, set: v => g.set('shadowDistance', Math.round(v / 10) * 10) },
+                    { toggle: 'Tint by cascade', on: st.cascadeTint, set: set('cascadeTint') }] },
+            ] },
+            { id: 'lighting', title: 'Lighting', sub: `${L.name} · never rebakes`, icon: [[255, 149, 0], 'L'], sections: [
+                { cells: [
+                    { choice: 'Preset', options: L.names, index: L.names.indexOf(L.name), pick: i => g.relight('preset', L.names[i]) },
+                    { slider: 'Sun azimuth', value: L.target.azimuth, min: 0, max: 360, fmt: v => `${v.toFixed(0)}°`, set: v => g.relight('azimuth', v) },
+                    { slider: 'Sun elevation', value: L.target.elevation, min: 2, max: 90, fmt: v => `${v.toFixed(0)}°`, set: v => g.relight('elevation', v) },
+                    { slider: 'Lights', value: L.target.emission, min: 0, max: 2, fmt: v => v.toFixed(2), set: v => g.relight('emission', v) }],
+                  footer: 'Runtime only: the atlases keep their bake.' }] },
+            { id: 'bake', title: 'Bake', sub: st.focus || 'no model', icon: [[175, 82, 222], 'B'], sections: [
+                { cells: [
+                    names.length && { choice: 'Model', options: names, index: names.indexOf(st.focus), pick: i => g.set('focus', names[i]) },
+                    { choice: 'Frames', ...pick(GRID_CHOICES, 'grid'), value: P.bake.grid },
+                    { choice: 'Resolution', ...pick(RES_CHOICES, 'res'), value: P.bake.res },
+                    { choice: 'Hemisphere', ...pick(['hemi', 'full'], 'mode'), value: P.bake.mode },
+                    { action: g.baking ? 'Baking…' : 'Rebake', run: () => g.action('rebake') },
+                    at && { label: '', value: `${at.grid * at.res}px atlas, ${at.levels} mips, ${a.asset.mesh.triangles} tris, baked in ${at.bakeMs.toFixed(0)} ms` }] },
+                { header: 'DATA', cells: [
+                    { action: 'Load model / scenario…', run: () => g.action('load') },
+                    { action: 'Export scenario JSON', run: () => g.action('export') },
+                    { action: 'Reset camera', run: () => g.onKey('KeyR') }],
+                  footer: 'Drop a .glb / .gltf / .obj on the page to bake it.' }] },
+        ];
     }
 
     set(key, v) {

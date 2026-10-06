@@ -6987,7 +6987,6 @@ class Input {
         io.listen(el, 'pointercancel', up);
         io.listen(el, 'wheel', e => { e.preventDefault(); this.wheel += Math.sign(e.deltaY); }, { passive: false });
         io.listen(window, 'keydown', e => {
-            if (e.code === 'Escape') Dropdown.open(null);
             if (['Space', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
             if (!e.repeat) this.pressed.push(e.code);
             this.keys.add(e.code);
@@ -7243,55 +7242,46 @@ const rainName = (rate, drops) => drops < 0.2 && rate < 0.3 ? 'drizzle' : rate <
     : rate <= 1 ? 'heavy rain' : drops > 0.9 ? 'downpour' : 'torrential rain';
 const fmtKm = d => d < 1000 ? `${d.toFixed(0)} m` : `${(d / 1000).toFixed(d < 10000 ? 1 : 0)} km`;
 
-// a dropdown of the top-right menu bar: radio items (pick one; the menu closes) and check items (any number on; it stays
-// open). Its button never takes the focus, so the keys stay with the demo.
-class Dropdown {
-    constructor(bar, name, title) {
-        this.el = document.createElement('span');
-        this.el.className = 'dd';
-        this.el.innerHTML = `<button title="${title}"><span class="k">${name}</span><span class="v"></span></button><div class="dd-menu"></div>`;
-        [this.btn, this.menu] = this.el.children;
-        this.value = this.btn.lastChild;
+// a menu of this world's options as data: radio items (pick one), check items (any number on) and info items, with a
+// summary; the engine's handheld shows them (Menu.cells, FeatureWorld.handheld)
+class Menu {
+    constructor(name, title) {
+        this.name = name;
+        this.title = title;
+        this.summary = '';
         this.items = [];
-        this.key = '';
-        for (const el of [this.btn, this.menu]) el.addEventListener('mousedown', e => e.preventDefault());
-        this.btn.addEventListener('click', () => Dropdown.open(Dropdown.current === this ? null : this));
-        this.menu.addEventListener('click', e => {
-            const it = this.items[e.target.closest('.dd-item')?.dataset.i];
-            if (!it?.pick) return;
-            if (it.kind === 'radio') Dropdown.open(null);
-            it.pick();
-        });
-        bar.appendChild(this.el);
-    }
-
-    static open(dd) {
-        Dropdown.current?.el.classList.remove('open');
-        Dropdown.current = dd;
-        dd?.el.classList.add('open');
+        this.shown = true;
     }
 
     // items: { label, kind: 'radio' | 'check', on, key (its shortcut), pick }, { label, kind: 'info', key (its value) } or
-    // { sep: true }; the DOM is only rebuilt
-    // when something shown changed
+    // { sep: true }
     set(summary, items, shown = true) {
+        this.summary = summary;
         this.items = items;
-        const key = JSON.stringify([summary, shown, items]);
-        if (key === this.key) return;
-        this.key = key;
-        this.el.style.display = shown ? '' : 'none';
-        this.value.textContent = summary;
-        this.menu.innerHTML = items.map((it, i) => it.sep ? '<div class="dd-sep"></div>'
-            : `<div class="dd-item ${it.kind}${it.on ? ' on' : ''}" data-i="${i}"><i></i><span>${it.label}</span>${it.key ? `<span class="key">${it.key}</span>` : ''}</div>`).join('');
+        this.shown = shown;
+    }
+
+    // as handheld cells: the radio items one choice, each check item a toggle, each info item a label
+    cells(title, { radios = true } = {}) {
+        if (!this.shown) return [];
+        const radio = this.items.filter(i => i.kind === 'radio'), out = [];
+        if (radios && radio.length) {
+            out.push({ choice: title, options: radio.map(r => ({ label: r.label, sub: r.key || undefined })), index: radio.findIndex(r => r.on),
+                value: this.summary, pick: i => radio[i].pick() });
+        }
+        for (const it of this.items) {
+            if (it.kind === 'check') out.push({ toggle: it.label, on: !!it.on, set: () => it.pick() });
+            else if (it.kind === 'info') out.push({ label: it.label, value: it.key || '' });
+        }
+        return out;
     }
 }
-window.addEventListener('pointerdown', e => { if (!e.target.closest?.('.dd')) Dropdown.open(null); });
 
+// The screen keeps the in-world labels, the walker's dot and toasts; the readout (lines) and every option (the menus)
+// are on the engine's handheld (FeatureWorld.handheld)
 class Hud {
     constructor(ui) {
-        this.el = ui.$('hud');
-        this.help = ui.$('help');
-        this.menusEl = ui.$('menus');
+        this.lines = [];
         this.toastEl = ui.$('toast');
         this.labels = ui.$('labels');
         this.lctx = this.labels.getContext('2d');
@@ -7327,10 +7317,11 @@ class Hud {
             ...(app.rideBus ? [`bus     ${app.rideBus.label} ${app.rideBus.describe()}${app.walker.active ? ` · <span class="w">${app.walker.seat ? 'seated' : app.walker.bus ? 'aboard' : 'on foot'}</span>` : ''}${w.busBoost > 1 ? ' <span class="w">×10</span>' : ''}`] : []),
         ];
         if (app.renderer.lastError) lines.push(`<span class="off">${app.renderer.lastError.slice(0, 90)}</span>`);
-        this.el.innerHTML = lines.join('\n');
-        // the menus follow the weather (auto cycle, views, keys); the radar sits under their bar (on a phone it is at the bottom)
+        this.lines = lines;
+        // the menus follow the weather (auto cycle, views, keys); the radar sits under the engine's corner chip (on a
+        // phone at the bottom)
         app.syncMenus();
-        app.radarTop = innerWidth > 700 ? (this.menusEl.getBoundingClientRect().bottom + 6) / innerHeight : 0;
+        app.radarTop = innerWidth > 700 ? 52 / innerHeight : 0;
     }
 
     drawLabels(app) {
@@ -7396,7 +7387,7 @@ class App {
         this.paused = false;
         this.fps = 60;
         this.mode = 0;
-        this.radar = true;
+        this.radar = false;          // R, or the handheld: the storm radar over the view (render.radar)
         this.flashlight = false;     // L: a torch in hand, along the view
         this.froxels = true;
         this.tiles = true;
@@ -7410,28 +7401,24 @@ class App {
         this.probe = { coverage: 0, top: 0, precip: 0, virga: 0, cover: 0 };
         this.groundSnowHint = 'none';
         this.reset = true;
-        // the menu bar top right: weather and rain (pick one), the persistent clouds (show any of them), tornado and hurricane
-        // in two rows: the weather, then the view and the graphics
-        const row = () => fx.ui.$('menus').appendChild(Object.assign(document.createElement('div'), { className: 'row' }));
-        let bar = row();
+        // the menus (shown on the engine's handheld): weather and rain (pick one), the persistent clouds (show any of
+        // them), tornado and hurricane; the view; the graphics
+        const menu = (name, title) => new Menu(name, title);
         this.menus = {
-            weather: new Dropdown(bar, 'weather', 'weather state'),
-            rain: new Dropdown(bar, 'rain', 'rain variants'),
-            time: new Dropdown(bar, 'time', 'how fast the weather runs'),
-            clouds: new Dropdown(bar, 'clouds', 'persistent clouds to show'),
-            tornado: new Dropdown(bar, 'tornado', "tornado under the supercell's wall cloud"),
-            hurricane: new Dropdown(bar, 'hurricane', 'hurricane with an eye (Saffir-Simpson category)'),
+            weather: menu('weather', 'weather state'),
+            rain: menu('rain', 'rain variants'),
+            time: menu('time', 'how fast the weather runs'),
+            clouds: menu('clouds', 'persistent clouds to show'),
+            tornado: menu('tornado', "tornado under the supercell's wall cloud"),
+            hurricane: menu('hurricane', 'hurricane with an eye (Saffir-Simpson category)'),
+            view: menu('view', 'jump to a viewpoint'),
+            move: menu('move', 'fly, or walk on the ground below'),
+            bus: menu('bus', 'go to a bus'),
+            lighting: menu('lighting', 'lighting preset'),
+            quality: menu('quality', 'graphics quality'),
+            render: menu('render', 'render mode'),
+            gpu: menu('gpu', 'GPU features and timings'),
         };
-        bar = row();
-        Object.assign(this.menus, {
-            view: new Dropdown(bar, 'view', 'jump to a viewpoint'),
-            move: new Dropdown(bar, 'move', 'fly, or walk on the ground below'),
-            bus: new Dropdown(bar, 'bus', 'go to a bus'),
-            lighting: new Dropdown(bar, 'lighting', 'lighting preset'),
-            quality: new Dropdown(bar, 'quality', 'graphics quality'),
-            render: new Dropdown(bar, 'render', 'render mode'),
-            gpu: new Dropdown(bar, 'gpu', 'GPU features and timings'),
-        });
         this.busFast = false;           // the buses' ×10 latched from the bus menu (else while Z is held)
         this.cloudFocus = 0;            // the persistent cloud J hides / shows: the last one picked
     }
@@ -7654,7 +7641,7 @@ class App {
         this.cfg = { ...RENDER_DEFAULTS, ...(scenario.render || {}) };
         this.quality = clamp(this.cfg.quality, 0, QUALITY.length - 1);
         this.timeScale = this.cfg.timeScale;
-        this.radar = this.cfg.radar ?? true;
+        this.radar = this.cfg.radar ?? false;       // off unless the scenario wants it: the screen stays clean
         this.renderer.setWorld(world);
         this.buildCloudPicker();
         const L = scenario.lighting || {};
@@ -7757,7 +7744,6 @@ class App {
                 case 'KeyL': this.flashlight = !this.flashlight; this.hud.toast(`Flashlight ${this.flashlight ? 'on' : 'off'}`); break;
                 case 'KeyI': this.hud.showLabels = !this.hud.showLabels; break;
                 case 'KeyP': this.paused = !this.paused; break;
-                case 'KeyH': this.hud.help.style.display = this.hud.help.style.display === 'none' ? '' : 'none'; break;
             }
         }
     }
@@ -8098,9 +8084,7 @@ class App {
 
 // ------------------------------------------------------------------------------------- feature world
 // This demo as one world of the engine (js/engine/host.js calls these).
-const HUD_HTML = `<canvas class="labels" data-hud="labels"></canvas>
-    <div data-hud="hud" class="panel"></div><div data-hud="help" class="panel"></div>
-    <div data-hud="menus" class="panel"></div><div data-hud="toast" class="panel"></div>`;
+const HUD_HTML = `<canvas class="labels" data-hud="labels"></canvas><div data-hud="toast" class="panel"></div>`;
 
 class FeatureWorld {
     constructor(fx) {
@@ -8147,6 +8131,36 @@ class FeatureWorld {
             busDist: bd, busSpeed: bus ? bus.v : 0, riding: !!a.inBus && a.rideBus === bus,
             temperature: c.temperature, coverage: c.coverage, cells: w.storms.length, flashes: w.flashCount, veil: a.flashVeil,
         };
+    }
+
+    // the readout and every option (its menus), on the engine's handheld (js/engine/handheld.js)
+    handheld() {
+        const a = this.app;
+        if (!a.world) return [];
+        a.syncMenus();
+        const m = a.menus, key = code => () => a.handleKeys([code]);
+        return [
+            { id: 'status', title: 'Status', sub: 'Weather, sky, air, where you are', icon: [[48, 176, 199], 'C'], sections: Handheld.panel(a.hud.lines) },
+            { id: 'weather', title: 'Weather', sub: `${m.weather.summary} · ×${a.timeScale}`, icon: [[0, 122, 255], 'W'], sections: [
+                { cells: [...m.weather.cells('Weather'), ...m.rain.cells('Rain'), ...m.time.cells('Weather time'),
+                    { action: 'Lightning strike', run: key('KeyK') }, { toggle: 'Paused', on: a.paused, set: v => { a.paused = v; } }] },
+                { header: 'CLOUDS', cells: m.clouds.cells('Clouds') },
+                { header: 'STORMS', cells: [...m.tornado.cells('Tornado'), ...m.hurricane.cells('Hurricane')],
+                    footer: 'Right click (or Ctrl + click) on the ground grows a storm cell there.' },
+            ] },
+            { id: 'view', title: 'View', sub: `${m.move.summary} · ${a.lightName}`, icon: [[255, 149, 0], 'V'], sections: [
+                { cells: [...m.view.cells('View'), ...m.move.cells('Move'), ...m.bus.cells('Bus'), ...m.lighting.cells('Lighting')] },
+                { cells: [
+                    { toggle: 'Flashlight', on: a.flashlight, set: key('KeyL') },
+                    { toggle: 'Radar', on: a.radar, set: v => { a.radar = v; } },
+                    { toggle: 'Labels', on: a.hud.showLabels, set: v => { a.hud.showLabels = v; } }],
+                  footer: 'The arrow keys move the sun.' },
+            ] },
+            { id: 'graphics', title: 'Graphics', sub: `${m.quality.summary} · ${m.gpu.summary}`, icon: [[142, 142, 147], 'G'], sections: [
+                { cells: [...m.quality.cells('Quality'), ...m.render.cells('Render')] },
+                { header: 'GPU', cells: m.gpu.cells('GPU', { radios: false }), footer: 'The adapter itself is the engine\'s GPU option.' },
+            ] },
+        ];
     }
 
     set(key, v) {

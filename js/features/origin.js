@@ -1265,20 +1265,16 @@ class CameraController {
 }
 
 // ------------------------------------------------------------------------------------------- game/hud
+// The screen keeps the in-world labels and toasts; the readout (lines) and every option are on the engine's handheld
+// (FeatureWorld.handheld)
 class Hud {
     constructor(ui) {
-        this.el = ui.$('hud');
-        this.help = ui.$('help');
-        this.marks = ui.$('marks');
+        this.lines = [];
         this.toastEl = ui.$('toast');
         this.labels = ui.$('labels');
         this.lctx = this.labels.getContext('2d');
         this.showLabels = true;
         this.last = 0;
-    }
-
-    setBookmarks(list) {
-        this.marks.innerHTML = list.map(b => `<b>${b.key}</b> ${b.name}`).join('\n');
     }
 
     toast(msg, ms = 2200) {
@@ -1312,7 +1308,7 @@ class Hud {
             `         ${app.fps.toFixed(0)} fps${app.paused ? '  <span class="w">paused</span>' : ''}${w.store.outOfRange ? `  <span class="off">${w.store.outOfRange} beyond ±2^30 cells</span>` : ''}`,
         ];
         if (!f.translate) lines.push('<span class="off">translation rebasing off: classic float32 coordinates around world 0</span>');
-        this.el.innerHTML = lines.join('\n');
+        this.lines = lines;
     }
 
     // names of bodies and landmarks, projected in doubles
@@ -1384,7 +1380,6 @@ class App {
         this.minAlt = camCfg.minAltitude ?? 1.7;
         this.lighting = { exposure: 1, sun: 1.6, ...(scenario.lighting || {}) };
         this.bookmarks = scenario.bookmarks || [];
-        this.hud.setBookmarks(this.bookmarks);
         if (!keepCamera) {
             const b = this.bookmarks.find(b => b.key === scenario.start) || this.bookmarks[0];
             if (b) this.jump(b);
@@ -1414,7 +1409,6 @@ class App {
                 case 'KeyO': f.everyFrame = !f.everyFrame; this.fx.emit('toggle', { on: f.everyFrame }); this.hud.toast(f.everyFrame ? 'Rebasing every frame: cost stays one 80 B upload' : 'Rebasing on demand'); break;
                 case 'KeyL': this.hud.showLabels = !this.hud.showLabels; break;
                 case 'KeyP': this.paused = !this.paused; break;
-                case 'KeyH': this.hud.help.style.display = this.hud.help.style.display === 'none' ? '' : 'none'; break;
                 case 'BracketLeft': case 'BracketRight': {
                     const d = clamp(this.density * (code === 'BracketRight' ? 2 : 0.5), 1 / 16, 8);
                     if (d !== this.density) { this.density = d; this.load(this.scenario, true); this.hud.toast(`Field density ×${d}: ${this.world.instanceCount.toLocaleString()} instances`); }
@@ -1482,9 +1476,7 @@ class App {
 
 // ------------------------------------------------------------------------------------- feature world
 // This demo as one world of the engine (js/engine/host.js calls these).
-const HUD_HTML = `<canvas class="labels" data-hud="labels"></canvas>
-    <div data-hud="hud" class="panel"></div><div data-hud="help" class="panel"></div>
-    <div data-hud="marks" class="panel"></div><div data-hud="toast" class="panel"></div>`;
+const HUD_HTML = `<canvas class="labels" data-hud="labels"></canvas><div data-hud="toast" class="panel"></div>`;
 
 class FeatureWorld {
     constructor(fx) {
@@ -1549,6 +1541,33 @@ class FeatureWorld {
             out[e.id] = quat.rotate(quat.conj(e.frame.q), d);
         }
         return out;
+    }
+
+    // the readout and every option, on the engine's handheld (js/engine/handheld.js)
+    handheld() {
+        const a = this.app, f = a.floating;
+        if (!a.world) return [];
+        const key = code => () => a.handleKeys([code]);
+        const B = a.bookmarks;
+        return [
+            { id: 'status', title: 'Status', sub: 'Camera, origin matrix, rebasing', icon: [[88, 86, 214], 'O'], sections: Handheld.panel(a.hud.lines) },
+            B.length && { id: 'places', title: 'Places', sub: `${B.length} bookmarks`, icon: [[255, 149, 0], 'B'], sections: [
+                { cells: B.map(b => ({ action: b.name, key: `bookmark ${b.key}`, run: () => a.jump(b) })), footer: 'The number keys jump there too.' }] },
+            { id: 'options', title: 'Origin', sub: `rebasing ${[f.translate && 'T', f.rotate && 'R', f.scale && 'G'].filter(Boolean).join(' ') || 'off'} · density ×${a.density}`, icon: [[48, 176, 199], 'R'], sections: [
+                { header: 'REBASING', cells: [
+                    { toggle: 'Translation', on: f.translate, set: key('KeyT') },
+                    { toggle: 'Rotation', on: f.rotate, set: key('KeyR') },
+                    { toggle: 'Scale', on: f.scale, set: key('KeyG') },
+                    { toggle: 'Every frame', on: f.everyFrame, set: key('KeyO') }],
+                    footer: 'p\' = R^T (p - T) / s: what the GPU sees stays near zero however far the camera goes.' },
+                { header: 'FIELD', cells: [
+                    { choice: 'Density', options: [1 / 16, 1 / 8, 1 / 4, 1 / 2, 1, 2, 4, 8].map(d => `×${d < 1 ? `1/${1 / d}` : d}`), index: Math.round(Math.log2(a.density)) + 4,
+                        pick: i => { const d = 2 ** (i - 4); if (d !== a.density) { a.density = d; a.load(a.scenario, true); } } }] },
+                { header: 'VIEW', cells: [
+                    { toggle: 'Labels', on: a.hud.showLabels, set: v => { a.hud.showLabels = v; } },
+                    { toggle: 'Paused', on: a.paused, set: v => { a.paused = v; } }] },
+            ] },
+        ].filter(Boolean);
     }
 
     set(key, v) {
