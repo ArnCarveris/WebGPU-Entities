@@ -2,10 +2,10 @@
 // The phone's radar app.
 
 Features.part('gui', (engine, feature) => {
-const { clamp, rad, col, pad3, bearingOf, IOS, PHONE_NAV_H, PhoneApp } = GuiKit;
+const { clamp, rad, col, pad3, bearingOf, IOS, PHONE_NAV_H, PhoneApp } = engine.kits.gui;
 const { ENTITY_TYPES } = feature;
 
-// The facility's phone apps (PhoneApp, see js/engine/gui-kit.js): pages the gui world adds to the engine's handheld.
+// The facility's phone apps (PhoneApp, the gui kit: js/kits/gui/): pages the gui world adds to the engine's handheld.
 
 // Far Cry-style radar: heading-up, rotating compass ring, tracked objects and sound waves
 class RadarApp extends PhoneApp {

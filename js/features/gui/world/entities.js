@@ -3,8 +3,8 @@
 
 Features.part('gui', (engine, feature) => {
 const { kits } = engine;
-const { V3, M4, lerp, smooth01, deg } = GuiKit;
-const { TerminalGUI, EaselGUI, PaintCanvas } = feature;
+const { V3, M4, lerp, smooth01, deg, EaselGUI, PaintCanvas } = engine.kits.gui;
+const { TerminalGUI } = feature;
 
 // World entities. Each is constructed from a scenario definition ({ type, id, ... }).
 

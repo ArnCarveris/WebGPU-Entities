@@ -1,8 +1,8 @@
 'use strict';
 // The phone's gallery app.
 
-Features.part('gui', (engine, feature) => {
-const { col, clipTime, IOS, PHONE_NAV_H, PhoneApp } = GuiKit;
+Features.kit('gui', (engine, kit) => {
+const { col, clipTime, IOS, PHONE_NAV_H, PhoneApp } = kit;
 
 // Photo / video grid
 class GalleryApp extends PhoneApp {

@@ -1,6 +1,6 @@
 'use strict';
 // Handheld: the engine's phone, in every scenario, and the only place options and readouts live (the screen keeps
-// nothing but the worlds, their in-world labels and toasts). A PhoneGUI (js/engine/gui-kit.js) whose pages are data,
+// nothing but the worlds, their in-world labels and toasts). A PhoneGUI (the gui kit, js/kits/gui/) whose pages are data,
 // held in front of the camera and drawn over the finished frame (its own pass, depth and fixed field of view, so it
 // never clips into a world). TAB (or the corner chip) takes it out, Esc puts it away; while the cursor is on it, the
 // worlds don't get the mouse.
@@ -90,7 +90,7 @@ class Handheld {
         this.anim = 0;                  // 0 hidden .. 1 in hand
         this.kick = 0;                  // shutter recoil
         this.land = 0;                  // 0 portrait .. 1 landscape (a world's full-screen video)
-        this.pose = GuiKit.M4.identity();
+        this.pose = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
         this.mouse = { x: 0, y: 0, inside: false };
         this.hasCursor = false;
         this.capture = false;
@@ -141,7 +141,7 @@ class Handheld {
         this.host.audio.configure(cfg.sounds || []);
         GpuChoice.probe?.();
 
-        const { Renderer, MaterialTable, MeshBuilder, GuiAtlas, DeviceContext, PhoneGUI } = GuiKit;
+        const { Renderer, MaterialTable, MeshBuilder, GuiAtlas, DeviceContext, PhoneGUI } = Features.kits.gui;
         const host = this.host;
         const r = this.renderer = new Renderer({
             device: host.device, format: host.format,
@@ -150,6 +150,7 @@ class Handheld {
         });
         await r.init();
         await GuiAtlas.loadFonts();
+        r.reserveSurfaces(1);           // the phone's screen
         await r.createPipelines();
         r.setWorldMaterials(new MaterialTable(cfg.materials));
         this.atlas = new GuiAtlas();
@@ -407,7 +408,7 @@ class Handheld {
     // Pose relative to the eye: swings up from below with an overshoot when shown, sways with the walking player of
     // the world holding the camera, turns to landscape for a full-screen video
     poseAt(t) {
-        const { M4, lerp, clamp, smooth01, easeOutBack } = GuiKit;
+        const { M4, lerp, clamp, smooth01, easeOutBack } = Features.kits.gui;
         const P = this.cfg.pose, a = this.anim;
         const e = this.shown ? easeOutBack(a) : smooth01(a);
         const motion = this.providers.map(p => p.motion?.()).find(Boolean);
@@ -430,7 +431,7 @@ class Handheld {
 
     frame(now, dt) {
         if (!this.ready) return;
-        const { M4, clamp } = GuiKit;
+        const { M4, clamp } = Features.kits.gui;
         const t = now / 1000, r = this.renderer, g = this.gui;
         this.anim = clamp(this.anim + ((this.shown ? 1 : -1) * dt) / this.cfg.showSeconds, 0, 1);
         this.kick *= Math.exp(-dt * 14);

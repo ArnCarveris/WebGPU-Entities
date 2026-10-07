@@ -2,18 +2,20 @@
 // The game: the frame loop over world, screens and renderer.
 
 Features.part('gui', (engine, feature) => {
-const { M4, MaterialTable, Renderer, GuiAtlas, DeviceContext } = GuiKit;
 const {
-    AudioSystem, Easel, RadarApp, CameraApp, GalleryApp, ViewerApp, TvApp, CctvSystem, PhoneCamera, IptvPlayer,
-    World, PlayerController, InputSystem, InteractionSystem, Bindings,
-} = feature;
+    M4, MaterialTable, Renderer, GuiAtlas, DeviceContext, DEPTH_FORMAT, InteractionSystem, CctvSystem, PhoneCamera, IptvPlayer,
+    mediaApps,
+} = engine.kits.gui;
+const { AudioSystem, Easel, SecurityCamera, RadarApp, World, PlayerController, InputSystem, Bindings } = feature;
 
 // Game: builds every system from the scenario and runs the frame.
 //
 // Frame order:
 //   simulate (player, world) -> route the cursor -> update + rebuild GUI models
-//   -> decide which render targets are needed -> write instances -> encode passes:
+//   -> decide which views are needed -> write instances -> encode passes:
 //      paint canvases, CCTV, phone camera, player view -> submit
+// The CCTV, the phone's camera and IPTV are the gui kit's (js/kits/gui/): this game is their scene (renderView),
+// its security cameras their cameras.
 // (the phone itself is the engine's handheld, drawn over the finished frame)
 
 class FrameStats {
@@ -52,24 +54,32 @@ class Game {
     }
 
     async start() {
-        const r = this.renderer;
+        const r = this.renderer, s = this.scenario;
+        // the facility's entities first: their screens are what the renderer reserves stencil values for
+        this.world = new World(this, s);
         await r.init();
         await GuiAtlas.loadFonts();
+        r.reserveSurfaces(this.world.guis.length);
         await r.createPipelines();
-        r.setWorldMaterials(new MaterialTable(this.scenario.materials));
+        r.setWorldMaterials(new MaterialTable(s.materials));
 
         this.atlas = new GuiAtlas();
         r.registerMaterial('atlas', 'gui', this.atlas.upload(r));
         this.dc = new DeviceContext(this.atlas);
 
-        const s = this.scenario;
-        this.world = new World(this, s);
         this.player = new PlayerController(this, s.player);
+        this.scene = this;
+        this.views = new Map();         // view target -> its depth and view uniforms
         this.cctv = new CctvSystem(this, s.cctv);
         this.camera = new PhoneCamera(this, s.media);
         this.iptv = new IptvPlayer(this, s.iptv);
         this.handheld = this.fx.host.handheld;
-        this.interaction = new InteractionSystem(this);
+        // the view ray through the mouse, unless it looks around or the handheld has the cursor
+        this.interaction = new InteractionSystem(() => this.world.guis, () => {
+            const { input, player, handheld } = this;
+            if (!input.mouse.inside || input.looking || handheld.hasCursor) return null;
+            return { eye: player.eye, dir: player.viewRay(input.mouse, player.fovy) };
+        });
         this.bindings = new Bindings(this);
 
         this.cctv.init(r);
@@ -90,10 +100,7 @@ class Game {
             id: fx.id,
             pages: this.scenario.phone.pages,
             bindings: this.bindings,
-            apps: (phone) => ({
-                radar: new RadarApp(phone, this), camera: new CameraApp(phone, this), photos: new GalleryApp(phone, this),
-                viewer: new ViewerApp(phone, this), tv: new TvApp(phone, this)
-            }),
+            apps: (phone) => ({ radar: new RadarApp(phone, this), ...mediaApps(this)(phone) }),
             renderer: r,
             fullscreen: () => this.iptv.fullscreen,
             hidden: () => { this.iptv.fullscreen = false; },
@@ -110,6 +117,31 @@ class Game {
     // the phone in this world: the handheld's eye-space pose, held by the player
     phoneModel() {
         return M4.multiply(M4.facing(this.player.eye, this.player.basis().fwd), this.handheld.pose);
+    }
+
+    // ---- what the kit's media systems ask of their world ----
+    cameras() {
+        return this.world.ofType(SecurityCamera);
+    }
+
+    placeLabel(x, z) {
+        return this.world.placeLabel(x, z);
+    }
+
+    // the scene contract (js/kits/gui/views.js): a view of the facility into `target`, in this frame's encoder
+    renderView(enc, target, s) {
+        const r = this.renderer;
+        let v = this.views.get(target);
+        if (!v) {
+            const depth = r.device.createTexture({ size: [target.width, target.height], format: DEPTH_FORMAT, usage: GPUTextureUsage.RENDER_ATTACHMENT });
+            v = { depthView: depth.createView(), view: r.createView() };
+            if (target.material) v.view.exclude.add(target.material);     // can't sample the texture it renders into
+            this.views.set(target, v);
+        }
+        v.view.update(M4.viewProjection(s.eye, s.dir, s.up, s.fovY, target.aspect, s.near, s.far), s.eye, this.frameState);
+        const pass = r.beginScenePass(target.colorView, v.depthView, v.view);
+        this.world.render(pass, { showAvatar: s.showAvatar, skip: s.skip });
+        pass.end();
     }
 
     get guis() {
@@ -143,21 +175,21 @@ class Game {
         const { renderer: r, world, player, handheld: phone } = this;
         r.resize();
         // Views and render targets for this frame
-        const frame = world.frameState(t);
+        const frame = this.frameState = world.frameState(t);
         const view = player.viewMatrix();
         this.mainView.update(M4.multiply(M4.perspective(player.fovy, r.aspect, 0.02, this.far), view), player.eye, frame);
         if (!phone.visible) this.iptv.fullscreen = false;
         this.iptv.update(phone.visible && (this.iptv.fullscreen || phone.gui.pagesVisible().includes('tv')));
-        this.cctv.prepare(frame);
-        this.camera.prepare(frame);
+        this.cctv.prepare();
+        this.camera.prepare();
 
         world.writeInstances(r);
 
         // Passes
         r.beginFrame();
         for (const easel of world.ofType(Easel)) easel.canvas.flush(r);
-        this.cctv.render();
-        this.camera.render(now);
+        this.cctv.render(r.encoder);
+        this.camera.render(r.encoder, now);
         const pass = r.beginScenePass(r.swapView, r.depthView, this.mainView);
         world.render(pass, { showAvatar: false });
         pass.end();

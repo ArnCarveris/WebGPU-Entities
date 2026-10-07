@@ -2,7 +2,7 @@
 // The world: builds the facility and its entities and runs them.
 
 Features.part('gui', (engine, feature) => {
-const { clamp, MeshBuilder, MAX_LIGHTS } = GuiKit;
+const { clamp, MeshBuilder, MAX_LIGHTS } = engine.kits.gui;
 const { ENTITY_TYPES } = feature;
 
 // The facility: entities built from scenario data, shared facility state and actions.

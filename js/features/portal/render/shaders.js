@@ -187,7 +187,7 @@ fn surface(m: Material, lp: vec3f, n: vec3f) -> vec4f {
 }
 `;
 
-// World-space GUI screens (Doom 3 style, js/engine/gui-kit.js): a GuiModel's quads (x y in the GUI's virtual screen, y
+// World-space GUI screens (Doom 3 style, the gui kit: js/kits/gui/): a GuiModel's quads (x y in the GUI's virtual screen, y
 // down) drawn in the screen's draw slot, whose model matrix maps virtual units onto the screen surface (y up). They draw
 // right after the screen's own surface, depth-tested just in front of it and masked by its portal entry's stencil ref.
 // The GUI's colours are display values: taken back through the tone curve, they are fogged like the world around them.

@@ -1,8 +1,8 @@
 'use strict';
 // The phone's camera app.
 
-Features.part('gui', (engine, feature) => {
-const { col, clipTime, pad3, IOS, PHONE_NAV_H, PhoneApp } = GuiKit;
+Features.kit('gui', (engine, kit) => {
+const { col, clipTime, pad3, IOS, PHONE_NAV_H, PhoneApp } = kit;
 
 // Camera: live viewfinder (the phone camera's render target), photo / video modes
 class CameraApp extends PhoneApp {
@@ -26,7 +26,7 @@ class CameraApp extends PhoneApp {
         const fs = 42 + Math.sin(t * 3) * 2;
         dc.rect(W / 2 - fs / 2, V.y + V.h / 2 - fs / 2, fs, fs, 1.5, col([255, 214, 10]));
         dc.roundRect(8, V.y + 8, 72, 20, 10, [0, 0, 0, 0.45]);
-        dc.text(`HDG ${pad3(this.game.player.heading)}°`, 44, V.y + 22, 11, col([255, 255, 255]), 'center', false, 'sansBold');
+        dc.text(`HDG ${pad3(this.game.camera.heading)}°`, 44, V.y + 22, 11, col([255, 255, 255]), 'center', false, 'sansBold');
         const right = video ? `${clipTime(cam.freeVideoSeconds)} free` : `${lib.counts().photos}/${cam.cfg.photo.capacity}`;
         dc.roundRect(W - 72, V.y + 8, 64, 20, 10, [0, 0, 0, 0.45]);
         dc.text(right, W - 40, V.y + 22, 11, col([255, 255, 255]), 'center', false, 'sansBold');

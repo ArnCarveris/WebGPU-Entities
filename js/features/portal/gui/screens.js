@@ -1,9 +1,9 @@
 'use strict';
-// The GUI screens of the bunker and the freighter: world-space EntityGUIs (js/engine/gui-kit.js) on the consoles,
+// The GUI screens of the bunker and the freighter: world-space EntityGUIs (the gui kit, js/kits/gui/) on the consoles,
 // generators and bridge (world/entities.js Screen draws them).
 
 Features.part('portal', (engine, feature) => {
-const { clamp, col, deg, wrapIndex, pad3, cardinal, timeText, EntityGUI } = GuiKit;
+const { clamp, col, deg, wrapIndex, pad3, cardinal, timeText, fitRect, EntityGUI } = engine.kits.gui;
 const { g2, RATED_RPM } = feature;
 
 // Every kind is an EntityGUI whose screen is a Screen entity (world/entities.js): `this.screen`, `this.world`, and once
@@ -17,6 +17,7 @@ const { g2, RATED_RPM } = feature;
 //   engine      the freighter's main engine: shaft speed, load, exhaust, telegraph
 //   navigation  the freighter's chart: route, waypoints, track, speed, ETA at the dock
 //   helm        rudder angle, engine telegraph, heel and trim, who steers
+//   cctv        the security cameras: the selected one's feed (the gui kit's CctvSystem, 'cctv' material) and the list
 // Maps show the island with +z up and -x to the right: as seen facing +z, the way the control room's consoles face.
 
 const C = {
@@ -51,13 +52,16 @@ class ScreenGUI extends EntityGUI {
         this.app = null;
     }
 
-    // the game that runs the world: its device for the GUI model, its events for sound
+    // the game that runs the world: its renderer (which draws the GUI model itself, FrameBuilder's 'gui' commands), its
+    // events for sound
     attachTo(app) {
         this.app = app;
-        const device = app.renderer.device;
-        this.game = { renderer: { device }, audio: { emit: (name, payload) => app.fx.emit(name, payload) } };
-        this.model.buffer = device.createBuffer({ size: this.model.verts.byteLength, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
+        this.attach({ renderer: app.renderer, audio: { emit: (name, payload) => app.fx.emit(name, payload) } });
     }
+
+    // picking (the gui kit's InteractionSystem): the screen's own face, usable within `range` of the hit
+    trace(eye, dir) { return this.screen.trace(eye, dir); }
+    inRange(eye, hit) { return hit.t <= this.range; }
 
     get accent() { return C.cyan; }
     get title() { return this.def.title || 'TERMINAL'; }
@@ -597,9 +601,49 @@ class HelmGUI extends ShipGUI {
     }
 }
 
+// The island's security cameras (game/media.js: the gui kit's CctvSystem over the SecurityCamera entities). The feed
+// renders only while this screen is drawn (request() from drawBody, which runs only when the screen is seen).
+class CctvGUI extends ScreenGUI {
+    get title() { return this.def.title || 'SECURITY // CCTV'; }
+    get cctv() { return this.app?.media?.cctv || null; }
+
+    drawBody(dc, t, now) {
+        const W = this.vw, H = this.vh, cctv = this.cctv, cams = cctv ? cctv.cameras : [];
+        if (!cams.length) {
+            dc.text('NO CAMERAS ON THIS NETWORK', W / 2, H / 2, 16, col(C.orange), 'center');
+            return;
+        }
+        cctv.request();
+        const top = 44, listW = Math.min(170, W * 0.3), rowH = Math.min(30, (H - top - 10) / cams.length);
+        this.panel(dc, 8, top, listW, H - top - 8, 'CAMERAS');
+        cams.forEach((cam, i) => {
+            const on = i === cctv.selected;
+            this.button(dc, `cam:${i}`, 14, top + 20 + i * rowH, listW - 12, rowH - 4, cam.label, cam.offline ? C.dim : on ? C.green : C.cyan, on);
+        });
+        const fx = listW + 16, area = { x: fx, y: top, w: W - fx - 8, h: H - top - 8 };
+        this.panel(dc, area.x, area.y, area.w, area.h, 'FEED');
+        const R = fitRect({ x: area.x + 6, y: area.y + 18, w: area.w - 12, h: area.h - 24 }, cctv.aspect), cam = cctv.current;
+        const sig = cctv.signal(now);
+        if (sig > 0) {
+            dc.setMaterial('cctv');
+            dc.stretchPic(R.x, R.y, R.w, R.h, 0, 0, 1, 1, [sig, sig, sig, 1]);
+            dc.setMaterial('atlas');
+        } else dc.fillRect(R.x, R.y, R.w, R.h, col(C.ink));
+        if (cam.offline) dc.text('NO SIGNAL', R.x + R.w / 2, R.y + R.h / 2, 18, col(C.red), 'center');
+        dc.text(`${cam.label}  ${cam.name}`, R.x + 8, R.y + 18, 12, col(C.white));
+        dc.text(timeText(new Date()), R.x + R.w - 8, R.y + 18, 12, col(C.white), 'right');
+        if (Math.floor(t * 2) % 2) dc.circle(R.x + 12, R.y + R.h - 14, 4, col(C.red));
+        dc.text('REC', R.x + 22, R.y + R.h - 10, 11, col(C.red));
+    }
+
+    press(id) {
+        if (id.startsWith('cam:')) this.cctv?.select(+id.slice(4));
+    }
+}
+
 const SCREEN_GUIS = {
     facility: FacilityGUI, doors: DoorsGUI, harbour: HarbourGUI, power: PowerGUI, generator: GeneratorGUI,
-    engine: EngineGUI, navigation: NavigationGUI, helm: HelmGUI,
+    engine: EngineGUI, navigation: NavigationGUI, helm: HelmGUI, cctv: CctvGUI,
 };
 
 return { ScreenGUI, SCREEN_GUIS };

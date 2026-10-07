@@ -4,23 +4,61 @@
 Features.part('portal', (engine, feature) => {
 const {
     AREA_FLOATS, MAX_DRAWS, DRAW_STRIDE, MAX_FOG_PORTALS, DRAW_FLOATS, MAX_LINE_VERTS, MAX_POLY_VERTS, POLY_FLOATS,
-    DEPTH_FORMAT, WGSL_WORLD, WGSL_GUI, WGSL_SKY, WGSL_POLY, WGSL_LINES,
+    DEPTH_FORMAT, STENCIL, WGSL_WORLD, WGSL_SKY, WGSL_POLY, WGSL_LINES,
 } = feature;
+const { StencilLayout, buildPipelines, RenderExtensions } = engine.kits.gpu;
 
-// Renderer: pipelines for the scene, world-space GUI screens, sky, stencil marks, water, glass / fog veils and debug
-// lines, and one render pass that executes a command list built by FrameBuilder.
-
-function depthState(o) {
-    const face = { compare: o.sCompare || 'always', failOp: 'keep', depthFailOp: 'keep', passOp: o.sPass || 'keep' };
-    return {
-        format: DEPTH_FORMAT, depthWriteEnabled: !!o.write, depthCompare: o.compare || 'less',
-        stencilFront: face, stencilBack: face, stencilReadMask: o.read ?? 0xFF, stencilWriteMask: o.writeMask ?? 0,
-    };
-}
+// Renderer: pipelines for the scene, sky, stencil marks, water, glass / fog veils and debug lines, and one render pass
+// that executes a command list built by FrameBuilder, into the canvas or a view target (render(f, target), with its
+// own MSAA colour and depth).
+//
+// Its depth-stencil target's bits are a StencilLayout (js/kits/gpu/stencil.js) with the slots of STENCIL
+// (core/config.js): "portal.regions", one value per portal entry's region (FrameBuilder numbers them 1..capacity), and
+// "portal.mark", the flag that marks an aperture while its child's region is written. The pipelines are a table
+// (js/kits/gpu/pipelines.js) that names those slots; no stencil value or mask is written here.
+//
+// Everything else it draws comes from render extensions (js/kits/gpu/extensions.js), registered for 'portal' by any
+// kit or part, or added with extend() before init(): the GUI screens are one (render/gui-pass.js). Besides name,
+// stencil, init and pipelines, a portal extension may have
+//   overlay(o)        a command ({ op, ... }) for a visible object, emitted by FrameBuilder after its entry's objects
+//                     (it gets chunk, slot, ref and rect: the object's geometry, draw slot, region and scissor)
+//   info(o)           the object's draw slot info.z (a number), when the extension's shader reads it
+//   prepare(f, enc, target)  passes of its own before the frame's pass (render targets its commands then sample)
+//   commands: { op(c, x) }   draws its commands; x: the pass and helpers (see render())
+// ctx (init / pipelines) carries the renderer's modules (world, sky, poly, lines), layouts (world: groups 0 + 1, base:
+// group 0), bind group layouts (bgl0, bgl1), buffers, blends, and `region`, the slots a draw in its entry's region tests.
 
 class Renderer {
     // fx: the feature context (the host's device and canvas target; see js/engine/host.js)
-    constructor(fx) { this.fx = fx; this.onError = (msg) => console.error(msg); }
+    constructor(fx) {
+        this.fx = fx;
+        this.onError = (msg) => console.error(msg);
+        this.stencil = new StencilLayout();
+        for (const [name, spec] of Object.entries(STENCIL)) this.stencil.reserve(name, spec);
+        this.regions = this.stencil.slot('portal.regions');
+        this.targets = new Map();       // view target -> its MSAA colour and depth
+        this.ext = {};                  // render extensions by name
+        this.exts = [];
+        this.handlers = new Map();      // command op -> its extension
+        for (const make of RenderExtensions.for('portal')) this.extend(make(this));
+    }
+
+    // a render extension (see above), before init()
+    extend(ext) {
+        if (this.stencil.resolved) throw new Error(`render extension "${ext.name}": added after init()`);
+        if (this.ext[ext.name]) throw new Error(`render extension "${ext.name}": added twice`);
+        for (const [name, spec] of Object.entries(ext.stencil || {})) this.stencil.reserve(name, spec);
+        for (const op of Object.keys(ext.commands || {})) {
+            if (this.handlers.has(op)) throw new Error(`render extension "${ext.name}": command "${op}" is "${this.handlers.get(op).name}"'s`);
+            this.handlers.set(op, ext);
+        }
+        this.ext[ext.name] = ext;
+        this.exts.push(ext);
+        return ext;
+    }
+
+    // the extensions FrameBuilder asks for overlay commands
+    get overlays() { return this.exts.filter(x => x.overlay); }
 
     async init() {
         const device = this.device = this.fx.device;
@@ -43,123 +81,55 @@ class Renderer {
             { binding: 0, visibility: S.VERTEX | S.FRAGMENT, buffer: { type: 'uniform', hasDynamicOffset: true, minBindingSize: DRAW_FLOATS * 4 } },
         ] });
         this.drawBG = device.createBindGroup({ layout: this.bgl1, entries: [{ binding: 0, resource: { buffer: this.drawBuf, size: DRAW_FLOATS * 4 } }] });
-        const worldLayout = device.createPipelineLayout({ bindGroupLayouts: [this.bgl0, this.bgl1] });
-        const baseLayout = device.createPipelineLayout({ bindGroupLayouts: [this.bgl0] });
-        const ms = { count: 4 };
-        const blend = { color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' }, alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' } };
 
-        const worldMod = device.createShaderModule({ code: WGSL_WORLD });
-        const world = stencil => device.createRenderPipeline({
-            layout: worldLayout,
-            vertex: { module: worldMod, entryPoint: 'vs', buffers: [{ arrayStride: 28, attributes: [
-                { shaderLocation: 0, offset: 0, format: 'float32x3' },
-                { shaderLocation: 1, offset: 12, format: 'float32x3' },
-                { shaderLocation: 2, offset: 24, format: 'uint32' },
-            ] }] },
-            fragment: { module: worldMod, entryPoint: 'fs', targets: [{ format: this.format }] },
-            primitive: { topology: 'triangle-list', cullMode: 'back', frontFace: 'ccw' },
-            depthStencil: depthState({ write: true, compare: 'less', sCompare: stencil ? 'equal' : 'always' }),
-            multisample: ms,
+        const mod = code => device.createShaderModule({ code });
+        const ctx = {
+            device, format: this.format, depthFormat: DEPTH_FORMAT, samples: 4, stencil: this.stencil,
+            modules: { world: mod(WGSL_WORLD), sky: mod(WGSL_SKY), poly: mod(WGSL_POLY), lines: mod(WGSL_LINES) },
+            layouts: {
+                world: device.createPipelineLayout({ bindGroupLayouts: [this.bgl0, this.bgl1] }),
+                base: device.createPipelineLayout({ bindGroupLayouts: [this.bgl0] }),
+            },
+            bgl0: this.bgl0, bgl1: this.bgl1, region: ['portal.regions'],
+            buffers: {
+                world: [{ arrayStride: 28, attributes: [
+                    { shaderLocation: 0, offset: 0, format: 'float32x3' },
+                    { shaderLocation: 1, offset: 12, format: 'float32x3' },
+                    { shaderLocation: 2, offset: 24, format: 'uint32' },
+                ] }],
+                poly: [{ arrayStride: POLY_FLOATS * 4, attributes: [
+                    { shaderLocation: 0, offset: 0, format: 'float32x3' }, { shaderLocation: 1, offset: 12, format: 'float32x3' }, { shaderLocation: 2, offset: 24, format: 'float32x4' },
+                    { shaderLocation: 3, offset: 40, format: 'float32' },
+                ] }],
+                lines: [{ arrayStride: 28, attributes: [
+                    { shaderLocation: 0, offset: 0, format: 'float32x3' }, { shaderLocation: 1, offset: 12, format: 'float32x4' },
+                ] }],
+            },
+            blends: { alpha: { color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' }, alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' } } },
+        };
+        for (const x of this.exts) await x.init?.(this, ctx);
+        const R = ['portal.regions'], M = ['portal.mark'];
+        // stencil mode draws inside its entry's region; scissor / none modes draw unmasked
+        const masked = { stencil: { stencil: { test: R } }, plain: {} };
+        const poly = fs => ({ layout: 'base', module: 'poly', vs: 'vs', fs, buffers: 'poly' });
+        const lines = compare => ({ layout: 'base', module: 'lines', vs: 'vs', fs: 'fs', buffers: 'lines', topology: 'line-list', blend: 'alpha', depth: { compare } });
+        this.pipes = buildPipelines(ctx, {
+            world: { layout: 'world', module: 'world', vs: 'vs', fs: 'fs', buffers: 'world', cull: 'back', depth: { write: true, compare: 'less' }, variants: masked },
+            sky: { layout: 'base', module: 'sky', vs: 'vs', fs: 'fs', depth: { compare: 'less-equal' }, variants: masked },
+            // three passes over the child's clipped portal polygon:
+            //  A: where the parent's region is and the aperture is not hidden by nearer geometry, set the mark
+            //  B: where the mark is, write the child's region
+            //  C: clear the mark
+            markA: { ...poly('fsMark'), colorWrite: false, depth: { compare: 'less-equal' }, stencil: { test: R, op: 'invert', write: M } },
+            markB: { ...poly('fsMark'), colorWrite: false, depth: { compare: 'always' }, stencil: { test: M, op: 'replace', write: R } },
+            markC: { ...poly('fsMark'), colorWrite: false, depth: { compare: 'always' }, stencil: { test: M, op: 'zero', write: M } },
+            water: { ...poly('fsWater'), blend: 'alpha', depth: { compare: 'less-equal' }, variants: masked },
+            veil: { ...poly('fsVeil'), blend: 'alpha', depth: { compare: 'less-equal' } },
+            glass: { ...poly('fsGlass'), blend: 'alpha', depth: { compare: 'less-equal' } },
+            lineDepth: lines('less-equal'),
+            lineOverlay: lines('always'),
         });
-        this.worldStencil = world(true);
-        this.worldPlain = world(false);
-
-        // GUI screens: the GUI atlas (fonts, cursor, blob; js/engine/gui-kit.js) and its quads, blended over the screen
-        // surface just behind them, in its portal entry's stencil region
-        const { GuiAtlas, GUI_VERTEX_LAYOUT } = GuiKit;
-        await GuiAtlas.loadFonts();
-        this.atlas = new GuiAtlas();
-        const atlasView = this.atlas.upload(this);
-        this.bgl2 = device.createBindGroupLayout({ entries: [
-            { binding: 0, visibility: S.FRAGMENT, sampler: { type: 'filtering' } },
-            { binding: 1, visibility: S.FRAGMENT, texture: { sampleType: 'float' } },
-        ] });
-        const sampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear' });
-        this.atlasBG = device.createBindGroup({ layout: this.bgl2, entries: [{ binding: 0, resource: sampler }, { binding: 1, resource: atlasView }] });
-        const guiMod = device.createShaderModule({ code: WGSL_GUI });
-        const gui = stencil => device.createRenderPipeline({
-            layout: device.createPipelineLayout({ bindGroupLayouts: [this.bgl0, this.bgl1, this.bgl2] }),
-            vertex: { module: guiMod, entryPoint: 'vs', buffers: [GUI_VERTEX_LAYOUT] },
-            fragment: { module: guiMod, entryPoint: 'fs', targets: [{ format: this.format, blend }] },
-            primitive: { topology: 'triangle-list', cullMode: 'none' },
-            depthStencil: depthState({ compare: 'less-equal', sCompare: stencil ? 'equal' : 'always' }),
-            multisample: ms,
-        });
-        this.guiStencil = gui(true);
-        this.guiPlain = gui(false);
-
-        const skyMod = device.createShaderModule({ code: WGSL_SKY });
-        const sky = stencil => device.createRenderPipeline({
-            layout: baseLayout,
-            vertex: { module: skyMod, entryPoint: 'vs' },
-            fragment: { module: skyMod, entryPoint: 'fs', targets: [{ format: this.format }] },
-            primitive: { topology: 'triangle-list' },
-            depthStencil: depthState({ compare: 'less-equal', sCompare: stencil ? 'equal' : 'always' }),
-            multisample: ms,
-        });
-        this.skyStencil = sky(true);
-        this.skyPlain = sky(false);
-
-        const polyMod = device.createShaderModule({ code: WGSL_POLY });
-        const polyVB = [{ arrayStride: POLY_FLOATS * 4, attributes: [
-            { shaderLocation: 0, offset: 0, format: 'float32x3' }, { shaderLocation: 1, offset: 12, format: 'float32x3' }, { shaderLocation: 2, offset: 24, format: 'float32x4' },
-            { shaderLocation: 3, offset: 40, format: 'float32' },
-        ] }];
-        const mark = ds => device.createRenderPipeline({
-            layout: baseLayout,
-            vertex: { module: polyMod, entryPoint: 'vs', buffers: polyVB },
-            fragment: { module: polyMod, entryPoint: 'fsMark', targets: [{ format: this.format, writeMask: 0 }] },
-            primitive: { topology: 'triangle-list', cullMode: 'none' },
-            depthStencil: depthState(ds),
-            multisample: ms,
-        });
-        // three passes over the child's clipped portal polygon:
-        //  A: where stencil == parent and the aperture is not hidden by nearer geometry, set bit 7
-        //  B: where bit 7 is set, write the child's ref into bits 0..6
-        //  C: clear bit 7
-        this.markA = mark({ compare: 'less-equal', sCompare: 'equal', sPass: 'invert', read: 0x7F, writeMask: 0x80 });
-        this.markB = mark({ compare: 'always', sCompare: 'equal', sPass: 'replace', read: 0x80, writeMask: 0x7F });
-        this.markC = mark({ compare: 'always', sCompare: 'equal', sPass: 'zero', read: 0x80, writeMask: 0x80 });
-        const water = stencil => device.createRenderPipeline({
-            layout: baseLayout,
-            vertex: { module: polyMod, entryPoint: 'vs', buffers: polyVB },
-            fragment: { module: polyMod, entryPoint: 'fsWater', targets: [{ format: this.format, blend }] },
-            primitive: { topology: 'triangle-list', cullMode: 'none' },
-            depthStencil: depthState({ compare: 'less-equal', sCompare: stencil ? 'equal' : 'always' }),
-            multisample: ms,
-        });
-        this.waterStencil = water(true);
-        this.waterPlain = water(false);
-        this.veilPipe = device.createRenderPipeline({
-            layout: baseLayout,
-            vertex: { module: polyMod, entryPoint: 'vs', buffers: polyVB },
-            fragment: { module: polyMod, entryPoint: 'fsVeil', targets: [{ format: this.format, blend }] },
-            primitive: { topology: 'triangle-list', cullMode: 'none' },
-            depthStencil: depthState({ compare: 'less-equal' }),
-            multisample: ms,
-        });
-        this.glassPipe = device.createRenderPipeline({
-            layout: baseLayout,
-            vertex: { module: polyMod, entryPoint: 'vs', buffers: polyVB },
-            fragment: { module: polyMod, entryPoint: 'fsGlass', targets: [{ format: this.format, blend }] },
-            primitive: { topology: 'triangle-list', cullMode: 'none' },
-            depthStencil: depthState({ compare: 'less-equal' }),
-            multisample: ms,
-        });
-
-        const lineMod = device.createShaderModule({ code: WGSL_LINES });
-        const lines = compare => device.createRenderPipeline({
-            layout: baseLayout,
-            vertex: { module: lineMod, entryPoint: 'vs', buffers: [{ arrayStride: 28, attributes: [
-                { shaderLocation: 0, offset: 0, format: 'float32x3' }, { shaderLocation: 1, offset: 12, format: 'float32x4' },
-            ] }] },
-            fragment: { module: lineMod, entryPoint: 'fs', targets: [{ format: this.format, blend }] },
-            primitive: { topology: 'line-list' },
-            depthStencil: depthState({ compare }),
-            multisample: ms,
-        });
-        this.lineDepthPipe = lines('less-equal');
-        this.lineOverlayPipe = lines('always');
+        for (const x of this.exts) if (x.pipelines) x.pipes = buildPipelines(ctx, x.pipelines(ctx));
     }
 
     upload(world) {
@@ -190,17 +160,43 @@ class Renderer {
         this.depthSample = this.depth.createView({ aspect: 'depth-only' });
     }
 
-    // f.cmds: draw | gui | sky | mark | glass | veil | water, executed in order (portal-tree DFS in stencil mode)
+    // a view target's MSAA colour and depth (its size, sampled by nobody)
+    attachments(target) {
+        let a = this.targets.get(target);
+        if (!a) {
+            const size = [target.width, target.height], U = GPUTextureUsage;
+            a = {
+                msaa: this.device.createTexture({ size, sampleCount: 4, format: this.format, usage: U.RENDER_ATTACHMENT }).createView(),
+                depth: this.device.createTexture({ size, sampleCount: 4, format: DEPTH_FORMAT, usage: U.RENDER_ATTACHMENT }).createView(),
+            };
+            this.targets.set(target, a);
+        }
+        return a;
+    }
+
+    // the draw slot info.z of an object: the first extension's that has one
+    info(o) {
+        for (const x of this.exts) {
+            const v = x.info?.(o);
+            if (v !== undefined) return v;
+        }
+        return 0;
+    }
+
+    // f.cmds: draw | sky | mark | glass | veil | water and the extensions' ops, executed in order (portal-tree DFS in
+    // stencil mode)
     // f.draws: one { o, fog } per draw slot; fog = the portals it is seen through, nearest first
-    render(f) {
-        const d = this.device, q = d.queue, W = this.W, H = this.H;
+    // target: a view target (js/kits/gui/views.js) instead of the canvas
+    render(f, target = null) {
+        const d = this.device, q = d.queue, W = target ? target.width : this.W, H = target ? target.height : this.H;
+        const into = target ? { ...this.attachments(target), resolve: target.colorView } : { msaa: this.msaa.createView(), depth: this.depth.createView(), resolve: this.fx.target() };
         q.writeBuffer(this.globalBuf, 0, f.globals);
         q.writeBuffer(this.areaBuf, 0, f.areas);
         const F = DRAW_STRIDE / 4, nSlots = Math.min(f.draws.length, MAX_DRAWS), D = this.drawData;
         for (let i = 0; i < nSlots; i++) {
             const { o, fog } = f.draws[i], k = i * F, n = Math.min(fog.length, MAX_FOG_PORTALS);
             D.set(o.model, k);
-            D[k + 16] = o.lightArea; D[k + 17] = n; D[k + 18] = o.gui ? o.gui.vh : 0; D[k + 19] = 0;
+            D[k + 16] = o.lightArea; D[k + 17] = n; D[k + 18] = this.info(o); D[k + 19] = 0;
             D[k + 20] = 1; D[k + 21] = 1; D[k + 22] = 1; D[k + 23] = 1;
             for (let j = 0; j < n; j++) {
                 D.set(fog[j].plane, k + 24 + j * 4);
@@ -214,10 +210,11 @@ class Renderer {
         if (lineVerts) q.writeBuffer(this.lineBuf, 0, f.lines, 0, lineVerts * 7);
 
         const enc = d.createCommandEncoder();
+        for (const x of this.exts) x.prepare?.(f, enc, target);
         const pass = enc.beginRenderPass({
-            colorAttachments: [{ view: this.msaa.createView(), resolveTarget: this.fx.target(),
+            colorAttachments: [{ view: into.msaa, resolveTarget: into.resolve,
                 clearValue: { r: 0.004, g: 0.005, b: 0.007, a: 1 }, loadOp: 'clear', storeOp: 'discard' }],
-            depthStencilAttachment: { view: this.depth.createView(), depthClearValue: 1, depthLoadOp: 'clear', depthStoreOp: 'store',
+            depthStencilAttachment: { view: into.depth, depthClearValue: 1, depthLoadOp: 'clear', depthStoreOp: 'store',
                 stencilClearValue: 0, stencilLoadOp: 'clear', stencilStoreOp: 'discard' },
         });
         const scissor = r => {
@@ -233,56 +230,61 @@ class Renderer {
         };
         pass.setBindGroup(0, this.bg0);
         pass.setIndexBuffer(this.ibuf, 'uint32');
-        const worldPipe = f.stencil ? this.worldStencil : this.worldPlain, skyPipe = f.stencil ? this.skyStencil : this.skyPlain;
-        const guiPipe = f.stencil ? this.guiStencil : this.guiPlain;
+        const P = this.pipes, variant = f.stencil ? 'stencil' : 'plain', L = this.stencil, R = this.regions;
+        const worldPipe = P.world[variant], skyPipe = P.sky[variant];
+        // what an extension's commands draw with: the pass, pipeline / vertex buffer switching, the mode's pipeline
+        // variant, the stencil layout and region slot, the command's draw slot and an object's geometry, the target
+        const x = {
+            pass, use, variant, stencil: L, regions: R, target,
+            drawSlot: slot => {
+                if (slot >= MAX_DRAWS) return false;
+                pass.setBindGroup(1, this.drawBG, [slot * DRAW_STRIDE]);
+                return true;
+            },
+            drawChunk: (chunk, pipeline) => {
+                use(pipeline, this.vbuf);
+                pass.drawIndexed(chunk.count, 1, chunk.first, chunk.baseVertex, 0);
+            },
+        };
         for (const c of f.cmds) {
             if (!scissor(c.rect)) continue;
             switch (c.op) {
                 case 'draw':
                     if (c.slot >= MAX_DRAWS) break;
                     use(worldPipe, this.vbuf);
-                    pass.setStencilReference(c.ref);
+                    pass.setStencilReference(R.ref(c.ref));
                     pass.setBindGroup(1, this.drawBG, [c.slot * DRAW_STRIDE]);
                     pass.drawIndexed(c.chunk.count, 1, c.chunk.first, c.chunk.baseVertex, 0);
                     break;
-                case 'gui': {
-                    // a screen's GUI model, in the screen's draw slot (its surface's model matrix and fog chain)
-                    const m = c.gui.model;
-                    if (c.slot >= MAX_DRAWS || !m.count) break;
-                    use(guiPipe, m.buffer);
-                    pass.setStencilReference(c.ref);
-                    pass.setBindGroup(1, this.drawBG, [c.slot * DRAW_STRIDE]);
-                    pass.setBindGroup(2, this.atlasBG);
-                    for (const surf of m.surfaces) if (surf.material === 'atlas') pass.draw(surf.count, 1, surf.first);
-                    break;
-                }
                 case 'sky':
                     use(skyPipe);
-                    pass.setStencilReference(c.ref);
+                    pass.setStencilReference(R.ref(c.ref));
                     pass.draw(3);
                     break;
                 case 'mark':
-                    use(this.markA, this.polyBuf); pass.setStencilReference(c.parent); pass.draw(c.count, 1, c.first);
-                    use(this.markB); pass.setStencilReference(0x80 | c.child); pass.draw(c.count, 1, c.first);
-                    use(this.markC); pass.setStencilReference(0x80); pass.draw(c.count, 1, c.first);
+                    use(P.markA, this.polyBuf); pass.setStencilReference(R.ref(c.parent)); pass.draw(c.count, 1, c.first);
+                    use(P.markB); pass.setStencilReference(L.compose({ 'portal.mark': 1, 'portal.regions': c.child })); pass.draw(c.count, 1, c.first);
+                    use(P.markC); pass.setStencilReference(L.compose({ 'portal.mark': 1 })); pass.draw(c.count, 1, c.first);
                     break;
                 case 'water':
-                    use(f.stencil ? this.waterStencil : this.waterPlain, this.polyBuf);
-                    pass.setStencilReference(c.ref);
+                    use(P.water[variant], this.polyBuf);
+                    pass.setStencilReference(R.ref(c.ref));
                     pass.draw(c.count, 1, c.first);
                     break;
                 case 'glass':
                 case 'veil':
-                    use(c.op === 'glass' ? this.glassPipe : this.veilPipe, this.polyBuf);
+                    use(c.op === 'glass' ? P.glass : P.veil, this.polyBuf);
                     pass.draw(c.count, 1, c.first);
                     break;
+                default:
+                    this.handlers.get(c.op)?.commands[c.op](c, x);
             }
         }
         if (lineVerts) {
             pass.setScissorRect(0, 0, W, H);
             const nd = Math.min(f.lineDepthCount, lineVerts);
-            if (nd) { use(this.lineDepthPipe, this.lineBuf); pass.draw(nd, 1, 0); }
-            if (lineVerts > nd) { use(this.lineOverlayPipe, this.lineBuf); pass.draw(lineVerts - nd, 1, nd); }
+            if (nd) { use(P.lineDepth, this.lineBuf); pass.draw(nd, 1, 0); }
+            if (lineVerts > nd) { use(P.lineOverlay, this.lineBuf); pass.draw(lineVerts - nd, 1, nd); }
         }
         pass.end();
         q.submit([enc.finish()]);

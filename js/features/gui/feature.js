@@ -2,7 +2,7 @@
 // Entity GUI, as a feature of WebGPU Entities: Doom 3-style world-space GUIs (an airlock terminal with CCTV, a paint
 // easel) in a facility built from data. The engine is the one from the WebGPU-EntityGUI demo; the host
 // (js/engine/host.js) gives it its device, canvas target and input, and builds its scenario from entities ("gui.*", see
-// js/engine/scenario-format.js). Its GUI toolkit is the engine's (js/engine/gui-kit.js), and its phone is the engine's
+// js/engine/scenario-format.js). Its GUI toolkit is the gui kit (js/kits/gui/), and its phone is the engine's
 // handheld (js/engine/handheld.js): the facility lends it pages, bindings and apps (radar, camera, gallery, IPTV) and
 // its render targets.
 //

@@ -1,7 +1,7 @@
 'use strict';
 // The media library: photos and their thumbnails.
 
-Features.part('gui', (engine, feature) => {
+Features.kit('gui', (engine, kit) => {
 // Phone camera and the media library it fills.
 //
 // Photos: the viewfinder render target is copied into a slot of a photo atlas ('photos' material).

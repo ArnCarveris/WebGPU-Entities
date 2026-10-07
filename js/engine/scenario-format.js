@@ -53,7 +53,7 @@ const ScenarioFormat = (() => {
         },
         portal: {
             title: 'Entity Portal',
-            config: ['camera', 'player', 'minimap', 'outdoor'],
+            config: ['camera', 'player', 'minimap', 'outdoor', 'cctv', 'media', 'iptv'],
             maps: { materials: { type: 'material' }, models: { type: 'model' } },
             lists: { areas: 'area', portals: 'portal', occluders: 'occluder', vehicles: 'vehicle' },
         },

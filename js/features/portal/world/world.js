@@ -35,6 +35,7 @@ class World {
         this.drones = [];
         this.hulls = [];
         this.screens = [];              // GUI screens (entities.js Screen)
+        this.cameras = [];              // security cameras (entities.js SecurityCamera)
         this.power = new PowerGrid(this);
         this.materials = new MaterialTable(scn.materials, this.warnings);
         this.nav = new NavGraph(this);

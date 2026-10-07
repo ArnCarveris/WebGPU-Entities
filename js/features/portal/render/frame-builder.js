@@ -42,14 +42,28 @@ function portalDistance(eye, poly, n) {
     return Math.hypot(h, inside ? 0 : edge);
 }
 
+let STAMP = 0;      // shared by every FrameBuilder (the main view's, the view targets'), as objects keep the last one
+
 class FrameBuilder {
-    constructor(world) {
+    // renderer: how many stencil regions its layout gave the portal tree (regions.capacity), and its render
+    // extensions' overlay commands (a visible object's GUI screen...)
+    constructor(world, renderer) {
         this.world = world;
+        this.refs = renderer.regions.capacity;
+        this.overlays = renderer.overlays;
         this.stamp = 0;
     }
 
+    // the extensions' commands for objects of an entry, after the entry's objects: in the object's draw slot and region
+    overlay(objs, slotOf, ref, rectOf) {
+        for (const x of this.overlays) for (const o of objs) {
+            const c = x.overlay(o);
+            if (c) this.cmds.push({ ...c, chunk: o.chunk, slot: slotOf(o), ref, rect: rectOf(o) });
+        }
+    }
+
     build(vis, mode, W, H) {
-        this.stamp++;
+        this.stamp = ++STAMP;
         this.vis = vis;
         this.cmds = [];
         this.objs = [];
@@ -124,15 +138,15 @@ class FrameBuilder {
         const walk = e => {
             const objs = this.collect(e);
             for (const o of objs) cmds.push({ op: 'draw', chunk: o.chunk, slot: this.slot(o, e.fog), ref: e.ref, rect: e.rect });
-            // GUI screens over their surfaces, once everything of the entry that may hide them has its depth
-            for (const o of objs) if (o.gui) cmds.push({ op: 'gui', gui: o.gui, slot: this.slot(o, e.fog), ref: e.ref, rect: e.rect });
+            // overlays (GUI screens over their surfaces), once everything of the entry that may hide them has its depth
+            this.overlay(objs, o => this.slot(o, e.fog), e.ref, () => e.rect);
             if (e.area === 0) cmds.push({ op: 'sky', ref: e.ref, rect: e.rect });
             const kids = e.children.length > 1 ? e.children.map(c => [c.share ? -1 : portalDistance(this.vis.eye, c.clipped, c.via.normal), c]).sort((a, b) => a[0] - b[0]).map(x => x[1]) : e.children;
             for (const c of kids) {
                 // the air in front of the portal fogs the ray up to its plane
                 const P = c.via;
                 c.fog = c.share ? e.fog : e.fog.concat([{ plane: [P.normal[0], P.normal[1], P.normal[2], P.d], fog: w.areas[e.area].fog }]);
-                if (c.share || nextRef > 127) c.ref = e.ref;             // camera in the aperture: same region as the parent
+                if (c.share || nextRef > this.refs) c.ref = e.ref;             // camera in the aperture: same region as the parent
                 else {
                     c.ref = nextRef++;
                     cmds.push(Object.assign({ op: 'mark', parent: e.ref, child: c.ref, rect: c.rect }, this.addPoly(c.clipped, c.via.normal, [0, 0, 0, 0])));
@@ -155,7 +169,7 @@ class FrameBuilder {
         const w = this.world, vis = this.vis, cmds = this.cmds;
         for (const e of vis.entries) for (const o of this.collect(e)) { this.slot(o); o.rect = rectUnion(o.rect, e.rect); }
         for (const o of this.objs) cmds.push({ op: 'draw', chunk: o.chunk, slot: o.slots.get(NO_FOG_CHAIN), ref: 0, rect: mode === 'scissor' ? o.rect : full });
-        for (const o of this.objs) if (o.gui) cmds.push({ op: 'gui', gui: o.gui, slot: o.slots.get(NO_FOG_CHAIN), ref: 0, rect: mode === 'scissor' ? o.rect : full });
+        this.overlay(this.objs, o => o.slots.get(NO_FOG_CHAIN), 0, o => (mode === 'scissor' ? o.rect : full));
         if (vis.sky) cmds.push({ op: 'sky', ref: 0, rect: mode === 'scissor' ? vis.skyRect : full });
         const outs = (vis.nodes[0] || []).filter(e => this.waterVisible(e));
         if (outs.length) {

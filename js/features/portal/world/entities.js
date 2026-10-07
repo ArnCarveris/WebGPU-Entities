@@ -1,5 +1,5 @@
 'use strict';
-// Entities: props, GUI screens, lamps, stairs, hulls, helms, doors and drones.
+// Entities: props, GUI screens, lamps, stairs, hulls, helms, doors, drones and security cameras.
 
 Features.part('portal', (engine, feature) => {
 const { Common, kits } = engine;
@@ -82,7 +82,7 @@ class Prop extends Entity {
     link() { this.screen?.link(); }
 }
 
-// A world-space GUI screen (Doom 3 style; EntityGUI, js/engine/gui-kit.js) on a prop's display face: the model part with
+// A world-space GUI screen (Doom 3 style; EntityGUI, the gui kit: js/kits/gui/) on a prop's display face: the model part with
 // `face` ("+x" | "-x" | "+z" | "-z", the side it shows; with its `tilt`), less `inset` metres all round. A dynamic SECTR Member like the
 // door panels: its chunk is the dark glass under the GUI, and FrameBuilder draws the GUI's quads right after it, in the
 // same draw slot. Its model matrix maps the GUI's virtual units onto the face (x right and y up as the viewer sees it,
@@ -120,7 +120,8 @@ class Screen extends Member {
         this.place(this.local);
         this.owners = w.areasOverlapping(this.min, this.max);
         this.lightArea = w.areaAt(m4.point(this.local, [vw / 2, vh / 2, 0.3]));
-        this.gui = new Kind({ range: 3, ...e, id: e.id || `${e.gui}@${p.pos.join(',')}`, size: [W, H], virtual: [vw, vh], maxVerts: e.maxVerts || 24000 }, this);
+        const range = e.range ?? 3;   // use range; the "move closer" hint within four times that
+        this.gui = new Kind({ ...e, range, hintRange: e.hintRange ?? range * 4, id: e.id || `${e.gui}@${p.pos.join(',')}`, size: [W, H], virtual: [vw, vh], maxVerts: e.maxVerts || 24000 }, this);
         w.addDynamic(this);
         w.screens.push(this);
     }
@@ -475,7 +476,35 @@ class Drone extends Member {
     }
 }
 
+// A security camera: a viewpoint the gui kit's CctvSystem renders through (game/media.js), at `pos` looking at
+// `target`, panning `sweep` radians either way at `speed`. It has no geometry; its housing is a prop of its own.
+// def: { pos, target, sweep, speed, label, name, loc, offline }
+class SecurityCamera extends Entity {
+    constructor(def, world) {
+        super(def, world);
+        this.label = def.label || def.id || `CAM-${String(world.cameras.length + 1).padStart(2, '0')}`;
+        this.fwd = v3.norm(v3.sub(def.target, def.pos));
+    }
+
+    get position() { return this.def.pos; }
+    get name() { return this.def.name || this.label; }
+    get location() { return this.def.loc || ''; }
+    get offline() { return !!this.def.offline; }
+
+    spawn() {
+        this.world.cameras.push(this);
+        this.world.addDynamic(this);
+    }
+
+    update(dt, t) {
+        const d = this.def, base = v3.norm(v3.sub(d.target, d.pos));
+        const pan = (d.sweep || 0) * Math.sin(t * (d.speed ?? 0.3) + d.pos[0]), c = Math.cos(pan), s = Math.sin(pan);
+        this.fwd = [base[0] * c + base[2] * s, base[1], -base[0] * s + base[2] * c];
+    }
+}
+
 const ENTITY_TYPES = {
+    securityCamera: SecurityCamera,
     prop: Prop,
     light: Lamp,
     stairs: Stairs,

@@ -23,15 +23,24 @@ const Features = {
         terrain: { uses: ['world', 'noise'], parts: ['heightfield', 'stamps'] },
         interior: { parts: ['origin', 'vis-area', 'interior'] },
         transit: { uses: ['interior'], parts: ['paths', 'line'] },
+        gpu: { parts: ['stencil', 'pipelines', 'extensions'] },
+        gui: {
+            uses: ['noise', 'gpu'],
+            parts: [
+                'math', 'materials', 'geometry', 'shaders', 'renderer', 'atlas', 'device-context', 'entity-gui', 'interaction',
+                'phone-gui', 'phone-apps', 'paint-shader', 'paint-canvas', 'easel-gui', 'views', 'media', 'cctv', 'phone-camera',
+                'iptv', 'apps/camera', 'apps/gallery', 'apps/viewer', 'apps/tv', 'media-phone',
+            ],
+        },
     },
-    ENGINE_KITS: ['noise', 'view'],
+    ENGINE_KITS: ['noise', 'view', 'gpu', 'gui'],
     USES: {
         cloud: ['noise', 'view', 'world', 'terrain', 'interior', 'transit'],
         water: ['noise', 'view', 'world', 'terrain'],
         origin: ['noise', 'world'],
         imposter: ['noise', 'view', 'world'],
-        portal: ['noise', 'view', 'world', 'interior', 'transit'],
-        gui: ['noise', 'view', 'world', 'interior'],
+        portal: ['noise', 'view', 'world', 'interior', 'transit', 'gpu', 'gui'],
+        gui: ['noise', 'view', 'world', 'interior', 'gpu', 'gui'],
     },
     PARTS: {
         cloud: [
@@ -64,16 +73,14 @@ const Features = {
         ],
         portal: [
             'core/config', 'core/math', 'core/geometry2d', 'core/frustum', 'render/mesh', 'render/materials',
-            'render/shaders', 'render/renderer', 'render/frame-builder', 'render/debug-lines', 'vis/object-trees',
+            'render/shaders', 'render/renderer', 'render/gui-pass', 'render/frame-builder', 'render/debug-lines', 'vis/object-trees',
             'vis/portal-vis', 'world/collision', 'world/area', 'world/portal', 'world/architecture', 'world/outdoors',
             'world/nav-graph', 'world/vehicle', 'world/power', 'gui/screens', 'world/entities', 'world/world', 'game/player', 'game/input',
-            'game/hud', 'game/minimap', 'game/game', 'phone-pages', 'feature',
+            'game/hud', 'game/minimap', 'game/media', 'game/game', 'phone-pages', 'feature',
         ],
         gui: [
-            'core/audio', 'render/paint-shader', 'gui/terminal-gui', 'gui/easel-gui', 'systems/paint-canvas',
-            'world/entities', 'gui/apps/radar', 'gui/apps/camera', 'gui/apps/gallery', 'gui/apps/viewer', 'gui/apps/tv',
-            'systems/cctv', 'systems/media', 'systems/phone-camera', 'systems/iptv', 'world/world', 'game/player',
-            'game/input', 'game/interaction', 'game/bindings', 'game/game', 'feature',
+            'core/audio', 'gui/terminal-gui', 'world/entities', 'gui/apps/radar', 'world/world', 'game/player',
+            'game/input', 'game/bindings', 'game/game', 'feature',
         ],
     },
     parts: {},

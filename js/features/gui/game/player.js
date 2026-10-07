@@ -3,7 +3,7 @@
 
 Features.part('gui', (engine, feature) => {
 const { kits } = engine;
-const { V3, M4, clamp, wrapIndex, deg, rad } = GuiKit;
+const { V3, M4, clamp, wrapIndex, deg, rad } = engine.kits.gui;
 
 // First-person player: movement, collision, footsteps and noise.
 

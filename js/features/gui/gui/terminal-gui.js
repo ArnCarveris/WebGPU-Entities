@@ -2,7 +2,7 @@
 // The airlock terminal's screen.
 
 Features.part('gui', (engine, feature) => {
-const { clamp, deg, col, timeText, EntityGUI } = GuiKit;
+const { clamp, deg, col, timeText, EntityGUI } = engine.kits.gui;
 
 // Wall terminal GUI (640x480): airlock controls, access keypad and the CCTV window.
 

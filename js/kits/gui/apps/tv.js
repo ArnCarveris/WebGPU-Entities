@@ -1,8 +1,8 @@
 'use strict';
 // The phone's TV app.
 
-Features.part('gui', (engine, feature) => {
-const { col, fitRect, timeText, clipTime, IOS, PHONE_NAV_H, PhoneApp } = GuiKit;
+Features.kit('gui', (engine, kit) => {
+const { col, fitRect, timeText, clipTime, IOS, PHONE_NAV_H, PhoneApp } = kit;
 
 // IPTV: player, transport controls and the channel list
 class TvApp extends PhoneApp {

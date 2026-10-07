@@ -191,7 +191,6 @@ js/engine/
     hud.js                  the corner chip, toasts (and the pickers, when the page could not start)
     handheld.js             the engine's handheld (handheld, handheld.page): every option and readout, in every
                             scenario; worlds offer theirs through handheld()
-    gui-kit.js              the Doom 3-style GUI toolkit (renderer, font atlas, DeviceContext, EntityGUI, PhoneGUI)
     audio.js                sound.* entities (WebAudio synthesis)
     expr.js                 the expression language
     gpu-choice.js           GPU adapter choice
@@ -200,7 +199,28 @@ js/kits/<kit>/              generic building blocks, not any one feature's (Feat
                             their exports are engine.kits.<kit> (Features.kits)
     noise/                  seeded random (mulberry32, seededRandom, hashes), value noise 2D / 3D, fbm with options,
                             ridged multifractal; NoiseWGSL: the shaders' hashes, value noise (± gradient), fbm and
-                            tileable Perlin / Worley, each under the name its shader calls it (gui-kit's included)
+                            tileable Perlin / Worley, each under the name its shader calls it (the gui kit's included)
+    gpu/                    StencilLayout: a depth-stencil target's bits shared out by name. Users reserve slots
+                            (`{ values: n, min }` or `{ flag: true }`), resolve() packs them (flags from the top,
+                            value slots from the bottom, shrinking the ones with `min` when bits run out) and refs
+                            are composed from slots, never written as literals. buildPipelines: render pipelines as
+                            a table of descriptors whose stencil names slots (`{ test, op, write }`), with variants
+                            (portal's stencil / plain, gui's stencil / depth). RenderExtensions: register(kind,
+                            factory) adds to every renderer of that kind what it draws besides its own (stencil
+                            slots, resources, pipelines, commands) without touching it: portal's renderer takes
+                            them (its GUI screens pass is one: render/gui-pass.js)
+    gui/                    the Doom 3-style GUI toolkit (an engine kit: the handheld uses it): math, world
+                            materials, meshes and GUI surfaces, WGSL, the Renderer (views, render targets, scene
+                            passes; GUI surfaces reserve its "gui.surface" stencil slot), the font atlas, GuiModel +
+                            DeviceContext, EntityGUI, InteractionSystem (aiming at and using EntityGUIs, for any
+                            feature: gui's facility, portal's screens), PhoneGUI + PhoneApp, the paint easel
+                            (EaselGUI over a PaintCanvas), and the media systems: ViewTarget + the scene contract
+                            (a world renders a view of itself: renderView(enc, target, shot)), CctvSystem (security
+                            cameras), PhoneCamera + MediaLibrary (viewfinder, photos, video), IptvPlayer, their phone
+                            apps (camera, photos, viewer, IPTV) and mediaApps / mediaPages for the handheld. gui's
+                            facility and portal's island both implement the scene contract. An EntityGUI only needs a
+                            device from its host; the kit's Renderer draws it with its own stencil value, another
+                            feature's renderer its own way (portal's: a one-value "gui.surface" mask per screen)
     view/                   FirstPersonView: a first-person eye with options (turn direction, look sensitivity, pitch
                             limit, keys, boost / slow, wheel speed, ground clearance): the engine's fly camera, the
                             cloud / water / imposter cameras and the portal / gui players' views

@@ -2,7 +2,7 @@
 // Bindings: the values the screens and the phone read and set.
 
 Features.part('gui', (engine, feature) => {
-const { pad3, cardinal } = GuiKit;
+const { pad3, cardinal } = engine.kits.gui;
 
 // Named bindings between data-driven GUI pages and game state.
 //   value:  { get, set?, min?, max?, fmt?, label?, options? }  (switch / slider / picker / option cells)

@@ -69,7 +69,16 @@ js/main.js      entry point
 ### The phone is the engine's handheld (WebGPU Entities)
 
 In WebGPU Entities the phone is not this world's: it is the engine's handheld ([`js/engine/handheld.js`](../../js/engine/handheld.js)),
-in every scenario, and `EntityGUI`, `PhoneGUI` and the rest of the toolkit live in [`js/engine/gui-kit.js`](../../js/engine/gui-kit.js).
+in every scenario, and `EntityGUI`, `PhoneGUI`, `InteractionSystem`, the easel (`EaselGUI`, `PaintCanvas`) and the rest of the
+toolkit live in the gui kit, [`js/kits/gui/`](../../js/kits/gui/), which any feature can use (the portal feature's screens do).
+GUI surfaces no longer count stencil values themselves: the facility reserves one per screen in its renderer's stencil
+layout (`Renderer.reserveSurfaces`, the `gui.surface` slot of [`js/kits/gpu/stencil.js`](../../js/kits/gpu/stencil.js)), and a
+surface the layout has no value left for falls back to the depth test.
+
+The CCTV, the phone's camera and photo library, IPTV and their phone apps are the gui kit's too (`cctv.js`, `phone-camera.js`,
+`media.js`, `iptv.js`, `apps/`). They render through a scene contract ([`js/kits/gui/views.js`](../../js/kits/gui/views.js)):
+the facility's game implements `renderView(enc, target, shot)` with its own renderer, and the portal feature's island does
+the same with its portal traversal.
 This facility lends it its `phone.pages` (their root sections lead the root page), its `Bindings`, its apps (radar,
 camera, gallery, viewer, IPTV) and its render targets, and, while its player has the camera, its stride and lights.
 `gui.phone` keeps `links` and `pages`; the handheld's own look (model, screen, pose, `startShown`) is the `handheld`

@@ -1,8 +1,8 @@
 'use strict';
 // IPTV: channels and playback.
 
-Features.part('gui', (engine, feature) => {
-const { wrapIndex } = GuiKit;
+Features.kit('gui', (engine, kit) => {
+const { wrapIndex } = kit;
 
 // IPTV player. Internet channels are HLS streams (hls.js is loaded on first use); each new video frame
 // is copied into a GPU texture exposed as the 'tv' material. Local channels need no network.

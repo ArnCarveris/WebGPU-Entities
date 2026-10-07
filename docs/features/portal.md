@@ -76,7 +76,7 @@ tools/              embed-scenarios.mjs: regenerate the script copies
 
 ### GUI screens (WebGPU Entities)
 
-The consoles, generators and bridge desks carry world-space EntityGUIs (Doom 3 style, [`js/engine/gui-kit.js`](../../js/engine/gui-kit.js)),
+The consoles, generators and bridge desks carry world-space EntityGUIs (Doom 3 style, the gui kit: [`js/kits/gui/`](../../js/kits/gui/)),
 drawn in the portal renderer's own pass: a prop with `screen: { gui, ... }` puts one on its model's display face (the box part
 with `face`: `+x | -x | +z | -z`, optionally `tilt`ed). The screen is a dynamic SECTR Member (riding the ship when its prop does);
 FrameBuilder draws its GUI quads right after its portal entry's objects, depth-tested just in front of the glass and masked by
@@ -86,6 +86,26 @@ drone, doors, power), `doors` (lock / unlock, lockdown; the drone reroutes), `ha
 `power` (a breaker per area; unpowered areas keep their emergency beacons), `generator` (`unit`: rpm, load, coolant, fuel,
 start / stop), and aboard: `engine`, `navigation` (chart, waypoints, ETA), `helm` (rudder, telegraph, heel and trim).
 The island's power is [`world/power.js`](../../js/features/portal/world/power.js).
+
+The screens are drawn by a render extension of the portal renderer ([`render/gui-pass.js`](../../js/features/portal/render/gui-pass.js);
+`RenderExtensions` in [`js/kits/gpu/extensions.js`](../../js/kits/gpu/extensions.js)): the renderer core only draws the world,
+sky, marks, water, glass and lines. Anything else that draws in its pass registers for `'portal'` the same way, from any
+kit or part, with its stencil slots (reserved next to `portal.regions` and `portal.mark`, which shrink to make room),
+its resources and pipelines, an `overlay(o)` command per visible object, its draw-slot `info(o)` and its `commands`.
+
+A screen's quads are masked to its glass with the stencil layout's `gui.surface` slot (one value: the glass, drawn again,
+sets it where it is seen in its entry's region, the quads draw with depth ALWAYS inside it, and the glass clears it).
+When the layout has no bit left for it (other extensions took them), the pass falls back to render targets: before the
+frame's pass, each screen the frame draws renders its GUI model into a texture of its own (only when the model changed,
+so once however many views draw it), and its glass is drawn again showing that texture, from the world shader's own
+vertex stage, so at exactly the glass's depth: no stencil, no offset, nothing to z-fight. Every view (the main one,
+CCTV, the phone's camera) rebuilds the screens it sees, once per frame.
+
+**CCTV, the phone's camera, IPTV** (the gui kit's media systems, [`game/media.js`](../../js/features/portal/game/media.js)):
+`securityCamera` entities (`pos`, `target`, `sweep`, `speed`, `label`, `name`; no geometry, their housings are props) feed
+the `cctv` screen kind (camera list + the selected feed). `portal.cctv`, `portal.media` and `portal.iptv` tune them, and
+the handheld gets Camera, Photos and IPTV pages. Every picture is a view of the island rendered by the island
+(`Game.renderView`: its own portal traversal and frame into a view target, submitted before the main frame).
 
 ## Concepts
 
@@ -124,12 +144,18 @@ Queries carry a plane mask, so a node fully inside a plane stops testing it.
 The portal tree is drawn depth-first. Each child's clipped portal polygon is written into the
 stencil in three steps:
 
-1. Where stencil == parent ref and depth passes, set bit 7.
-2. Write the child's ref.
-3. Clear bit 7.
+1. Where the stencil holds the parent's region and depth passes, set the mark.
+2. Where the mark is, write the child's region.
+3. Clear the mark.
 
-The child's objects and sky then draw with stencil EQUAL, masked to the aperture exactly. There are
-127 refs per frame.
+The child's objects and sky then draw with stencil EQUAL, masked to the aperture exactly.
+
+*In WebGPU Entities* the regions and the mark are slots of the renderer's stencil layout
+([`js/kits/gpu/stencil.js`](../../js/kits/gpu/stencil.js); `STENCIL` in `core/config.js`): `portal.regions`
+(`{ values: 127, min: 15 }`) and `portal.mark` (a flag). Alone they resolve to the original bits 0..6 and bit 7, but no
+value is written in the code: the pipelines name the slots they test and write, so if another user of the target
+reserves bits, the regions shrink (down to 15 per frame; deeper entries share their parent's region) instead of
+colliding.
 
 Fog through portals: every draw carries the chain of portals it is seen through (up to 4), each with
 its plane and the fog of the area in front of it. The scene shader splits the view ray at those
