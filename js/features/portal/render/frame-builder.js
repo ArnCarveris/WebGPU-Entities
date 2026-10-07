@@ -8,6 +8,9 @@ const { POLY_FLOATS, NEAR_PASS, aabbVisible, aabbContained, rectUnion } = featur
 
 // FrameBuilder: visibility entries -> object tree queries -> command list for Renderer.render.
 //
+// A GUI screen (o.gui, world/entities.js Screen) is drawn by a 'gui' command after its entry's objects: its quads are
+// depth-tested against them (just in front of its own surface) and masked by the entry's stencil ref like the rest.
+//
 // Stencil mode draws the portal tree depth-first. Each child's clipped portal polygon is marked into the
 // stencil where the parent's ref is; the child's objects and sky then draw with stencil EQUAL. Every draw
 // carries the chain of portals it is seen through (plane + fog of the area in front of each), so the scene
@@ -119,7 +122,10 @@ class FrameBuilder {
         const w = this.world, cmds = this.cmds, st = this.st;
         let nextRef = 1;
         const walk = e => {
-            for (const o of this.collect(e)) cmds.push({ op: 'draw', chunk: o.chunk, slot: this.slot(o, e.fog), ref: e.ref, rect: e.rect });
+            const objs = this.collect(e);
+            for (const o of objs) cmds.push({ op: 'draw', chunk: o.chunk, slot: this.slot(o, e.fog), ref: e.ref, rect: e.rect });
+            // GUI screens over their surfaces, once everything of the entry that may hide them has its depth
+            for (const o of objs) if (o.gui) cmds.push({ op: 'gui', gui: o.gui, slot: this.slot(o, e.fog), ref: e.ref, rect: e.rect });
             if (e.area === 0) cmds.push({ op: 'sky', ref: e.ref, rect: e.rect });
             const kids = e.children.length > 1 ? e.children.map(c => [c.share ? -1 : portalDistance(this.vis.eye, c.clipped, c.via.normal), c]).sort((a, b) => a[0] - b[0]).map(x => x[1]) : e.children;
             for (const c of kids) {
@@ -149,6 +155,7 @@ class FrameBuilder {
         const w = this.world, vis = this.vis, cmds = this.cmds;
         for (const e of vis.entries) for (const o of this.collect(e)) { this.slot(o); o.rect = rectUnion(o.rect, e.rect); }
         for (const o of this.objs) cmds.push({ op: 'draw', chunk: o.chunk, slot: o.slots.get(NO_FOG_CHAIN), ref: 0, rect: mode === 'scissor' ? o.rect : full });
+        for (const o of this.objs) if (o.gui) cmds.push({ op: 'gui', gui: o.gui, slot: o.slots.get(NO_FOG_CHAIN), ref: 0, rect: mode === 'scissor' ? o.rect : full });
         if (vis.sky) cmds.push({ op: 'sky', ref: 0, rect: mode === 'scissor' ? vis.skyRect : full });
         const outs = (vis.nodes[0] || []).filter(e => this.waterVisible(e));
         if (outs.length) {

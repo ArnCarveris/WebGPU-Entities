@@ -12,7 +12,8 @@ const {
 //
 // Frame order:
 //   world update (vehicles first, so riders use this frame's pose) -> player -> portal traversal
-//   (or the frozen one) -> FrameBuilder command list -> debug lines -> render -> minimap, HUD
+//   (or the frozen one) -> FrameBuilder command list -> GUI screens (cursor, the drawn ones rebuilt) -> debug lines
+//   -> render -> minimap, HUD
 
 const MASK_MODES = ['stencil', 'scissor', 'none'];
 
@@ -38,12 +39,15 @@ class Game {
         this.frameMode = 'stencil';
         this.running = false;
         this.lastT = performance.now();
+        this.screenFocus = null;        // the GUI screen under the cursor, in reach
+        this.screenCapture = null;      // the one holding the pointer (a drag)
     }
 
     get cam() { return this.player && this.player.cam; }
 
     async start() {
         await this.renderer.init();
+        this.dc = new GuiKit.DeviceContext(this.renderer.atlas);
         this.input.attach();
     }
 
@@ -58,6 +62,8 @@ class Game {
         this.frozen = null;
         this.opts.freeze = false;
         this.player = new PlayerController(this, scn.camera, scn.player);
+        this.screenFocus = this.screenCapture = null;
+        for (const s of world.screens) s.gui.attachTo(this);
         if (world.warnings.length) this.hud.toast(`${world.warnings.length} scenario warning(s), see console`);
         else this.hud.toast(`Loaded "${scn.name || 'scenario'}": ${world.areas.length - 1} areas, ${world.portals.length} portals`);
     }
@@ -110,12 +116,15 @@ class Game {
 
     // events for the scenario's sound cues: footsteps while walking on the ground, every stride
     soundEvents(dt) {
-        const P = this.player, pos = P.cam.pos;
-        if (this.fx.cameraLocked || !this.opts.walk || !P.onGround || P.driving) { this.stepPos = pos.slice(); return; }
+        // strides are measured in the frame of what the player stands on: a ship carrying them is no walking
+        const P = this.player, frame = P.support || null, pos = frame ? frame.toLocal(P.cam.pos) : P.cam.pos.slice();
+        const from = this.stepFrame === frame ? this.stepPos : null;
+        this.stepPos = pos;
+        this.stepFrame = frame;
+        if (this.fx.cameraLocked || !this.opts.walk || !P.onGround || P.driving) return;
         const run = this.input.keys.has('ShiftLeft') || this.input.keys.has('ShiftRight');
-        const d = this.stepPos ? Math.hypot(pos[0] - this.stepPos[0], pos[2] - this.stepPos[2]) : 0;
+        const d = from ? Math.hypot(pos[0] - from[0], pos[2] - from[2]) : 0;
         this.stepDist = (this.stepDist || 0) + (d < 3 ? d : 0);
-        this.stepPos = pos.slice();
         if (this.stepDist > (run ? 1.6 : 1.1)) { this.stepDist = 0; this.fx.emit('step', { run, swim: P.swimming }); }
     }
 
@@ -145,12 +154,53 @@ class Game {
         stats.objs = fr.objs.length;
         this.frameStats = fr.stats;
         this.frameMode = mode;
+        this.updateScreens(now, eye, fwd, viewProj);
 
         const lines = this.debugLines.build(vis, o, o.freeze ? this.frozen : null, player.cam.fov);
         R.render({ globals: this.globals(viewProj, eye, t, W, H, mode === 'stencil'), areas: w.lightingTable(t), draws: fr.draws, cmds: fr.cmds, polys: fr.polys, stencil: mode === 'stencil', lines: lines.data, lineDepthCount: lines.depthCount });
 
         if (o.map) this.minimap.draw(vis);
         this.hud.tick(now, vis);
+    }
+
+    // GUI screens (world/entities.js Screen): the view ray (the crosshair while the mouse looks, else the mouse) gives
+    // the nearest screen it meets the cursor, if within the GUI's range; the screens in this frame's draws rebuild their
+    // GUI models (the others aren't seen)
+    updateScreens(now, eye, fwd, viewProj) {
+        const dt = Math.min(0.1, (now - (this.screenT ?? now)) / 1000), screens = this.world.screens;
+        this.screenT = now;
+        const ray = this.viewRay(eye, fwd, viewProj);
+        let best = null;
+        for (const s of screens) {
+            s.gui.active = s.gui.outOfRange = false;
+            const hit = ray && s.trace(eye, ray);
+            if (hit && (!best || hit.t < best.hit.t)) best = { s, hit };
+        }
+        this.screenFocus = null;
+        if (best) {
+            const g = best.s.gui;
+            if (best.hit.t <= g.range || this.screenCapture === g) { g.active = true; g.cursor.x = best.hit.x; g.cursor.y = best.hit.y; this.screenFocus = g; }
+            else g.outOfRange = best.hit.t < g.range * 4;
+        }
+        if (this.screenCapture) this.screenCapture.pointerDrag();
+        const free = document.pointerLockElement !== this.canvas;
+        if (free && this.screenFocus) { this.canvas.style.cursor = 'none'; this.cursorHidden = true; }
+        else if (this.cursorHidden) { this.canvas.style.cursor = ''; this.cursorHidden = false; }
+        for (const s of screens) {
+            s.gui.update(dt, now);
+            if (s.stamp === this.frameBuilder.stamp) s.gui.build(this.dc, now);
+        }
+    }
+
+    // the view ray: forward while the mouse looks (pointer lock), through the mouse while it is over the canvas
+    viewRay(eye, fwd, viewProj) {
+        if (this.fx.cameraLocked) return null;
+        if (document.pointerLockElement === this.canvas) return fwd;
+        const m = this.input.mouse;
+        if (!m.inside) return null;
+        const r = this.canvas.getBoundingClientRect();
+        const q = m4.project(m4.invert(viewProj), [((m.x - r.left) / r.width) * 2 - 1, 1 - ((m.y - r.top) / r.height) * 2, 1, 1]);
+        return v3.norm(v3.sub([q[0] / q[3], q[1] / q[3], q[2] / q[3]], eye));
     }
 
     // Globals uniform: view-projection (+ inverse), eye, sun, sky colours, time, viewport and whether the

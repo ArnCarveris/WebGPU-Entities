@@ -74,6 +74,19 @@ tools/              embed-scenarios.mjs: regenerate the script copies
    other entities in `link()`.
 3. Register it in `ENTITY_TYPES` and place it in the scenario's `entities`.
 
+### GUI screens (WebGPU Entities)
+
+The consoles, generators and bridge desks carry world-space EntityGUIs (Doom 3 style, [`js/engine/gui-kit.js`](../../js/engine/gui-kit.js)),
+drawn in the portal renderer's own pass: a prop with `screen: { gui, ... }` puts one on its model's display face (the box part
+with `face`: `+x | -x | +z | -z`, optionally `tilt`ed). The screen is a dynamic SECTR Member (riding the ship when its prop does);
+FrameBuilder draws its GUI quads right after its portal entry's objects, depth-tested just in front of the glass and masked by
+the entry's stencil ref, fogged through portals like the walls. Aim with the crosshair (or the free mouse) within 3 m and click.
+Kinds ([`js/features/portal/gui/screens.js`](../../js/features/portal/gui/screens.js)): `facility` (map of both levels: you, the
+drone, doors, power), `doors` (lock / unlock, lockdown; the drone reroutes), `harbour` (the freighter's route and departure),
+`power` (a breaker per area; unpowered areas keep their emergency beacons), `generator` (`unit`: rpm, load, coolant, fuel,
+start / stop), and aboard: `engine`, `navigation` (chart, waypoints, ETA), `helm` (rudder, telegraph, heel and trim).
+The island's power is [`world/power.js`](../../js/features/portal/world/power.js).
+
 ## Concepts
 
 | Here | Far Cry 1 | SECTR |

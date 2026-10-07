@@ -1,11 +1,11 @@
 'use strict';
-// Entities: props, lamps, stairs, hulls, helms, doors and drones.
+// Entities: props, GUI screens, lamps, stairs, hulls, helms, doors and drones.
 
 Features.part('portal', (engine, feature) => {
 const { Common, kits } = engine;
 const { v3 } = Common;
 const { mulberry32 } = kits.noise;
-const { MAX_LIGHTS, AXES, m4, IDENTITY, g2, newell, MeshBuilder, splitMesh, worldBounds, PointLight } = feature;
+const { MAX_LIGHTS, AXES, m4, IDENTITY, g2, newell, MeshBuilder, splitMesh, worldBounds, PointLight, SCREEN_GUIS } = feature;
 
 // World entities. Each is constructed from a scenario definition ({ type, ... }) and spawned once, in
 // scenario order: static ones add geometry to the world, dynamic ones also register for per-frame updates.
@@ -63,18 +63,88 @@ class Member extends Entity {
     }
 }
 
-// A scenario model placed at pos / rot / scale; belongs to every area its bounds overlap
+// A scenario model placed at pos / rot / scale; belongs to every area its bounds overlap. `screen` puts a GUI screen
+// on the model's display face (Screen)
 class Prop extends Entity {
     spawn() {
         const w = this.world, e = this.def, b = new MeshBuilder();
         w.addModel(b, e.model, m4.trs(e.pos, e.rot || 0, e.scale || 1));
         const owners = e.area !== undefined ? [w.areaIndex(e.area)] : w.areasOverlapping(b.min, b.max);
         const lightArea = w.areaAt(v3.add(e.pos, [0, 0.3, 0]));
+        const first = w.objects.length;
         w.addStatic(b, {
             name: `prop:${e.model}`, owners, lightArea, vehicle: e.vehicle, dockedOnly: e.dockedOnly,
             solid: e.solid !== false, climbable: !!e.climbable,
         });
+        if (e.screen) (this.screen = new Screen(e.screen, w, e, w.objects.slice(first))).spawn();
     }
+
+    link() { this.screen?.link(); }
+}
+
+// A world-space GUI screen (Doom 3 style; EntityGUI, js/engine/gui-kit.js) on a prop's display face: the model part with
+// `face` ("+x" | "-x" | "+z" | "-z", the side it shows; with its `tilt`), less `inset` metres all round. A dynamic SECTR Member like the
+// door panels: its chunk is the dark glass under the GUI, and FrameBuilder draws the GUI's quads right after it, in the
+// same draw slot. Its model matrix maps the GUI's virtual units onto the face (x right and y up as the viewer sees it,
+// z out of it in metres), so the glass is built in virtual units and the GUI shader places its quads with the same
+// matrix. It rides the vehicle its prop was claimed by. def: { gui: kind (gui/screens.js SCREEN_GUIS), virtual: [w, h]
+// (default: 360 high, the face's aspect), range, inset, mat, title, ... (what the kind reads) }
+class Screen extends Member {
+    constructor(def, world, prop, hostObjects) {
+        super(def, world);
+        this.prop = prop;
+        this.hostObjects = hostObjects;
+        this.gui = null;
+    }
+
+    spawn() {
+        const w = this.world, e = this.def, p = this.prop;
+        const part = (w.scn.models?.[p.model] || []).find(q => q.face && q.box);
+        const n = part && { '+x': [1, 0, 0], '-x': [-1, 0, 0], '+z': [0, 0, 1], '-z': [0, 0, -1] }[part.face];
+        if (!n) { w.warnings.push(`screen: model "${p.model}" has no box part with a "face"`); return; }
+        const Kind = SCREEN_GUIS[e.gui];
+        if (!Kind) { w.warnings.push(`screen: unknown gui "${e.gui}"`); return; }
+        // the face in the world (or the vehicle's frame), through the prop's yaw and scale: centre, axes, size in metres
+        const [x, y, z, sx, sy, sz] = part.box, P = m4.trs(p.pos, p.rot || 0, p.scale || 1), inset = e.inset ?? 0.04;
+        const right = v3.cross([0, 1, 0], n), size = [sx, sy, sz], T = (part.tilt || 0) * Math.PI / 180;
+        const tilt = q => [q[0], q[1] * Math.cos(T) - q[2] * Math.sin(T), q[1] * Math.sin(T) + q[2] * Math.cos(T)];     // as World.addModel
+        const across = m4.dir(P, tilt(v3.mul(right, Math.abs(v3.dot(right, size))))), out = m4.dir(P, tilt(v3.mul(n, Math.abs(v3.dot(n, size)) / 2)));
+        const up = m4.dir(P, tilt([0, sy, 0])), W = v3.len(across) - 2 * inset, H = v3.len(up) - 2 * inset;
+        const R = v3.norm(across), U = v3.norm(up), N = v3.norm(out);
+        const vh = e.virtual?.[1] ?? 360, vw = e.virtual?.[0] ?? Math.round(vh * W / H);
+        const corner = v3.madd(v3.madd(v3.madd(v3.add(m4.point(P, [x, y, z]), out), N, 0.002), R, -W / 2), U, -H / 2);
+        this.local = m4.basis(v3.mul(R, W / vw), v3.mul(U, H / vh), N, corner);
+        const b = new MeshBuilder();
+        b.poly([[0, 0, 0], [vw, 0, 0], [vw, vh, 0], [0, vh, 0]], [0, 0, 1], w.mat(e.mat || 'display'));
+        this.chunk = w.pool.add(b, { name: `screen:${e.gui}`, dynamic: true });
+        this.place(this.local);
+        this.owners = w.areasOverlapping(this.min, this.max);
+        this.lightArea = w.areaAt(m4.point(this.local, [vw / 2, vh / 2, 0.3]));
+        this.gui = new Kind({ range: 3, ...e, id: e.id || `${e.gui}@${p.pos.join(',')}`, size: [W, H], virtual: [vw, vh], maxVerts: e.maxVerts || 24000 }, this);
+        w.addDynamic(this);
+        w.screens.push(this);
+    }
+
+    // aboard: the vehicle that claimed its prop carries it
+    link() {
+        const veh = this.world.vehicles.find(v => this.hostObjects.some(o => o.vehicle === v));
+        if (veh) { this.ride(veh, this.local); this.veh = veh; }
+    }
+
+    // the view ray (world, dir normalized) on the GUI: its cursor in virtual units and the distance, or null
+    trace(eye, dir) {
+        if (!this.gui) return null;
+        const inv = m4.invert(this.model), o = m4.point(inv, eye), d = m4.dir(inv, dir);
+        if (d[2] >= -1e-9) return null;                              // from behind
+        const t = (0.003 - o[2]) / d[2];
+        if (t <= 0) return null;
+        const gx = o[0] + d[0] * t, gy = o[1] + d[1] * t, g = this.gui;
+        if (gx < 0 || gx > g.vw || gy < 0 || gy > g.vh) return null;
+        return { x: gx, y: g.vh - gy, t };
+    }
+
+    // the GUI's centre in the world (use range)
+    get centre() { return m4.point(this.model, [this.gui.vw / 2, this.gui.vh / 2, 0]); }
 }
 
 // Point light of the area it is in, with an optional (non-solid) fixture model

@@ -66,7 +66,7 @@ const Features = {
             'core/config', 'core/math', 'core/geometry2d', 'core/frustum', 'render/mesh', 'render/materials',
             'render/shaders', 'render/renderer', 'render/frame-builder', 'render/debug-lines', 'vis/object-trees',
             'vis/portal-vis', 'world/collision', 'world/area', 'world/portal', 'world/architecture', 'world/outdoors',
-            'world/nav-graph', 'world/vehicle', 'world/entities', 'world/world', 'game/player', 'game/input',
+            'world/nav-graph', 'world/vehicle', 'world/power', 'gui/screens', 'world/entities', 'world/world', 'game/player', 'game/input',
             'game/hud', 'game/minimap', 'game/game', 'phone-pages', 'feature',
         ],
         gui: [

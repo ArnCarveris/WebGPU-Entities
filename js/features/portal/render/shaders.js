@@ -1,5 +1,5 @@
 'use strict';
-// WGSL: the world, sky, portal polygons and debug lines.
+// WGSL: the world, GUI screens, sky, portal polygons and debug lines.
 
 Features.part('portal', (engine, feature) => {
 const { kits } = engine;
@@ -39,8 +39,9 @@ fn skyColor(dir: vec3f) -> vec3f {
 }
 `;
 
-const WGSL_WORLD = WGSL_COMMON + /* wgsl */`
-// info: x = lighting area, y = number of fog portals.
+// the per-draw uniform and fog through portals, shared by the world and the GUI screens
+const WGSL_DRAW = /* wgsl */`
+// info: x = lighting area, y = number of fog portals, z = a GUI screen's virtual height.
 // fogPlanes / fogColors: the portals this draw is seen through, nearest first, with the fog (rgb, density)
 // of the area in front of each one
 struct Draw {
@@ -72,6 +73,9 @@ fn applyFog(c: vec3f, wpos: vec3f, own: vec4f) -> vec3f {
     return col;
 }
 
+`;
+
+const WGSL_WORLD = WGSL_COMMON + WGSL_DRAW + /* wgsl */`
 struct VOut {
     @builtin(position) pos: vec4f,
     @location(0) wpos: vec3f,
@@ -183,6 +187,44 @@ fn surface(m: Material, lp: vec3f, n: vec3f) -> vec4f {
 }
 `;
 
+// World-space GUI screens (Doom 3 style, js/engine/gui-kit.js): a GuiModel's quads (x y in the GUI's virtual screen, y
+// down) drawn in the screen's draw slot, whose model matrix maps virtual units onto the screen surface (y up). They draw
+// right after the screen's own surface, depth-tested just in front of it and masked by its portal entry's stencil ref.
+// The GUI's colours are display values: taken back through the tone curve, they are fogged like the world around them.
+const WGSL_GUI = WGSL_COMMON + WGSL_DRAW + /* wgsl */`
+@group(2) @binding(0) var guiSampler: sampler;
+@group(2) @binding(1) var guiAtlas: texture_2d<f32>;
+
+struct GOut {
+    @builtin(position) pos: vec4f,
+    @location(0) wpos: vec3f,
+    @location(1) uv: vec2f,
+    @location(2) color: vec4f,
+    @location(3) gpos: vec2f,
+};
+
+@vertex fn vs(@location(0) p: vec2f, @location(1) uv: vec2f, @location(2) c: vec4f) -> GOut {
+    var o: GOut;
+    let w = D.model * vec4f(p.x, D.info.z - p.y, 0.003, 1.0);
+    o.pos = G.viewProj * w;
+    o.wpos = w.xyz;
+    o.uv = uv;
+    o.color = c;
+    o.gpos = p;
+    return o;
+}
+
+fn untonemap(c: vec3f) -> vec3f { return -log(vec3f(1.0) - pow(min(c, vec3f(0.995)), vec3f(2.2))) / 1.15; }
+
+@fragment fn fs(i: GOut) -> @location(0) vec4f {
+    let c = textureSample(guiAtlas, guiSampler, i.uv) * i.color;
+    if (c.a < 0.004) { discard; }
+    let scan = 0.93 + 0.07 * sin(i.gpos.y * 2.0944 - G.params.x * 3.0);
+    let lin = untonemap(c.rgb * scan) * 1.15;
+    return vec4f(tonemap(applyFog(lin, i.wpos, areas[u32(D.info.x)].fog)), c.a);
+}
+`;
+
 const WGSL_SKY = WGSL_COMMON + /* wgsl */`
 struct SOut { @builtin(position) pos: vec4f, @location(0) ndc: vec2f };
 @vertex fn vs(@builtin(vertex_index) i: u32) -> SOut {
@@ -276,5 +318,5 @@ struct LOut { @builtin(position) pos: vec4f, @location(0) col: vec4f };
 @fragment fn fs(i: LOut) -> @location(0) vec4f { return i.col; }
 `;
 
-return { WGSL_WORLD, WGSL_SKY, WGSL_POLY, WGSL_LINES };
+return { WGSL_WORLD, WGSL_GUI, WGSL_SKY, WGSL_POLY, WGSL_LINES };
 });

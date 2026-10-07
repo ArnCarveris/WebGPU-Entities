@@ -4,11 +4,11 @@
 Features.part('portal', (engine, feature) => {
 const {
     AREA_FLOATS, MAX_DRAWS, DRAW_STRIDE, MAX_FOG_PORTALS, DRAW_FLOATS, MAX_LINE_VERTS, MAX_POLY_VERTS, POLY_FLOATS,
-    DEPTH_FORMAT, WGSL_WORLD, WGSL_SKY, WGSL_POLY, WGSL_LINES,
+    DEPTH_FORMAT, WGSL_WORLD, WGSL_GUI, WGSL_SKY, WGSL_POLY, WGSL_LINES,
 } = feature;
 
-// Renderer: pipelines for the scene, sky, stencil marks, water, glass / fog veils and debug lines, and one
-// render pass that executes a command list built by FrameBuilder.
+// Renderer: pipelines for the scene, world-space GUI screens, sky, stencil marks, water, glass / fog veils and debug
+// lines, and one render pass that executes a command list built by FrameBuilder.
 
 function depthState(o) {
     const face = { compare: o.sCompare || 'always', failOp: 'keep', depthFailOp: 'keep', passOp: o.sPass || 'keep' };
@@ -63,6 +63,30 @@ class Renderer {
         });
         this.worldStencil = world(true);
         this.worldPlain = world(false);
+
+        // GUI screens: the GUI atlas (fonts, cursor, blob; js/engine/gui-kit.js) and its quads, blended over the screen
+        // surface just behind them, in its portal entry's stencil region
+        const { GuiAtlas, GUI_VERTEX_LAYOUT } = GuiKit;
+        await GuiAtlas.loadFonts();
+        this.atlas = new GuiAtlas();
+        const atlasView = this.atlas.upload(this);
+        this.bgl2 = device.createBindGroupLayout({ entries: [
+            { binding: 0, visibility: S.FRAGMENT, sampler: { type: 'filtering' } },
+            { binding: 1, visibility: S.FRAGMENT, texture: { sampleType: 'float' } },
+        ] });
+        const sampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear' });
+        this.atlasBG = device.createBindGroup({ layout: this.bgl2, entries: [{ binding: 0, resource: sampler }, { binding: 1, resource: atlasView }] });
+        const guiMod = device.createShaderModule({ code: WGSL_GUI });
+        const gui = stencil => device.createRenderPipeline({
+            layout: device.createPipelineLayout({ bindGroupLayouts: [this.bgl0, this.bgl1, this.bgl2] }),
+            vertex: { module: guiMod, entryPoint: 'vs', buffers: [GUI_VERTEX_LAYOUT] },
+            fragment: { module: guiMod, entryPoint: 'fs', targets: [{ format: this.format, blend }] },
+            primitive: { topology: 'triangle-list', cullMode: 'none' },
+            depthStencil: depthState({ compare: 'less-equal', sCompare: stencil ? 'equal' : 'always' }),
+            multisample: ms,
+        });
+        this.guiStencil = gui(true);
+        this.guiPlain = gui(false);
 
         const skyMod = device.createShaderModule({ code: WGSL_SKY });
         const sky = stencil => device.createRenderPipeline({
@@ -166,7 +190,7 @@ class Renderer {
         this.depthSample = this.depth.createView({ aspect: 'depth-only' });
     }
 
-    // f.cmds: draw | sky | mark | glass | veil | water, executed in order (portal-tree DFS in stencil mode)
+    // f.cmds: draw | gui | sky | mark | glass | veil | water, executed in order (portal-tree DFS in stencil mode)
     // f.draws: one { o, fog } per draw slot; fog = the portals it is seen through, nearest first
     render(f) {
         const d = this.device, q = d.queue, W = this.W, H = this.H;
@@ -176,7 +200,7 @@ class Renderer {
         for (let i = 0; i < nSlots; i++) {
             const { o, fog } = f.draws[i], k = i * F, n = Math.min(fog.length, MAX_FOG_PORTALS);
             D.set(o.model, k);
-            D[k + 16] = o.lightArea; D[k + 17] = n;
+            D[k + 16] = o.lightArea; D[k + 17] = n; D[k + 18] = o.gui ? o.gui.vh : 0; D[k + 19] = 0;
             D[k + 20] = 1; D[k + 21] = 1; D[k + 22] = 1; D[k + 23] = 1;
             for (let j = 0; j < n; j++) {
                 D.set(fog[j].plane, k + 24 + j * 4);
@@ -210,6 +234,7 @@ class Renderer {
         pass.setBindGroup(0, this.bg0);
         pass.setIndexBuffer(this.ibuf, 'uint32');
         const worldPipe = f.stencil ? this.worldStencil : this.worldPlain, skyPipe = f.stencil ? this.skyStencil : this.skyPlain;
+        const guiPipe = f.stencil ? this.guiStencil : this.guiPlain;
         for (const c of f.cmds) {
             if (!scissor(c.rect)) continue;
             switch (c.op) {
@@ -220,6 +245,17 @@ class Renderer {
                     pass.setBindGroup(1, this.drawBG, [c.slot * DRAW_STRIDE]);
                     pass.drawIndexed(c.chunk.count, 1, c.chunk.first, c.chunk.baseVertex, 0);
                     break;
+                case 'gui': {
+                    // a screen's GUI model, in the screen's draw slot (its surface's model matrix and fog chain)
+                    const m = c.gui.model;
+                    if (c.slot >= MAX_DRAWS || !m.count) break;
+                    use(guiPipe, m.buffer);
+                    pass.setStencilReference(c.ref);
+                    pass.setBindGroup(1, this.drawBG, [c.slot * DRAW_STRIDE]);
+                    pass.setBindGroup(2, this.atlasBG);
+                    for (const surf of m.surfaces) if (surf.material === 'atlas') pass.draw(surf.count, 1, surf.first);
+                    break;
+                }
                 case 'sky':
                     use(skyPipe);
                     pass.setStencilReference(c.ref);

@@ -37,6 +37,8 @@
         {"type":"portal.material","id":"pipe","albedo":[0.55,0.35,0.22],"pattern":"flat","scale":1,"spec":0.8},
         {"type":"portal.material","id":"barrel","albedo":[0.2,0.32,0.55],"pattern":"noise","scale":2,"spec":0.5},
         {"type":"portal.material","id":"screen","albedo":[0.03,0.06,0.05],"pattern":"screen","scale":1,"spec":0.9,"emissive":[0.25,1,0.6,1.4]},
+        {"type":"portal.material","id":"bezel","albedo":[0.05,0.055,0.06],"pattern":"flat","scale":1,"spec":0.3},
+        {"type":"portal.material","id":"display","albedo":[0.01,0.015,0.02],"pattern":"flat","scale":1,"spec":1.2,"emissive":[0.05,0.25,0.35,0.15]},
         {"type":"portal.material","id":"lamp","albedo":[1,1,1],"pattern":"flat","scale":1,"spec":0,"emissive":[1,0.85,0.6,3]},
         {"type":"portal.material","id":"coldlamp","albedo":[1,1,1],"pattern":"flat","scale":1,"spec":0,"emissive":[0.7,0.85,1,3]},
         {"type":"portal.material","id":"redlamp","albedo":[1,0.3,0.2],"pattern":"flat","scale":1,"spec":0,"emissive":[1,0.2,0.1,3]},
@@ -71,7 +73,12 @@
         },
         {
             "type": "portal.model", "id": "console",
-            "value": [{"box":[0,0.45,0,2.2,0.9,0.7],"mat":"metal"},{"box":[0,0.93,-0.1,2,0.06,0.45],"mat":"panel"},{"box":[0,1.35,0.25,2,0.8,0.08],"mat":"screen"}]
+            "value": [{"box":[0,0.45,0,2.2,0.9,0.7],"mat":"metal"},{"box":[0,0.93,-0.1,2,0.06,0.45],"mat":"panel"},{"box":[0,1.35,0.25,2,0.8,0.08],"mat":"bezel","face":"-z"}]
+        },
+        {
+            "$comment": "a low bridge desk: its screen leans back below the window sill, so the view ahead stays clear",
+            "type": "portal.model", "id": "bridgeConsole",
+            "value": [{"box":[0,0.4,0,1.2,0.8,0.7],"mat":"metal"},{"box":[0,0.81,-0.2,1.1,0.03,0.25],"mat":"panel"},{"box":[0,1.03,0.12,1.2,0.55,0.06],"mat":"bezel","face":"-z","tilt":35}]
         },
         {
             "type": "portal.model", "id": "shelf",
@@ -104,7 +111,7 @@
         {"type":"portal.model","id":"barrierWall","value":[{"box":[0,2.5,0,0.8,5,30],"mat":"concrete"},{"box":[0,0.2,0,0.9,0.4,30.1],"mat":"hazard"}]},
         {
             "type": "portal.model", "id": "generator",
-            "value": [{"box":[0,0.9,0,3.2,1.6,1.6],"mat":"machine"},{"box":[0,0.08,0,3.4,0.16,1.8],"mat":"hazard"},{"cyl":[-1,1.7,0,0.35,0.7],"seg":12,"mat":"metal"},{"cyl":[1,1.7,0,0.35,0.7],"seg":12,"mat":"metal"},{"box":[0,1.2,0.81,1.2,0.5,0.03],"mat":"screen"},{"box":[0,2.3,0,0.3,1.4,0.3],"mat":"pipe"}]
+            "value": [{"box":[0,0.9,0,3.2,1.6,1.6],"mat":"machine"},{"box":[0,0.08,0,3.4,0.16,1.8],"mat":"hazard"},{"cyl":[-1,1.7,0,0.35,0.7],"seg":12,"mat":"metal"},{"cyl":[1,1.7,0,0.35,0.7],"seg":12,"mat":"metal"},{"box":[0,1.15,0.81,1.5,0.7,0.03],"mat":"bezel","face":"+z"},{"box":[0,2.3,0,0.3,1.4,0.3],"mat":"pipe"}]
         },
         {"type":"portal.model","id":"pipeRun","value":[{"box":[0,0,0,0.22,0.22,18],"mat":"pipe"},{"box":[0.35,0.05,0,0.14,0.14,18],"mat":"metal"}]},
         {
@@ -298,7 +305,7 @@
         {"type":"portal.light","pos":[-4,3.38,15.5],"color":[0.4,0.8,1],"intensity":1.6,"radius":5,"model":"coldLamp"},
         {"type":"portal.light","pos":[-9,1.7,20.4],"color":[0.2,1,0.6],"intensity":1.4,"radius":3.5},
         {"type":"portal.light","pos":[-5.5,1.7,20.4],"color":[0.2,1,0.6],"intensity":1.4,"radius":3.5},
-        {"type":"portal.light","pos":[-10.4,1.7,15],"color":[0.2,1,0.6],"intensity":1.2,"radius":3},
+        {"type":"portal.light","pos":[-10.4,1.7,14.3],"color":[0.2,1,0.6],"intensity":1.2,"radius":3},
         {"type":"portal.light","pos":[-4,1.5,14.5],"color":[1,0.8,0.5],"intensity":1,"radius":2.5},
         {"type":"portal.light","pos":[-8.5,5.9,19.5],"color":[1,0.7,0.4],"intensity":2,"radius":4,"model":"bulb"},
         {"type":"portal.light","pos":[-4.5,5.9,15.5],"color":[1,0.7,0.4],"intensity":1.6,"radius":4,"model":"bulb"},
@@ -318,7 +325,7 @@
         {"type":"portal.light","pos":[-23.6,-2,6],"color":[1,0.25,0.1],"intensity":1.6,"radius":4,"model":"redBeacon","signal":"pulse"},
         {"type":"portal.light","pos":[-9,-0.6,7.5],"color":[1,0.6,0.25],"intensity":2.2,"radius":5,"model":"ceilingLamp"},
         {"type":"portal.light","pos":[-4.5,-0.6,10.5],"color":[1,0.6,0.25],"intensity":2.2,"radius":5,"model":"ceilingLamp"},
-        {"type":"portal.light","pos":[-9,-2.4,10.4],"color":[0.3,1,0.5],"intensity":1,"radius":2.5},
+        {"type":"portal.light","pos":[-9,-2.4,8.4],"color":[0.3,1,0.5],"intensity":1,"radius":2.5},
         {"type":"portal.light","pos":[-2.4,-1.4,6.4],"color":[1,0.2,0.1],"intensity":1.6,"radius":4,"model":"redBeacon","signal":"pulse"},
         {"type":"portal.light","pos":[-19,-0.6,-10],"color":[0.5,0.6,1],"intensity":1.6,"radius":5,"model":"coldLamp","signal":"flicker"},
         {"type":"portal.light","pos":[-23.5,-2,-13.5],"color":[1,0.8,0.3],"intensity":1,"radius":3},
@@ -337,9 +344,9 @@
         {"type":"portal.prop","model":"bench","pos":[-2.8,0,1],"rot":0},
         {"type":"portal.prop","model":"crateSmall","pos":[0.9,0,12],"rot":12},
         {"type":"portal.prop","model":"barrel","pos":[15.3,0,21.4],"rot":0},
-        {"type":"portal.prop","model":"console","pos":[-9,0,21.3],"rot":0},
-        {"type":"portal.prop","model":"console","pos":[-5.5,0,21.3],"rot":0},
-        {"type":"portal.prop","model":"console","pos":[-11.3,0,15],"rot":90},
+        {"type":"portal.prop","model":"console","pos":[-9,0,21.3],"rot":0,"screen":{"gui":"facility"}},
+        {"type":"portal.prop","model":"console","pos":[-5.5,0,21.3],"rot":0,"screen":{"gui":"doors"}},
+        {"type":"portal.prop","model":"console","pos":[-11.3,0,14.3],"rot":-90,"screen":{"gui":"harbour"}},
         {"type":"portal.prop","model":"desk","pos":[-4,0,14.5],"rot":0},
         {"type":"portal.prop","model":"ladder","pos":[-6,0,16.75],"rot":0,"climbable":true},
         {"type":"portal.prop","model":"desk","pos":[-8.5,3.5,19.5],"rot":0},
@@ -369,10 +376,10 @@
         {"type":"portal.prop","model":"barrel","pos":[-15.8,-4,-5.4],"rot":0},
         {"type":"portal.prop","model":"crate","pos":[-22.8,-4,10.8],"rot":12},
         {"type":"portal.prop","model":"crateSmall","pos":[-21.6,-4,11.2],"rot":40},
-        {"type":"portal.prop","model":"generator","pos":[-9,-4,9.6],"rot":0},
-        {"type":"portal.prop","model":"generator","pos":[-4.5,-4,9.6],"rot":0},
+        {"type":"portal.prop","model":"generator","pos":[-9,-4,9.6],"rot":180,"screen":{"gui":"generator","unit":"G1"}},
+        {"type":"portal.prop","model":"generator","pos":[-4.5,-4,9.6],"rot":180,"screen":{"gui":"generator","unit":"G2"}},
         {"type":"portal.prop","model":"pipeRun","pos":[-8,-0.8,11.7],"rot":90,"scale":[1,1,0.66]},
-        {"type":"portal.prop","model":"console","pos":[-12.8,-4,7.5],"rot":90},
+        {"type":"portal.prop","model":"console","pos":[-12.8,-4,7.5],"rot":-90,"screen":{"gui":"power"}},
         {"type":"portal.prop","model":"safe","pos":[-19,-4,-13.3],"rot":0},
         {"type":"portal.prop","model":"shelf","pos":[-23.5,-4,-10],"rot":90},
         {"type":"portal.prop","model":"shelf","pos":[-14.5,-4,-10],"rot":90},
@@ -423,7 +430,7 @@
         {"type":"portal.door","portal":"p_ship_hatch_down","auto":true,"style":"ship","mat":"shipdoor","radius":2.2,"lift":0.05},
         {"type":"portal.door","portal":"p_cargo_hatch","auto":true,"mat":"shipdeck","radius":11,"slide":"down","lift":0.1,"speed":0.6},
         {"type":"portal.prop","model":"engineBlock","pos":[56.5,-2,1.5],"rot":0},
-        {"type":"portal.prop","model":"generator","pos":[51.6,-2,4.5],"rot":90},
+        {"type":"portal.prop","model":"generator","pos":[51.6,-2,4.5],"rot":90,"screen":{"gui":"engine"}},
         {"type":"portal.prop","model":"pipeRun","pos":[59.4,3.8,0.5],"rot":0,"scale":[1,1,0.7]},
         {"type":"portal.prop","model":"ladder","pos":[53,-2,-2.45],"rot":0,"scale":[1,2,1],"climbable":true},
         {"type":"portal.prop","model":"barrel","pos":[59,-2,-5.2],"rot":0},
@@ -452,12 +459,12 @@
         {"type":"portal.light","pos":[53,7.9,2],"color":[1,0.8,0.55],"intensity":1.8,"radius":4.5,"model":"bulb"},
         {"type":"portal.light","pos":[57,7.9,2],"color":[1,0.8,0.55],"intensity":1.8,"radius":4.5,"model":"bulb"},
         {"type":"portal.light","pos":[54,7.9,-3],"color":[1,0.8,0.55],"intensity":1.6,"radius":4.5,"model":"bulb"},
-        {"type":"portal.prop","model":"console","pos":[53.6,8,2.4],"rot":180,"scale":[0.6,1,1]},
-        {"type":"portal.prop","model":"console","pos":[56.4,8,2.4],"rot":180,"scale":[0.6,1,1]},
-        {"type":"portal.prop","model":"helm","pos":[55,8,1.2],"rot":0},
-        {"type":"portal.helm","vehicle":"freighter","stand":[55,8,-0.25],"reach":1.6,"wheel":{"pos":[55,9.2,0.92],"radius":0.34},"lever":{"pos":[55.55,9.1,1.15]}},
+        {"type":"portal.prop","model":"bridgeConsole","pos":[53.6,8,2.4],"rot":0,"screen":{"gui":"navigation"}},
+        {"type":"portal.prop","model":"bridgeConsole","pos":[56.4,8,2.4],"rot":0,"screen":{"gui":"helm"}},
+        {"type":"portal.prop","model":"helm","pos":[55,8,2.1],"rot":0},
+        {"type":"portal.helm","vehicle":"freighter","stand":[55,8,0.65],"reach":1.6,"wheel":{"pos":[55,9.2,1.82],"radius":0.34},"lever":{"pos":[55.55,9.1,2.05]}},
         {"type":"portal.light","pos":[55,10.9,-1],"color":[0.7,0.85,1],"intensity":1.6,"radius":5,"model":"coldLamp"},
-        {"type":"portal.light","pos":[55,9.2,2.2],"color":[0.2,1,0.6],"intensity":1,"radius":3},
+        {"type":"portal.light","pos":[55,9.4,2.7],"color":[0.2,1,0.6],"intensity":1,"radius":3},
         {"type":"portal.drone","model":"drone","pos":[0,1.8,5],"speed":3.2,"light":{"color":[1,0.25,0.15],"intensity":1.6,"radius":4}},
         {"type":"sound.bed","id":"wind","source":"brown","filters":[["bandpass",380,0.9]],"smooth":0.8,
             "gain":"portal.outdoor ? 0.05 + 0.02 * sin(time * 0.4) : 0.006","filter":[0,"300 + 120 * sin(time * 0.31)"]},
@@ -470,6 +477,7 @@
         {"type":"sound.cue","on":"door","parts":[
             {"tone":["result == 'locked' ? 140 : 90",0.35,"sawtooth","result == 'locked' ? 0.05 : 0.035","result == 'locked' ? 120 : 55"]},
             {"noise":{"filter":"lowpass","freq":600,"vol":"result == 'locked' ? 0 : 0.08","dur":0.6}}]},
+        {"type":"sound.cue","on":"tap","parts":[{"tone":[1400,0.03,"square",0.012,1800]}]},
         {"type":"sound.cue","on":"step","parts":[
             {"shot":{"source":"brown","filter":"lowpass","freq":"swim ? 500 : 280","q":1,"env":[[0.01,"(run ? 0.28 : 0.18) * rand(0.8, 1.2)"],[0.12,0]]}},
             {"noise":{"filter":"swim ? 'bandpass' : 'highpass'","freq":"swim ? 1400 : 2600","q":0.7,"vol":"swim ? 0.05 : 0.02","dur":"swim ? 0.25 : 0.06"}}]},

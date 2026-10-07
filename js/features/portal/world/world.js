@@ -7,8 +7,14 @@ const { v3 } = Common;
 const { GridHash } = kits.interior;
 const {
     MAX_LIGHTS, AREA_FLOATS, AXES, IDENTITY, g2, GeometryPool, splitMesh, MaterialTable, BVHTree, QuadTree, pushSeg,
-    CollisionSet, Area, Portal, Occluder, Architecture, Outdoors, NavGraph, Vehicle, ENTITY_TYPES,
+    CollisionSet, Area, Portal, Occluder, Architecture, Outdoors, NavGraph, Vehicle, PowerGrid, ENTITY_TYPES,
 } = feature;
+
+// a box part's axes, tilted `deg` about x (its top toward +z)
+function tiltAxes(deg) {
+    const a = deg * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+    return [[1, 0, 0], [0, c, s], [0, -s, c]];
+}
 
 // World: built entirely from the scenario data.
 //
@@ -28,6 +34,8 @@ class World {
         this.helms = [];
         this.drones = [];
         this.hulls = [];
+        this.screens = [];              // GUI screens (entities.js Screen)
+        this.power = new PowerGrid(this);
         this.materials = new MaterialTable(scn.materials, this.warnings);
         this.nav = new NavGraph(this);
         this.buildAreas();
@@ -183,14 +191,15 @@ class World {
         return pieces.map(pc => ({ b: pc.b, owners: pc.owners, lightArea: pc.owners.includes(lightArea) ? lightArea : pc.owners[0] }));
     }
 
-    // add a scenario model (box / cyl / cone parts) to b, placed with matrix M
+    // add a scenario model (box / cyl / cone parts) to b, placed with matrix M. A box may `tilt` (degrees about the model's
+    // x axis, its top toward +z): a sloped desk screen
     addModel(b, name, M) {
         const parts = (this.scn.models || {})[name];
         if (!parts) { this.warnings.push(`unknown model "${name}"`); return; }
         b.M = M;
         for (const part of parts) {
             const m = this.mat(part.mat);
-            if (part.box) { const [x, y, z, sx, sy, sz] = part.box; b.box([x, y, z], AXES, [sx / 2, sy / 2, sz / 2], m); }
+            if (part.box) { const [x, y, z, sx, sy, sz] = part.box; b.box([x, y, z], part.tilt ? tiltAxes(part.tilt) : AXES, [sx / 2, sy / 2, sz / 2], m); }
             else if (part.cyl) { const [x, y, z, r, h] = part.cyl; b.cylinder([x, y, z], r, h, part.seg || 12, m); }
             else if (part.cone) { const [x, y, z, r, h] = part.cone; b.cone([x, y, z], r, h, part.seg || 12, m); }
         }
@@ -294,6 +303,7 @@ class World {
     update(dt, t, actors) {
         this.time = t;
         for (const veh of this.vehicles) veh.update(dt, t);
+        this.power.update(dt, t);
         const all = actors.concat(this.drones.map(d => d.pos));
         for (const e of this.dynamic) e.update(dt, t, all);
         for (const list of this.dynamicByArea) list.length = 0;
@@ -301,13 +311,15 @@ class World {
         this.water?.update(this.hulls);
     }
 
-    // per-area lighting table (static lights + dynamic lights of the frame)
+    // per-area lighting table (static lights + dynamic lights of the frame); an area without power keeps its emergency
+    // beacons only
     lightingTable(t) {
         const data = new Float32Array(this.areas.length * AREA_FLOATS);
         const dyn = this.areas.map(() => []);
         for (const e of this.dynamic) if (e.light && e.lightOn) dyn[e.lightArea].push(e.light);
         this.areas.forEach((a, i) => {
-            const o = i * AREA_FLOATS, lights = dyn[i].concat(a.lights).slice(0, MAX_LIGHTS);
+            const own = this.power.powered(i) ? a.lights : a.lights.filter(L => L.signal === 'pulse');
+            const o = i * AREA_FLOATS, lights = dyn[i].concat(own).slice(0, MAX_LIGHTS);
             data.set([a.ambient[0], a.ambient[1], a.ambient[2], 0, a.fog[0], a.fog[1], a.fog[2], a.fog[3], a.sun, lights.length, 0, 0], o);
             lights.forEach((L, k) => data.set([L.pos[0], L.pos[1], L.pos[2], L.radius, L.color[0], L.color[1], L.color[2], L.intensityAt(t)], o + 12 + k * 8));
         });
@@ -315,5 +327,5 @@ class World {
     }
 }
 
-return { World };
+return { World, tiltAxes };
 });
