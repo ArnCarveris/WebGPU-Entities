@@ -4,6 +4,7 @@
 Features.kit('transit', (engine, kit) => {
 const { Common } = engine;
 const { clamp, lerp, fmtKm } = Common;
+const { Interior } = engine.kits.interior;
 
 // Speed limits (m/s) at every point of a closed path sampled every `step` m: limit(i) where the line sets one, slower
 // through bends (`lateral` m/s^2 sideways, the heading's change over `span` points either side), then braking (`brake`
@@ -94,9 +95,12 @@ class TransitLine {
 //                    (default: at once to what the plan allows)
 //   stopMargin       m short of the stop it plans to be at rest (it then creeps on to it); arrive: within this it is there
 //   doors            whether it has doors; doorTime: s to open or close, closing doorLead s before it leaves
+//   cabin            its interior (kits.interior): { lo, hi, portals, shelter } in its own frame; its Origin is the
+//                    vehicle's pose (`frame`, read live), so it moves with it at no cost. Add it to the world's
+//                    InteriorIndex; place() re-buckets it there (O(1))
 // Each step ends with moved(): by default place(), which poses it from its axles on the route: `model` (column-major,
 // local -> world: x along the heading, pitched by the axles' heights, y up, z to its right) and `pose` { x, y, z, cs, sn,
-// slope }. A vehicle that poses itself overrides moved().
+// slope }. A vehicle that poses itself overrides moved() (and `frame`, the rigid local -> world matrix its interior uses).
 class LineVehicle {
     constructor(line, spec) {
         this.line = line;
@@ -108,7 +112,10 @@ class LineVehicle {
         this.stop = 0;
         this.clock = line.dwell[0];
         this.braking = false;
+        this.interior = this.spec.cabin ? new Interior({ owner: this, kind: 'vehicle', origin: () => this.frame, ...this.spec.cabin }) : null;
     }
+
+    get frame() { return this.model; }
 
     get focus() { const p = this.pose; return [p.x, p.y, p.z]; }
 
@@ -120,6 +127,7 @@ class LineVehicle {
         const cp = 1 / Math.hypot(1, slope), sp = slope * cp;
         this.model = [cs * cp, sp, sn * cp, 0, -cs * sp, cp, -sn * sp, 0, -sn, 0, cs, 0, x, y, z, 1];
         this.pose = { x, y, z, cs, sn, slope };
+        this.interior?.moved();
     }
 
     toWorld(q, w = 1) { const m = this.model; return [0, 1, 2].map(r => m[r] * q[0] + m[4 + r] * q[1] + m[8 + r] * q[2] + m[12 + r] * w); }

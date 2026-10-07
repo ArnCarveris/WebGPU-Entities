@@ -55,7 +55,7 @@ class PortalVis {
                 res.occluders.push({ occ: O, verts, planes });
             }
             if (e.depth >= MAX_DEPTH) continue;
-            for (const pi of w.areas[e.area].portals) {
+            for (const pi of this.candidates(e)) {
                 if (e.path.includes(pi)) continue;
                 const P = w.portals[pi];
                 res.tested++;
@@ -92,6 +92,20 @@ class PortalVis {
             }
         }
         return res;
+    }
+
+    // the portals of entry e's area worth testing. Outdoors holds every exit portal of every building, so there the
+    // world's outdoor-portal quadtree gives only those whose bounds meet e's frustum (its planes pushed out by
+    // NEAR_PASS + 1 m: a broad phase that never drops one the tests below would pass, the camera standing in an aperture
+    // included), in index order as the full list would visit them. Cost: the tree nodes in view, not the world's portals
+    candidates(e) {
+        const w = this.world;
+        if (e.area !== 0 || !w.outdoorPortals) return w.areas[e.area].portals;
+        const pad = NEAR_PASS + 1, planes = e.planes.map(q => [q[0], q[1], q[2], q[3] + pad]), out = [];
+        // a vehicle's (the ship's): only while its bounding sphere is in view
+        for (const { veh, portals } of w.movingOutdoorPortals) if (veh.inPlanes(planes)) out.push(...portals);
+        w.outdoorPortals.query(planes, P => out.push(P.index), this.st ??= { nodes: 0, objs: 0 });
+        return out.sort((a, b) => a - b);
     }
 }
 

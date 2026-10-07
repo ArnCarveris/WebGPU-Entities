@@ -211,7 +211,20 @@ function buildBus(livery) {
 }
 
 // how it runs on its line (LineVehicle): its axles, and its length bumper to bumper
-const BUS_SPEC = { axleF: BUS.axleF, axleR: BUS.axleR, length: 2 * BUS.hl };
+// its cabin (kits.interior), from the skirt to the roof: the windows down both sides, the glazed doors (seen through
+// shut or open), the windscreen; no rain or snow inside
+const BUS_SPEC = { axleF: BUS.axleF, axleR: BUS.axleR, length: 2 * BUS.hl, cabin: busCabin() };
+
+function busCabin() {
+    const K = BUS, y = (K.winLo + K.winHi) / 2, h = K.winHi - K.winLo, bx = k => K.bay0 + k * K.bay, portals = [];
+    for (const sd of [-1, 1]) for (let k = 0; k < K.bays; k++) {
+        const door = sd > 0 && K.doorBays.includes(k), x0 = bx(k) + K.pillar / 2, x1 = bx(k + 1) - K.pillar / 2;
+        portals.push(door ? { c: [(x0 + x1) / 2, (K.floor + K.winHi) / 2, K.hw], n: [0, 0, 1], w: x1 - x0, h: K.winHi - K.floor, kind: 'opening' }
+            : { c: [(x0 + x1) / 2, y, sd * K.hw], n: [0, 0, sd], w: x1 - x0, h, kind: 'window' });
+    }
+    portals.push({ c: [K.hl, 1.7, 0], n: [1, 0, 0], w: 2 * K.hw - 0.2, h: 1.5, kind: 'window' });
+    return { lo: [-K.hl, K.skirt, -K.hw], hi: [K.hl, K.roof, K.hw], portals };
+}
 
 return { Bus, BUS_SPEC };
 });

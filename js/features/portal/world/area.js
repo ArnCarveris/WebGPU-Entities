@@ -14,8 +14,17 @@ class PointLight {
         this.intensity = def.intensity ?? 1;
         this.radius = def.radius || 8;
         this.signal = def.signal;
-        this.vehicle = null;        // set when the light rides a vehicle (pos is then moved from `local`)
+        this.vehicle = null;        // set when the light rides a vehicle (ride): pos is then `local` through its Origin
         this.local = null;
+    }
+
+    // ride vehicle veh: its position stays `local` in the vehicle's frame and is worked out through the vehicle's Origin
+    // when read after the vehicle moved (nothing to do per light when it moves)
+    ride(veh) {
+        this.vehicle = veh;
+        this.local = this.pos.slice();
+        let at = null, stamp = -1;
+        Object.defineProperty(this, 'pos', { get: () => { if (stamp !== veh.poseStamp) { at = veh.origin.toWorld(this.local); stamp = veh.poseStamp; } return at; }, configurable: true });
     }
 
     intensityAt(t) {
@@ -54,13 +63,17 @@ class Area {
         this.lights = [];
         this.occluders = [];
         this.vehicle = null;
+        this.shelter = def.shelter !== false;              // a weather shelter (kits.interior): no rain or snow inside
     }
+
+    // its Origin: the vehicle's pose for an area aboard one, else the world's
+    get origin() { return this.vehicle ? this.vehicle.origin : null; }
 
     // the implicit outdoor area: holds every portal with only one area on it (FarCry exit portals)
     static outdoors(def = {}) {
         const a = Object.create(Area.prototype);
         return Object.assign(a, {
-            index: 0, id: 'outdoor', name: def.name || 'Outdoors', outdoor: true, portals: [], lights: [], occluders: [], vehicle: null,
+            index: 0, id: 'outdoor', name: def.name || 'Outdoors', outdoor: true, portals: [], lights: [], occluders: [], vehicle: null, shelter: false,
             ambient: def.ambient || [0.3, 0.3, 0.35], sun: def.sun ?? 1, fog: def.fog || [0.6, 0.7, 0.8, 0.006], hub: def.hub || [0, 1.8, -8],
         });
     }
@@ -78,8 +91,10 @@ class Area {
     }
 
     // point (world space) inside the extruded shape; vehicle areas test in vehicle space
-    contains(p0) {
-        const p = this.vehicle ? this.vehicle.toLocal(p0) : p0;
+    contains(p0) { return this.containsLocal(this.vehicle ? this.vehicle.toLocal(p0) : p0); }
+
+    // p already in its frame (the vehicle's for an area aboard one)
+    containsLocal(p) {
         if (p[1] < this.y || p[1] >= this.top) return false;
         if (p[0] < this.bbox[0] || p[0] > this.bbox[2] || p[2] < this.bbox[1] || p[2] > this.bbox[3]) return false;
         return g2.inside([p[0], p[2]], this.shape);

@@ -4,7 +4,7 @@
 Features.kit('world', (engine, kit) => {
 // One world of a feature, as the host runs it. A feature extends this with createApp() (its engine: an App or Game with
 // start(), frame(now, dt, opts), and load(native) when it takes its scenario after starting) and what else the host
-// asks of it: depth(), stats(), handheld(), set(key, v), anchor(id), drop(files), ground(p), views(). The host reads and moves the
+// asks of it: depth(), stats(), handheld(), set(key, v), anchor(id), drop(files), ground(p), sheltered(p), views(). The host reads and moves the
 // camera through view / setView, and walks or flies it through moves / move / setMove; all go to the app's camera (a
 // FirstPersonView: kits.view) unless the feature overrides them.
 class FeatureWorld {
@@ -40,6 +40,10 @@ class FeatureWorld {
     // the ground under p (this world's frame): the height of the highest thing to stand on at or below p[1] (null: none
     // here). The engine walks its camera on the highest ground of every shown world (Host.floorAt).
     ground(p) { return null; }
+
+    // the interior (kits.interior) that shelters p (this world's frame) from the weather, or null. The engine keeps an
+    // atmosphere world's rain and snow off the camera while any other shown world's interior holds it (Host.shelter)
+    sheltered(p) { return null; }
 }
 
 // the HUD elements a world can ask for in its hudHtml: in-world labels (LabelLayer), toasts (Toast), a crosshair

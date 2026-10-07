@@ -12,11 +12,32 @@ const { POLY_FLOATS, NEAR_PASS, aabbVisible, aabbContained, rectUnion } = featur
 // stencil where the parent's ref is; the child's objects and sky then draw with stencil EQUAL. Every draw
 // carries the chain of portals it is seen through (plane + fog of the area in front of each), so the scene
 // shader fogs each stretch of the view ray with the air it crosses. After a child, its portal gets its
-// glass pane; water draws last in every outdoor entry.
+// glass pane; water draws last in every outdoor entry. Siblings are marked nearest first: where a nearer
+// portal's aperture covers a farther one on screen, the nearer one's room owns those pixels (its walls hide
+// what lies behind it), so a far portal never shows through a near doorway.
+// (A portal's distance: from the eye to the nearest point of its clipped polygon, portalDistance.)
 // Scissor / none modes draw every visible object once, clipped to the union of its entries' rects; fog
 // through portals is then approximated by fog veils over the apertures.
 
 const NO_FOG_CHAIN = [];
+
+// distance from the eye to the nearest point of a convex planar polygon (normal n)
+function portalDistance(eye, poly, n) {
+    const h = v3.dot(v3.sub(eye, poly[0]), n), q = v3.madd(eye, n, -h);
+    let inside = true, edge = Infinity;
+    for (let i = 0; i < poly.length; i++) {
+        const a = poly[i], b = poly[(i + 1) % poly.length], ab = v3.sub(b, a), aq = v3.sub(q, a);
+        if (v3.dot(v3.cross(ab, aq), n) < 0) inside = false;
+        const t = Math.max(0, Math.min(1, v3.dot(aq, ab) / (v3.dot(ab, ab) || 1)));
+        edge = Math.min(edge, v3.dist(q, v3.madd(a, ab, t)));
+    }
+    // the polygon may wind either way: inside means on the same side of every edge
+    if (!inside) {
+        inside = true;
+        for (let i = 0; i < poly.length; i++) { const a = poly[i], b = poly[(i + 1) % poly.length]; if (v3.dot(v3.cross(v3.sub(b, a), v3.sub(q, a)), n) > 0) inside = false; }
+    }
+    return Math.hypot(h, inside ? 0 : edge);
+}
 
 class FrameBuilder {
     constructor(world) {
@@ -47,7 +68,9 @@ class FrameBuilder {
 
     occluded(o) {
         const occ = this.vis.occluders;
-        return occ.length && occ.some(oc => aabbContained(o.wmin || o.min, o.wmax || o.max, oc.planes));
+        if (!occ.length) return false;
+        const b = o.vehicle ? o.vehicle.bounds(o) : null;
+        return occ.some(oc => aabbContained(b ? b.wmin : o.min, b ? b.wmax : o.max, oc.planes));
     }
 
     // query the tree of the entry's area only (outdoor quadtree or the area's BVH + its dynamic members)
@@ -58,7 +81,7 @@ class FrameBuilder {
         const visit = o => { if (o.dockedOnly && !o.vehicle.docked) return; if (this.occluded(o)) st.occluded++; else out.push(o); };
         if (e.area === 0) {
             w.outdoorTree.query(e.planes, visit, counter);
-            for (const veh of w.vehicles) veh.outdoorTree.query(veh.localPlanes(e.planes), visit, counter);   // vehicle space
+            for (const veh of w.vehicles) if (veh.inPlanes(e.planes)) veh.outdoorTree.query(veh.localPlanes(e.planes), visit, counter);   // vehicle space
         } else {
             const veh = w.areas[e.area].vehicle;
             w.areaTrees[e.area].query(veh ? veh.localPlanes(e.planes) : e.planes, visit, counter);
@@ -98,7 +121,8 @@ class FrameBuilder {
         const walk = e => {
             for (const o of this.collect(e)) cmds.push({ op: 'draw', chunk: o.chunk, slot: this.slot(o, e.fog), ref: e.ref, rect: e.rect });
             if (e.area === 0) cmds.push({ op: 'sky', ref: e.ref, rect: e.rect });
-            for (const c of e.children) {
+            const kids = e.children.length > 1 ? e.children.map(c => [c.share ? -1 : portalDistance(this.vis.eye, c.clipped, c.via.normal), c]).sort((a, b) => a[0] - b[0]).map(x => x[1]) : e.children;
+            for (const c of kids) {
                 // the air in front of the portal fogs the ray up to its plane
                 const P = c.via;
                 c.fog = c.share ? e.fog : e.fog.concat([{ plane: [P.normal[0], P.normal[1], P.normal[2], P.d], fog: w.areas[e.area].fog }]);

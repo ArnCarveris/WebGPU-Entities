@@ -107,8 +107,9 @@ class BusLine extends Entity {
         const fleet = Math.max(1, Math.round(d.fleet ?? st.def.buses ?? 1));
         const liveries = [d.livery || [0.12, 0.36, 0.62], ...BUS_LIVERIES];
         this.buses = this.line.fleet(fleet, BUS_SPEC, k => new Bus(this.line, k ? `${this.label} #${k + 1}` : this.label, liveries[k % liveries.length]));
-        for (const b of this.buses) S.boxes.list.push(b.box);
+        for (const b of this.buses) { S.boxes.list.push(b.box); S.interiors.add(b.interior); }
         this.world.buses.push(...this.buses);
+        this.world.buses.forEach((b, k) => { b.slot = k; });     // its slot in the renderer's bus uniforms
     }
 
     update(dt) { this.line.update(dt * (this.world.busBoost || 1)); }

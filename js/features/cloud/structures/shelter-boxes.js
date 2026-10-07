@@ -3,8 +3,9 @@
 // into the frame uniform near the camera, and tested on the CPU as the shaders do.
 
 Features.part('cloud', (engine, feature) => {
-const { Common } = engine;
+const { Common, kits } = engine;
 const { clamp } = Common;
+const { GridHash } = kits.interior;
 const { BLOCK_RANGE, MAX_BLOCKERS, BLOCK_GRID, MAX_DRIPS, DRIP_DENSITY, DRIP_PARTICLES } = feature;
 
 class ShelterBoxes {
@@ -12,6 +13,32 @@ class ShelterBoxes {
         this.list = [];              // { x, z, hx, hz, cs, sn, y0, y1, ao, slope, base, enclosed, dyn }
         this.drips = [];
         this.listed = null;          // the boxes in the frame uniform now
+        this.hashed = -1;            // static boxes and drip edges in grids (GridHash), so the frame's range queries cost
+                                     // the cells near the camera, not the world's boxes; moving ones (`dyn`) listed apart
+    }
+
+    // (re)bucket the boxes and drip edges when some were added
+    rehash() {
+        if (this.hashed === this.list.length + this.drips.length) return;
+        this.hashed = this.list.length + this.drips.length;
+        this.grid = new GridHash(512);
+        this.dyn = [];
+        this.reach = 0;
+        for (const b of this.list) {
+            if (b.dyn) { this.dyn.push(b); continue; }
+            const r = Math.hypot(b.hx, b.hz);
+            this.reach = Math.max(this.reach, r);
+            this.grid.insert(b, b.x - r, b.z - r, b.x + r, b.z + r);
+        }
+        this.dripGrid = new GridHash(64);
+        for (const e of this.drips) { const r = Math.hypot(e.hx, e.hz); this.dripGrid.insert(e, e.x - r, e.z - r, e.x + r, e.z + r); }
+    }
+
+    // the boxes / drip edges whose cells lie within `range` (plus their own size) of p
+    nearBoxes(p, range) {
+        const out = [], R = range + this.reach;
+        this.grid.each(p[0] - R, p[2] - R, p[0] + R, p[2] + R, b => out.push(b));
+        return out.concat(this.dyn);
     }
 
     // a shader box (see WGSL_SHELTER): frame f around local (ox, oz), half sizes, bottom / top at its centre, sky
@@ -32,13 +59,16 @@ class ShelterBoxes {
     // the roof edges near `around` that rain runs off (returns how many), and the boxes nearest it into the frame uniform, their bounds, and the grid of which boxes can shade each cell,
     // for this sun (sunDir) and wind ([x, z]; snow, which blows further, when the freezing level is near the boxes)
     write(F, around, sunDir, wind, freezing, fall = 9.5) {
+        this.rehash();
         const drips = this.writeDrips(F, around);
         // the boxes within BLOCK_RANGE (the village and the bus station lie kilometres apart: one grid over both would
         // be too coarse to help), nearest first when there are too many
         const d = b => Math.hypot(b.x - around[0], b.z - around[2]);
-        let list = this.list.filter(b => d(b) < BLOCK_RANGE + Math.hypot(b.hx, b.hz));
+        let list = this.nearBoxes(around, BLOCK_RANGE).filter(b => d(b) < BLOCK_RANGE + Math.hypot(b.hx, b.hz));
+        // in the order they were added, as a scan of the whole list would give them
+        if (list.length > 1) { const at = this.order ??= new Map(); if (at.size !== this.list.length) { at.clear(); this.list.forEach((b, i) => at.set(b, i)); } list.sort((p, q) => at.get(p) - at.get(q)); }
         if (list.length > MAX_BLOCKERS) list = list.sort((p, q) => d(p) - d(q)).slice(0, MAX_BLOCKERS);
-        if (!list.length) { F.set('blocks', [0, 0, 0, 0]); this.listed = null; return drips; }
+        if (!list.length) { F.set('blocks', [0, 0, 0, 0]); this.listed = null; this.gridBox = null; return drips; }
         // moving boxes (the bus, `dyn`) are rewritten every frame
         if (!this.listed || list.length !== this.listed.length || list.some((b, i) => b !== this.listed[i] || b.dyn)) {
             this.listed = list;
@@ -64,7 +94,7 @@ class ShelterBoxes {
         });
         const x0 = Math.min(...caps.map(c => c.x0)), x1 = Math.max(...caps.map(c => c.x1));
         const z0 = Math.min(...caps.map(c => c.z0)), z1 = Math.max(...caps.map(c => c.z1));
-        const G = BLOCK_GRID, cw = (x1 - x0) / G, ch = (z1 - z0) / G, half = Math.hypot(cw, ch) / 2, grid = this.grid ??= new Uint32Array(G * G * 4);
+        const G = BLOCK_GRID, cw = (x1 - x0) / G, ch = (z1 - z0) / G, half = Math.hypot(cw, ch) / 2, grid = this.grid2 ??= new Uint32Array(G * G * 4);
         const segDist = (px, pz, ax, az, bx, bz) => {
             const dx = bx - ax, dz = bz - az, l2 = dx * dx + dz * dz, t = l2 > 0 ? clamp(((px - ax) * dx + (pz - az) * dz) / l2, 0, 1) : 0;
             return Math.hypot(ax + dx * t - px, az + dz * t - pz);
@@ -82,6 +112,7 @@ class ShelterBoxes {
         F.set('blockers', this.data);
         F.set('blocks', [list.length, this.lo, this.hi, 0]);
         F.set('blockBox', [x0, z0, x1, z1]);
+        this.gridBox = [x0, z0, x1, z1];
         F.setBits('blockGrid', grid);
         return drips;
     }
@@ -90,7 +121,9 @@ class ShelterBoxes {
     writeDrips(F, around) {
         const d = e => Math.max(Math.abs((around[0] - e.x) * e.cs + (around[2] - e.z) * e.sn) - e.hx, 0)
             + Math.max(Math.abs(-(around[0] - e.x) * e.sn + (around[2] - e.z) * e.cs) - e.hz, 0) + Math.abs(around[1] - e.y) * 0.5;
-        const list = this.drips.filter(e => d(e) < 150).sort((p, q) => d(p) - d(q)).slice(0, MAX_DRIPS);
+        const near = [];
+        this.dripGrid.each(around[0] - 150, around[2] - 150, around[0] + 150, around[2] + 150, e => near.push(e));
+        const list = near.filter(e => d(e) < 150).sort((p, q) => d(p) - d(q)).slice(0, MAX_DRIPS);
         // nearer edges get more drops, but a long edge gets more than a short one
         const wts = list.map(e => e.per / (1 + d(e) / 25)), sum = wts.reduce((a, b) => a + b, 0);
         let acc = 0;
@@ -132,8 +165,21 @@ class ShelterBoxes {
         return tn > 0.02 && tn <= tf;
     }
 
-    // a structure keeps off what falls on p along -d (d: back up against the fall)
-    shelters(p, d) { return this.list.some(b => ShelterBoxes.holds(b, p) || ShelterBoxes.hit(b, p, d)); }
+    // a structure keeps off what falls on p along -d (d: back up against the fall). As rainReaches in WGSL: only the boxes
+    // the frame's grid lists for p's cell (write(), around the camera); outside the grid no box can reach p. Before the
+    // first frame is written, the boxes near p
+    shelters(p, d) {
+        const test = b => ShelterBoxes.holds(b, p) || ShelterBoxes.hit(b, p, d);
+        if (!this.listed || !this.gridBox) { this.rehash(); return this.nearBoxes(p, 400).some(test); }
+        const [x0, z0, x1, z1] = this.gridBox, G = BLOCK_GRID;
+        if (p[0] <= x0 || p[0] >= x1 || p[2] <= z0 || p[2] >= z1) return false;
+        const i = Math.min(Math.floor((p[0] - x0) / (x1 - x0) * G), G - 1), j = Math.min(Math.floor((p[2] - z0) / (z1 - z0) * G), G - 1);
+        for (let w = 0; w < 4; w++) for (let bits = this.grid2[(j * G + i) * 4 + w]; bits; bits &= bits - 1) {
+            const k = w * 32 + 31 - Math.clz32(bits & -bits);
+            if (test(this.listed[k])) return true;
+        }
+        return false;
+    }
 }
 
 return { ShelterBoxes };

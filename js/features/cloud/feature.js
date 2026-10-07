@@ -72,11 +72,13 @@ class CloudWorld extends FeatureWorld {
     // the terrain as drawn, or a floor of a structure or a bus within a step of p
     ground(p) { const a = this.app; return a.world ? a.walker.floorAt(a, [...p], -Infinity) : null; }
 
+    // its buildings' and buses' interiors shelter what is in them (the InteriorIndex, O(1))
+    sheltered(p) { return this.app.world?.structures.interiors.sheltered(p) || null; }
+
     // what the sound beds, HUD panels and links read
     stats() {
         const a = this.app, w = a.world, c = w.weather.cur, cam = a.camera.pos;
-        let bus = null, bd = Infinity;
-        for (const b of w.buses) { const d = Math.hypot(b.pose.x - cam[0], b.pose.y - cam[1], b.pose.z - cam[2]); if (d < bd) { bd = d; bus = b; } }
+        const { bus, dist: bd } = a.nearBus || { bus: null, dist: Infinity };     // Surroundings, from the InteriorIndex
         return {
             name: w.scenario.name, fps: a.fps, paused: a.paused, time: a.time, weather: w.weather.target, light: a.lightName,
             rain: a.near.rain, snow: a.near.snow, inside: !!a.indoors || !!a.inBus || !!a.forceIndoors, sheltered: !!a.sheltered, inBus: !!a.inBus,

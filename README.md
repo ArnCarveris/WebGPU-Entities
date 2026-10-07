@@ -208,9 +208,16 @@ js/kits/<kit>/              generic building blocks, not any one feature's (Feat
                             Menu and Pages (handheld options and status), FeatureWorld (the host's interface)
     terrain/                Heightfield (grid, sampling, normals, raycast), TerrainEntity, the tilt / hills /
                             mountain stamps (cloud, water)
+    interior/               what every building and vehicle has by default: an Interior = Origin (its rigid local
+                            frame; a vehicle's is its live pose) + VisArea (a box with door / window portals, folded
+                            into at most six wall apertures for culling) + weather shelter; GridHash and InteriorIndex
+                            find them in O(1) (at, sheltered) and cull them by range + portals (seen). Cloud's
+                            buildings and bus cabins, portal's areas (their areaAt), the gui facility; the host
+                            keeps an atmosphere world's rain off the camera inside any shown world's interior
     transit/                paths (roundPath, offsetLine, SplineRoute), TransitLine + LineVehicle: vehicles running
                             a closed route (PolylineRoute, SplineRoute) on a timetable with stops, dwell, doors,
-                            braking, speed limits and headways: cloud's buses, and portal's ship when on autopilot
+                            braking, speed limits and headways: cloud's buses, and portal's ship when on autopilot;
+                            a LineVehicle's `cabin` spec is its Interior
 js/features/<feature>/      each original engine, split into parts with one responsibility each (config, shaders,
                             entities, world, renderer, HUD, app...), loaded in the order of Features.PARTS
                             (Features.part, over js/engine/common.js and its kits); only what is that feature's own

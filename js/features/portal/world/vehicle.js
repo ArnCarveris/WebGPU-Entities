@@ -4,6 +4,7 @@
 Features.part('portal', (engine, feature) => {
 const { kits } = engine;
 const { SplineRoute, TransitLine, LineVehicle } = kits.transit;
+const { Origin } = kits.interior;
 const { m4, g2, worldBounds, CollisionSet } = feature;
 
 // Vehicle: a moving group of areas, portals, objects and lights (the freighter). Everything is
@@ -34,6 +35,8 @@ class Vehicle extends LineVehicle {
         this.pivot = d.pivot || [0, 0, 0];
         this.M = m4.identity();
         this.inv = m4.identity();
+        this.origin = new Origin(() => this.M);       // its frame (kits.interior): what it carries stays in it
+        this.poseStamp = 0;                         // bumped on each new pose (place)
         this.col = new CollisionSet(2);
         this.dockCol = new CollisionSet(2);         // parts that are only there while docked (gangway)
         this.objects = [];
@@ -66,6 +69,7 @@ class Vehicle extends LineVehicle {
 
     // it poses itself (update), not from axles on the route
     moved() {}
+    get frame() { return this.M; }
     get maxYawRate() { return this.data.maxYawRate ?? 0.12; }
 
     toLocal(p) { return m4.point(this.inv, p); }
@@ -87,7 +91,7 @@ class Vehicle extends LineVehicle {
         const near = (x, z, m) => g2.inside([x, z], out) || out.some((a, i) => segD2(x, z, a, out[(i + 1) % out.length]) < m * m);
         for (const a of w.areas) if (a.index > 0 && a.shape.every(q => near(q[0], q[1], 0.5))) { a.vehicle = this; this.areas.push(a); }
         for (const P of w.portals) if (P.center[1] > keel && near(P.center[0], P.center[2], 0.5)) { P.attach(this); this.portals.push(P); }
-        for (const a of w.areas) for (const L of a.lights) if (L.pos[1] > keel && near(L.pos[0], L.pos[2], 0.5)) { L.vehicle = this; L.local = L.pos.slice(); this.lights.push(L); }
+        for (const a of w.areas) for (const L of a.lights) if (L.pos[1] > keel && near(L.pos[0], L.pos[2], 0.5)) { L.ride(this); this.lights.push(L); }
         for (const o of w.objects) {
             if (o.terrain) continue;
             const tagged = o.vehicleId && (o.vehicleId === this.id || o.vehicleId === this.hull.id);
@@ -95,7 +99,39 @@ class Vehicle extends LineVehicle {
             if (!tagged && !inside) continue;
             o.vehicle = this; o.model = this.M; this.objects.push(o);
         }
+        // its bounding sphere in its frame (everything it carries, its areas and portals): far from it or out of view,
+        // nothing aboard needs testing
+        const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity], grow = (a, b) => { for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], a[k]); hi[k] = Math.max(hi[k], b[k]); } };
+        for (const o of this.objects) grow(o.min, o.max);
+        for (const a of this.areas) grow([a.bbox[0], a.y, a.bbox[1]], [a.bbox[2], a.top, a.bbox[3]]);
+        for (const P of this.portals) grow(P.min, P.max);
+        for (const q of out) grow([q[0], keel, q[1]], [q[0], this.hull.deck ?? keel, q[1]]);
+        this.centre = lo.map((v, k) => (v + hi[k]) / 2);
+        this.radius = Math.hypot(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) / 2;
         this.place();
+    }
+
+    // its footprint in xz for the world's vehicle grid: its sphere, padded by what the point queries reach (3 m)
+    rect() { const c = this.sphereCentre, r = this.radius + 3; return [c[0] - r, c[2] - r, c[0] + r, c[2] + r]; }
+
+    // its bounding sphere in the world: [x, y, z], r
+    get sphereCentre() { return m4.point(this.M, this.centre); }
+    // p is within m metres of it
+    near(p, m = 0) { const c = this.sphereCentre, r = this.radius + m; return (p[0] - c[0]) ** 2 + (p[1] - c[1]) ** 2 + (p[2] - c[2]) ** 2 <= r * r; }
+    // p is above or below it (within m metres of its sphere in xz): what stands on it may be there
+    over(p, m = 0) { const c = this.sphereCentre, r = this.radius + m; return (p[0] - c[0]) ** 2 + (p[2] - c[2]) ** 2 <= r * r; }
+    // its sphere is (partly) inside the planes, pushed out by pad m
+    inPlanes(planes, pad = 0) {
+        const c = this.sphereCentre, r = this.radius + pad;
+        for (const q of planes) if (q[0] * c[0] + q[1] * c[1] + q[2] * c[2] + q[3] < -r) return false;
+        return true;
+    }
+
+    // world bounds of object o aboard, for this pose: computed when asked (an object being drawn), not for every object
+    // every frame
+    bounds(o) {
+        if (o.poseStamp !== this.poseStamp) { const b = worldBounds(this.M, o); o.wmin = b.min; o.wmax = b.max; o.poseStamp = this.poseStamp; }
+        return o;
     }
 
     update(dt, t) {
@@ -119,6 +155,7 @@ class Vehicle extends LineVehicle {
         const M = m4.mul(m4.mul(m4.mul(m4.mul(m4.translate([p[0], pv[1] + heave, p[1]]), m4.rotY(heading)), m4.rotX(-this.pitch)), m4.rotZ(this.roll)), m4.translate([-pv[0], -pv[1], -pv[2]]));
         this.M.set(M); this.inv.set(m4.invert(M));
         this.place();
+        this.world.vehicleGrid?.move(this, ...this.rect());
     }
 
     // autopilot on the route: its line runs it (wait at the dock, cruise, brake to rest on the dock mark)
@@ -192,16 +229,11 @@ class Vehicle extends LineVehicle {
     takeHelm() { this.control = this.helm = { throttle: this.v / this.maxSpeed, rudder: 0 }; this.free = 'manual'; this.backoff = 0; }
     leaveHelm() { this.control = null; this.helm = { throttle: this.helm.throttle, rudder: this.helm.rudder }; this.free = 'rejoin'; }
 
-    // move the vehicle's portals, lights and object bounds to its current pose
-    place() {
-        const M = this.M;
-        for (const P of this.portals) P.place(M);
-        for (const L of this.lights) L.pos = m4.point(M, L.local);
-        for (const o of this.objects) {
-            const b = worldBounds(M, o);
-            o.wmin = b.min; o.wmax = b.max;
-        }
-    }
+    // a new pose: everything aboard stays in its frame, behind its Origin. Its areas are tested in that frame (areaAt),
+    // its trees are queried with the frustum taken into it, and the world poses of its portals, lights and object
+    // bounds are worked out from the Origin when something reads them (Portal.pose, PointLight.ride, bounds). O(1)
+    // however much it carries
+    place() { this.poseStamp = (this.poseStamp || 0) + 1; }
 
     waterline() { return this.hull.waterline2D.map(q => { const w = m4.point(this.M, [q[0], this.world.water.level, q[1]]); return [w[0], w[2]]; }); }
 }

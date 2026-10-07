@@ -17,7 +17,6 @@
             "skyTop":[0.35,0.42,0.55],"skyHorizon":[0.7,0.72,0.75]},
 
         {"type":"camera","from":"bunker"},
-        {"type":"link","to":"sky.indoors","value":"!bunker.outdoor"},
         {"type":"handheld.page","id":"reservoir","title":"Reservoir","nav":{"section":"SCENARIO","sub":"Area, weather, storms","icon":[[255,149,0],"B"]},"sections":[{"header":"BUNKER","cells":[{"type":"label","title":"Area","expr":"{bunker.area}"},{"type":"label","title":"Rain","expr":"{bunker.outdoor ? 'falls here' : 'stays out (indoors)'}"}]},{"header":"WEATHER","cells":[{"type":"label","title":"Weather","expr":"{sky.weather}"},{"type":"label","title":"Rain here","expr":"{sky.rain|pct}"},{"type":"label","title":"Storm cells","expr":"{sky.cells}"},{"type":"label","title":"Flashes","expr":"{sky.flashes}"}],"footer":"` cycles the keys: the sky takes 1-9 weather."}]}
     ]
 }

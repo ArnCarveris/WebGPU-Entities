@@ -5,7 +5,7 @@
 
 Features.part('cloud', (engine, feature) => {
 const { Common } = engine;
-const { clamp, sat01, v3, m4 } = Common;
+const { clamp, sat01, v3, m4, frustumPlanes } = Common;
 const {
     NEAR, WEATHER_RES, GROUND_RES, DRIP_PARTICLES, CELL_FLOATS, QUALITY, SHADOW_SLICES, FROXEL_NEAR, rainFall,
     BUS_DRAW, BUS, INTERIOR_DRAW, BUS_UNIFORM, Sky,
@@ -37,10 +37,12 @@ class FrameWriter {
         // on foot the near plane comes in to 5 cm (seat backs and bus walls are within a metre); reversed-Z keeps the far depth precise
         const near = a.walker.active ? 0.05 : NEAR, proj = m4.reversedInfinite(cam.fov, aspect, near);
         this.viewProj = m4.mul(proj, m4.view(cam.pos, right, up, fwd));
-        // each bus near enough to see: its model-view built in doubles about the camera (its interior a metre away would
-        // jitter in f32 world space), nearest first
+        // each bus near enough to see (the InteriorIndex's coarse cells within BUS_DRAW, not every bus): its model-view
+        // built in doubles about the camera (its interior a metre away would jitter in f32 world space), nearest first.
+        // k: its slot in busData
         const draws = [];
-        w.buses.forEach((bus, k) => {
+        w.structures.interiors.near(cam.pos, BUS_DRAW, 'vehicle').forEach(({ owner: bus }) => {
+            const k = bus.slot;
             const m = bus.model, dist = Math.hypot(m[12] - cam.pos[0], m[13] - cam.pos[1], m[14] - cam.pos[2]);
             if (dist > BUS_DRAW) return;
             const b = [-fwd[0], -fwd[1], -fwd[2]], rows = [right, up, b], mv = new Array(16).fill(0);
@@ -56,16 +58,12 @@ class FrameWriter {
             r.busData.set([bus.v, bus.doors, 0, 0], o + 48);
             draws.push([dist, k]);
         });
-        r.busDraws = draws.sort((p, q2) => p[0] - q2[0]).map(e => e[1]);
-        // building interiors within INTERIOR_DRAW of their centre (the same test fsWindow and fsPane make) whose bounding
-        // sphere is in the view frustum, nearest first
-        const kx = Math.hypot(1, tanX), ky = Math.hypot(1, tanY);
-        const inView = b => {
-            const v = v3.sub(b.centre, cam.pos), r = b.radius ??= Math.hypot(b.hx, b.hz, b.n * b.H / 2), z = v3.dot(v, fwd);
-            return z > -r && Math.abs(v3.dot(v, right)) - z * tanX < r * kx && Math.abs(v3.dot(v, up)) - z * tanY < r * ky;
-        };
-        const nearB = w.structures.buildings.list.map(b => [v3.len(v3.sub(b.centre, cam.pos)), b]).filter(e => e[0] < INTERIOR_DRAW && inView(e[1])).sort((p, q2) => p[0] - q2[0]);
-        r.interiorDraws = nearB.map(([, b]) => [b.range[0], b.range[1] - b.range[0]]).filter(e => e[1] > 0);
+        r.busDraws = draws.sort((p, q2) => p[0] - q2[0] || p[1] - q2[1]).map(e => e[1]);
+        // building interiors within INTERIOR_DRAW of their centre (the same test fsWindow and fsPane make) that the camera
+        // is in or sees into through a portal (a window, an open door) in the view frustum, nearest first: only the
+        // InteriorIndex cells within INTERIOR_DRAW are visited, whatever the number of buildings
+        const seen = w.structures.interiors.seen(cam.pos, frustumPlanes(this.viewProj, { reversed: true }), INTERIOR_DRAW, 'building');
+        r.interiorDraws = seen.map(([, it]) => it.owner.range).map(([a, b]) => [a, b - a]).filter(e => e[1] > 0);
         // the cabin the rain and the march leave out: the bus ridden, or the nearest
         if (a.rideBus) {
             F.set('busInv', a.rideBus.inverse);

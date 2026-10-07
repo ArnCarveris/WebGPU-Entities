@@ -21,16 +21,17 @@ const Features = {
         view: { parts: ['first-person'] },
         world: { parts: ['entity', 'hud', 'pages', 'feature-world'] },
         terrain: { uses: ['world', 'noise'], parts: ['heightfield', 'stamps'] },
-        transit: { parts: ['paths', 'line'] },
+        interior: { parts: ['origin', 'vis-area', 'interior'] },
+        transit: { uses: ['interior'], parts: ['paths', 'line'] },
     },
     ENGINE_KITS: ['noise', 'view'],
     USES: {
-        cloud: ['noise', 'view', 'world', 'terrain', 'transit'],
+        cloud: ['noise', 'view', 'world', 'terrain', 'interior', 'transit'],
         water: ['noise', 'view', 'world', 'terrain'],
         origin: ['noise', 'world'],
         imposter: ['noise', 'view', 'world'],
-        portal: ['noise', 'view', 'world', 'transit'],
-        gui: ['noise', 'view', 'world'],
+        portal: ['noise', 'view', 'world', 'interior', 'transit'],
+        gui: ['noise', 'view', 'world', 'interior'],
     },
     PARTS: {
         cloud: [

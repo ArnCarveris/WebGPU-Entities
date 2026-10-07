@@ -6,6 +6,7 @@ Features.part('cloud', (engine, feature) => {
 const { Common, kits } = engine;
 const { DEG, clamp, lerp } = Common;
 const { mulberry32 } = kits.noise;
+const { Interior, Origin } = kits.interior;
 const {
     STRUCT_FLOATS, BUILDING_TYPES, BLD_ID, FURNITURE, FURNITURE_ITEMS, FURNITURE_COLORS, rectMinusHoles,
     STRUCT_COLORS,
@@ -216,7 +217,7 @@ class Buildings {
             const open = S.solids.add(f, ...fbox(fc, u0 + 0.05, t + d.w / 2, 0.05, d.w / 2), floor, floor + d.h);
             open.off = true;
             const [cx, cz] = fc.o(d.at, t / 2);
-            S.doors.add({ building: id, hinge: f.xz(x, z), u: wdir(fc.U), d: wdir(fc.D), w: d.w - 0.04, h: d.h - 0.02, y: floor, lt, open: 0, target: 0,
+            S.doors.add(d.leaf = { building: id, hinge: f.xz(x, z), u: wdir(fc.U), d: wdir(fc.D), w: d.w - 0.04, h: d.h - 0.02, y: floor, lt, open: 0, target: 0,
                 shut, openSolid: open, col: C[T.door.color] || C.door, mat: M(0), centre: f.at(cx, floor + 1.2, cz) });
         }
         // a lamp over the doors of a share of them (`porch`), on by night: a small glowing box on the wall, its light out
@@ -260,18 +261,23 @@ class Buildings {
         S.boxes.add(f, 0, 0, hx, hz, gLo, roofTop, 0, 0, gLo, T.shelter !== false);
         // (each flight's start and its direction up it, in the world: to walk it in tests and tours)
         const stairs = flights.map(fl => { const [x, z] = fl.fc.o(fl.up ? fl.a0 - 0.6 : fl.a1 + 0.6, fl.d0 + fl.sw / 2); return { at: f.at(x, floor + fl.s * H, z), dir: wdir(fl.up ? fl.fc.U : [-fl.fc.U[0], -fl.fc.U[1]]) }; });
-        this.list.push({ id, f, hx, hz, t, floor, top, n, H, stairs, centre: [f.c[0], floor + n * H / 2, f.c[1]], range: [iv0, S.iv.length / STRUCT_FLOATS],
-            record: [f.c[0], f.c[1], f.cs, f.sn, hx, hz, floor, H, n, W.sill, W.height, W.pitch, W.width, t, T.lamps ?? 0.5, faceMask] });
+        const b = { id, f, hx, hz, t, floor, top, n, H, stairs, centre: [f.c[0], floor + n * H / 2, f.c[1]], range: [iv0, S.iv.length / STRUCT_FLOATS],
+            record: [f.c[0], f.c[1], f.cs, f.sn, hx, hz, floor, H, n, W.sill, W.height, W.pitch, W.width, t, T.lamps ?? 0.5, faceMask] };
+        // its interior (kits.interior): the rooms inside the walls in its own frame (origin on the floor at its centre), seen
+        // from outside through its windows and its doors while they are open; a weather shelter unless the archetype says not
+        const portals = [];
+        for (const [name, fc] of Object.entries(FACES)) for (const [u0, u1, y0, y1, kind] of holes[name]) {
+            const [x, z] = fc.o((u0 + u1) / 2, t / 2), leaf = kind === 'door' && doors.find(d => d.face === name && Math.abs(d.at - (u0 + u1) / 2) < 1e-6)?.leaf;
+            portals.push({ c: [x, (y0 + y1) / 2 - floor, z], n: [-fc.D[0], 0, -fc.D[1]], w: u1 - u0, h: y1 - y0, kind, open: leaf ? () => leaf.open > 0.02 : null });
+        }
+        b.interior = S.interiors.add(new Interior({ owner: b, kind: 'building', origin: Origin.yaw(f.c[0], floor, f.c[1], f.cs, f.sn),
+            lo: [-hx + t, -0.2, -hz + t], hi: [hx - t, top - floor, hz - t], portals, shelter: T.shelter !== false }));
+        this.list.push(b);
         return { id, floor, top };
     }
 
-    // the building p is inside (its interior), or null
-    inside(p) {
-        return this.list.find(b => {
-            const rx = p[0] - b.f.c[0], rz = p[2] - b.f.c[1], lx = rx * b.f.cs + rz * b.f.sn, lz = -rx * b.f.sn + rz * b.f.cs;
-            return Math.abs(lx) < b.hx - b.t && Math.abs(lz) < b.hz - b.t && p[1] > b.floor - 0.2 && p[1] < b.top;
-        }) || null;
-    }
+    // the building p is inside (its interior), or null: the few buildings in p's cell of the InteriorIndex, O(1)
+    inside(p) { return this.S.interiors.at(p, 'building')?.owner || null; }
 }
 
 return { Buildings };

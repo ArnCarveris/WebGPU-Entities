@@ -58,6 +58,9 @@ class PortalWorld extends FeatureWorld {
         return g === -Infinity ? null : g;
     }
 
+    // its areas but the outdoors are weather shelters (Area.shelter)
+    sheltered(p) { return this.app.world?.shelterAt(p) || null; }
+
     stats() {
         const g = this.app, w = g.world, P = g.player, s = g.stats, cam = P.cam.pos;
         const area = w.areas[w.areaAt(cam)], ship = w.vehicles[0];

@@ -40,6 +40,27 @@ class Member extends Entity {
         this.min = b.min;
         this.max = b.max;
     }
+
+    // riding vehicle veh, posed by `local` in its frame: its world model and bounds are worked out through the vehicle's
+    // Origin when read (drawn, culled) after it or the vehicle moved, so a ship's pose costs nothing per member
+    ride(veh, local) {
+        if (!this.rider) {
+            this.rider = { veh, local, ver: 0, at: -1, atVer: -1, model: null, min: null, max: null };
+            for (const k of ['model', 'min', 'max']) { delete this[k]; Object.defineProperty(this, k, { get: () => this.posed()[k], configurable: true }); }
+        }
+        this.rider.local = local;
+        this.rider.ver++;
+    }
+
+    posed() {
+        const r = this.rider;
+        if (r.at !== r.veh.poseStamp || r.atVer !== r.ver) {
+            r.model = m4.mul(r.veh.M, r.local);
+            const b = worldBounds(r.model, this.chunk);
+            r.min = b.min; r.max = b.max; r.at = r.veh.poseStamp; r.atVer = r.ver;
+        }
+        return r;
+    }
 }
 
 // A scenario model placed at pos / rot / scale; belongs to every area its bounds overlap
@@ -165,9 +186,14 @@ class HelmPart extends Member {
         this.rotate = rotate;
     }
 
+    // posed in the ship's frame, and only when the wheel or the lever moved
     update() {
         const v = this.helm.vehicle;
-        if (v) this.place(m4.mul(m4.mul(v.M, m4.translate(this.pos)), this.rotate(v.helm)));
+        if (!v) return;
+        const h = v.helm, key = `${h.rudder},${h.throttle}`;
+        if (this.rider && this.key === key) return;
+        this.key = key;
+        this.ride(v, m4.mul(m4.translate(this.pos), this.rotate(h)));
     }
 }
 
@@ -221,7 +247,13 @@ class DoorPanel extends Member {
         this.door = door;
     }
 
-    update() { this.place(this.door.model); }
+    // follows its door: only when the door moved (in the vehicle's frame for a door aboard one)
+    update() {
+        const d = this.door;
+        if (this.ver === d.ver) return;
+        this.ver = d.ver;
+        if (d.portal.vehicle) this.ride(d.portal.vehicle, d.local); else this.place(d.model);
+    }
 }
 
 // SECTR_Door: drives the Closed flag of its portal; `auto` doors open for nearby actors.
@@ -282,20 +314,28 @@ class Door extends Entity {
         return 'ok';
     }
 
+    // A door aboard a vehicle is posed in the vehicle's frame (its portal's local pose; the world one follows through the
+    // vehicle's Origin when read): moving the vehicle costs it nothing. Its panel is re-posed only while it moves (ver)
     update(dt, t, actors) {
-        const P = this.portal;
+        const P = this.portal, veh = P.vehicle;
         if (this.auto && !P.locked) {
-            const near = actors.some(a => v3.dist(a, P.center) < this.radius);
+            // aboard: nobody near the vehicle is near the door, without posing it
+            const near = (!veh || actors.some(a => veh.near(a, this.radius))) && actors.some(a => v3.dist(a, P.center) < this.radius);
             if (near) { this.target = 1; this.hold = this.delay; }
             else if ((this.hold -= dt) <= 0) this.target = 0;
         }
         const d = this.target - this.open;
         this.open += Math.sign(d) * Math.min(Math.abs(d), this.speed * dt);
         P.closed = this.open < 0.02;
-        const ease = this.open * this.open * (3 - 2 * this.open);
+        if (this.ver !== undefined && this.posedOpen === this.open && this.posedOn === veh) return;     // (or it boarded: Vehicle.claim)
+        this.posedOpen = this.open;
+        this.posedOn = veh;
+        this.ver = (this.ver || 0) + 1;
+        const F = veh ? P.local : P, ease = this.open * this.open * (3 - 2 * this.open);
         const lift = this.lift * Math.min(1, this.open * 4);
-        const sd = { right: [P.right, P.w], left: [v3.mul(P.right, -1), P.w], up: [P.up, P.h], down: [v3.mul(P.up, -1), P.h] }[this.slide];
-        this.model = m4.basis(P.right, P.up, P.normal, v3.madd(v3.madd(P.center, sd[0], sd[1] * 0.97 * ease), P.normal, lift));
+        const sd = { right: [F.right, P.w], left: [v3.mul(F.right, -1), P.w], up: [F.up, P.h], down: [v3.mul(F.up, -1), P.h] }[this.slide];
+        const M = m4.basis(F.right, F.up, F.normal, v3.madd(v3.madd(F.center, sd[0], sd[1] * 0.97 * ease), F.normal, lift));
+        if (veh) this.local = M; else this.model = M;
     }
 }
 

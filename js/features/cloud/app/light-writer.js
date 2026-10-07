@@ -3,8 +3,9 @@
 // that lists them per cell, the fake street lamps' poles near the camera, and the distant lights and glows by night.
 
 Features.part('cloud', (engine, feature) => {
-const { Common } = engine;
+const { Common, kits } = engine;
 const { DEG, clamp, smoothstep, v3 } = Common;
+const { GridHash } = kits.interior;
 const {
     MAX_LIGHTS, LIGHT_GRID, MAX_POLES, MAX_FAR_DYN, FAR_FLOATS, LIGHT_RANGE, LIGHT_CABIN, LIGHT_SPOT, POLE_DRAW,
     GLOW_GAIN, LAMPS, ShelterBoxes, Structures,
@@ -35,9 +36,11 @@ class LightWriter {
                 intensity: L.intensity, range: L.range, size: L.size, cone: [Math.cos(L.cone[0] * DEG), Math.cos(L.cone[1] * DEG)], first: true });
         }
         if (night) {
-            all.push(...w.structures.fixtures.lights);
+            all.push(...this.nearLamps(w.structures.fixtures.lights, cam));
             w.nearFakeLamps(cam, LIGHT_RANGE + LAMPS.sodium.range, all);    // the fake street lamps near: real lights now
-            for (const b of w.buses) if (Math.hypot(b.pose.x - cam[0], b.pose.z - cam[2]) < LIGHT_RANGE + 80) b.lights(all);
+            // the buses within reach (the InteriorIndex, not every bus), in their order
+            const buses = w.structures.interiors.near(cam, LIGHT_RANGE + 80, 'vehicle').map(it => it.owner).sort((p, q) => p.slot - q.slot);
+            for (const b of buses) if (Math.hypot(b.pose.x - cam[0], b.pose.z - cam[2]) < LIGHT_RANGE + 80) b.lights(all);
         }
         const reach = l => l.first ? -1 : Math.max(v3.len(v3.sub(l.pos, cam)) - l.range, 0);
         const list = all.map(l => [reach(l), l]).filter(e => e[0] < LIGHT_RANGE).sort((p, q) => p[0] - q[0]);
@@ -86,6 +89,20 @@ class LightWriter {
         this.writeFar(F, night, adapt);
     }
 
+    // the structures' lamps that can reach within LIGHT_RANGE of the camera, in the order they were built: from a GridHash
+    // over them (rebuilt only when lamps are added), so the frame visits the cells near the camera, not every lamp
+    nearLamps(lights, cam) {
+        if (this.lampCount !== lights.length) {
+            this.lampCount = lights.length;
+            this.lampGrid = new GridHash(256);
+            this.lampReach = 0;
+            lights.forEach((l, i) => { l.seq = i; this.lampReach = Math.max(this.lampReach, l.range); this.lampGrid.insert(l, l.pos[0], l.pos[2], l.pos[0], l.pos[2]); });
+        }
+        const out = [], R = LIGHT_RANGE + this.lampReach;
+        this.lampGrid.each(cam[0] - R, cam[2] - R, cam[0] + R, cam[2] + R, l => out.push(l));
+        return out.sort((p, q) => p.seq - q.seq);
+    }
+
     // the fake street lamps' poles within POLE_DRAW (vsFarPole), day and night: re-listed when the camera has moved 20 m
     writePoles() {
         const a = this.app, r = a.renderer, cam = a.camera.pos, last = this.poleAt;
@@ -105,8 +122,9 @@ class LightWriter {
         const a = this.app, r = a.renderer, w = a.world;
         this.writePoles();
         if (!night) { r.farCount = 0; F.set('glowInfo', [0, 0, 0, 0]); return; }
+        // the first buses' lights, as many as there are slots: it stops there, however many buses run
         const bl = [];
-        for (const b of w.buses) b.lights(bl);
+        for (const b of w.buses) { if (bl.length >= MAX_FAR_DYN) break; b.lights(bl); }
         const n = Math.min(bl.length, MAX_FAR_DYN), dyn = this.farDyn;
         bl.slice(0, n).forEach((l, i) => dyn.set([...l.pos, l.size ?? 0.5, ...l.color.map(c => c * l.intensity), 0, ...l.dir, l.cone ? l.cone[0] : -2,
             l.cone ? l.cone[1] : 1, l.range, l.pos[1], 0], i * FAR_FLOATS));

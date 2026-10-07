@@ -2,8 +2,9 @@
 // The world: builds the scenario's architecture and entities and runs them.
 
 Features.part('portal', (engine, feature) => {
-const { Common } = engine;
+const { Common, kits } = engine;
 const { v3 } = Common;
+const { GridHash } = kits.interior;
 const {
     MAX_LIGHTS, AREA_FLOATS, AXES, IDENTITY, g2, GeometryPool, splitMesh, MaterialTable, BVHTree, QuadTree, pushSeg,
     CollisionSet, Area, Portal, Occluder, Architecture, Outdoors, NavGraph, Vehicle, ENTITY_TYPES,
@@ -40,6 +41,11 @@ class World {
         this.spawnEntities();
         this.vehicles = (scn.vehicles || []).map(d => new Vehicle(this, d));
         for (const veh of this.vehicles) veh.claim();
+        this.indexAreas();
+        // the vehicles in a GridHash by their bounding spheres (re-bucketed as they cross cells, Vehicle.update): point
+        // queries (areaAt, groundAt, collide) look only at the ones over p, however many sail
+        this.vehicleGrid = new GridHash(64);
+        for (const veh of this.vehicles) this.vehicleGrid.insert(veh, ...veh.rect());
         for (const e of this.entities) e.link();
         this.buildTrees();
         this.buildCollision();
@@ -55,6 +61,21 @@ class World {
         this.areas = [Area.outdoors(this.scn.outdoor)];
         for (const def of this.scn.areas || []) this.areas.push(new Area(def, this.areas.length));
         this.areaById = new Map(this.areas.map(a => [a.id, a.index]));
+        this.indexAreas();
+    }
+
+    // the areas in GridHashes over their footprints, so areaAt is O(1) however many there are: the world's in one, each
+    // vehicle's in its own, in its frame (its Origin), so they move with it for free
+    indexAreas() {
+        this.areaGrid = new GridHash(16);
+        for (const veh of this.vehicles || []) { veh.areaGrid = new GridHash(16); veh.areaReach = 0; }
+        for (const a of this.areas) {
+            if (a.index === 0) continue;
+            const veh = a.vehicle;
+            (veh ? veh.areaGrid : this.areaGrid).insert(a, ...a.bbox);
+            // how far from its origin a vehicle's areas reach: further off, p is in none of them (no transform needed)
+            if (veh) for (const x of [a.bbox[0], a.bbox[2]]) for (const z of [a.bbox[1], a.bbox[3]]) for (const y of [a.y, a.top]) veh.areaReach = Math.max(veh.areaReach, Math.hypot(x, y, z));
+        }
     }
 
     areaIndex(id) {
@@ -63,11 +84,25 @@ class World {
         return this.areaById.get(id);
     }
 
-    // FarCry SetCurAreas / SECTR GetContaining: point query, outdoors when nothing contains it
+    // FarCry SetCurAreas / SECTR GetContaining: point query, outdoors when nothing contains it (the first area that does,
+    // by index). The few areas in p's cell of each grid: O(1) in the number of areas
+    // the vehicles whose cells hold p (all of them while the world is being built)
+    vehiclesAt(p) { return this.vehicleGrid ? this.vehicleGrid.at(p[0], p[2]) : this.vehicles || []; }
+
     areaAt(p) {
-        for (let i = 1; i < this.areas.length; i++) if (this.areas[i].contains(p)) return i;
-        return 0;
+        let best = 0;
+        for (const veh of this.vehiclesAt(p)) {
+            const M = veh.M, r = veh.areaReach;
+            if (!r || (p[0] - M[12]) ** 2 + (p[1] - M[13]) ** 2 + (p[2] - M[14]) ** 2 > r * r) continue;
+            const l = veh.toLocal(p);
+            for (const a of veh.areaGrid.at(l[0], l[2])) if ((!best || a.index < best) && a.containsLocal(l)) best = a.index;
+        }
+        for (const a of this.areaGrid.at(p[0], p[2])) if ((!best || a.index < best) && a.containsLocal(p)) best = a.index;
+        return best;
     }
+
+    // the interior (kits.interior) p is sheltered in from the weather: its area, or null outdoors
+    shelterAt(p) { const a = this.areas[this.areaAt(p)]; return a.shelter ? a : null; }
 
     // SECTR Member: an AABB may belong to several sectors (and to the outdoors)
     areasOverlapping(min, max) {
@@ -184,6 +219,11 @@ class World {
         // a vehicle keeps its outdoor parts (hull, deck gear) in its own tree, in vehicle space
         for (const veh of this.vehicles) veh.outdoorTree = new BVHTree(veh.objects.filter(o => o.owners.includes(0)));
         this.dynamicByArea = this.areas.map(() => []);
+        // the portals out to the outdoors: from outdoors, PortalVis asks this tree for those in its frustum instead of
+        // testing every one in the world (a vehicle's move with it: tested while the vehicle is in view)
+        const out = this.portals.filter(P => P.front === 0 || P.back === 0);
+        this.outdoorPortals = new QuadTree(out.filter(P => !P.vehicle));
+        this.movingOutdoorPortals = this.vehicles.map(veh => ({ veh, portals: out.filter(P => P.vehicle === veh).map(P => P.index) })).filter(v => v.portals.length);
     }
 
     // ---- walking: collision, ground, ladders ----
@@ -207,7 +247,8 @@ class World {
         if (th <= maxY && this.areaAt([p[0], th + 0.1, p[2]]) === 0) best.y = th;     // no terrain inside buildings
         const gw = this.col.ground(p[0], p[2], maxY);
         if (gw > best.y) best = { y: gw, support: null };
-        for (const veh of this.vehicles) {
+        for (const veh of this.vehiclesAt(p)) {
+            if (!veh.over(p, 1)) continue;                             // not above or below it
             const l = veh.toLocal(p);
             let gl = veh.col.ground(l[0], l[2], l[1] + step);
             if (veh.docked) gl = Math.max(gl, veh.dockCol.ground(l[0], l[2], l[1] + step));
@@ -224,7 +265,8 @@ class World {
     // push a player cylinder (radius r, from feet+lo to feet+hi) out of walls, hulls and closed doors
     collide(p, r, lo, hi) {
         this.col.pushOut(p, r, p[1] + lo, p[1] + hi);
-        for (const veh of this.vehicles) {
+        for (const veh of this.vehiclesAt(p)) {
+            if (!veh.near(p, r + hi)) continue;                        // nothing of it within reach
             const l = veh.toLocal(p);
             veh.col.pushOut(l, r, l[1] + lo, l[1] + hi);
             if (veh.docked) veh.dockCol.pushOut(l, r, l[1] + lo, l[1] + hi);

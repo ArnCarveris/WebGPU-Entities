@@ -300,6 +300,19 @@ class Host {
         return best;
     }
 
+    // Weather shelter by default: while the camera is inside an interior of a shown world (FeatureWorld.sheltered: a
+    // building, a vehicle's cabin, a portal area), every atmosphere world keeps its rain and snow off it (set('indoors')),
+    // unless a scenario link drives that itself. One point query per world, O(1) in what the worlds hold
+    shelter() {
+        if (!this.composed) return;
+        const atmos = this.instances.filter(i => i.role === 'atmosphere' && !this.links.some(l => l.inst === i && l.param === 'indoors'));
+        if (!atmos.length) return;
+        const v = this.fly ? this.fly.view : this.worldView();
+        if (!v) return;
+        const inside = this.instances.some(i => i.visible && i.role !== 'atmosphere' && !!i.world.sheltered?.(this.frameOf(i).local(v.pos)));
+        for (const i of atmos) if (i.sheltered !== inside) { i.sheltered = inside; i.world.set?.('indoors', inside); }
+    }
+
     // ... at a point of inst's frame, in its frame (fx.floor)
     floorIn(inst, x, y, z) {
         const F = this.frameOf(inst), w = F.point([x, y, z]), g = this.floorAt(w[0], w[1], w[2]);
@@ -458,7 +471,8 @@ class Host {
             if (!this.failed) { this.failed = true; showFallback(err); }
             return;
         }
-        // links, sound and the handheld read what the worlds did
+        // weather shelter by default; then links, sound and the handheld read what the worlds did
+        this.shelter();
         const scope = this.scope = this.buildScope();
         for (const l of this.links) {
             let v;

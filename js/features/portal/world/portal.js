@@ -4,7 +4,7 @@
 Features.part('portal', (engine, feature) => {
 const { Common } = engine;
 const { v3 } = Common;
-const { DEFAULT_GLASS, m4 } = feature;
+const { DEFAULT_GLASS } = feature;
 
 // Portals (SECTR_Portal hull + FarCry portal flags) and occluders (SECTR_Occluder).
 
@@ -65,24 +65,30 @@ class Portal {
     // stop flags for navigation: closed (unless automatic), locked, windows, sky-only
     get navigable() { return !this.locked && (!this.closed || this.autoDoor) && this.kind !== 'window' && !this.skyOnly; }
 
-    // the portal rides a vehicle: remember its docked (local) pose
+    // the portal rides a vehicle: it keeps its docked (local) pose, and its world pose (verts, center, normal, right, up,
+    // d, min, max) is worked out through the vehicle's Origin when read after the vehicle moved, so moving the vehicle
+    // costs nothing per portal
     attach(vehicle) {
         this.vehicle = vehicle;
         this.local = { verts: this.verts.map(v => v.slice()), center: this.center.slice(), normal: this.normal.slice(), right: this.right.slice(), up: this.up.slice() };
+        this.posed = null;
+        this.poseStamp = -1;
+        for (const k of Portal.POSED) { delete this[k]; Object.defineProperty(this, k, { get: () => this.pose()[k], configurable: true }); }
     }
 
-    // move to the vehicle pose M
-    place(M) {
-        const l = this.local;
-        this.verts = l.verts.map(v => m4.point(M, v));
-        this.center = m4.point(M, l.center);
-        this.normal = v3.norm(m4.dir(M, l.normal));
-        this.right = v3.norm(m4.dir(M, l.right));
-        this.up = v3.norm(m4.dir(M, l.up));
-        this.d = -v3.dot(this.normal, this.center);
-        this.updateBounds();
+    // its world pose for the vehicle's current one
+    pose() {
+        const veh = this.vehicle;
+        if (this.poseStamp === veh.poseStamp) return this.posed;
+        const O = veh.origin, l = this.local, center = O.toWorld(l.center), normal = v3.norm(O.toWorld(l.normal, 0)), verts = l.verts.map(v => O.toWorld(v));
+        const p = { verts, center, normal, right: v3.norm(O.toWorld(l.right, 0)), up: v3.norm(O.toWorld(l.up, 0)), d: -v3.dot(normal, center),
+            min: [0, 1, 2].map(k => Math.min(...verts.map(v => v[k]))), max: [0, 1, 2].map(k => Math.max(...verts.map(v => v[k]))) };
+        this.posed = p;
+        this.poseStamp = veh.poseStamp;
+        return p;
     }
 }
+Portal.POSED = ['verts', 'center', 'normal', 'right', 'up', 'd', 'min', 'max'];
 
 // Planar convex hull that hides what is fully behind it; autoOrient "y" turns it toward the camera
 class Occluder {

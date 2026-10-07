@@ -12,6 +12,7 @@
 Features.part('gui', (engine, feature) => {
 const { kits } = engine;
 const { FeatureWorld } = kits.world;
+const { Interior, InteriorIndex, Origin } = kits.interior;
 const { Game } = feature;
 
 // This demo as one world of the engine (js/engine/host.js calls these). All of its UI is in the 3D scene (and on the
@@ -33,6 +34,20 @@ class GuiWorld extends FeatureWorld {
     get moves() { return ['walk']; }
     get move() { return 'walk'; }
     setMove(mode) {}
+
+    // the facility is a building (kits.interior): the room within the player's bounds and the corridor beyond the
+    // doorway, joined by the hatch (a door portal), both weather shelters
+    sheltered(p) {
+        const P = this.app?.player;
+        if (!P) return null;
+        if (!this.interiors) {
+            const { bounds: b, doorway: d } = P.cfg, ix = this.interiors = new InteriorIndex(8), at = Origin.IDENTITY, top = 4;
+            const hatch = { c: [(d.x[0] + d.x[1]) / 2, 1.2, b.z[0]], n: [0, 0, -1], w: d.x[1] - d.x[0], h: 2.4, kind: 'door', open: () => this.app.world.get(d.door).passable };
+            ix.add(new Interior({ owner: this, origin: at, lo: [b.x[0] - 0.3, -0.5, b.z[0] - 0.3], hi: [b.x[1] + 0.3, top, b.z[1] + 0.3], portals: [hatch] }));
+            ix.add(new Interior({ owner: this, origin: at, lo: [d.x[0] - 0.3, -0.5, d.minZ - 0.3], hi: [d.x[1] + 0.3, top, b.z[0]], portals: [{ ...hatch, n: [0, 0, 1] }] }));
+        }
+        return this.interiors.sheltered(p);
+    }
 
     stats() {
         const g = this.app, w = g.world, P = g.player;

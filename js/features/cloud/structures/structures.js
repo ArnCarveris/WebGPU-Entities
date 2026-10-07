@@ -4,7 +4,7 @@
 // edges (WGSL_SHELTER), the doors, the buildings and the fixtures. Entities build into it (Entity.build).
 
 Features.part('cloud', (engine, feature) => {
-const { Common } = engine;
+const { Common, kits } = engine;
 const { lerp, v3 } = Common;
 const { STRUCT_COLORS, Solids, ShelterBoxes, Doors, Buildings, Fixtures } = feature;
 
@@ -16,6 +16,7 @@ class Structures {
         this.cur = this.v;           // where tri() puts its triangles: the outside (v), or a building's interior (iv)
         this.solids = new Solids();
         this.boxes = new ShelterBoxes();
+        this.interiors = new kits.interior.InteriorIndex(32);   // every building's and bus's interior (kits.interior)
         this.doors = new Doors(this);
         this.buildings = new Buildings(this, types);
         this.fixtures = new Fixtures(this);
