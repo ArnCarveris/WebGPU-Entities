@@ -2,6 +2,8 @@
 // WGSL: the world, sky, portal polygons and debug lines.
 
 Features.part('portal', (engine, feature) => {
+const { kits } = engine;
+const { NoiseWGSL } = kits.noise;
 const { MAX_LIGHTS, MAX_FOG_PORTALS } = feature;
 
 // WGSL sources. The scene shader indexes the per-area lighting table and the material table (storage
@@ -19,16 +21,9 @@ struct Material { albedo: vec4f, params: vec4f, emissive: vec4f };
 @group(0) @binding(1) var<storage, read> areas: array<Area>;
 @group(0) @binding(2) var<storage, read> mats: array<Material>;
 
-fn hash2(p: vec2f) -> f32 { return fract(sin(dot(p, vec2f(127.1, 311.7))) * 43758.5453); }
-fn vnoise(p: vec2f) -> f32 {
-    let i = floor(p); let f = fract(p); let u = f * f * (3.0 - 2.0 * f);
-    return mix(mix(hash2(i), hash2(i + vec2f(1.0, 0.0)), u.x), mix(hash2(i + vec2f(0.0, 1.0)), hash2(i + vec2f(1.0, 1.0)), u.x), u.y);
-}
-fn fbm(p: vec2f) -> f32 {
-    var s = 0.0; var a = 0.5; var q = p;
-    for (var i = 0; i < 4; i++) { s += a * vnoise(q); q = q * 2.03 + vec2f(1.7, 9.2); a *= 0.5; }
-    return s;
-}
+${NoiseWGSL.hashSin2('hash2')}
+${NoiseWGSL.value2('vnoise', 'hash2')}
+${NoiseWGSL.fbm('fbm', 'vnoise', { octaves: 4, shift: [1.7, 9.2] })}
 fn tonemap(c: vec3f) -> vec3f { return pow(vec3f(1.0) - exp(-c * 1.15), vec3f(1.0 / 2.2)); }
 fn skyColor(dir: vec3f) -> vec3f {
     let t = dir.y;

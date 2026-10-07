@@ -21,50 +21,36 @@
 // WGSL, GPU mesh, baker, renderer | archetypes, entities, world | camera, input, HUD, panel, game | main
 
 Features.part('imposter', (engine, feature) => {
-const { Common } = engine;
-const { DEG, clamp, v3, yawPitch } = Common;
+const { Common, kits } = engine;
+const { DEG, clamp, v3 } = Common;
+const { FeatureWorld } = kits.world, { HUD } = FeatureWorld;
 const { MSAA, CASCADES, LOD_MODES, ATLAS_VIEWS, GRID_CHOICES, RES_CHOICES, Game, phonePages } = feature;
 
-// This demo as one world of the engine (js/engine/host.js calls these).
-const HUD_HTML = `<div data-hud="toast" class="panel"></div>
-    <input data-hud="file" type="file" multiple accept=".glb,.gltf,.bin,.obj,.mtl,.json,.png,.jpg,.jpeg,.webp" hidden>`;
+// This demo as one world of the engine (js/engine/host.js calls these; view / setView: its camera's).
+const FILE_INPUT = `<input data-hud="file" type="file" multiple accept=".glb,.gltf,.bin,.obj,.mtl,.json,.png,.jpg,.jpeg,.webp" hidden>`;
 
-class FeatureWorld {
-    constructor(fx) {
-        this.fx = fx;
-        this.hudHtml = HUD_HTML;
-    }
+class ImposterWorld extends FeatureWorld {
+    constructor(fx) { super(fx, HUD.toast + FILE_INPUT); }
 
-    async init() {
-        this.game = new Game(this.fx);
-        await this.game.start();
-    }
-
-    frame(now, dt, opts) { this.game.frame(now, dt, opts); }
+    createApp(fx) { return new Game(fx); }
 
     // dropped models (the engine keeps scenario .json drops)
-    drop(files) { this.game.loadFiles(files); }
+    drop(files) { this.app.loadFiles(files); }
 
     // reversed-Z, infinite far plane, 4x MSAA, metres
     depth() {
-        const r = this.game.renderer;
+        const r = this.app.renderer;
         return r.depthView && { view: r.depthView, kind: 'reversed', near: 0.1, samples: MSAA };
     }
 
-    get view() {
-        const c = this.game.camera, fwd = c.forward(), right = c.right();
-        return { pos: [...c.pos], fwd, up: v3.cross(right, fwd), fov: c.fov * DEG };
-    }
-
-    setView(v) {
-        const c = this.game.camera;
-        c.pos = [...v.pos];
-        Object.assign(c, yawPitch(v.fwd));
-        if (v.fov) c.fov = v.fov / DEG;
+    // the terrain, within its square
+    ground(p) {
+        const t = this.app.world?.terrain;
+        return t && Math.max(Math.abs(p[0]), Math.abs(p[2])) <= t.size / 2 ? t.height(p[0], p[2]) : null;
     }
 
     stats() {
-        const g = this.game, st = g.settings, w = g.world, cam = g.camera.pos;
+        const g = this.app, st = g.settings, w = g.world, cam = g.camera.pos;
         let inst = 0, meshes = 0, imposters = 0;
         if (w) for (const a of w.list) { inst += a.count; meshes += a.visible[0]; imposters += a.visible[1]; }
         return {
@@ -75,10 +61,10 @@ class FeatureWorld {
     }
 
     // the readout and every control, on the engine's handheld (js/engine/handheld.js)
-    handheld() { return phonePages(this.game); }
+    handheld() { return phonePages(this.app); }
 
     set(key, v) {
-        const g = this.game;
+        const g = this.app;
         if (key === 'light' && g.lighting.names.includes(v) && v !== g.lighting.name) g.relight('preset', v);
         else if (key === 'lod' && LOD_MODES.includes(v)) g.set('lodMode', v);
         else if (key === 'shadows') g.set('shadows', !!v);
@@ -91,5 +77,5 @@ class FeatureWorld {
     }
 }
 
-return { create: ctx => new FeatureWorld(ctx) };
+return { create: ctx => new ImposterWorld(ctx) };
 });

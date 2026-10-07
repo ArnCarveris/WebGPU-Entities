@@ -2,24 +2,18 @@
 // Entities: doors, lamps, beacons, lights, drones, cameras, the avatar, terminals and easels.
 
 Features.part('gui', (engine, feature) => {
+const { kits } = engine;
 const { V3, M4, lerp, smooth01, deg } = GuiKit;
 const { TerminalGUI, EaselGUI, PaintCanvas } = feature;
 
 // World entities. Each is constructed from a scenario definition ({ type, id, ... }).
 
-class Entity {
-    constructor(def, world) {
-        this.def = def;
-        this.id = def.id;
-        this.world = world;
-    }
-
+class Entity extends kits.world.Entity {
     get game() { return this.world.game; }
     get position() { return this.def.pos; }
     get guis() { return []; }
 
     init(renderer) {}
-    update(dt, t) {}
     writeInstances(renderer) {}
     render(pass, ctx) {}        // ctx: { showAvatar, skip }
     lights(out) {}              // push [x, y, z, intensity, r, g, b, 0]
@@ -195,7 +189,6 @@ class SecurityCamera extends ModelEntity {
         this.panDeg = 0;
     }
 
-    get label() { return this.def.label; }
     get name() { return this.def.name; }
     get location() { return this.def.loc; }
     get offline() { return !!this.def.offline; }

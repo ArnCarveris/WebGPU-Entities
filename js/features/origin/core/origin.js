@@ -11,7 +11,7 @@ const { ORIGIN_BYTES, quat, WorldPos } = feature;
 class Origin {
     constructor() {
         this.pos = new WorldPos();
-        this.q = quat.id();
+        this.q = quat.identity();
         this.scale = 1;
         this.axes = quat.axes(this.q);      // origin X / Y / Z in world space
         this.gpu = new ArrayBuffer(ORIGIN_BYTES);

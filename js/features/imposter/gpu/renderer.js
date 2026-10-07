@@ -3,11 +3,11 @@
 
 Features.part('imposter', (engine, feature) => {
 const { Common } = engine;
-const { DEG, clamp, lerp, v3 } = Common;
+const { DEG, clamp, lerp, v3, frustumPlanes } = Common;
 const {
     MSAA, DEPTH_FORMAT, BAKE_DEPTH_FORMAT, ALBEDO_FORMAT, NORMAL_FORMAT, EMISSIVE_FORMAT, CASCADES, SHADOW_FLOATS,
-    LISTS, CHEAP_CASCADE, VF, GLOBAL_FLOATS, LOD_MODES, ATLAS_VIEWS, m4, frustumPlanes, TextureFactory, uploadImage,
-    WGSL_SKY, WGSL_MESH, WGSL_BAKE, WGSL_AO, WGSL_MIP, WGSL_CULL, WGSL_IMPOSTER, WGSL_OVERLAY, atlasLayers,
+    LISTS, CHEAP_CASCADE, VF, GLOBAL_FLOATS, LOD_MODES, ATLAS_VIEWS, m4, TextureFactory, uploadImage, WGSL_SKY,
+    WGSL_MESH, WGSL_BAKE, WGSL_AO, WGSL_MIP, WGSL_CULL, WGSL_IMPOSTER, WGSL_OVERLAY, atlasLayers,
 } = feature;
 
 class Renderer {
@@ -211,8 +211,8 @@ class Renderer {
     // stretched far back toward the sun so casters outside the slice still land in the map.
     writeShadows(cam, env, st, aspect) {
         const S = this.shadowData, res = this.shadowRes, far = st.shadowDistance, near = 0.5, lambda = st.shadowLambda;
-        const fwd = cam.forward(), right = cam.right(), up = v3.cross(right, fwd);
-        const th = Math.tan(cam.fov * DEG / 2), tw = th * aspect, L = env.sunDir;
+        const { fwd, right, up } = cam.basis();
+        const th = Math.tan(cam.fov / 2), tw = th * aspect, L = env.sunDir;
         const LV = m4.lookAt(L, [0, 0, 0], Math.abs(L[1]) > 0.99 ? [0, 0, 1] : [0, 1, 0]);
         let prev = near;
         for (let c = 0; c < CASCADES; c++) {
@@ -272,7 +272,7 @@ class Renderer {
 
     writeGlobals(cam, env, st, time) {
         const g = this.globals, W = this.width, H = this.height;
-        const vp = m4.mul(m4.reversedInfinite(cam.fov * DEG, W / H, 0.1), cam.view());
+        const vp = m4.mul(m4.reversedInfinite(cam.fov, W / H, 0.1), cam.viewMatrix());
         g.set(vp, 0);
         g.set([...cam.pos, time], 16);
         g.set([...env.sunDir, env.exposure], 20);
@@ -282,17 +282,17 @@ class Renderer {
         g.set([...env.ambientSky, 0], 36);
         g.set([...env.ambientGround, env.ambientStrength], 40);
         g.set([...env.fogColor, env.fogDensity], 44);
-        this.camPlanes = frustumPlanes(vp);
+        this.camPlanes = frustumPlanes(vp, { reversed: true });
         this.camPlanes.forEach((p, i) => g.set(p, 48 + i * 4));
         g.set([st.lodDistance, st.fade, st.far, LOD_MODES.indexOf(st.lodMode)], 72);
         g.set([st.blend ? 1 : 0, st.parallax ? 1 : 0, st.depthOffset ? 1 : 0, st.tint ? 1 : 0], 76);
         g.set(m4.invert(vp), 80);
         g.set([W, H, 1 / W, 1 / H], 96);
         g.set([env.emission, 0, 0, 0], 100);
-        g.set([...cam.forward(), 0], 104);
+        g.set([...cam.basis().fwd, 0], 104);
         this.device.queue.writeBuffer(this.globalBuf, 0, g);
         this.viewData.set(vp, 0);
-        this.viewData.set([...cam.pos, 1, ...cam.forward(), 0], 16);
+        this.viewData.set([...cam.pos, 1, ...cam.basis().fwd, 0], 16);
     }
 
     stamps(i) { return this.querySet ? { querySet: this.querySet, beginningOfPassWriteIndex: i, endOfPassWriteIndex: i + 1 } : undefined; }

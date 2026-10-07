@@ -2,18 +2,17 @@
 // Entities: props, lamps, stairs, hulls, helms, doors and drones.
 
 Features.part('portal', (engine, feature) => {
-const { Common } = engine;
-const { v3, mulberry32 } = Common;
+const { Common, kits } = engine;
+const { v3 } = Common;
+const { mulberry32 } = kits.noise;
 const { MAX_LIGHTS, AXES, m4, IDENTITY, g2, newell, MeshBuilder, splitMesh, worldBounds, PointLight } = feature;
 
 // World entities. Each is constructed from a scenario definition ({ type, ... }) and spawned once, in
 // scenario order: static ones add geometry to the world, dynamic ones also register for per-frame updates.
 
-class Entity {
+class Entity extends kits.world.Entity {
     constructor(def, world) {
-        this.def = def;
-        this.world = world;
-        this.id = def && def.id;
+        super(def, world);
         this.owners = [];           // areas it is drawn in (dynamic members only)
     }
 

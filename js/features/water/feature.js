@@ -22,26 +22,15 @@
 // stamp the heightmap, water entities fill lakes, add sources / sinks, or emit floating debris.
 
 Features.part('water', (engine, feature) => {
-const { Common } = engine;
-const { yawPitch } = Common;
+const { kits } = engine;
+const { FeatureWorld } = kits.world, { HUD } = FeatureWorld;
 const { NEAR, RENDER_MODES, Dam, App, phonePages } = feature;
 
-// This demo as one world of the engine (js/engine/host.js calls these).
-const HUD_HTML = `<canvas class="labels" data-hud="labels"></canvas><div data-hud="toast" class="panel"></div>`;
+// This demo as one world of the engine (js/engine/host.js calls these; view / setView: its camera's).
+class WaterWorld extends FeatureWorld {
+    constructor(fx) { super(fx, HUD.labels + HUD.toast); }
 
-class FeatureWorld {
-    constructor(fx) {
-        this.fx = fx;
-        this.hudHtml = HUD_HTML;
-    }
-
-    async init() {
-        this.app = new App(this.fx);
-        await this.app.start();
-        this.app.load(this.fx.native);
-    }
-
-    frame(now, dt, opts) { this.app.frame(now, dt, opts); }
+    createApp(fx) { return new App(fx); }
 
     // reversed-Z, infinite far plane, metres
     depth() {
@@ -49,16 +38,16 @@ class FeatureWorld {
         return r.depthView && { view: r.depthCView || r.depthView, kind: 'reversed', near: NEAR };
     }
 
-    get view() {
-        const c = this.app.camera, { fwd, up } = c.basis();
-        return { pos: [...c.pos], fwd, up, fov: c.fov };
+    // its scenario's views (water.view)
+    views() {
+        const a = this.app;
+        return (a.views || []).map((v, i) => ({ name: v.name, go: () => { a.viewIndex = i; a.jump(v); } }));
     }
 
-    setView(v) {
-        const c = this.app.camera;
-        c.pos = [...v.pos];
-        Object.assign(c, yawPitch(v.fwd));
-        if (v.fov) c.fov = v.fov;
+    // the terrain, on the map
+    ground(p) {
+        const f = this.app.world?.field;
+        return f && Math.max(Math.abs(p[0]), Math.abs(p[2])) <= f.size / 2 ? f.sample(p[0], p[2]) : null;
     }
 
     stats() {
@@ -87,5 +76,5 @@ class FeatureWorld {
     }
 }
 
-return { create: ctx => new FeatureWorld(ctx) };
+return { create: ctx => new WaterWorld(ctx) };
 });

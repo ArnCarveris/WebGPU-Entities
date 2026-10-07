@@ -2,9 +2,10 @@
 // Geometry: part shapes and the mesh builder that merges them per material.
 
 Features.part('imposter', (engine, feature) => {
-const { Common } = engine;
+const { Common, kits } = engine;
 const { v3 } = Common;
-const { VF, m4, rng, noise3 } = feature;
+const { seededRandom, valueNoise3 } = kits.noise;
+const { VF, m4 } = feature;
 
 // Geo: a shape in its own space (positions, normals, uv in metres, indices; CCW = front)
 class Geo {
@@ -100,7 +101,7 @@ const SHAPES = {
         }
         const g = new Geo();
         for (const p of P) {
-            const k = r * (1 + amp * noise3(p[0] * freq + 11, p[1] * freq, p[2] * freq, seed));
+            const k = r * (1 + amp * valueNoise3(p[0] * freq + 11, p[1] * freq, p[2] * freq, seed));
             g.vert(v3.mul(p, k), p, [(p[0] + p[2]) * k, p[1] * k]);
         }
         for (const f of F) g.tri(f[0], f[1], f[2]);
@@ -155,7 +156,7 @@ const SHAPES = {
     },
     // leaf cards scattered in an ellipsoid, normals bent outward so the clump lights like a volume
     foliage(d) {
-        const [rx, ry, rz] = d.radius || [1, 1, 1], cnt = d.count || 40, s = (d.card || 0.8) / 2, rnd = rng(d.seed || 1), g = new Geo();
+        const [rx, ry, rz] = d.radius || [1, 1, 1], cnt = d.count || 40, s = (d.card || 0.8) / 2, rnd = seededRandom(d.seed || 1), g = new Geo();
         for (let k = 0; k < cnt; k++) {
             let u;
             do { u = [rnd() * 2 - 1, rnd() * 2 - 1, rnd() * 2 - 1]; } while (v3.len(u) > 1);

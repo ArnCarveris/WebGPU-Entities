@@ -2,18 +2,18 @@
 // The player controller.
 
 Features.part('gui', (engine, feature) => {
+const { kits } = engine;
 const { V3, M4, clamp, wrapIndex, deg, rad } = GuiKit;
 
 // First-person player: movement, collision, footsteps and noise.
 
-class PlayerController {
+// Its view is a FirstPersonView (turning right with +yaw, 0.004 rad per pixel, pitch within 1.3 rad); its own fov is set
+// in degrees (fovDeg)
+class PlayerController extends kits.view.FirstPersonView {
     constructor(game, cfg) {
+        super({ pos: cfg.start.pos, yaw: cfg.start.yaw, pitch: cfg.start.pitch, fov: rad(cfg.fovDeg), turn: 'right', sensitivity: 0.004, pitchLimit: 1.3 });
         this.game = game;
         this.cfg = cfg;
-        this.pos = [...cfg.start.pos];
-        this.yaw = cfg.start.yaw;
-        this.pitch = cfg.start.pitch;
-        this.fovDeg = cfg.fovDeg;
         this.stepAccum = 0;
         this.stepPhase = 0;
         this.moving = false;
@@ -22,15 +22,10 @@ class PlayerController {
     }
 
     get eye() { return this.pos; }
-    get fovy() { return rad(this.fovDeg); }
+    get fovy() { return this.fov; }
+    get fovDeg() { return deg(this.fov); }
+    set fovDeg(v) { this.fov = rad(v); }
     get heading() { return wrapIndex(Math.round(deg(this.yaw)) % 360, 360); }
-
-    basis() {
-        const cp = Math.cos(this.pitch);
-        const fwd = [Math.sin(this.yaw) * cp, Math.sin(this.pitch), -Math.cos(this.yaw) * cp];
-        const right = V3.normalize([-fwd[2], 0, fwd[0]]);
-        return { fwd, right, up: V3.cross(right, fwd) };
-    }
 
     viewMatrix() {
         return M4.lookAt(this.pos, V3.add(this.pos, this.basis().fwd), [0, 1, 0]);
@@ -44,11 +39,6 @@ class PlayerController {
         const th = Math.tan(fovy / 2);
         const aspect = window.innerWidth / window.innerHeight;
         return [0, 1, 2].map((k) => fwd[k] + right[k] * nx * th * aspect + up[k] * ny * th);
-    }
-
-    look(dx, dy) {
-        this.yaw += dx * 0.004;
-        this.pitch = clamp(this.pitch - dy * 0.004, -1.3, 1.3);
     }
 
     stepForward(dist) {

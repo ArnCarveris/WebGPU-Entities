@@ -2,6 +2,8 @@
 // The phone pages (js/engine/handheld.js): the minimap, the readout and the visibility options of the portal world.
 
 Features.part('portal', (engine, feature) => {
+const { kits } = engine;
+const { Pages } = kits.world;
 const { MASK_MODES } = feature;
 
 // the readout, the minimap and every option, on the engine's handheld (js/engine/handheld.js)
@@ -16,7 +18,7 @@ function phonePages(g) {
                 { toggle: 'Minimap', on: o.map, set: v => { o.map = v; } },
                 { toggle: 'Whole island', on: o.island, set: v => { o.island = v; } }],
               footer: 'Portals: green passed, cyan sky only, amber culled, red closed, violet occluder.' }] },
-        { id: 'status', title: 'Status', sub: 'Visibility, traversal, player', icon: [[255, 149, 0], 'P'], sections: Handheld.panel(g.hud.lines) },
+        Pages.status('Visibility, traversal, player', [[255, 149, 0], 'P'], g.hud),
         { id: 'options', title: 'Portals', sub: `culling ${o.culling ? 'on' : 'off'} · ${o.mode} · ${o.walk ? 'walk' : 'fly'}`, icon: [[48, 176, 199], 'V'], sections: [
             { header: 'VISIBILITY', cells: [
                 { toggle: 'Portal culling', on: o.culling, set: key('Digit1') },
@@ -27,7 +29,6 @@ function phonePages(g) {
                 { toggle: 'Portal lines', on: o.portals, set: v => { o.portals = v; } },
                 { toggle: 'Area volumes', on: o.volumes, set: v => { o.volumes = v; } }] },
             { header: 'PLAYER', cells: [
-                { toggle: 'Walk (off: fly)', on: o.walk, set: key('KeyV') },
                 { action: 'Door at hand / the helm', run: key('KeyF') },
                 { action: 'Reset', run: key('KeyR') }] },
         ] },

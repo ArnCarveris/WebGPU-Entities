@@ -1,21 +1,13 @@
 'use strict';
-// Frustums: planes, box tests, polygon clipping and screen rectangles.
+// Frustums: box tests, polygon clipping and screen rectangles.
 
 Features.part('portal', (engine, feature) => {
 const { Common } = engine;
 const { v3 } = Common;
 
-// Frustum planes, AABB tests and polygon clipping.
+// AABB tests and polygon clipping against frustum planes (Common.frustumPlanes).
 // Planes are [nx, ny, nz, d]; a point is inside when dot(n, p) + d >= 0.
 
-function frustumPlanes(m) {
-    const row = i => [m[i], m[4 + i], m[8 + i], m[12 + i]];
-    const r0 = row(0), r1 = row(1), r2 = row(2), r3 = row(3);
-    const add = (a, b) => a.map((x, i) => x + b[i]), sub = (a, b) => a.map((x, i) => x - b[i]);
-    return [add(r3, r0), sub(r3, r0), add(r3, r1), sub(r3, r1), r2, sub(r3, r2)].map(p => {
-        const l = Math.hypot(p[0], p[1], p[2]); return p.map(x => x / l);
-    });
-}
 const planeDist = (p, v) => p[0] * v[0] + p[1] * v[1] + p[2] * v[2] + p[3];
 
 function aabbVisible(min, max, planes) {
@@ -90,7 +82,7 @@ const rectIntersect = (a, b) => { const r = [Math.max(a[0], b[0]), Math.max(a[1]
 const rectUnion = (a, b) => !a ? b.slice() : [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])];
 
 return {
-    frustumPlanes, planeDist, aabbVisible, aabbContained, classify, clipPoly3, planesFromHull, screenRect,
+    planeDist, aabbVisible, aabbContained, classify, clipPoly3, planesFromHull, screenRect,
     rectIntersect, rectUnion,
 };
 });

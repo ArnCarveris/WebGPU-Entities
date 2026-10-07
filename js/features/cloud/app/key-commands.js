@@ -4,8 +4,8 @@
 
 Features.part('cloud', (engine, feature) => {
 const { Common } = engine;
-const { DEG, clamp, v3 } = Common;
-const { RENDER_MODES, QUALITY, TIME_SCALES, RAIN_VARIANTS, fmtKm } = feature;
+const { DEG, clamp, v3, fmtKm } = Common;
+const { RENDER_MODES, QUALITY, TIME_SCALES, RAIN_VARIANTS } = feature;
 
 class KeyCommands {
     constructor(app) { this.app = app; }
@@ -41,7 +41,6 @@ class KeyCommands {
                     c.setWeather(names[(names.indexOf(wx.target) + 1) % names.length]);
                     break;
                 }
-                case 'KeyX': c.setWalk(!a.walker.active); break;
                 case 'KeyB':
                     // to the next bus of the fleet (each press another)
                     if (!w.buses.length) { a.hud.toast('No bus in this scenario'); break; }

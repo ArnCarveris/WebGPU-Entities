@@ -4,7 +4,7 @@
 Features.part('cloud', (engine, feature) => {
 const { Common } = engine;
 const { DEG, clamp } = Common;
-const { QUALITY, RENDER_MODES, RAIN_VARIANTS, BUS, WALK, BusLine, HURRICANE, Supercell, TORNADO } = feature;
+const { QUALITY, RENDER_MODES, RAIN_VARIANTS, BUS, WALK, HURRICANE, Supercell, TORNADO } = feature;
 
 class Controls {
     constructor(app) { this.app = app; }
@@ -50,7 +50,6 @@ class Controls {
         if (!a.views[i]) return;
         a.viewIndex = i;
         this.jump(a.views[i]);
-        a.menus.sync();
     }
 
     setQuality(i) {
@@ -90,26 +89,15 @@ class Controls {
         a.menus.sync();
     }
 
-    // to bus i: outside its front door while it stands at a stop, else aboard in the aisle
+    // to bus i (B): at its door (Bus.board)
     toBus(i) {
         const a = this.app, bus = a.world.buses[i];
         if (!bus) return;
         a.busPick = i;
-        const doorX = BUS.bay0 + (BUS.doorBays[0] + 0.5) * BUS.bay;
-        if (bus.mode === 'dwell') {
-            const p = bus.toWorld([doorX, 0, BUS.hw + 1.2]);
-            a.walker.place(a, p[0], p[2], p[1]);
-            a.walker.eye(a);
-            a.camera.lookAt(bus.toWorld([doorX, 1.5, 0]));
-        } else {
-            a.walker.place(a, bus.pose.x, bus.pose.z);
-            Object.assign(a.walker, { bus, seat: null, feet: [-1.0, BUS.floor, 0], busYaw: bus.yaw });
-            a.camera.yaw = bus.yaw;
-        }
-        a.camera.pitch = 0;
+        a.walker.active = false;
+        bus.board(a, 'door');
         a.reset = true;
         a.hud.toast(`${bus.label}: ${bus.describe()}`);
-        a.menus.sync();
     }
 
     setWeather(name) {
@@ -150,18 +138,16 @@ class Controls {
         a.hud.toast(host ? `${TORNADO[cat].name} tornado under ${host.def.label || host.id}` : `${TORNADO[cat].name} tornado: waiting for a supercell`);
     }
 
-    jump(v) {
-        const a = this.app, cam = a.camera, e = v.follow && a.world.get(v.follow);
+    // to view v (cloud.view): its pos / look, or on what it follows (the entity `follow`, or `member` of it): boarding it
+    // (board(app, spot): a bus's seat or door), at a spot it laid out (a village's bus stop), or offset from its focus
+    jump(v, member = null) {
+        const a = this.app, cam = a.camera, e = member || (v.follow && a.world.get(v.follow));
         a.walker.active = false;
         // a view on a hidden persistent cloud shows it, and J then toggles it
         const pick = a.clouds.persistent.indexOf(e);
         if (pick >= 0) a.clouds.set(pick, true, false);
-        if (v.spot === 'seat' && e instanceof BusLine) {
-            // aboard the bus, in a seat
-            a.walker.sit(a, e.buses[0]);
-            a.walker.eye(a);
-        } else if (v.spot && e?.spots?.[v.spot]) {
-            // a viewpoint the entity laid out (a village's bus stop)
+        if (e?.board) e.board(a, v.spot);
+        else if (v.spot && e?.spots?.[v.spot]) {
             cam.pos = [...e.spots[v.spot].pos];
             cam.lookAt(e.spots[v.spot].look);
         } else if (e?.focus) {
@@ -180,7 +166,7 @@ class Controls {
         if (v.weather) a.world.weather.set(v.weather);
         if (v.hurricane !== undefined && v.hurricane !== a.world.hurricaneCat) this.setHurricane(v.hurricane);
         a.reset = true;
-        a.hud.toast(v.name);
+        a.hud.toast(member ? `${member.label}: ${member.describe?.() ?? ''}` : v.name);
     }
 }
 

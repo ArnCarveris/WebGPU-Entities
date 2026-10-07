@@ -2,6 +2,7 @@
 // One camera for every world of a composition.
 //
 //   camera { controller: "fly", pos, look, fov, speed }    the engine flies it (WASD, drag, wheel, Space / C)
+//   camera { ..., mode: "walk" }                           ... walking (H switches): on the ground of every shown world
 //   camera { from: "<world id>" }                         that world's own camera (walk, fly, ride...) drives it
 //   camera { from: ["a", "b"], carry }                    ... several: giving one the keys (`) gives it the camera too,
 //                                                         from where the camera is (carry, default) or where it was
@@ -48,69 +49,29 @@ class LayerFrame {
         return { pos: M.qRotate(iq, M.sub(view.pos, this.pos)), fwd: M.qRotate(iq, view.fwd), up: M.qRotate(iq, view.up), fov: view.fov };
     }
 
+    // a point of this frame in composition space, and back
+    point(p) { return CamMath.add(this.pos, CamMath.qRotate(this.q, p)); }
+    local(p) { return CamMath.qRotate(CamMath.qConj(this.q), CamMath.sub(p, this.pos)); }
+
     // this frame placed in a parent frame
     within(parent) {
         return new LayerFrame(CamMath.add(parent.pos, CamMath.qRotate(parent.q, this.pos)), CamMath.qMul(parent.q, this.q));
     }
 }
 
-// the engine's own free camera
+// the engine's own camera (camera { controller: "fly" }): a FirstPersonView (kits.view, an engine kit) driven by
+// PointerInput, flying or walking on floor(x, y, z) (composition space: every shown world's ground, Host.floorAt)
 class FlyCamera {
-    constructor(def, io) {
-        this.pos = [...(def.pos || [0, 100, 0])];
-        this.yaw = 0;
-        this.pitch = 0;
-        this.fov = (def.fov || 60) * Math.PI / 180;
-        this.speed = def.speed || 60;
-        this.keys = new Set();
-        this.drag = false;
-        this.dx = this.dy = this.wheel = 0;
-        if (def.look) this.lookAt(def.look);
-        const c = io.canvas;
-        io.listen(c, 'pointerdown', e => { if (e.button === 0 && !e.ctrlKey) this.drag = true; });
-        io.listen(c, 'pointermove', e => { if (this.drag) { this.dx += e.movementX; this.dy += e.movementY; } });
-        io.listen(window, 'pointerup', () => { this.drag = false; });
-        io.listen(c, 'wheel', e => { this.wheel += Math.sign(e.deltaY); });
-        io.listen(window, 'keydown', e => this.keys.add(e.code));
-        io.listen(window, 'keyup', e => this.keys.delete(e.code));
-        io.listen(window, 'blur', () => { this.keys.clear(); this.drag = false; });
+    constructor(def, io, floor) {
+        this.eye = new Features.kits.view.FirstPersonView({ pos: def.pos || [0, 100, 0], fov: (def.fov || 60) * Math.PI / 180,
+            speed: def.speed || 60, wheel: { step: 1.2, min: 1, max: 20000 } });
+        this.input = new Common.PointerInput(io);
+        this.floor = floor;
+        if (def.look) this.eye.lookAt(def.look);
     }
 
-    lookAt(target) {
-        Object.assign(this, Common.yawPitch(CamMath.norm(CamMath.sub(target, this.pos))));
-    }
+    update(dt) { this.eye.control(dt, this.input.consume(), this.input.keys, this.floor); }
 
-    basis() {
-        const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw), cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
-        const fwd = [-sy * cp, sp, -cy * cp], right = [cy, 0, -sy];
-        return { fwd, right, up: CamMath.cross(right, fwd) };
-    }
-
-    update(dt) {
-        this.yaw -= this.dx * 0.0025;
-        this.pitch = Math.max(-1.55, Math.min(1.55, this.pitch - this.dy * 0.0025));
-        this.dx = this.dy = 0;
-        if (this.wheel) { this.speed = Math.max(1, Math.min(20000, this.speed * Math.pow(1.2, -this.wheel))); this.wheel = 0; }
-        const k = this.keys, { fwd, right } = this.basis();
-        let m = [0, 0, 0];
-        if (k.has('KeyW')) m = CamMath.add(m, fwd);
-        if (k.has('KeyS')) m = CamMath.sub(m, fwd);
-        if (k.has('KeyD')) m = CamMath.add(m, right);
-        if (k.has('KeyA')) m = CamMath.sub(m, right);
-        if (k.has('Space')) m[1] += 1;
-        if (k.has('KeyC')) m[1] -= 1;
-        const mul = k.has('ShiftLeft') || k.has('ShiftRight') ? 5 : 1;
-        this.pos = CamMath.add(this.pos, CamMath.mul(m, this.speed * mul * dt));
-    }
-
-    get view() {
-        const { fwd, up } = this.basis();
-        return { pos: [...this.pos], fwd, up, fov: this.fov };
-    }
-
-    set view(v) {
-        this.pos = [...v.pos];
-        Object.assign(this, Common.yawPitch(v.fwd));
-        if (v.fov) this.fov = v.fov;
-    }
+    get view() { return this.eye.view; }
+    set view(v) { this.eye.setView(v); }
 }

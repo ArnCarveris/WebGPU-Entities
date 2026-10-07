@@ -3,9 +3,9 @@
 
 Features.part('imposter', (engine, feature) => {
 const { Common } = engine;
-const { lerp, v3 } = Common;
+const { lerp, v3, fmtK } = Common;
 const {
-    INSTANCE_FLOATS, FORCE, LOD_MODES, ATLAS_VIEWS, nextFrame, fmtK, quat, Oct, ModelLibrary, GltfLoader, ObjLoader,
+    INSTANCE_FLOATS, FORCE, LOD_MODES, ATLAS_VIEWS, nextFrame, quat, Oct, ModelLibrary, GltfLoader, ObjLoader,
     ImposterBaker, Renderer, Lighting, World, FlyCamera, InputSystem, Hud, ControlPanel,
 } = feature;
 

@@ -2,8 +2,10 @@
 // The app: the simulation and render loop, input and the camera.
 
 Features.part('water', (engine, feature) => {
-const { Common } = engine;
-const { DEG, clamp, v3, m4, PointerInput, TerrainFlyCamera } = Common;
+const { Common, kits } = engine;
+const { DEG, clamp, v3, m4, PointerInput } = Common;
+const { FirstPersonView } = kits.view;
+const SLOW_ALT = { keys: ['AltLeft'], factor: 0.2 };       // Alt held: a fifth of the speed
 const {
     NEAR, RENDER_MODES, WATER_DEFAULTS, Dam, World, FlowSim, WaveCascade, DebrisSystem, Renderer, TOOL_TYPES, Hud,
 } = feature;
@@ -15,7 +17,7 @@ class App {
         this.renderer = new Renderer(fx);
         this.input = new PointerInput(fx.io);
         this.hud = new Hud(fx.ui);
-        this.camera = new TerrainFlyCamera();
+        this.camera = new FirstPersonView({ pos: [0, 200, 0], speed: 80, wheel: { step: 1.2, min: 2, max: 2000 }, clearance: 2, slow: SLOW_ALT });
         this.time = 0;
         this.paused = false;
         this.fps = 60;
@@ -142,7 +144,7 @@ class App {
             if (!this.paused) this.time += dt;
             const io = this.input.consume();
             this.handleKeys(io.pressed);
-            if (!this.fx.cameraLocked) this.camera.update(dt, io, this.input, w.field);
+            if (!this.fx.cameraLocked) this.camera.control(dt, io, this.input.keys, this.fx.floor);
 
             // cursor ray -> terrain, tools
             const rect = this.canvas.getBoundingClientRect();

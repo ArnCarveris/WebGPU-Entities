@@ -1,11 +1,10 @@
 'use strict';
-// Small helpers: yielding a frame, number and path formatting, colour conversion.
+// Small helpers: yielding a frame, path names, colour conversion.
 
 Features.part('imposter', (engine, feature) => {
 const sgn = x => (x >= 0 ? 1 : -1);
 // yield to the browser (lets a toast paint); the timer covers background tabs, where rAF is paused
 const nextFrame = () => new Promise(r => { requestAnimationFrame(r); setTimeout(r, 50); });
-const fmtK = n => (n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'k' : String(Math.round(n)));
 const basename = p => p.split(/[\\/]/).pop();
 
 function srgbToLinear(c) { return c.map(x => (x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4))); }
@@ -17,5 +16,5 @@ function hexToSrgb(h) {
 }
 const lin = h => srgbToLinear(hexToSrgb(h));
 
-return { sgn, nextFrame, fmtK, basename, srgbToLinear, lin };
+return { sgn, nextFrame, basename, srgbToLinear, lin };
 });

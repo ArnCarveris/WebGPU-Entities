@@ -143,6 +143,8 @@ class Host {
         const scenario = this.scenario = await this.loadScenario(id);
         document.title = `${scenario.name} · WebGPU Entities`;
         await this.initGpu();
+        this.engine = { Expr, GpuChoice, Common, CamMath, LayerFrame, host: this, kits: Features.kits };
+        for (const k of Features.ENGINE_KITS) await Features.loadKit(k, this.engine);
         await this.handheld.init(scenario);
         await this.createWorlds(scenario);
         this.configure(scenario);
@@ -168,7 +170,7 @@ class Host {
     async createWorlds(scenario) {
         const roots = ScenarioFormat.roots(scenario);
         if (!roots.length) throw new Error(`Scenario "${scenario.name}" has no feature world (an entity of type ${Object.keys(ScenarioFormat.SCHEMAS).join(' / ')})`);
-        const engine = { Expr, GpuChoice, Common, CamMath, LayerFrame, host: this };
+        const engine = this.engine;
         this.composed = roots.length > 1;
         for (const root of roots) {
             const module = await Features.load(root.feature, engine);
@@ -214,6 +216,7 @@ class Host {
             toast: (msg, ms) => this.hud.toast(msg, ms),
             sound: { toggle: () => this.audio.toggle() },
             fail: err => showFallback(err),
+            floor: (x, y, z) => this.floorIn(inst, x, y, z),
         };
         inst.world = module.create(ctx);
         ui.innerHTML = inst.world.hudHtml || '';
@@ -226,7 +229,7 @@ class Host {
         const cam = this.cameraDef = ents.find(e => e.type === 'camera') || {};
         this.owners = [];
         if (cam.controller === 'fly') {
-            this.fly = new FlyCamera(cam, this.router.scope('engine'));
+            this.fly = new FlyCamera(cam, this.router.scope('engine'), (x, y, z) => this.floorAt(x, y, z));
             this.router.always.add('engine');
         } else if (cam.from) {
             this.owners = [].concat(cam.from).map(id => this.instances.find(i => i.id === id)).filter(Boolean);
@@ -235,6 +238,7 @@ class Host {
         // each camera world's own view, for taking the camera back where it left it (carry false)
         for (const o of this.owners) o.savedView = o.world.view;
         this.setCameraOwner(this.owners[0] || null);
+        if (cam.mode) this.setMove(cam.mode, false);
         const focus = this.instances.find(i => i.layer.focus) || this.cameraOwner || this.instances[0];
         this.focusInstance(focus);
         this.router.onFocus = () => this.refreshHuds();
@@ -243,6 +247,7 @@ class Host {
             if (e.target instanceof Element && e.target.closest('.engine-ui')) return;
             this.audio.start();
             if (e.code === 'Backquote' && this.instances.length > 1) this.cycleFocus();
+            else if (e.code === 'KeyH' && !e.repeat) this.setMove(this.move === 'walk' ? 'fly' : 'walk');
         });
         window.addEventListener('pointerdown', () => this.audio.start());
         // links between worlds
@@ -261,8 +266,44 @@ class Host {
 
     // ------------------------------------------------------------------------------------------- worlds
     setCameraOwner(inst) {
+        const mode = this.cameraOwner && this.move;
         this.cameraOwner = inst;
         for (const i of this.instances) i.ctx.cameraLocked = !!this.fly || (inst ? i !== inst : false);
+        // the new camera world goes on walking (or flying) if it can
+        if (mode && this.moves.includes(mode) && this.move !== mode) this.setMove(mode, false);
+    }
+
+    // ------------------------------------------------------------------------------------------- walk / fly
+    // The camera's mode, the engine's to switch (H, the handheld, camera.mode): the engine's camera walks on every shown
+    // world's ground; a world with the camera walks its own way (FeatureWorld.moves / move / setMove), on fx.floor
+    get moves() { return this.fly ? ['fly', 'walk'] : this.cameraOwner?.world.moves || ['fly']; }
+    get move() { return this.fly ? this.fly.eye.mode : this.cameraOwner?.world.move || 'fly'; }
+
+    setMove(mode, say = true) {
+        if (!this.moves.includes(mode)) { if (say) this.hud.toast(`${this.cameraOwner?.label || 'This camera'} cannot ${mode}`, 1500); return; }
+        if (this.fly) this.fly.eye.setMode(mode);
+        else this.cameraOwner.world.setMove(mode);
+        if (say) this.hud.toast(mode === 'walk' ? 'Walking' : 'Flying', 1200);
+    }
+
+    // the floor at composition-space point (x, y, z): the highest thing to stand on at or below y over every shown
+    // world (each world's ground(), in its own frame), or -Infinity
+    floorAt(x, y, z) {
+        let best = -Infinity;
+        for (const i of this.instances) {
+            if (!i.visible || !i.world.ground) continue;
+            const F = this.frameOf(i), lp = F.local([x, y, z]), g = i.world.ground(lp);
+            if (g == null || g === -Infinity) continue;
+            const h = F.point([lp[0], g, lp[2]])[1];
+            if (h > best) best = h;
+        }
+        return best;
+    }
+
+    // ... at a point of inst's frame, in its frame (fx.floor)
+    floorIn(inst, x, y, z) {
+        const F = this.frameOf(inst), w = F.point([x, y, z]), g = this.floorAt(w[0], w[1], w[2]);
+        return g === -Infinity ? g : F.local([w[0], g, w[2]])[1];
     }
 
     focusInstance(inst) {
@@ -325,6 +366,33 @@ class Host {
         if (this.fly) return this.fly.view;
         const o = this.cameraOwner, v = o?.world.view;
         return v ? this.frameOf(o).toWorld(v) : null;
+    }
+
+    // Every view of the scenario, for the handheld's View: its `view` entities (composition space), then each world's own
+    // (FeatureWorld.views: static ones, and one per member of a followed entity), each { key, name, sub, group, go }
+    get viewList() {
+        const out = (this.scenario?.entities || []).filter(e => e.type === 'view')
+            .map((v, i) => ({ key: `engine/${i}`, name: v.name || `view ${i + 1}`, group: this.scenario.name, go: () => this.jumpView(v) }));
+        for (const inst of this.instances) {
+            let list = [];
+            try { list = inst.world.views?.() || []; } catch (err) { console.warn(`${inst.id}: views()`, err); }
+            list.forEach((v, i) => out.push({ ...v, key: `${inst.id}/${v.key ?? i}`, group: inst.label, inst }));
+        }
+        return out;
+    }
+
+    // go to a view of viewList: a world's view moves its camera (it takes the camera when it can); a world that can't
+    // hand the camera on (an atmosphere) has its view copied to the camera
+    goView(v) {
+        const inst = v.inst;
+        if (inst && this.owners.includes(inst) && inst !== this.cameraOwner) this.focusInstance(inst);
+        v.go();
+        this.viewKey = v.key;
+        if (inst && inst !== this.cameraOwner && inst.world.view) {
+            const view = this.frameOf(inst).toWorld(inst.world.view);
+            if (this.fly) this.fly.view = view;
+            else if (this.cameraOwner) this.setView(this.cameraOwner, view);
+        }
     }
 
     // a view entity: the camera there, looking at `look`

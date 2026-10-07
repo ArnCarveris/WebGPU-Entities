@@ -2,6 +2,8 @@
 // WGSL: the paint stamp the easel's brush draws with.
 
 Features.part('gui', (engine, feature) => {
+const { kits } = engine;
+const { NoiseWGSL } = kits.noise;
 // Brush stamping: every dab is an instanced quad drawn into the paint render target. The brush type
 // picks the dab's shape; flow is how much paint one dab lays down.
 const stampShader = (width, height) => /* wgsl */`
@@ -19,9 +21,7 @@ const stampShader = (width, height) => /* wgsl */`
     };
     const SIZE = vec2f(${width}.0, ${height}.0);
 
-    fn hash(p : vec2f) -> f32 {
-        return fract(sin(dot(p, vec2f(127.1, 311.7))) * 43758.5453);
-    }
+${NoiseWGSL.hashSin2('hash')}
 
     @vertex
     fn vs_stamp(@builtin(vertex_index) vi : u32, d : Dab) -> O {

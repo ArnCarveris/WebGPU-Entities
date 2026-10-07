@@ -4,8 +4,10 @@
 // uniform.
 
 Features.part('cloud', (engine, feature) => {
-const { GpuChoice, Common } = engine;
-const { clamp, v3, PointerInput, TerrainFlyCamera } = Common;
+const { GpuChoice, Common, kits } = engine;
+const { clamp, v3, PointerInput } = Common;
+const { FirstPersonView } = kits.view;
+const SLOW_ALT = { keys: ['AltLeft'], factor: 0.2 };       // Alt held: a fifth of the speed
 const {
     SPLASH_PARTICLES, RENDER_DEFAULTS, QUALITY, World, Renderer, Walker, Hud, AppMenus, CloudPicker, Controls,
     KeyCommands, DoorControl, Surroundings, SoundEvents, LightWriter, FrameWriter,
@@ -18,7 +20,7 @@ class App {
         this.renderer = new Renderer(fx);
         this.input = new PointerInput(fx.io);
         this.hud = new Hud(fx.ui);
-        this.camera = new TerrainFlyCamera({ pos: [0, 3000, 0], speed: 400, wheelStep: 1.25, minSpeed: 5, maxSpeed: 20000, clearance: 1.5, ceiling: 25000 });
+        this.camera = new FirstPersonView({ pos: [0, 3000, 0], speed: 400, wheel: { step: 1.25, min: 5, max: 20000 }, clearance: 1.5, ceiling: 25000, slow: SLOW_ALT });
         this.walker = new Walker();
         this.time = 0;
         this.weatherTime = 0;
@@ -88,7 +90,7 @@ class App {
             this.keys.handle(io.pressed);
             this.keys.clicks(io.clicks);
             const before = this.lastCam || [...this.camera.pos];
-            if (!this.walker.active && !locked) this.camera.update(dt, io, this.input, w.field);
+            if (!this.walker.active && !locked) this.camera.control(dt, io, this.input.keys, this.fx.floor);
             this.keys.sun(dt);
 
             const wdt = this.wdt = this.paused ? 0 : dt * this.timeScale;

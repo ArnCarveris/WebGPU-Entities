@@ -2,9 +2,10 @@
 // Floating debris on the GPU.
 
 Features.part('water', (engine, feature) => {
-const { Common } = engine;
-const { mulberry32, makeBuffer } = Common;
-const { MAX_PARTICLES, WGSL_DEBRIS_SIM, BU, makeLayout, makeGroup } = feature;
+const { Common, kits } = engine;
+const { makeBuffer, bindLayout, bindGroup } = Common;
+const { mulberry32 } = kits.noise;
+const { MAX_PARTICLES, WGSL_DEBRIS_SIM, BU } = feature;
 
 class DebrisSystem {
     constructor(device, flow, world) {
@@ -28,11 +29,11 @@ class DebrisSystem {
         this.emitters = makeBuffer(device, emData.byteLength, B.STORAGE, emData);
         this.uniform = new ArrayBuffer(32);
         this.buf = makeBuffer(device, 32, B.UNIFORM | B.COPY_DST);
-        const layout = makeLayout(device, GPUShaderStage.COMPUTE, ['uniform', 'storage', 'read', 'tex', 'sampler', 'tex:unfilterable-float', 'tex:unfilterable-float']);
+        const layout = bindLayout(device, GPUShaderStage.COMPUTE, ['uniform', 'storage', 'read', 'tex', 'sampler', 'tex:unfilterable-float', 'tex:unfilterable-float']);
         const module = device.createShaderModule({ label: 'debris', code: WGSL_DEBRIS_SIM });
         this.pipe = device.createComputePipeline({ layout: device.createPipelineLayout({ bindGroupLayouts: [layout] }), compute: { module, entryPoint: 'updateDebris' } });
         const sampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' });
-        this.group = makeGroup(device, layout, [this.buf, this.particles, this.emitters, flow.flow.createView(), sampler, flow.surf.createView(), flow.terrain.createView()]);
+        this.group = bindGroup(device, layout, [this.buf, this.particles, this.emitters, flow.flow.createView(), sampler, flow.surf.createView(), flow.terrain.createView()]);
         this.field = world.field;
         this.minDepth = flow.cfg.minDepth;
     }

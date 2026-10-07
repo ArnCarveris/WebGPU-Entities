@@ -2,6 +2,8 @@
 // The phone pages (js/engine/handheld.js): the readout, the tools and every option of the water world.
 
 Features.part('water', (engine, feature) => {
+const { kits } = engine;
+const { Pages } = kits.world;
 const { RENDER_MODES, Dam } = feature;
 
 // the readout and every option, on the engine's handheld (js/engine/handheld.js)
@@ -11,7 +13,7 @@ function phonePages(a) {
     const key = code => () => a.handleKeys([code]);
     const dams = w.entities.filter(e => e instanceof Dam);
     return [
-        { id: 'status', title: 'Status', sub: 'Flow sim, water, waves, debris', icon: [[0, 122, 255], 'W'], sections: Handheld.panel(a.hud.lines) },
+        Pages.status('Flow sim, water, waves, debris', [[0, 122, 255], 'W'], a.hud),
         { id: 'options', title: 'Options', sub: `${a.tool ? a.tool.name : 'no tool'} · ${RENDER_MODES[a.mode]} · ${a.lightName}`, icon: [[48, 176, 199], 'O'], sections: [
             { header: 'TOOL', cells: [
                 a.tools.length && { choice: 'Tool', options: a.tools.map(t => ({ label: t.name, sub: `key ${t.key}` })), index: a.tools.indexOf(a.tool),
@@ -24,12 +26,11 @@ function phonePages(a) {
                 dams.length && { toggle: 'Dams breached', on: dams.some(d => d.target), set: key('KeyX') },
                 { action: 'Reset water', run: key('KeyN') },
                 { slider: 'Sim steps / frame', value: a.stepsPerFrame, min: 0, max: 256, fmt: v => v.toFixed(0), set: v => { a.stepsPerFrame = Math.round(v); } },
-                { toggle: 'Paused', on: a.paused, set: v => { a.paused = v; } }] },
+                Pages.paused(a)] },
             { header: 'VIEW', cells: [
                 { choice: 'Render', options: RENDER_MODES, index: a.mode, pick: i => { a.mode = i; } },
                 a.lightNames.length > 1 && { choice: 'Lighting', options: a.lightNames, index: a.lightNames.indexOf(a.lightName), pick: i => a.setLight(a.lightNames[i]) },
-                a.views.length && { choice: 'View', options: a.views.map(v => v.name), index: a.viewIndex, pick: i => { a.viewIndex = i; a.jump(a.views[i]); } },
-                { toggle: 'Labels', on: a.hud.showLabels, set: v => { a.hud.showLabels = v; } }] },
+                Pages.labels(a.hud)] },
         ] },
     ];
 }

@@ -102,9 +102,9 @@ class RainZones {
 
     // the route of `along` (a bus line): its path from the station out to the turn
     build(spec) {
-        const line = this.world.get(spec.along);
+        const line = this.world.get(spec.along)?.line;
         this.pts = [];
-        if (!line?.path) return;
+        if (!line) return;
         const half = line.len / 2;
         for (let s = 0; s <= half && this.pts.length < MAX_RAIN_ZONES; s += ZONE_STEP) {
             const p = line.at(s), a = line.at(s - 20), b = line.at(s + 20), l = Math.hypot(b[0] - a[0], b[2] - a[2]) || 1;

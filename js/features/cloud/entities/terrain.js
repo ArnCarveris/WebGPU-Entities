@@ -2,8 +2,9 @@
 // Entities that stamp the terrain and paint land use (and the Entity base every entity extends).
 
 Features.part('cloud', (engine, feature) => {
-const { Common } = engine;
-const { lerp, smoothstep, fbm, polylineLengths, polylineNearest, polylineBox } = Common;
+const { Common, kits } = engine;
+const { lerp, smoothstep, polylineLengths, polylineNearest, polylineBox } = Common;
+const { fbm } = kits.noise;
 
 // Entities
 // Built from scenario definitions ({ type, id, label, ... }) in order. Hooks, all optional:
@@ -13,23 +14,14 @@ const { lerp, smoothstep, fbm, polylineLengths, polylineNearest, polylineBox } =
 //   update(dt, wdt, t)    per frame; dt real seconds, wdt weather seconds
 //   cell()                per frame: a storm cell for the GPU ({ x, z, radius, top, coverage, precip, seed, virga, core }) or null
 // Entities may set `dead` to be removed after the frame.
-class Entity {
+class Entity extends kits.terrain.TerrainEntity {
     constructor(def, world) {
-        this.def = def;
-        this.world = world;
-        this.id = def.id || null;
-        this.label = def.label || '';
+        super(def, world);
         this.dead = false;
     }
 
-    // label anchor in world space
-    get anchor() {
-        const p = this.def.labelPos || this.def.pos;
-        if (!p) return null;
-        return [p[0], this.world.field.sample(p[0], p[1]) + (this.def.labelHeight ?? 300), p[1]];
-    }
+    get labelLift() { return 300; }
 
-    stamp(field) {}
     build(structures) {}
     spawn() {}
     features(out) {}
@@ -39,34 +31,7 @@ class Entity {
 
 // --- terrain features
 
-// global slope along `dir` (downhill): the far side is `drop` metres lower than the near side
-class Tilt extends Entity {
-    stamp(f) {
-        const [dx, dz] = this.def.dir || [0, 1], l = Math.hypot(dx, dz) || 1, drop = this.def.drop || 0;
-        f.eachAll((idx, x, z) => { f.h[idx] -= drop * (x * dx + z * dz) / l / f.size; });
-    }
-}
-
-class Hills extends Entity {
-    stamp(f) {
-        const d = this.def, s = d.scale || 400, amp = d.amplitude || 20, opt = { octaves: d.octaves || 5, seed: d.seed || 1, ridged: !!d.ridged };
-        f.eachAll((idx, x, z) => { f.h[idx] += amp * fbm(x / s, z / s, opt); });
-    }
-}
-
-class Mountain extends Entity {
-    get anchor() { const p = this.def.pos; return [p[0], this.world.field.sample(p[0], p[1]) + 400, p[1]]; }
-    stamp(f) {
-        const d = this.def, [cx, cz] = d.pos, r = d.radius, hgt = d.height, rough = d.roughness ?? 0.4, seed = d.seed || 3;
-        f.each(cx - r, cz - r, cx + r, cz + r, (idx, x, z) => {
-            const t = Math.hypot(x - cx, z - cz) / r;
-            if (t >= 1) return;
-            const shape = Math.pow(1 - smoothstep(0, 1, t), 1.6);
-            const ridge = fbm(x / (r * 0.35), z / (r * 0.35), { octaves: 5, seed, ridged: true });
-            f.h[idx] += hgt * shape * (1 - rough + rough * 1.6 * ridge);
-        });
-    }
-}
+const { Tilt, Hills, Mountain } = kits.terrain.terrainStamps(Entity, { peakLabel: 100 });
 
 // mountain range along a polyline: a ridged massif `width` wide, `height` above the plain
 class Range extends Entity {

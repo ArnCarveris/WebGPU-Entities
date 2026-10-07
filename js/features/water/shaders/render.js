@@ -2,6 +2,8 @@
 // WGSL: the render passes: sky and terrain, then the water surface and debris.
 
 Features.part('water', (engine, feature) => {
+const { kits } = engine;
+const { NoiseWGSL } = kits.noise;
 const WGSL_COMMON = /* wgsl */`
 struct Frame {
     viewProj: mat4x4f,
@@ -58,24 +60,8 @@ fn wetAt(xz: vec2f) -> f32 {
 }
 fn flowAt(xz: vec2f) -> vec4f { return textureSampleLevel(flowTex, linSamp, simUV(xz), 0.0); }
 
-fn hash21(p: vec2f) -> f32 {
-    var q = fract(p * vec2f(123.34, 456.21));
-    q += dot(q, q + 45.32);
-    return fract(q.x * q.y);
-}
-// value noise with its analytic gradient: (value, d/dx, d/dy)
-fn noised(p: vec2f) -> vec3f {
-    let i = floor(p);
-    let f = p - i;
-    let u = f * f * (3.0 - 2.0 * f);
-    let du = 6.0 * f * (1.0 - f);
-    let a = hash21(i);
-    let b = hash21(i + vec2f(1.0, 0.0));
-    let c = hash21(i + vec2f(0.0, 1.0));
-    let d = hash21(i + vec2f(1.0, 1.0));
-    let k = a - b - c + d;
-    return vec3f(a + (b - a) * u.x + (c - a) * u.y + k * u.x * u.y, du * (vec2f(b - a, c - a) + k * u.yx));
-}
+${NoiseWGSL.hashFract2('hash21')}
+${NoiseWGSL.value2Grad('noised', 'hash21')}
 
 fn skyColor(d: vec3f) -> vec3f {
     var c = mix(F.skyHorizon.rgb, F.skyTop.rgb, pow(clamp(d.y, 0.0, 1.0), 0.5));

@@ -73,7 +73,6 @@ class Game {
             case 'Digit6': o.occluders = !o.occluders; hud.toast(`Occluders ${o.occluders ? 'ON' : 'OFF'}`); break;
             case 'KeyM': o.map = !o.map; break;
             case 'KeyR': if (P.driving) hud.toast(P.toggleHelm()); P.cam.reset(); P.reset(P.cam.pos); break;
-            case 'KeyV': if (P.driving) hud.toast(P.toggleHelm()); o.walk = !o.walk; if (o.walk) P.reset(P.cam.pos); hud.toast(o.walk ? 'Walk mode' : 'Fly mode (noclip)'); break;
             case 'KeyN': o.island = !o.island; break;
             case 'KeyF': { const msg = P.toggleHelm(); if (msg) hud.toast(msg); else this.useDoor(); break; }
         }

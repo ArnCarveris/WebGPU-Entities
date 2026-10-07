@@ -1,66 +1,22 @@
 'use strict';
-// The HUD: in-world readouts and menus.
+// The HUD: in-world labels and the readout.
 
 Features.part('cloud', (engine, feature) => {
-const { Common } = engine;
-const { DEG, v3, Toast, LabelLayer } = Common;
-const { fmtKm, StormCell } = feature;
+const { Common, kits } = engine;
+const { DEG, v3, fmtKm } = Common;
+const { StormCell } = feature;
 
 // what falling rain is called: by its rate (near-field intensity) and how fine its drops are
 const rainName = (rate, drops) => drops < 0.2 && rate < 0.3 ? 'drizzle' : rate < 0.3 ? 'light rain' : rate < 0.7 ? 'moderate rain'
     : rate <= 1 ? 'heavy rain' : drops > 0.9 ? 'downpour' : 'torrential rain';
 
-// a menu of this world's options as data: radio items (pick one), check items (any number on) and info items, with a
-// summary; the engine's handheld shows them (Menu.cells, FeatureWorld.handheld)
-class Menu {
-    constructor(name, title) {
-        this.name = name;
-        this.title = title;
-        this.summary = '';
-        this.items = [];
-        this.shown = true;
-    }
-
-    // items: { label, kind: 'radio' | 'check', on, key (its shortcut), pick }, { label, kind: 'info', key (its value) } or
-    // { sep: true }
-    set(summary, items, shown = true) {
-        this.summary = summary;
-        this.items = items;
-        this.shown = shown;
-    }
-
-    // as handheld cells: the radio items one choice, each check item a toggle, each info item a label
-    cells(title, { radios = true } = {}) {
-        if (!this.shown) return [];
-        const radio = this.items.filter(i => i.kind === 'radio'), out = [];
-        if (radios && radio.length) {
-            out.push({ choice: title, options: radio.map(r => ({ label: r.label, sub: r.key || undefined })), index: radio.findIndex(r => r.on),
-                value: this.summary, pick: i => radio[i].pick() });
-        }
-        for (const it of this.items) {
-            if (it.kind === 'check') out.push({ toggle: it.label, on: !!it.on, set: () => it.pick() });
-            else if (it.kind === 'info') out.push({ label: it.label, value: it.key || '' });
-        }
-        return out;
-    }
-}
-
 // The screen keeps the in-world labels, the walker's dot and toasts; the readout (lines) and every option (the menus)
 // are on the engine's handheld (FeatureWorld.handheld)
-class Hud {
-    constructor(ui) {
-        this.lines = [];
-        this.toaster = new Toast(ui.$('toast'));
-        this.labels = new LabelLayer(ui.$('labels'));
-        this.showLabels = true;
-        this.last = 0;
-    }
-
-    toast(msg, ms) { this.toaster.show(msg, ms); }
+class Hud extends kits.world.WorldHud {
+    constructor(ui) { super(ui, { labels: true }); }
 
     update(app, now) {
-        if (now - this.last < 150) return;
-        this.last = now;
+        if (!this.due(now)) return;
         const w = app.world, wx = w.weather, c = wx.cur, p = app.near;
         const storms = w.storms, raining = storms.filter(s => s.state.precip > 0.05 && s.state.virga < 0.7).length;
         const wind = Math.hypot(...c.wind), dirDeg = (Math.atan2(c.wind[0], -c.wind[1]) / DEG + 360) % 360;
@@ -120,5 +76,5 @@ class Hud {
     }
 }
 
-return { Menu, Hud };
+return { Hud };
 });

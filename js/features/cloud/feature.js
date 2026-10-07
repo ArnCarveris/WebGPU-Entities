@@ -35,26 +35,15 @@
 // the sky populated.
 
 Features.part('cloud', (engine, feature) => {
-const { Common } = engine;
-const { yawPitch } = Common;
+const { kits } = engine;
+const { FeatureWorld } = kits.world, { HUD } = FeatureWorld;
 const { NEAR, QUALITY, App, phonePages } = feature;
 
-// This demo as one world of the engine (js/engine/host.js calls these).
-const HUD_HTML = `<canvas class="labels" data-hud="labels"></canvas><div data-hud="toast" class="panel"></div>`;
+// This demo as one world of the engine (js/engine/host.js calls these; view / setView: its camera's).
+class CloudWorld extends FeatureWorld {
+    constructor(fx) { super(fx, HUD.labels + HUD.toast); }
 
-class FeatureWorld {
-    constructor(fx) {
-        this.fx = fx;
-        this.hudHtml = HUD_HTML;
-    }
-
-    async init() {
-        this.app = new App(this.fx);
-        await this.app.start();
-        this.app.load(this.fx.native);
-    }
-
-    frame(now, dt, opts) { this.app.frame(now, dt, opts); }
+    createApp(fx) { return new App(fx); }
 
     // reversed-Z, infinite far plane, metres (the near plane comes in to 5 cm on foot)
     depth() {
@@ -62,17 +51,26 @@ class FeatureWorld {
         return r.depthView && { view: r.depthView, kind: 'reversed', near: this.app.walker.active ? 0.05 : NEAR };
     }
 
-    get view() {
-        const c = this.app.camera, { fwd, up } = c.basis();
-        return { pos: [...c.pos], fwd, up, fov: c.fov };
+    // walking is its Walker's (on the terrain as drawn, structures, into the buses); the engine switches it
+    get moves() { return ['fly', 'walk']; }
+    get move() { return this.app.walker.active ? 'walk' : 'fly'; }
+    setMove(mode) { this.app.controls.setWalk(mode === 'walk'); }
+
+    // its scenario's views (cloud.view): one each, or, following an entity with `each`, one per member of it (a bus line's
+    // buses), named by `name` with {label} the member's, its sub line what the member is doing
+    views() {
+        const a = this.app, w = a.world;
+        if (!w) return [];
+        return (a.views || []).flatMap((v, i) => {
+            const e = v.follow && w.get(v.follow);
+            if (!v.each) return [{ key: i, name: v.name, go: () => a.controls.setView(i) }];
+            return (e?.members || []).map((m, k) => ({ key: `${i}.${k}`, name: (v.name || '{label}').replace('{label}', m.label), sub: m.describe?.(),
+                go: () => a.controls.jump(v, m) }));
+        });
     }
 
-    setView(v) {
-        const c = this.app.camera;
-        c.pos = [...v.pos];
-        Object.assign(c, yawPitch(v.fwd));
-        if (v.fov) c.fov = v.fov;
-    }
+    // the terrain as drawn, or a floor of a structure or a bus within a step of p
+    ground(p) { const a = this.app; return a.world ? a.walker.floorAt(a, [...p], -Infinity) : null; }
 
     // what the sound beds, HUD panels and links read
     stats() {
@@ -103,5 +101,5 @@ class FeatureWorld {
     }
 }
 
-return { create: ctx => new FeatureWorld(ctx) };
+return { create: ctx => new CloudWorld(ctx) };
 });

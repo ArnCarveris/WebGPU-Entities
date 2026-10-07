@@ -2,10 +2,11 @@
 // The app's menus (shown on the engine's handheld): each option of the world as a Menu, kept in step with the app.
 
 Features.part('cloud', (engine, feature) => {
-const { GpuChoice } = engine;
-const { QUALITY, RENDER_MODES, FROXEL, RAIN_VARIANTS, TIME_SCALES, TORNADO, Supercell, HURRICANE, Menu } = feature;
+const { GpuChoice, kits } = engine;
+const { Menu } = kits.world;
+const { QUALITY, RENDER_MODES, FROXEL, RAIN_VARIANTS, TIME_SCALES, TORNADO, Supercell, HURRICANE } = feature;
 
-// weather and rain (pick one), the persistent clouds (show any of them), tornado and hurricane; the view; the graphics
+// weather and rain (pick one), the persistent clouds (show any of them), tornado and hurricane; the lighting; the graphics
 class AppMenus {
     constructor(app) {
         this.app = app;
@@ -16,9 +17,6 @@ class AppMenus {
         this.clouds = menu('clouds', 'persistent clouds to show');
         this.tornado = menu('tornado', "tornado under the supercell's wall cloud");
         this.hurricane = menu('hurricane', 'hurricane with an eye (Saffir-Simpson category)');
-        this.view = menu('view', 'jump to a viewpoint');
-        this.move = menu('move', 'fly, or walk on the ground below');
-        this.bus = menu('bus', 'go to a bus');
         this.lighting = menu('lighting', 'lighting preset');
         this.quality = menu('quality', 'graphics quality');
         this.render = menu('render', 'render mode');
@@ -44,15 +42,6 @@ class AppMenus {
         this.tornado.set(TORNADO[w.tornadoCat]?.name || 'off', cats(TORNADO, w.tornadoCat, k => c.setTornado(k)), w.entities.some(e => e instanceof Supercell));
         this.hurricane.set(HURRICANE[w.hurricaneCat]?.name || 'off', cats(HURRICANE, w.hurricaneCat, k => c.setHurricane(k)));
 
-        const views = a.views || [];             // (not yet while a scenario loads)
-        this.view.set(views[a.viewIndex]?.name || 'none', views.map((v, i) => radio(v.name, i === a.viewIndex, () => c.setView(i))), views.length > 0);
-        this.move.set(a.walker.active ? 'walk' : 'fly', [radio('fly', !a.walker.active, () => c.setWalk(false)), radio('walk', a.walker.active, () => c.setWalk(true))]);
-        const aboard = a.walker.active && a.walker.bus;
-        this.bus.set(aboard ? aboard.label : 'none', [
-            ...w.buses.map((b, i) => radio(b.label, b === aboard, () => c.toBus(i))),
-            { sep: true },
-            { label: 'buses ×10', kind: 'check', on: a.busFast, pick: () => { a.busFast = !a.busFast; this.sync(); } },
-        ], w.buses.length > 0);
         const lights = a.lightNames || [];
         this.lighting.set(a.lightName, lights.map(n => radio(n, n === a.lightName, () => c.pickLight(n))), lights.length > 1);
         this.quality.set(QUALITY[a.quality].name, QUALITY.map((q, i) => radio(`${q.name} · ${q.scale * 100}% · ${q.steps} steps`, i === a.quality, () => c.setQuality(i))));

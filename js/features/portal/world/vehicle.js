@@ -1,64 +1,30 @@
 'use strict';
-// Vehicles on routes: the ship.
+// Vehicles on routes: the ship (a transit line's vehicle that can also be steered).
 
 Features.part('portal', (engine, feature) => {
+const { kits } = engine;
+const { SplineRoute, TransitLine, LineVehicle } = kits.transit;
 const { m4, g2, worldBounds, CollisionSet } = feature;
 
 // Vehicle: a moving group of areas, portals, objects and lights (the freighter). Everything is
 // authored at the docked pose, which is the vehicle's local space; each frame one transform M
 // carries it along its route, with heel from steering and pitch / roll / heave from the waves.
 // Visibility queries transform the frustum planes into vehicle space instead of moving trees.
+// On autopilot it is the one vehicle of a transit line (kits.transit): round a closed spline through the scenario's
+// waypoints (`route.points`, a SplineRoute) at `route.speed`, pulling away at `route.accel`, braking gently to rest on
+// the dock mark (waypoint `route.dock`) and waiting `route.wait` s there; no doors. At the helm, or finding its way back
+// to the route after it, it steers freely (steer); `free` says which ('manual', 'rejoin').
 
-// Closed Catmull-Rom spline through 2D waypoints, sampled by arc length
-class Route {
-    constructor(points, steps = 64) {
-        this.points = points;
-        this.steps = steps;
-        this.samples = [];
-        const n = points.length;
-        for (let i = 0; i < n; i++) for (let k = 0; k < steps; k++) this.samples.push({ p: this.cr(i, k / steps), i, t: k / steps, s: 0 });
-        let L = 0;
-        this.samples.forEach((sm, i) => { if (i) L += Math.hypot(sm.p[0] - this.samples[i - 1].p[0], sm.p[1] - this.samples[i - 1].p[1]); sm.s = L; });
-        const first = this.samples[0].p, last = this.samples[this.samples.length - 1].p;
-        this.length = L + Math.hypot(first[0] - last[0], first[1] - last[1]);
-    }
-
-    // arc length at waypoint i
-    waypointS(i) { return this.samples[i * this.steps].s; }
-
-    // segment i at parameter t (or its derivative): smooth position and direction
-    cr(i, t, deriv = false) {
-        const P = this.points, n = P.length, p0 = P[(i - 1 + n) % n], p1 = P[i], p2 = P[(i + 1) % n], p3 = P[(i + 2) % n];
-        const t2 = t * t, t3 = t2 * t;
-        const f = deriv
-            ? (a, b, c, e) => 0.5 * ((-a + c) + 2 * (2 * a - 5 * b + 4 * c - e) * t + 3 * (-a + 3 * b - 3 * c + e) * t2)
-            : (a, b, c, e) => 0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - e) * t2 + (-a + 3 * b - 3 * c + e) * t3);
-        return [f(p0[0], p1[0], p2[0], p3[0]), f(p0[1], p1[1], p2[1], p3[1])];
-    }
-
-    // arc length -> spline parameter through the sample table, then evaluate the spline itself
-    param(s) {
-        s = ((s % this.length) + this.length) % this.length;
-        const S = this.samples;
-        let lo = 0, hi = S.length - 1;
-        while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (S[mid].s <= s) lo = mid; else hi = mid - 1; }
-        const a = S[lo], sb = lo + 1 < S.length ? S[lo + 1].s : this.length;
-        return { i: a.i, t: a.t + (s - a.s) / Math.max(1e-6, sb - a.s) / this.steps };
-    }
-
-    at(s) { const q = this.param(s); return this.cr(q.i, q.t); }
-    dir(s) { const q = this.param(s); return this.cr(q.i, q.t, true); }
-
-    // arc length of the sample nearest to (x, z)
-    nearest(x, z) {
-        let best = 0, bd = Infinity;
-        for (const sm of this.samples) { const d = (sm.p[0] - x) ** 2 + (sm.p[1] - z) ** 2; if (d < bd) { bd = d; best = sm.s; } }
-        return best;
-    }
-}
-
-class Vehicle {
+class Vehicle extends LineVehicle {
     constructor(world, d) {
+        const R = d.route, acc = R.accel || 0.3, route = new SplineRoute(R.points);
+        const line = new TransitLine({ route, stops: [route.waypointS(R.dock || 0)], dwell: [R.wait ?? 25], names: ['the dock'], limit: () => R.speed || 6 });
+        super(line, { accel: acc, brake: acc * 1.2, maxDecel: acc * 1.5, stopMargin: 0, doors: false });
+        line.vehicles.push(this);
+        this.route = route;
+        this.s = line.stops[0];
+        this.free = null;
+        this.travelled = 0;
         this.world = world;
         this.id = d.id;
         this.data = d;
@@ -75,13 +41,7 @@ class Vehicle {
         this.portals = [];
         this.areas = [];
         this.helmStation = null;                    // Helm entity, linked after the entities are spawned
-        this.route = new Route(d.route.points);
-        this.sDock = this.route.waypointS(d.route.dock || 0);
-        this.s = this.sDock;
-        this.v = 0;
-        this.state = 'docked';
         this.docked = true;
-        this.wait = d.route.wait ?? 25;
         this.heading = 0; this.dHeading = 0; this.heel = 0; this.pitch = 0; this.roll = 0; this.yawRate = 0;
         [this.px, this.pz] = this.route.at(this.s);
         this.control = null;
@@ -98,6 +58,14 @@ class Vehicle {
     }
 
     get maxSpeed() { return this.data.maxSpeed ?? 9; }
+
+    // what it does: docked, departing (its first 10 m), cruising, manual (at the helm), rejoin (back to the route)
+    get state() { return this.free || (this.mode === 'dwell' ? 'docked' : this.travelled > 10 ? 'cruising' : 'departing'); }
+    // seconds before it leaves the dock
+    get wait() { return this.clock; }
+
+    // it poses itself (update), not from axles on the route
+    moved() {}
     get maxYawRate() { return this.data.maxYawRate ?? 0.12; }
 
     toLocal(p) { return m4.point(this.inv, p); }
@@ -132,7 +100,7 @@ class Vehicle {
 
     update(dt, t) {
         const cruise = this.data.route.speed || 6, heading0 = this.heading;
-        if (this.control || this.state === 'rejoin') this.steer(dt);
+        if (this.free) this.steer(dt);
         else this.followRoute(dt);
         this.docked = this.state === 'docked';
         this.helmFromMotion();
@@ -153,22 +121,11 @@ class Vehicle {
         this.place();
     }
 
-    // autopilot on the route: wait at the dock, cruise, brake to rest exactly on the dock mark
+    // autopilot on the route: its line runs it (wait at the dock, cruise, brake to rest on the dock mark)
     followRoute(dt) {
-        const R = this.data.route, route = this.route, cruise = R.speed || 6, acc = R.accel || 0.3;
-        if (this.state === 'docked') {
-            this.v = 0;
-            if ((this.wait -= dt) <= 0) { this.state = 'departing'; this.travelled = 0; }
-        } else {
-            const ahead = ((this.sDock - this.s) % route.length + route.length) % route.length;
-            if (this.state === 'departing' && this.travelled > 10) this.state = 'cruising';
-            const brake = this.state === 'cruising' ? Math.sqrt(2 * acc * 1.2 * ahead) : Infinity;
-            this.v += Math.max(-acc * 1.5 * dt, Math.min(acc * dt, Math.min(cruise, brake) - this.v));
-            if (this.state === 'cruising') this.v = Math.min(this.v, ahead / Math.max(dt, 1e-4));      // never overshoot the dock
-            this.s += this.v * dt;
-            this.travelled += this.v * dt;
-            if (this.state === 'cruising' && ahead < 0.002 && this.v < 0.2) { this.state = 'docked'; this.s = this.sDock; this.v = 0; this.wait = R.wait ?? 25; }
-        }
+        const route = this.route, s0 = this.s;
+        this.step(dt);
+        this.travelled = this.mode === 'dwell' ? 0 : this.travelled + (this.s - s0 + route.length) % route.length;
         const p = route.at(this.s), tg = route.dir(this.s);
         // the hull yaws toward the path tangent through a critically damped spring: turn rate and
         // angular acceleration stay continuous even where the spline's curvature jumps at waypoints
@@ -192,7 +149,7 @@ class Vehicle {
             if (this.backoff > 0) { this.backoff -= dt; throttle = -0.4; rudder = -rudder; }
             const q = route.at(near), tg = route.dir(near), th = Math.atan2(tg[0], tg[1]);
             if (Math.hypot(q[0] - this.px, q[1] - this.pz) < 0.6 && Math.abs(Math.atan2(Math.sin(th - this.heading), Math.cos(th - this.heading))) < 0.05) {
-                this.state = 'cruising'; this.s = near; this.travelled = 100;          // back on the route
+                Object.assign(this, { free: null, s: near, mode: 'drive', stop: 0, travelled: 100 });       // back on the route
                 return this.followRoute(dt);
             }
         }
@@ -232,8 +189,8 @@ class Vehicle {
         this.helm.rudder = Math.max(-1, Math.min(1, -(this.yawRate || 0) / (this.maxYawRate * flow)));
     }
 
-    takeHelm() { this.control = this.helm = { throttle: this.v / this.maxSpeed, rudder: 0 }; this.state = 'manual'; this.backoff = 0; }
-    leaveHelm() { this.control = null; this.helm = { throttle: this.helm.throttle, rudder: this.helm.rudder }; this.state = 'rejoin'; }
+    takeHelm() { this.control = this.helm = { throttle: this.v / this.maxSpeed, rudder: 0 }; this.free = 'manual'; this.backoff = 0; }
+    leaveHelm() { this.control = null; this.helm = { throttle: this.helm.throttle, rudder: this.helm.rudder }; this.free = 'rejoin'; }
 
     // move the vehicle's portals, lights and object bounds to its current pose
     place() {

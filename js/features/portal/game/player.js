@@ -2,7 +2,7 @@
 // The player: camera and controller.
 
 Features.part('portal', (engine, feature) => {
-const { Common } = engine;
+const { Common, kits } = engine;
 const { v3 } = Common;
 const { m4 } = feature;
 
@@ -28,22 +28,17 @@ function withDefaults(defaults, over = {}) {
     return out;
 }
 
-class Camera {
+// the view (a FirstPersonView turning right with +yaw; look() takes radians), where it started, and on a vehicle a basis
+// turned with it
+class Camera extends kits.view.FirstPersonView {
     constructor(def) {
-        this.pos = (def ? def.pos : [0, 1.7, -16]).slice();
-        this.yaw = def ? (def.yaw || 0) * Math.PI / 180 : Math.PI;
-        def = def || {};
-        this.pitch = (def.pitch || 0) * Math.PI / 180;
-        this.fov = (def.fov || 70) * Math.PI / 180;
+        const d = def || {};
+        super({ pos: def ? def.pos : [0, 1.7, -16], yaw: def ? (d.yaw || 0) * Math.PI / 180 : Math.PI, pitch: (d.pitch || 0) * Math.PI / 180,
+            fov: (d.fov || 70) * Math.PI / 180, turn: 'right', sensitivity: 1, pitchLimit: 1.5 });
         this.start = { pos: this.pos.slice(), yaw: this.yaw, pitch: this.pitch };
     }
 
     reset() { Object.assign(this, { pos: this.start.pos.slice(), yaw: this.start.yaw, pitch: this.start.pitch }); }
-
-    look(dx, dy) {
-        this.yaw += dx;
-        this.pitch = Math.max(-1.5, Math.min(1.5, this.pitch - dy));
-    }
 
     // arrow keys turn the view
     turn(keys, rate) {
@@ -63,9 +58,7 @@ class Camera {
             const right = v3.norm(m4.dir(vehicle.M, [Math.cos(ly), 0, Math.sin(ly)]));
             return { fwd, right, up: v3.cross(right, fwd) };
         }
-        const fwd = [Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch)];
-        const right = [Math.cos(yaw), 0, Math.sin(yaw)];
-        return { fwd, right, up: v3.cross(right, fwd) };
+        return super.basis();
     }
 }
 

@@ -3,13 +3,13 @@
 
 Features.part('cloud', (engine, feature) => {
 const { Common } = engine;
-const { makeBuffer, gridIndices } = Common;
+const { makeBuffer, gridIndices, bindLayout, bindGroup } = Common;
 const {
     MAX_CELLS, CELL_FLOATS, MAX_BOLT_SEGS, FAR_FLOATS, MAX_FAR_DYN, FAR_LAMP_H, FAR_LAMP_REACH, MAX_POLES,
-    STRUCT_FLOATS, GRID_N, BLOOM_LEVELS, BUILDING_FLOATS, FrameBlock, WORLD_BINDINGS, BindingSet, makeLayout,
-    makeGroup, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_SHADOW_SAMPLE, WGSL_SHELTER, WGSL_BUILDING, BUS_UNIFORM, wgslBus,
-    WGSL_TERRAIN, WGSL_SCENE, WGSL_FINAL, WGSL_BLOOM, GroundFrame, STRUCT_COLORS, Structures, NoiseVolumes,
-    shaderSource, WeatherPass, GroundPass, FroxelPass, CloudPass, GpuProfiler,
+    STRUCT_FLOATS, GRID_N, BLOOM_LEVELS, BUILDING_FLOATS, FrameBlock, WORLD_BINDINGS, BindingSet, WGSL_SKY,
+    WGSL_WEATHER_SAMPLE, WGSL_SHADOW_SAMPLE, WGSL_SHELTER, WGSL_BUILDING, BUS_UNIFORM, wgslBus, WGSL_TERRAIN,
+    WGSL_SCENE, WGSL_FINAL, WGSL_BLOOM, GroundFrame, STRUCT_COLORS, Structures, NoiseVolumes, shaderSource,
+    WeatherPass, GroundPass, FroxelPass, CloudPass, GpuProfiler,
 } = feature;
 
 // Renderer
@@ -45,7 +45,7 @@ class Renderer {
 
     createPipelines() {
         const d = this.device;
-        this.screenLayout = makeLayout(d, GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, ['tex', 'tex', 'depth', 'tex']);
+        this.screenLayout = bindLayout(d, GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, ['tex', 'tex', 'depth', 'tex']);
         const scene = d.createShaderModule({ label: 'scene', code: shaderSource(this.worldSet, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_SHADOW_SAMPLE, WGSL_SHELTER, WGSL_BUILDING, WGSL_TERRAIN, wgslBus(1), WGSL_SCENE) });
         const final = d.createShaderModule({ label: 'final', code: shaderSource(this.worldSet, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_SHADOW_SAMPLE, WGSL_SHELTER, WGSL_BUILDING, WGSL_TERRAIN, wgslBus(2), WGSL_FINAL) });
         const layoutA = d.createPipelineLayout({ bindGroupLayouts: [this.worldSet.layout] });
@@ -101,7 +101,7 @@ class Renderer {
         this.pPrecip = pipe(layoutB, final, 'vsPrecip', 'fsPrecip', this.format, { write: false, compare: 'greater' }, blendAlpha);
         this.pBolt = pipe(layoutB, final, 'vsBolt', 'fsBolt', this.format, { write: false, compare: 'greater' }, blendAdd);
         // bloom (WGSL_BLOOM): fullscreen passes into the levels of this.bloom, no depth
-        this.bloomLayout = makeLayout(d, GPUShaderStage.FRAGMENT, ['tex', 'tex']);
+        this.bloomLayout = bindLayout(d, GPUShaderStage.FRAGMENT, ['tex', 'tex']);
         const bloom = d.createShaderModule({ label: 'bloom', code: shaderSource(this.worldSet, WGSL_BLOOM) });
         const layoutBloom = d.createPipelineLayout({ bindGroupLayouts: [this.worldSet.layout, this.bloomLayout] });
         const bloomPipe = (fs, blend) => d.createRenderPipeline({
@@ -204,13 +204,13 @@ class Renderer {
         this.bloom?.destroy();
         this.bloom = this.device.createTexture({ size: [bw, bh], mipLevelCount: levels, format: 'rgba16float', usage: U.RENDER_ATTACHMENT | U.TEXTURE_BINDING });
         this.bloomViews = Array.from({ length: levels }, (_, k) => this.bloom.createView({ baseMipLevel: k, mipLevelCount: 1 }));
-        this.bloomGroups = this.bloomViews.map((v, k) => makeGroup(this.device, this.bloomLayout, [v, this.hdrView], `bloom-${k}`));
-        this.bloomPreGroups = this.cloudPass.histViews.map((hv, k) => makeGroup(this.device, this.bloomLayout, [hv, this.hdrView], `bloom-pre-${k}`));
-        this.screenGroups = this.cloudPass.histViews.map((hv, k) => makeGroup(this.device, this.screenLayout, [hv, this.hdrView, this.depthView, this.bloomViews[0]], `screen-${k}`));
+        this.bloomGroups = this.bloomViews.map((v, k) => bindGroup(this.device, this.bloomLayout, [v, this.hdrView], `bloom-${k}`));
+        this.bloomPreGroups = this.cloudPass.histViews.map((hv, k) => bindGroup(this.device, this.bloomLayout, [hv, this.hdrView], `bloom-pre-${k}`));
+        this.screenGroups = this.cloudPass.histViews.map((hv, k) => bindGroup(this.device, this.screenLayout, [hv, this.hdrView, this.depthView, this.bloomViews[0]], `screen-${k}`));
         // for the bolts drawn into level 0: any other view in the bloom slot (unread there)
         this.bloomSpare ??= this.device.createTexture({ size: [1, 1], format: 'rgba16float', usage: U.TEXTURE_BINDING });
         const spare = levels > 1 ? this.bloomViews[1] : this.bloomSpare.createView();
-        this.boltGlowGroups = this.cloudPass.histViews.map((hv, k) => makeGroup(this.device, this.screenLayout, [hv, this.hdrView, this.depthView, spare], `bolt-glow-${k}`));
+        this.boltGlowGroups = this.cloudPass.histViews.map((hv, k) => bindGroup(this.device, this.screenLayout, [hv, this.hdrView, this.depthView, spare], `bolt-glow-${k}`));
         return true;
     }
 

@@ -2,26 +2,18 @@
 // The HUD: crosshair and readouts.
 
 Features.part('portal', (engine, feature) => {
+const { kits } = engine;
+
 // Hud: the stats / traversal readout (lines, shown on the engine's handheld, FeatureWorld.handheld) and toasts.
 
-class Hud {
+class Hud extends kits.world.WorldHud {
     constructor(game) {
+        super(game.ui, { every: 120, toastMs: 1800 });
         this.game = game;
-        this.lines = [];
-        this.toastEl = game.ui.$('toast');
-        this.toastUntil = 0;
-        this.last = 0;
-    }
-
-    toast(msg) {
-        this.toastEl.textContent = msg;
-        this.toastEl.style.display = 'block';
-        this.toastUntil = performance.now() + 1800;
     }
 
     tick(now, vis) {
-        if (now - this.last > 120) { this.last = now; this.update(vis); }
-        if (this.toastUntil && now > this.toastUntil) { this.toastEl.style.display = 'none'; this.toastUntil = 0; }
+        if (this.due(now)) this.update(vis);
     }
 
     update(vis) {

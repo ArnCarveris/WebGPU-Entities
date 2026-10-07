@@ -2,23 +2,19 @@
 // The HUD and the control panel.
 
 Features.part('imposter', (engine, feature) => {
-const { Common } = engine;
-const { Toast } = Common;
-const { fmtK } = feature;
+const { Common, kits } = engine;
+const { fmtK } = Common;
 
 // The screen keeps toasts; the readout (lines) and every control are on the engine's handheld (FeatureWorld.handheld)
-class Hud {
+class Hud extends kits.world.WorldHud {
     constructor(game) {
+        super(game.ui);
         this.game = game;
-        this.lines = [];
-        this.toaster = new Toast(game.ui.$('toast'));
         this.next = 0;
         this.frames = 0;
         this.prev = 0;
         this.fps = 0;
     }
-
-    toast(msg, ms) { this.toaster.show(msg, ms); }
 
     update(now) {
         this.frames++;

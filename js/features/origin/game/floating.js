@@ -42,7 +42,7 @@ class FloatingOrigin {
                 const up = v3.norm(camPos.sub(b.pos));
                 if (v3.dot(up, o.up) < Math.cos(c.angle * DEG)) { q = quat.mul(quat.fromTo(o.up, up), o.q); why += 'R'; }
             }
-        } else if (q[3] !== 1) { q = quat.id(); why += 'R'; }
+        } else if (q[3] !== 1) { q = quat.identity(); why += 'R'; }
 
         let pos = o.pos;
         if (this.translate) {

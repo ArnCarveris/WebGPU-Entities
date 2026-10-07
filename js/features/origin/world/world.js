@@ -56,7 +56,7 @@ class World {
 
     // placement -> { pos: WorldPos, q }
     resolve(spec) {
-        let pos, q = quat.id();
+        let pos, q = quat.identity();
         if (spec.orbit) {
             const o = spec.orbit, P = this.get(o.parent), r = o.radius ?? P.radius + (o.altitude || 0);
             const qo = quat.mul(quat.mul(P.frame.q, quat.axisAngle([0, 1, 0], (o.node || 0) * DEG)), quat.axisAngle([1, 0, 0], (o.incl || 0) * DEG));

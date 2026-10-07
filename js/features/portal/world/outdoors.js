@@ -2,11 +2,16 @@
 // The outdoors: the island terrain and water.
 
 Features.part('portal', (engine, feature) => {
-const { Common } = engine;
-const { v3, mulberry32, smoothstep } = Common;
-const { m4, vnoise, fbm, g2, MeshBuilder } = feature;
+const { Common, kits } = engine;
+const { v3, smoothstep } = Common;
+const { mulberry32, valueNoise01, fbm } = kits.noise;
+const { m4, g2, MeshBuilder } = feature;
 
 // The outdoors (scenario `outdoor`): terrain height field and chunks, scattered models and the sea.
+
+// the island's noise: value noise in [0, 1] (unseeded), and 4 octaves of it, weights 1/2, 1/4, ...
+const value01 = (x, z) => valueNoise01(x, z, 0);
+const fbm4 = (x, z) => 0.5 * fbm(x, z, { octaves: 4, seed: 0, offset: [0, 0], seedStep: 0, normalize: false, noise: valueNoise01 });
 
 // Animated sea plane minus the waterline of every hull (moving hulls cut a moving hole)
 class Water {
@@ -51,18 +56,18 @@ class Outdoors {
         }
         for (const r of t.flatten || []) dist = Math.min(dist, near(r[0], r[1], r[2], r[3]));
         const f = t.freq || 0.035, mask = smoothstep(t.flat ?? 5, (t.flat ?? 5) + (t.blend ?? 20), dist);
-        let h = (fbm(x * f + 11.3, z * f - 3.7) - 0.45) * 2 * (t.amp ?? 2.5) * mask - 0.03;
+        let h = (fbm4(x * f + 11.3, z * f - 3.7) - 0.45) * 2 * (t.amp ?? 2.5) * mask - 0.03;
         // island: the land sinks into the sea towards the edges of the terrain
         if (t.island) {
             const [x0, z0, x1, z1] = t.extent, de = Math.min(x - x0, x1 - x, z - z0, z1 - z);
-            const s = smoothstep(0, t.island.falloff ?? 30, de + (vnoise(x * 0.04, z * 0.04) - 0.5) * 10);
+            const s = smoothstep(0, t.island.falloff ?? 30, de + (value01(x * 0.04, z * 0.04) - 0.5) * 10);
             h = h * s - (t.island.depth ?? 12) * (1 - s);
         }
         // coast: the land sinks to the seabed beyond a shore line (point + normal pointing out to sea)
         const c = t.coast;
         if (c) {
             const d = (x - c.point[0]) * c.normal[0] + (z - c.point[1]) * c.normal[1];
-            const wob = (vnoise(x * 0.05, z * 0.05) - 0.5) * (c.wobble ?? 8);
+            const wob = (value01(x * 0.05, z * 0.05) - 0.5) * (c.wobble ?? 8);
             const s = smoothstep(-c.width * 0.35, c.width, d + wob);
             h = h * (1 - s) - c.depth * s;
         }

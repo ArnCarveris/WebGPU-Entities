@@ -2,18 +2,16 @@
 // World entities: bodies, props, fields and orbiters.
 
 Features.part('origin', (engine, feature) => {
-const { Common } = engine;
-const { DEG, v3, mulberry32 } = Common;
+const { Common, kits } = engine;
+const { DEG, v3 } = Common;
+const { mulberry32 } = kits.noise;
 const { SURFACES, quat, vec3Of } = feature;
 
 // World entities. Each is built from a scenario definition ({ type, id, ... }) and spawned once, in
 // scenario order, so an entity can use any earlier one as its parent.
-class Entity {
+class Entity extends kits.world.Entity {
     constructor(def, world) {
-        this.def = def;
-        this.world = world;
-        this.id = def.id;
-        this.label = def.label || '';
+        super(def, world);
         this.frame = null;          // { pos: WorldPos, q }
         this.radius = 0;
         this.spacing = 0;           // proximity floor inside volumes (fields)
@@ -22,7 +20,6 @@ class Entity {
     get pos() { return this.frame.pos; }
 
     spawn() { this.frame = this.world.resolve(this.def); }
-    update(dt, t) {}
 }
 
 // Star / planet / moon: drawn as an exact per-pixel sphere (bodies pass), not as a mesh

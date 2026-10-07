@@ -19,45 +19,22 @@
 // precision whatever its distance from the world centre, and rebasing never walks the entity list.
 
 Features.part('origin', (engine, feature) => {
-const { Common } = engine;
+const { Common, kits } = engine;
 const { v3 } = Common;
-const { SAMPLES, NEAR, quat, WorldPos, App, phonePages } = feature;
+const { FeatureWorld } = kits.world, { HUD } = FeatureWorld;
+const { SAMPLES, NEAR, quat, App, phonePages } = feature;
 
-// This demo as one world of the engine (js/engine/host.js calls these).
-const HUD_HTML = `<canvas class="labels" data-hud="labels"></canvas><div data-hud="toast" class="panel"></div>`;
+// This demo as one world of the engine (js/engine/host.js calls these; view / setView: its camera's, in metres from
+// world 0).
+class OriginWorld extends FeatureWorld {
+    constructor(fx) { super(fx, HUD.labels + HUD.toast); }
 
-class FeatureWorld {
-    constructor(fx) {
-        this.fx = fx;
-        this.hudHtml = HUD_HTML;
-    }
-
-    async init() {
-        this.app = new App(this.fx);
-        await this.app.start();
-        this.app.load(this.fx.native);
-    }
-
-    frame(now, dt, opts) { this.app.frame(now, dt, opts); }
+    createApp(fx) { return new App(fx); }
 
     // reversed-Z, infinite far plane, 4x MSAA; depth is in origin units: s metres each
     depth() {
         const r = this.app.renderer;
         return r.depthView && { view: r.depthView, kind: 'reversed', near: NEAR, samples: SAMPLES, scale: this.app.floating.origin.scale };
-    }
-
-    // the camera, in metres (doubles) from world 0
-    get view() {
-        const c = this.app.camera;
-        return { pos: c.pos.metres(), fwd: quat.rotate(c.q, [0, 0, -1]), up: quat.rotate(c.q, [0, 1, 0]), fov: c.fov };
-    }
-
-    setView(v) {
-        const c = this.app.camera;
-        c.pos = WorldPos.of(v.pos);
-        c.q = quat.look(v.fwd, v.up);
-        if (v.fov) c.fov = v.fov;
-        c.vel = [0, 0, 0];
     }
 
     // where an entity is (other worlds can ride on it: layer.transform.anchor)
@@ -91,6 +68,12 @@ class FeatureWorld {
         return out;
     }
 
+    // its bookmarks (origin.bookmark), the number keys' places
+    views() {
+        const a = this.app;
+        return (a.bookmarks || []).map(b => ({ name: b.name, sub: b.key ? `key ${b.key}` : undefined, go: () => a.jump(b) }));
+    }
+
     // the readout and every option, on the engine's handheld (js/engine/handheld.js)
     handheld() { return phonePages(this.app); }
 
@@ -103,5 +86,5 @@ class FeatureWorld {
     }
 }
 
-return { create: ctx => new FeatureWorld(ctx) };
+return { create: ctx => new OriginWorld(ctx) };
 });

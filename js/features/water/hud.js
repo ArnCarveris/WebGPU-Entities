@@ -2,34 +2,17 @@
 // The HUD: readouts of the simulation.
 
 Features.part('water', (engine, feature) => {
-const { Common } = engine;
-const { v3, Toast, LabelLayer } = Common;
+const { Common, kits } = engine;
+const { v3, fmtNum } = Common;
 const { RENDER_MODES, Dam, Sea, Lake, Spring } = feature;
-
-function fmtNum(x, unit = '') {
-    const a = Math.abs(x);
-    if (a >= 1e9) return `${(x / 1e9).toFixed(2)}G${unit}`;
-    if (a >= 1e6) return `${(x / 1e6).toFixed(2)}M${unit}`;
-    if (a >= 1e4) return `${(x / 1e3).toFixed(1)}k${unit}`;
-    return `${x.toFixed(a < 10 ? 1 : 0)}${unit}`;
-}
 
 // The screen keeps the in-world labels and toasts; the readout (lines) and every option are on the engine's handheld
 // (FeatureWorld.handheld)
-class Hud {
-    constructor(ui) {
-        this.lines = [];
-        this.toaster = new Toast(ui.$('toast'));
-        this.labels = new LabelLayer(ui.$('labels'));
-        this.showLabels = true;
-        this.last = 0;
-    }
-
-    toast(msg, ms) { this.toaster.show(msg, ms); }
+class Hud extends kits.world.WorldHud {
+    constructor(ui) { super(ui, { labels: true }); }
 
     update(app, now) {
-        if (now - this.last < 150) return;
-        this.last = now;
+        if (!this.due(now)) return;
         const w = app.world, f = w.field, sim = app.flow, st = sim.stats, c = sim.cfg;
         const onoff = v => v ? '<span class="on">on </span>' : '<span class="m">off</span>';
         const simRate = app.stepsPerFrame * c.stepTime * app.fps;

@@ -2,6 +2,8 @@
 // WGSL: one surface-wave cascade layer.
 
 Features.part('water', (engine, feature) => {
+const { kits } = engine;
+const { NoiseWGSL } = kits.noise;
 // One cascade layer: a res x res wave map (height, previous height, foam) centred on the camera.
 const WGSL_WAVES = /* wgsl */`
 struct Wave {
@@ -28,11 +30,7 @@ fn smp(x: vec2f) -> vec4f {
     let f = q - floor(q);
     return mix(mix(ld(i), ld(i + vec2i(1, 0)), f.x), mix(ld(i + vec2i(0, 1)), ld(i + vec2i(1, 1)), f.x), f.y);
 }
-fn hash(p: vec2u, s: u32) -> f32 {
-    var h = p.x * 1664525u + p.y * 1013904223u + s * 2654435761u;
-    h ^= h >> 16u; h *= 2246822519u; h ^= h >> 13u; h *= 3266489917u; h ^= h >> 16u;
-    return f32(h) / 4294967295.0;
-}
+${NoiseWGSL.hashU2('hash')}
 
 @compute @workgroup_size(8, 8)
 fn waveStep(@builtin(global_invocation_id) gid: vec3u) {

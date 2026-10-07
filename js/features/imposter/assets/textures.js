@@ -2,7 +2,8 @@
 // Procedural textures, drawn with Canvas 2D and uploaded with their mip chains.
 
 Features.part('imposter', (engine, feature) => {
-const { rng } = feature;
+const { kits } = engine;
+const { seededRandom } = kits.noise;
 
 function makeCanvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
 const pick = (arr, r) => arr[Math.floor(r() * arr.length) % arr.length];
@@ -143,7 +144,7 @@ const PATTERNS = {
 const TextureFactory = {
     canvas(def) {
         const S = def.size || 256, c = makeCanvas(S, S), g = c.getContext('2d');
-        (PATTERNS[def.pattern] || PATTERNS.flat)(g, S, (def.colors || ['#ffffff']).map(x => (Array.isArray(x) ? `rgb(${x.map(v => v * 255).join(',')})` : x)), rng(def.seed ?? 7));
+        (PATTERNS[def.pattern] || PATTERNS.flat)(g, S, (def.colors || ['#ffffff']).map(x => (Array.isArray(x) ? `rgb(${x.map(v => v * 255).join(',')})` : x)), seededRandom(def.seed ?? 7));
         return c;
     },
 };

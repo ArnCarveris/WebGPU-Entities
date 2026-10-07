@@ -2,8 +2,9 @@
 // Weather entities: storm cells, supercells, squall lines, spawners and clearings.
 
 Features.part('cloud', (engine, feature) => {
-const { Common } = engine;
-const { DEG, clamp, sat01, lerp, smoothstep, mulberry32 } = Common;
+const { Common, kits } = engine;
+const { DEG, clamp, sat01, lerp, smoothstep } = Common;
+const { mulberry32 } = kits.noise;
 const { Entity } = feature;
 
 // --- weather

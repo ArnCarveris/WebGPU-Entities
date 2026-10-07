@@ -3,10 +3,10 @@
 
 Features.part('portal', (engine, feature) => {
 const { Common } = engine;
-const { v3 } = Common;
+const { v3, frustumPlanes } = Common;
 const {
-    MAX_DEPTH, MAX_ENTRIES, NEAR_PASS, frustumPlanes, aabbVisible, aabbContained, clipPoly3, planesFromHull,
-    screenRect, rectIntersect, rectUnion,
+    MAX_DEPTH, MAX_ENTRIES, NEAR_PASS, aabbVisible, aabbContained, clipPoly3, planesFromHull, screenRect,
+    rectIntersect, rectUnion,
 } = feature;
 
 // PortalVis: FarCry CVisArea::PreRender / SECTR_CullingCamera traversal.

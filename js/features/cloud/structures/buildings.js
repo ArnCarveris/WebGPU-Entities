@@ -3,8 +3,9 @@
 // roof and GPU record, and the building a point is inside.
 
 Features.part('cloud', (engine, feature) => {
-const { Common } = engine;
-const { DEG, clamp, lerp, mulberry32 } = Common;
+const { Common, kits } = engine;
+const { DEG, clamp, lerp } = Common;
+const { mulberry32 } = kits.noise;
 const {
     STRUCT_FLOATS, BUILDING_TYPES, BLD_ID, FURNITURE, FURNITURE_ITEMS, FURNITURE_COLORS, rectMinusHoles,
     STRUCT_COLORS,

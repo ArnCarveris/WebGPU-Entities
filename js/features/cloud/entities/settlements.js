@@ -2,8 +2,9 @@
 // Entities that build settlements: villages and the bus station.
 
 Features.part('cloud', (engine, feature) => {
-const { Common } = engine;
-const { DEG, clamp, lerp, smoothstep, mulberry32 } = Common;
+const { Common, kits } = engine;
+const { DEG, clamp, lerp, smoothstep } = Common;
+const { mulberry32 } = kits.noise;
 const { BUS_LIVERIES, Entity, GroundFrame, STRUCT_COLORS } = feature;
 
 // A small village on a road, laid out from a seed on the terrain as drawn. The road runs across the river `river` (an

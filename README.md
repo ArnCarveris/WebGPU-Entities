@@ -28,7 +28,20 @@ The screen shows the worlds and nothing else (their in-world labels, toasts, a c
 on the **handheld**, a phone the engine holds in every scenario: <kbd>TAB</kbd> (or the chip) takes it out, <kbd>Esc</kbd>
 puts it away. Its root page has a section per world (its status, its options, its controls), the scenario's pages, and
 the engine's options: scenario, worlds (in a composition: show / hide each one, give one the keys, or press
-<kbd>`</kbd>), viewpoint, sound, GPU.
+<kbd>`</kbd>), view, move, sound, GPU.
+
+Views are the engine's too: the handheld's **View** lists the scenario's `view` entities and every world's own
+(`cloud.view`, `water.view`, `origin.bookmark`; a world offers them through `views()`), and going to one of a world that
+can't take the camera moves the camera there. A world view that follows an entity with `"each": true` is one view per
+member of that entity, from data: `{ "type": "cloud.view", "name": "{label}", "follow": "bus", "each": true, "spot": "door" }`
+lists every bus of the line `bus` (named by `{label}`, with what it is doing under it); `spot` is where on it (a bus's
+`door` or `seat`).
+
+Walking and flying are the engine's: <kbd>H</kbd> (or the handheld's Move) switches the camera between them, in every
+scenario. The engine's own camera walks on the highest ground of every shown world (each world's `ground()`, merged in
+composition space, so you walk on what you see); a world that has the camera walks its own way (cloud: its walker,
+into buildings and buses; portal: its player, stairs, ladders, swimming; water, imposter: their first-person view on the
+same merged ground; gui: always on foot; origin: flying only).
 
 ## Running
 
@@ -108,8 +121,8 @@ the engines work) are the original READMEs, in [docs/features](docs/features).
 
 | Type | Fields | |
 |---|---|---|
-| `camera` | `from: "<world>"` or `["a", "b"]`, `carry` · or `controller: "fly"`, `pos`, `look`, `fov`, `speed` | which world's camera drives the others, or the engine's free camera (WASD, drag, wheel, Space / C) |
-| `view` | `name`, `pos`, `look`, `fov` | a viewpoint in composition space, picked on the handheld |
+| `camera` | `from: "<world>"` or `["a", "b"]`, `carry` · or `controller: "fly"`, `pos`, `look`, `fov`, `speed` · `mode: "walk"` | which world's camera drives the others, or the engine's free camera (WASD, drag, wheel, Space / C); `mode` starts it walking (<kbd>H</kbd> switches) |
+| `view` | `name`, `pos`, `look`, `fov` | a viewpoint in composition space, picked on the handheld's View |
 | `link` | `to: "<world>.<param>"`, `value: expr` | sets a world's parameter from an expression every frame (when it changes) |
 | `include` | `scenario`, `as`, `skip`, `only`, `root` | splices another scenario's entities: `as` renames its world (and its name in expressions), `skip` / `only` filter by type (`"cloud.view"`, `"sound.*"`), `root` merges fields into its root |
 | `handheld` | `startShown`, `title`, `fovDeg`, `pose`, `screen`, `model`, `materials`, `lighting`, `sounds` | the engine's handheld, in every scenario (<kbd>TAB</kbd> / <kbd>Esc</kbd>, or the corner chip): merged over its defaults, later entities winning |
@@ -168,9 +181,10 @@ index.html                  the page: canvas, the feature HUD root (labels, toas
 css/entities.css            shell, chip and toasts, what the features still draw on the screen (.fhud[data-feature])
 js/engine/
     host.js                 boot, GPU device, worlds, the frame, links
-    common.js               helpers the features share (scalars, v3 / m4, noise, polylines, buffers, toasts, labels)
+    common.js               small helpers everything shares (scalars, v3 / quat / m4, frustum planes, polylines,
+                            buffers and bind groups, number formats, pointer input)
     scenario-format.js      schemas, entities <-> each feature's native scenario, includes
-    features.js             feature registry and on-demand script loading
+    features.js             feature and kit registry (Features.PARTS, KITS, USES), on-demand script loading
     compositor.js           depth linearize + nearest-wins merge, the atmosphere's inject target
     camera.js               composition transforms, the engine's fly camera
     input.js                input routing between worlds
@@ -181,11 +195,28 @@ js/engine/
     audio.js                sound.* entities (WebAudio synthesis)
     expr.js                 the expression language
     gpu-choice.js           GPU adapter choice
+js/kits/<kit>/              generic building blocks, not any one feature's (Features.kit), loaded with the first
+                            feature that lists them in Features.USES (the engine's: Features.ENGINE_KITS, at boot);
+                            their exports are engine.kits.<kit> (Features.kits)
+    noise/                  seeded random (mulberry32, seededRandom, hashes), value noise 2D / 3D, fbm with options,
+                            ridged multifractal; NoiseWGSL: the shaders' hashes, value noise (± gradient), fbm and
+                            tileable Perlin / Worley, each under the name its shader calls it (gui-kit's included)
+    view/                   FirstPersonView: a first-person eye with options (turn direction, look sensitivity, pitch
+                            limit, keys, boost / slow, wheel speed, ground clearance): the engine's fly camera, the
+                            cloud / water / imposter cameras and the portal / gui players' views
+    world/                  what every world has: the Entity base, WorldHud (toasts, in-world labels, the readout),
+                            Menu and Pages (handheld options and status), FeatureWorld (the host's interface)
+    terrain/                Heightfield (grid, sampling, normals, raycast), TerrainEntity, the tilt / hills /
+                            mountain stamps (cloud, water)
+    transit/                paths (roundPath, offsetLine, SplineRoute), TransitLine + LineVehicle: vehicles running
+                            a closed route (PolylineRoute, SplineRoute) on a timetable with stops, dwell, doors,
+                            braking, speed limits and headways: cloud's buses, and portal's ship when on autopilot
 js/features/<feature>/      each original engine, split into parts with one responsibility each (config, shaders,
                             entities, world, renderer, HUD, app...), loaded in the order of Features.PARTS
-                            (Features.part, sharing js/engine/common.js); phone-pages.js builds the world's handheld
-                            pages, and feature.js is its FeatureWorld, the host's interface (init, frame, depth,
-                            view, stats, set, anchor, handheld)
+                            (Features.part, over js/engine/common.js and its kits); only what is that feature's own
+                            lives here (the bus's body and lights on a LineVehicle, the cloud's land use on the
+                            Heightfield...). phone-pages.js builds the world's handheld pages, and feature.js extends
+                            FeatureWorld (createApp, depth, stats, set, anchor, handheld)
 scenarios/*.json            the scenarios (index.json and embedded.js are generated)
 tools/embed-scenarios.mjs   catalog + embedded copy
 tools/import-native.mjs     import a scenario of the original demos

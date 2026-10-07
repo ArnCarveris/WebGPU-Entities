@@ -1,5 +1,5 @@
 'use strict';
-// The camera, its input and its controller.
+// The camera and its controller (its input: Common.PointerInput).
 
 Features.part('origin', (engine, feature) => {
 const { Common } = engine;
@@ -11,35 +11,20 @@ const { MAX_CELL, quat, WorldPos } = feature;
 class Camera {
     constructor(fov = 60) {
         this.pos = new WorldPos();
-        this.q = quat.id();
+        this.q = quat.identity();
         this.fov = fov * DEG;
         this.vel = [0, 0, 0];
     }
-}
 
-class Input {
-    constructor(io) {
-        const canvas = io.canvas;
-        this.keys = new Set();
-        this.dx = this.dy = this.wheel = 0;
-        this.pressed = [];
-        this.dragging = false;
-        io.listen(canvas, 'pointerdown', e => { this.dragging = true; canvas.setPointerCapture(e.pointerId); canvas.classList.add('drag'); });
-        io.listen(canvas, 'pointerup', e => { this.dragging = false; canvas.releasePointerCapture(e.pointerId); canvas.classList.remove('drag'); });
-        io.listen(canvas, 'pointermove', e => { if (this.dragging) { this.dx += e.movementX; this.dy += e.movementY; } });
-        io.listen(canvas, 'wheel', e => { this.wheel += Math.sign(e.deltaY); e.preventDefault(); }, { passive: false });
-        io.listen(window, 'keydown', e => {
-            if (e.repeat) return;
-            this.keys.add(e.code);
-            this.pressed.push(e.code);
-            if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
-        });
-        io.listen(window, 'keyup', e => this.keys.delete(e.code));
-        io.listen(window, 'blur', () => this.keys.clear());
+    // { pos (metres, doubles, from world 0), fwd, up, fov } (FeatureWorld.view)
+    get view() { return { pos: this.pos.metres(), fwd: quat.rotate(this.q, [0, 0, -1]), up: quat.rotate(this.q, [0, 1, 0]), fov: this.fov }; }
+
+    setView(v) {
+        this.pos = WorldPos.of(v.pos);
+        this.q = quat.look(v.fwd, v.up);
+        if (v.fov) this.fov = v.fov;
+        this.vel = [0, 0, 0];
     }
-
-    down(code) { return this.keys.has(code); }
-    consume() { const r = { dx: this.dx, dy: this.dy, wheel: this.wheel, pressed: this.pressed }; this.dx = this.dy = this.wheel = 0; this.pressed = []; return r; }
 }
 
 class CameraController {
@@ -59,7 +44,7 @@ class CameraController {
             cam.q = quat.norm(quat.mul(quat.axisAngle(U, -io.dx * 0.0025), cam.q));
             cam.q = quat.norm(quat.mul(cam.q, quat.axisAngle([1, 0, 0], -io.dy * 0.0025)));
         }
-        const roll = (inp.down('KeyQ') ? 1 : 0) - (inp.down('KeyE') ? 1 : 0);
+        const roll = (inp.keys.has('KeyQ') ? 1 : 0) - (inp.keys.has('KeyE') ? 1 : 0);
         const [X, , Z] = quat.axes(cam.q);
         if (roll) cam.q = quat.norm(quat.mul(cam.q, quat.axisAngle([0, 0, 1], roll * 1.3 * dt)));
         else if (this.level && prox.body && prox.alt < prox.body.radius * 0.5 && Math.abs(v3.dot(Z, U)) < 0.97) {
@@ -69,13 +54,13 @@ class CameraController {
         }
 
         let m = [0, 0, 0];
-        if (inp.down('KeyW') || inp.down('ArrowUp')) m = v3.sub(m, Z);
-        if (inp.down('KeyS') || inp.down('ArrowDown')) m = v3.add(m, Z);
-        if (inp.down('KeyA') || inp.down('ArrowLeft')) m = v3.sub(m, X);
-        if (inp.down('KeyD') || inp.down('ArrowRight')) m = v3.add(m, X);
-        if (inp.down('Space')) m = v3.add(m, U);
-        if (inp.down('KeyC')) m = v3.sub(m, U);
-        const boost = (inp.down('ShiftLeft') || inp.down('ShiftRight') ? 10 : 1) * (inp.down('ControlLeft') || inp.down('ControlRight') ? 0.1 : 1);
+        if (inp.keys.has('KeyW') || inp.keys.has('ArrowUp')) m = v3.sub(m, Z);
+        if (inp.keys.has('KeyS') || inp.keys.has('ArrowDown')) m = v3.add(m, Z);
+        if (inp.keys.has('KeyA') || inp.keys.has('ArrowLeft')) m = v3.sub(m, X);
+        if (inp.keys.has('KeyD') || inp.keys.has('ArrowRight')) m = v3.add(m, X);
+        if (inp.keys.has('Space')) m = v3.add(m, U);
+        if (inp.keys.has('KeyC')) m = v3.sub(m, U);
+        const boost = (inp.keys.has('ShiftLeft') || inp.keys.has('ShiftRight') ? 10 : 1) * (inp.keys.has('ControlLeft') || inp.keys.has('ControlRight') ? 0.1 : 1);
         this.unitSpeed = 6 * 2 ** this.speedExp * boost;           // origin units / s
         const target = v3.len(m) ? v3.mul(v3.norm(m), this.unitSpeed * origin.scale) : [0, 0, 0];
         cam.vel = v3.lerp(cam.vel, target, 1 - Math.exp(-dt * 6));
@@ -100,5 +85,5 @@ class CameraController {
     }
 }
 
-return { Camera, Input, CameraController };
+return { Camera, CameraController };
 });

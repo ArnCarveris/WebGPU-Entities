@@ -2,6 +2,8 @@
 // WGSL: sky, celestial bodies and entity instances, relative to the floating origin.
 
 Features.part('origin', (engine, feature) => {
+const { kits } = engine;
+const { NoiseWGSL } = kits.noise;
 const { CELL, VERTEX_FLOATS, MeshBuilder } = feature;
 
 function cubeWGSL() {
@@ -47,25 +49,9 @@ fn toOrigin(v: vec3f) -> vec3f { return vec3f(dot(origin.ax.xyz, v), dot(origin.
 fn toWorldDir(d: vec3f) -> vec3f { return normalize(origin.ax.xyz * d.x + origin.ay.xyz * d.y + origin.az.xyz * d.z); }
 
 // ---- noise / tone ------------------------------------------------------------------------------
-fn hash3(p: vec3f) -> f32 {
-    var q = fract(p * 0.1031);
-    q += dot(q, q.zyx + 31.32);
-    return fract((q.x + q.y) * q.z);
-}
-fn noise3(p: vec3f) -> f32 {
-    let i = floor(p);
-    let f = fract(p);
-    let u = f * f * (3.0 - 2.0 * f);
-    return mix(mix(mix(hash3(i), hash3(i + vec3f(1, 0, 0)), u.x), mix(hash3(i + vec3f(0, 1, 0)), hash3(i + vec3f(1, 1, 0)), u.x), u.y),
-               mix(mix(hash3(i + vec3f(0, 0, 1)), hash3(i + vec3f(1, 0, 1)), u.x), mix(hash3(i + vec3f(0, 1, 1)), hash3(i + vec3f(1, 1, 1)), u.x), u.y), u.z);
-}
-fn fbm(p: vec3f, octaves: i32) -> f32 {
-    var a = 0.5;
-    var s = 0.0;
-    var q = p;
-    for (var i = 0; i < octaves; i++) { s += a * noise3(q); q = q * 2.03 + vec3f(1.7, 9.2, 3.1); a *= 0.5; }
-    return s;
-}
+${NoiseWGSL.hash13('hash3')}
+${NoiseWGSL.value3('noise3', 'hash3')}
+${NoiseWGSL.fbm('fbm', 'noise3', { dim: 3, octaves: 'param', shift: [1.7, 9.2, 3.1] })}
 fn tone(c: vec3f) -> vec3f { return pow(vec3f(1.0) - exp(-c * frame.misc.x), vec3f(1.0 / 2.2)); }
 
 // ---- sky ---------------------------------------------------------------------------------------

@@ -328,7 +328,8 @@ const GuiSurface = {
 
 // Scene + GUI shader. Bind group 0: view uniforms, per-instance data, sampler, GUI material texture,
 // world material table.
-const SCENE_SHADER = /* wgsl */`
+// built when a Renderer starts: the noise kit (an engine kit, Features.ENGINE_KITS) is loaded by then
+const sceneShader = () => /* wgsl */`
     struct Light { pos : vec4f, color : vec4f };   // pos.w = intensity
     struct Globals {
         viewProj : mat4x4f,
@@ -345,9 +346,7 @@ const SCENE_SHADER = /* wgsl */`
     @group(0) @binding(3) var guiTex : texture_2d<f32>;
     @group(0) @binding(4) var<storage, read> mats : array<MaterialDef>;
 
-    fn hash(p : vec2f) -> f32 {
-        return fract(sin(dot(p, vec2f(127.1, 311.7))) * 43758.5453);
-    }
+    ${Features.kits.noise.NoiseWGSL.hashSin2('hash')}
 
     // ---------------- World ----------------
     struct VSIn {
@@ -740,7 +739,7 @@ class Renderer {
     // ---- pipelines ----
     async createPipelines() {
         const device = this.device;
-        const module = device.createShaderModule({ code: SCENE_SHADER });
+        const module = device.createShaderModule({ code: sceneShader() });
         const videoModule = device.createShaderModule({ code: VIDEO_SHADER });
         await checkShaderModule(module);
         await checkShaderModule(videoModule);
@@ -1926,6 +1925,6 @@ class PhoneApp {
 }
 
 return {
-    V3, M4, clamp, lerp, smooth01, easeOutBack, easeOutCubic, wrapIndex, deg, rad, col, mixRGB, fitRect, timeText, clipTime, pad3, cardinal, bearingOf, hitIn, MATERIAL_PATTERNS, MATERIAL_SIGNALS, MATERIAL_FLOATS, MaterialTable, MeshBuilder, GuiSurface, SCENE_SHADER, VIDEO_SHADER, BLIT_SHADER, UNIFORM_FLOATS, MAX_LIGHTS, INSTANCE_FLOATS, GUI_STRIDE, DEPTH_FORMAT, CLEAR_COLOR, WORLD_VERTEX_LAYOUT, GUI_VERTEX_LAYOUT, ALPHA_BLEND, Renderer, RenderView, RenderTarget, ScenePass, FONT_PX, GLYPH, GLYPH_CHARS, GuiAtlas, GuiModel, DeviceContext, EntityGUI, IOS, PHONE_NAV_H, PHONE_TRANSITION_MS, TEXT_CELL, PhoneGUI, PhoneApp,
+    V3, M4, clamp, lerp, smooth01, easeOutBack, easeOutCubic, wrapIndex, deg, rad, col, mixRGB, fitRect, timeText, clipTime, pad3, cardinal, bearingOf, hitIn, MATERIAL_PATTERNS, MATERIAL_SIGNALS, MATERIAL_FLOATS, MaterialTable, MeshBuilder, GuiSurface, sceneShader, VIDEO_SHADER, BLIT_SHADER, UNIFORM_FLOATS, MAX_LIGHTS, INSTANCE_FLOATS, GUI_STRIDE, DEPTH_FORMAT, CLEAR_COLOR, WORLD_VERTEX_LAYOUT, GUI_VERTEX_LAYOUT, ALPHA_BLEND, Renderer, RenderView, RenderTarget, ScenePass, FONT_PX, GLYPH, GLYPH_CHARS, GuiAtlas, GuiModel, DeviceContext, EntityGUI, IOS, PHONE_NAV_H, PHONE_TRANSITION_MS, TEXT_CELL, PhoneGUI, PhoneApp,
 };
 })();

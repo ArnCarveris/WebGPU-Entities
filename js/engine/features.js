@@ -7,12 +7,34 @@
 // see Host.createInstance for ctx and the methods the host calls). Each part keeps its own function scope, so the
 // features' globals never collide. Parts load on demand (<script> tags, so pages opened from disk work too) and only
 // for the features a scenario uses.
+//
+// What is not one feature's own lives in kits: generic building blocks (js/kits/<kit>/, parts registered with
+// Features.kit(kit, fn)) that any feature can use. A feature lists its kits in USES; they load before its parts, and
+// their exports are engine.kits.<kit> (a kit may use the kits listed before it in its `uses`). The engine's own scripts
+// use ENGINE_KITS, which the host loads at boot, through Features.kits. Smaller shared helpers (math, GPU, text) are
+// js/engine/common.js's.
 
 const Features = {
+    // kit: { uses (kits it builds on), parts }
+    KITS: {
+        noise: { parts: ['random', 'value', 'wgsl'] },
+        view: { parts: ['first-person'] },
+        world: { parts: ['entity', 'hud', 'pages', 'feature-world'] },
+        terrain: { uses: ['world', 'noise'], parts: ['heightfield', 'stamps'] },
+        transit: { parts: ['paths', 'line'] },
+    },
+    ENGINE_KITS: ['noise', 'view'],
+    USES: {
+        cloud: ['noise', 'view', 'world', 'terrain', 'transit'],
+        water: ['noise', 'view', 'world', 'terrain'],
+        origin: ['noise', 'world'],
+        imposter: ['noise', 'view', 'world'],
+        portal: ['noise', 'view', 'world', 'transit'],
+        gui: ['noise', 'view', 'world'],
+    },
     PARTS: {
         cloud: [
-            'config/limits', 'config/quality', 'config/weather', 'config/bus', 'config/buildings', 'util/half',
-            'util/format', 'terrain/heightfield', 'gpu/bindings', 'shaders/common', 'shaders/shelter',
+            'config/limits', 'config/quality', 'config/weather', 'config/bus', 'config/buildings', 'util/half', 'terrain/heightfield', 'gpu/bindings', 'shaders/common', 'shaders/shelter',
             'shaders/occupancy', 'shaders/noise', 'shaders/weather', 'shaders/volumetrics', 'shaders/scene',
             'shaders/final', 'entities/terrain', 'structures/frame', 'structures/palette', 'structures/solids',
             'structures/shelter-boxes', 'structures/doors', 'structures/buildings', 'structures/fixtures',
@@ -33,7 +55,7 @@ const Features = {
             'game/camera', 'game/hud', 'game/app', 'phone-pages', 'feature',
         ],
         imposter: [
-            'core/config', 'core/util', 'core/math', 'core/noise', 'core/octahedral', 'assets/textures',
+            'core/config', 'core/util', 'core/math', 'core/octahedral', 'assets/textures',
             'assets/materials', 'assets/geometry', 'gpu/mesh', 'assets/models', 'assets/loaders', 'shaders/common',
             'shaders/mesh', 'shaders/bake', 'shaders/cull', 'shaders/imposter', 'shaders/overlay', 'gpu/atlas',
             'gpu/baker', 'gpu/renderer', 'world/lighting', 'world/archetype', 'world/entities', 'world/world',
@@ -55,8 +77,12 @@ const Features = {
     },
     parts: {},
     modules: {},
+    kitParts: {},
+    kitModules: {},
+    kits: {},                   // the loaded kits' exports (engine.kits)
 
     part(name, fn) { (this.parts[name] ??= []).push(fn); },
+    kit(name, fn) { (this.kitParts[name] ??= []).push(fn); },
 
     // scripts added with async = false download in parallel and run in the order they were added
     script(src) {
@@ -77,12 +103,31 @@ const Features = {
     async build(name, engine) {
         const parts = this.PARTS[name];
         if (!parts) throw new Error(`unknown feature "${name}"`);
-        await Promise.all(parts.map(p => this.script(`js/features/${name}/${p}.js`)));
-        const fns = this.parts[name] ?? [];
-        if (fns.length !== parts.length) throw new Error(`feature "${name}": ${fns.length} of ${parts.length} parts registered`);
-        const feature = {};
-        for (const fn of fns) Object.assign(feature, fn(engine, feature));
+        for (const k of this.USES[name] ?? []) await this.loadKit(k, engine);
+        const feature = await this.assemble(`feature "${name}"`, parts.map(p => `js/features/${name}/${p}.js`), () => this.parts[name], engine);
         if (typeof feature.create !== 'function') throw new Error(`feature "${name}" has no create()`);
         return feature;
+    },
+
+    // a kit, once per page: its exports land in Features.kits[name] (engine.kits)
+    loadKit(name, engine) {
+        return (this.kitModules[name] ??= (async () => {
+            const kit = this.KITS[name];
+            if (!kit) throw new Error(`unknown kit "${name}"`);
+            for (const k of kit.uses ?? []) await this.loadKit(k, engine);
+            const built = await this.assemble(`kit "${name}"`, kit.parts.map(p => `js/kits/${name}/${p}.js`), () => this.kitParts[name], engine);
+            this.kits[name] = built;
+            return built;
+        })());
+    },
+
+    // load the scripts, then run the part functions they registered, in order, each given what the earlier ones returned
+    async assemble(what, srcs, registered, engine) {
+        await Promise.all(srcs.map(src => this.script(src)));
+        const fns = registered() ?? [];
+        if (fns.length !== srcs.length) throw new Error(`${what}: ${fns.length} of ${srcs.length} parts registered`);
+        const out = {};
+        for (const fn of fns) Object.assign(out, fn(engine, out));
+        return out;
     },
 };

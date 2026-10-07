@@ -3,8 +3,8 @@
 
 Features.part('water', (engine, feature) => {
 const { Common } = engine;
-const { makeBuffer, gridIndices } = Common;
-const { FRAME_FLOATS, WGSL_COMMON, WGSL_SCENE, WGSL_SURFACE, TU, BU, makeLayout, makeGroup, makeTex } = feature;
+const { makeBuffer, gridIndices, bindLayout, bindGroup } = Common;
+const { FRAME_FLOATS, WGSL_COMMON, WGSL_SCENE, WGSL_SURFACE, TU, BU, makeTex } = feature;
 
 // Renderer
 class Renderer {
@@ -22,8 +22,8 @@ class Renderer {
 
     createPipelines() {
         const d = this.device, VF = GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT;
-        this.worldLayout = makeLayout(d, VF, ['uniform', 'tex:unfilterable-float', 'tex:unfilterable-float', 'tex', 'sampler', 'array', 'array', 'array', 'array', 'read', 'read']);
-        this.screenLayout = makeLayout(d, GPUShaderStage.FRAGMENT, ['tex', 'tex:depth']);
+        this.worldLayout = bindLayout(d, VF, ['uniform', 'tex:unfilterable-float', 'tex:unfilterable-float', 'tex', 'sampler', 'array', 'array', 'array', 'array', 'read', 'read']);
+        this.screenLayout = bindLayout(d, GPUShaderStage.FRAGMENT, ['tex', 'tex:depth']);
         this.sampler = d.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' });
         const U = TU();
         this.dummyArray = makeTex(d, 1, 1, 'rgba16float', U.TEXTURE_BINDING, 2).createView({ dimension: '2d-array' });
@@ -62,7 +62,7 @@ class Renderer {
         this.waterIndex = makeBuffer(d, wi.byteLength, U.INDEX, wi);
         this.waterCount = wi.length;
         const disp = [0, 1, 2, 3].map(i => waves.layers[i] ? waves.layers[i].dispView : this.dummyArray);
-        this.worldGroup = makeGroup(d, this.worldLayout, [this.frameBuf, flow.terrain.createView(), flow.surf.createView(), flow.flow.createView(),
+        this.worldGroup = bindGroup(d, this.worldLayout, [this.frameBuf, flow.terrain.createView(), flow.surf.createView(), flow.flow.createView(),
             this.sampler, ...disp, debris.particles, debris.emitters], 'world');
         this.debrisCount = debris.count;
     }
@@ -82,7 +82,7 @@ class Renderer {
         this.depthCView = this.depthC?.createView();
         this.hdrView = this.hdr.createView();
         this.depthView = this.depth.createView();
-        this.screenGroup = makeGroup(this.device, this.screenLayout, [this.hdrView, this.depthView], 'screen');
+        this.screenGroup = bindGroup(this.device, this.screenLayout, [this.hdrView, this.depthView], 'screen');
     }
 
     render(enc) {

@@ -2,26 +2,17 @@
 // The HUD: in-world labels and readouts.
 
 Features.part('origin', (engine, feature) => {
-const { Common } = engine;
-const { DEG, clamp, v3, Toast, LabelLayer } = Common;
+const { Common, kits } = engine;
+const { DEG, clamp, v3 } = Common;
 const { f32Step, fmtDist, Body } = feature;
 
 // The screen keeps the in-world labels and toasts; the readout (lines) and every option are on the engine's handheld
 // (FeatureWorld.handheld)
-class Hud {
-    constructor(ui) {
-        this.lines = [];
-        this.toaster = new Toast(ui.$('toast'));
-        this.labels = new LabelLayer(ui.$('labels'));
-        this.showLabels = true;
-        this.last = 0;
-    }
-
-    toast(msg, ms) { this.toaster.show(msg, ms); }
+class Hud extends kits.world.WorldHud {
+    constructor(ui) { super(ui, { labels: true, every: 100 }); }
 
     update(app, prox, now) {
-        if (now - this.last < 100) return;
-        this.last = now;
+        if (!this.due(now)) return;
         const f = app.floating, o = f.origin, cam = app.camera, w = app.world, st = f.stats;
         const onoff = v => v ? '<span class="on">on </span>' : '<span class="off">OFF</span>';
         const camO = o.toLocal(cam.pos), wp = cam.pos.metres(), up = o.up;

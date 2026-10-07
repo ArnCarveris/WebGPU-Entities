@@ -1,23 +1,18 @@
 'use strict';
-// One bus: its motion along the route and its mesh.
+// One bus: a vehicle of its line (kits.transit) with the bus's body, lights and colliders.
 
 Features.part('cloud', (engine, feature) => {
-const { Common } = engine;
-const { DEG, clamp, v3 } = Common;
-const { BUS, BUS_IN, BUS_LEAF, fmtKm, GroundFrame, LAMPS, Structures } = feature;
+const { Common, kits } = engine;
+const { DEG, v3 } = Common;
+const { BUS, BUS_IN, BUS_LEAF, GroundFrame, LAMPS, Structures } = feature;
 
-// One bus on a BusLine: where it is round the loop (s, m), its speed, its doors (0..1), and what it does: dwell at a
-// stop or drive to the next (`stop`: 0 the station, 1 the village). Its pose comes from its axles on the path.
-class Bus {
+// One bus on a BusLine: a vehicle of its line (kits.transit's LineVehicle: where it is round the loop, its speed, its
+// doors, dwelling at a stop or driving to the next) with the bus's body: its mesh, the moving shader box that keeps the
+// rain off and casts its shadow, its lights and its colliders.
+class Bus extends kits.transit.LineVehicle {
     constructor(line, label, livery) {
-        this.line = line;
+        super(line, BUS_SPEC);
         this.label = label;
-        this.s = 0;
-        this.v = 0;
-        this.doors = 1;
-        this.mode = 'dwell';
-        this.stop = 0;                   // the stop it stands at or drives to: 0 the station, 1 the village
-        this.clock = (line.def.dwell || [60, 30])[0];
         // mesh and glass in its own frame, colliders, seats; a moving shader box (rain shadow, sun shadow)
         this.mesh = livery ? buildBus(livery) : null;
         this.box = { x: 0, z: 0, hx: BUS.hl, hz: BUS.hw, cs: 1, sn: 0, y0: 0, y1: 1, ao: 0.35, slope: 0, base: 0, dyn: true };
@@ -25,60 +20,31 @@ class Bus {
     }
 
     get anchor() { const p = this.pose; return [p.x, p.y + 5, p.z]; }
-    get focus() { const p = this.pose; return [p.x, p.y, p.z]; }
 
-    // pose from the axles on the path: heading from the rear axle to the front one, pitched by their heights
     place() {
-        const K = BUS, r = this.line.at(this.s + K.axleR), f = this.line.at(this.s + K.axleF);
-        const dx = f[0] - r[0], dz = f[2] - r[2], l = Math.hypot(dx, dz) || 1, cs = dx / l, sn = dz / l, slope = (f[1] - r[1]) / l;
-        const x = r[0] - cs * K.axleR, z = r[2] - sn * K.axleR, y = r[1] - slope * K.axleR;
-        const cp = 1 / Math.hypot(1, slope), sp = slope * cp;
-        // local -> world, column-major: x along the heading (pitched), y up, z to the right
-        this.model = [cs * cp, sp, sn * cp, 0, -cs * sp, cp, -sn * sp, 0, -sn, 0, cs, 0, x, y, z, 1];
-        this.pose = { x, y, z, cs, sn, slope };
+        super.place();
+        const K = BUS, { x, y, z, cs, sn, slope } = this.pose;
         Object.assign(this.box, { x, z, cs, sn, slope, y0: y + K.skirt, y1: y + K.roof, base: y - 1 });
     }
 
-    toWorld(q, w = 1) { const m = this.model; return [0, 1, 2].map(r => m[r] * q[0] + m[4 + r] * q[1] + m[8 + r] * q[2] + m[12 + r] * w); }
-    toLocal(p, w = 1) {
-        const m = this.model, d = w ? [p[0] - m[12], p[1] - m[13], p[2] - m[14]] : p;
-        return [0, 1, 2].map(c => m[c * 4] * d[0] + m[c * 4 + 1] * d[1] + m[c * 4 + 2] * d[2]);
-    }
-    // world to its frame, column-major (model is a rotation and a translation)
-    get inverse() {
-        const m = this.model, inv = new Array(16).fill(0), t = [m[12], m[13], m[14]];
-        for (let r = 0; r < 3; r++) {
-            for (let c = 0; c < 3; c++) inv[c * 4 + r] = m[r * 4 + c];
-            inv[12 + r] = -(m[r * 4] * t[0] + m[r * 4 + 1] * t[1] + m[r * 4 + 2] * t[2]);
-        }
-        inv[15] = 1;
-        return inv;
-    }
-    // the FlyCamera yaw that looks along the bus
-    get yaw() { return Math.atan2(-this.pose.cs, -this.pose.sn); }
-
-    // dt s on, with `room` m of clear road ahead of its front bumper (to the next bus), of which it leaves 6 m
-    step(dt, room = Infinity) {
-        const L = this.line, dwell = L.def.dwell || [60, 30];
+    // a viewpoint on it (a view's `spot`), on foot: "seat" seated aboard (Walker.sit); else at the door: outside its front
+    // door while it stands at a stop, aboard in the aisle while it drives
+    board(app, spot) {
+        const wk = app.walker, cam = app.camera;
+        if (spot === 'seat') { wk.sit(app, this); wk.eye(app); return; }
+        const doorX = BUS.bay0 + (BUS.doorBays[0] + 0.5) * BUS.bay;
         if (this.mode === 'dwell') {
-            this.clock -= dt;
-            if (this.clock <= 0 && this.doors <= 0) { this.mode = 'drive'; this.stop = 1 - this.stop; }
+            const p = this.toWorld([doorX, 0, BUS.hw + 1.2]);
+            wk.place(app, p[0], p[2], p[1]);
+            wk.eye(app);
+            cam.lookAt(this.toWorld([doorX, 1.5, 0]));
         } else {
-            // up to the speed limit here, braking to stop at the next stop or behind the bus ahead (1 m/s^2), pulling
-            // away at 1.1 m/s^2
-            const left = (L.stops[this.stop] - this.s + L.len) % L.len, clear = Math.max(room - 6, 0);
-            const i = Math.floor(this.s / L.step) % L.path.length;
-            const vt = Math.min(L.vmax[i], Math.sqrt(2 * Math.max(left - 0.02, 0)), Math.sqrt(2 * clear));
-            this.braking = vt < this.v - 0.05;
-            this.v = vt < this.v ? vt : Math.min(vt, this.v + 1.1 * dt);
-            const ds = Math.min(this.v * dt, left, clear);
-            this.s = (this.s + ds) % L.len;
-            if (left - ds < 0.03) { this.s = L.stops[this.stop]; this.v = 0; this.mode = 'dwell'; this.clock = dwell[this.stop]; }
+            wk.place(app, this.pose.x, this.pose.z);
+            Object.assign(wk, { bus: this, seat: null, feet: [-1.0, BUS.floor, 0], busYaw: this.yaw });
+            wk.eye(app);
+            cam.yaw = this.yaw;
         }
-        // the doors open once the bus stands, and close 3 s before it leaves (1.5 s each way)
-        const open = this.mode === 'dwell' && this.clock > 3;
-        this.doors = clamp(this.doors + (open ? dt : -dt) / 1.5, 0, 1);
-        this.place();
+        cam.pitch = 0;
     }
 
     // its lights by night, into `out` (LightWriter.write): the headlights, a beam each ahead and a little down; the tail
@@ -92,14 +58,6 @@ class Bus {
         for (const sz of [-1, 1]) on('headlight', [K.hl + 0.15, 0.64, sz * 0.91], [1, -0.09, sz * 0.03]);
         on('tail', [-K.hl - 0.15, 0.8, 0], null, this.mode === 'drive' && this.braking ? 3 : 1);
         on('cabin', [0, K.ceil - 0.3, 0]);
-    }
-
-    // where it is, for the HUD
-    describe() {
-        const L = this.line, names = [L.world.get(L.def.from)?.label || 'station', L.world.get(L.def.to)?.label || 'village'];
-        if (this.mode === 'dwell') return `at ${names[this.stop]} · ${this.clock > 3 ? `doors open, leaves in ${Math.ceil(this.clock)} s` : 'doors closing'}`;
-        const left = (L.stops[this.stop] - this.s + L.len) % L.len;
-        return `to ${names[this.stop]} · ${fmtKm(left)} · ${(this.v * 3.6).toFixed(0)} km/h`;
     }
 
     // colliders in the bus's frame: the floor (walkable), walls, the driver's cab, wheel arches, seats, and the door leaves
@@ -252,5 +210,8 @@ function buildBus(livery) {
     return { v: B.v, glass: G.v, solids, doorSolids, seats };
 }
 
-return { Bus };
+// how it runs on its line (LineVehicle): its axles, and its length bumper to bumper
+const BUS_SPEC = { axleF: BUS.axleF, axleR: BUS.axleR, length: 2 * BUS.hl };
+
+return { Bus, BUS_SPEC };
 });

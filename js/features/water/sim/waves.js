@@ -3,8 +3,8 @@
 
 Features.part('water', (engine, feature) => {
 const { Common } = engine;
-const { clamp, makeBuffer } = Common;
-const { MAX_LAYERS, WAVE_DEFAULTS, WGSL_WAVES, TU, BU, makeLayout, makeGroup, makeTex } = feature;
+const { clamp, makeBuffer, bindLayout, bindGroup } = Common;
+const { MAX_LAYERS, WAVE_DEFAULTS, WGSL_WAVES, TU, BU, makeTex } = feature;
 
 // wave cascades: each layer steps at its own rate so waves travel at `speed` m/s in every layer
 class WaveLayer {
@@ -40,7 +40,7 @@ class WaveLayer {
         const key = a * 2 + slot;
         if (!this.groups.has(key)) {
             const b = 1 - a, f = this.flow;
-            this.groups.set(key, makeGroup(this.device, this.shared.layout, [this.buf, this.state[a].createView(), this.state[b].createView(),
+            this.groups.set(key, bindGroup(this.device, this.shared.layout, [this.buf, this.state[a].createView(), this.state[b].createView(),
                 f.flow.createView(), this.shared.sampler, this.disp.createView({ dimension: '2d', baseArrayLayer: slot, arrayLayerCount: 1 })]));
         }
         return this.groups.get(key);
@@ -83,7 +83,7 @@ class WaveLayer {
 class WaveCascade {
     constructor(device, flow, cfg) {
         this.cfg = { ...WAVE_DEFAULTS, ...(cfg || {}) };
-        const layout = makeLayout(device, GPUShaderStage.COMPUTE, ['uniform', 'tex:unfilterable-float', 'write:rgba32float', 'tex', 'sampler', 'write:rgba16float']);
+        const layout = bindLayout(device, GPUShaderStage.COMPUTE, ['uniform', 'tex:unfilterable-float', 'write:rgba32float', 'tex', 'sampler', 'write:rgba16float']);
         const module = device.createShaderModule({ label: 'waves', code: WGSL_WAVES });
         const pl = device.createPipelineLayout({ bindGroupLayouts: [layout] });
         const shared = {

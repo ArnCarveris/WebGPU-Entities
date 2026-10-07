@@ -1,7 +1,9 @@
 'use strict';
-// The frame uniform's layout and the bind group layouts every pass shares.
+// The frame uniform's layout and the bind group layouts every pass shares (a pass's own: Common.bindLayout / bindGroup).
 
 Features.part('cloud', (engine, feature) => {
+const { Common } = engine;
+const { bindLayoutEntry, bindResource } = Common;
 const {
     MAX_LAYERS, MAX_MOTHERSHIPS, MAX_SHELVES, MAX_FLASHES, MAX_BLOCKERS, BLOCK_GRID, MAX_LIGHTS, LIGHT_GRID,
     MAX_GLOWS, MAX_RAIN_ZONES, MAX_DRIPS,
@@ -104,23 +106,6 @@ const WORLD_BINDINGS = [
     ['buildings', 'read', 'var<storage, read> buildings: array<vec4f>'],   // every building's frame, storeys and windows (WGSL_BUILDING)
 ];
 
-function layoutEntry(binding, visibility, kind) {
-    const [k, arg] = kind.split(':'), e = { binding, visibility };
-    if (k === 'uniform') e.buffer = { type: 'uniform' };
-    else if (k === 'read') e.buffer = { type: 'read-only-storage' };
-    else if (k === 'storage') e.buffer = { type: 'storage' };
-    else if (k === 'tex') e.texture = { sampleType: arg || 'float', viewDimension: '2d' };
-    else if (k === 'tex3d') e.texture = { sampleType: 'float', viewDimension: '3d' };
-    else if (k === 'depth') e.texture = { sampleType: 'depth', viewDimension: '2d' };
-    else if (k === 'sampler') e.sampler = { type: 'filtering' };
-    else if (k === 'write') e.storageTexture = { access: 'write-only', format: arg, viewDimension: '2d' };
-    else if (k === 'write3d') e.storageTexture = { access: 'write-only', format: arg, viewDimension: '3d' };
-    else throw new Error(`layout kind ${kind}`);
-    return e;
-}
-
-const asResource = r => r instanceof GPUBuffer ? { buffer: r } : r;
-
 class BindingSet {
     constructor(device, names, group = 0) {
         this.device = device;
@@ -130,21 +115,13 @@ class BindingSet {
             return { name: n, binding: b, kind: WORLD_BINDINGS[b][1], decl: WORLD_BINDINGS[b][2] };
         });
         const vis = GPUShaderStage.COMPUTE | GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT;
-        this.layout = device.createBindGroupLayout({ entries: this.slots.map(s => layoutEntry(s.binding, vis, s.kind)) });
+        this.layout = device.createBindGroupLayout({ entries: this.slots.map(s => bindLayoutEntry(s.binding, vis, s.kind)) });
         this.wgsl = this.slots.map(s => `@group(${group}) @binding(${s.binding}) ${s.decl};`).join('\n') + '\n';
     }
     group(res, label) {
-        return this.device.createBindGroup({ label, layout: this.layout, entries: this.slots.map(s => ({ binding: s.binding, resource: asResource(res[s.name]) })) });
+        return this.device.createBindGroup({ label, layout: this.layout, entries: this.slots.map(s => ({ binding: s.binding, resource: bindResource(res[s.name]) })) });
     }
 }
 
-// private bindings of one pass (outputs, screen textures): kinds in binding order
-function makeLayout(device, visibility, kinds) {
-    return device.createBindGroupLayout({ entries: kinds.map((k, b) => layoutEntry(b, visibility, k)) });
-}
-function makeGroup(device, layout, resources, label) {
-    return device.createBindGroup({ label, layout, entries: resources.map((r, binding) => ({ binding, resource: asResource(r) })) });
-}
-
-return { FrameBlock, WORLD_BINDINGS, BindingSet, makeLayout, makeGroup };
+return { FrameBlock, WORLD_BINDINGS, BindingSet };
 });

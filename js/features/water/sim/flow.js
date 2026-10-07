@@ -3,8 +3,8 @@
 
 Features.part('water', (engine, feature) => {
 const { Common } = engine;
-const { makeBuffer } = Common;
-const { MAX_SOURCES, SOURCE_FLOATS, SIM_DEFAULTS, WGSL_FLOW, TU, BU, makeLayout, makeGroup, makeTex } = feature;
+const { makeBuffer, bindLayout, bindGroup } = Common;
+const { MAX_SOURCES, SOURCE_FLOATS, SIM_DEFAULTS, WGSL_FLOW, TU, BU, makeTex } = feature;
 
 // Simulation (GPU)
 class FlowSim {
@@ -28,14 +28,14 @@ class FlowSim {
         this.stats = { volume: 0, wet: 0, maxSpeed: 0 };
         this.statsState = 'idle';
 
-        const layout = makeLayout(device, GPUShaderStage.COMPUTE, ['uniform', 'tex:unfilterable-float', 'tex:unfilterable-float', 'write:rgba32float', 'read', 'write:rg32float', 'write:rgba16float', 'storage']);
+        const layout = bindLayout(device, GPUShaderStage.COMPUTE, ['uniform', 'tex:unfilterable-float', 'tex:unfilterable-float', 'write:rgba32float', 'read', 'write:rg32float', 'write:rgba16float', 'storage']);
         const module = device.createShaderModule({ label: 'flow', code: WGSL_FLOW });
         const pl = device.createPipelineLayout({ bindGroupLayouts: [layout] });
         const pipe = entryPoint => device.createComputePipeline({ label: entryPoint, layout: pl, compute: { module, entryPoint } });
         this.pSim = pipe('simulate');
         this.pProp = pipe('propagate');
         this.pInfo = pipe('info');
-        const grp = (a, b) => makeGroup(device, layout, [this.paramBuf, this.terrain.createView(), this.state[a].createView(), this.state[b].createView(), this.sourceBuf, this.surf.createView(), this.flow.createView(), this.statsBuf]);
+        const grp = (a, b) => bindGroup(device, layout, [this.paramBuf, this.terrain.createView(), this.state[a].createView(), this.state[b].createView(), this.sourceBuf, this.surf.createView(), this.flow.createView(), this.statsBuf]);
         this.groups = [grp(0, 1), grp(1, 0)];
         this.uploadTerrain(true);
         this.reset();

@@ -3,17 +3,15 @@
 
 Features.part('origin', (engine, feature) => {
 const { Common } = engine;
-const { DEG, clamp, v3 } = Common;
-const {
-    BODY_FLOATS, NEAR, quat, m4, Renderer, World, FloatingOrigin, Camera, Input, CameraController, Hud,
-} = feature;
+const { DEG, clamp, v3, PointerInput } = Common;
+const { BODY_FLOATS, NEAR, quat, m4, Renderer, World, FloatingOrigin, Camera, CameraController, Hud } = feature;
 
 class App {
     constructor(fx) {
         this.fx = fx;
         this.canvas = fx.canvas;
         this.renderer = new Renderer(fx);
-        this.input = new Input(fx.io);
+        this.input = new PointerInput(fx.io, { act: false });
         this.hud = new Hud(fx.ui);
         this.camera = new Camera();
         this.controller = new CameraController(this.camera, this.input);

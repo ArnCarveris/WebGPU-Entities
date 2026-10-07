@@ -2,8 +2,9 @@
 // Entities that shape the terrain (and the Entity base every entity extends).
 
 Features.part('water', (engine, feature) => {
-const { Common } = engine;
-const { lerp, smoothstep, fbm, polylineLengths, polylineNearest, polylineBox } = Common;
+const { Common, kits } = engine;
+const { lerp, smoothstep, polylineLengths, polylineNearest, polylineBox } = Common;
+const { fbm } = kits.noise;
 
 // Entities
 // Built from scenario definitions ({ type, id, label, ... }) in order. Hooks, all optional:
@@ -12,22 +13,9 @@ const { lerp, smoothstep, fbm, polylineLengths, polylineNearest, polylineBox } =
 //   spawn()        register with the world (debris emitters, sea level, ...)
 //   sources(out)   per frame: push water sources / sinks, or add to out.rain
 //   update(dt, t)  per frame (dams animate their breach)
-class Entity {
-    constructor(def, world) {
-        this.def = def;
-        this.world = world;
-        this.id = def.id || null;
-        this.label = def.label || '';
-    }
+class Entity extends kits.terrain.TerrainEntity {
+    get labelLift() { return 16; }
 
-    // label anchor in world space
-    get anchor() {
-        const p = this.def.labelPos || this.def.pos;
-        if (!p) return null;
-        return [p[0], this.world.field.sample(p[0], p[1]) + (this.def.labelHeight ?? 16), p[1]];
-    }
-
-    stamp(field) {}
     fill(water) {}
     spawn() {}
     sources(out) {}
@@ -36,34 +24,7 @@ class Entity {
 
 // --- terrain features
 
-// global slope along `dir` (downhill): the far side is `drop` metres lower than the near side
-class Tilt extends Entity {
-    stamp(f) {
-        const [dx, dz] = this.def.dir || [0, 1], l = Math.hypot(dx, dz) || 1, drop = this.def.drop || 0;
-        f.eachAll((idx, x, z) => { f.h[idx] -= drop * (x * dx + z * dz) / l / f.size; });
-    }
-}
-
-class Hills extends Entity {
-    stamp(f) {
-        const d = this.def, s = d.scale || 400, amp = d.amplitude || 20, opt = { octaves: d.octaves || 5, seed: d.seed || 1, ridged: !!d.ridged };
-        f.eachAll((idx, x, z) => { f.h[idx] += amp * fbm(x / s, z / s, opt); });
-    }
-}
-
-class Mountain extends Entity {
-    get anchor() { const a = super.anchor; return a && [a[0], a[1] + 10, a[2]]; }
-    stamp(f) {
-        const d = this.def, [cx, cz] = d.pos, r = d.radius, hgt = d.height, rough = d.roughness ?? 0.4, seed = d.seed || 3;
-        f.each(cx - r, cz - r, cx + r, cz + r, (idx, x, z) => {
-            const t = Math.hypot(x - cx, z - cz) / r;
-            if (t >= 1) return;
-            const shape = Math.pow(1 - smoothstep(0, 1, t), 1.6);
-            const ridge = fbm(x / (r * 0.35), z / (r * 0.35), { octaves: 5, seed, ridged: true });
-            f.h[idx] += hgt * shape * (1 - rough + rough * 1.6 * ridge);
-        });
-    }
-}
+const { Tilt, Hills, Mountain } = kits.terrain.terrainStamps(Entity, { peakLabel: 10 });
 
 // carves a river valley along a polyline: channel bed from levels[0] to levels[1], smooth banks
 class Valley extends Entity {

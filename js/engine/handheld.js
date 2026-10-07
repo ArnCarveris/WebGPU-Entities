@@ -6,7 +6,7 @@
 // worlds don't get the mouse.
 //
 // Its root page: a section per world (the pages that world offers, see below, and the scenario's pages tied to it), the
-// scenario's own pages, then the engine's options (scenario, worlds, viewpoint, sound, GPU).
+// scenario's own pages, then the engine's options (scenario, worlds, view, move, sound, GPU).
 //
 //   handheld       { startShown, title, fovDeg, showSeconds, pose, screen, virtual, zOffset, model, materials, sounds }
 //                  merged over HANDHELD_DEFAULTS, later entities winning (a composition overrides what it includes)
@@ -100,7 +100,6 @@ class Handheld {
         this.imageKeys = new Set();
         this.dirty = true;
         this.lastBuild = 0;
-        this.viewIndex = -1;
         const self = this;
         // what the PhoneGUI calls `game.audio`
         this.audio = {
@@ -248,11 +247,15 @@ class Handheld {
             ] });
             cells.push({ nav: 'Worlds', page: 'engine:worlds', sub: `${inst.filter(i => i.visible).length} of ${inst.length} shown · keys: ${focus >= 0 ? short(inst[focus]) : '-'}` });
         }
-        const views = (host.scenario?.entities || []).filter(e => e.type === 'view');
-        if (views.length && inst.length) {
-            cells.push({ choice: 'Viewpoint', options: views.map((v, i) => v.name || `view ${i + 1}`), index: this.viewIndex, value: '-',
-                pick: i => { this.viewIndex = i; host.jumpView(views[i]); } });
+        const views = inst.length ? host.viewList : [];
+        if (views.length) {
+            const multi = inst.length > 1 || views.some(v => !v.inst);
+            cells.push({ choice: 'View', options: views.map(v => ({ label: v.name, sub: [multi && v.group, v.sub].filter(Boolean).join(' · ') || undefined })),
+                index: views.findIndex(v => v.key === host.viewKey), value: '-', pick: i => host.goView(views[i]) });
         }
+        const moves = host.moves;
+        if (inst.length) cells.push({ choice: 'Move', options: moves.map(m => ({ label: m, sub: moves.length > 1 ? 'H' : undefined })),
+            index: moves.indexOf(host.move), value: host.move, pick: i => host.setMove(moves[i]) });
         cells.push({ toggle: 'Sound', on: host.audio.on, set: () => host.audio.toggle() });
         const names = GpuChoice.names || {};
         cells.push({ choice: 'GPU', options: GpuChoice.CHOICES.map(c => ({ label: c.label, sub: names[c.id] === null ? 'none here' : names[c.id] || '' })),

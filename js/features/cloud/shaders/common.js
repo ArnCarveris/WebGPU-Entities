@@ -2,6 +2,8 @@
 // WGSL shared by the passes: math, sky, weather map sampling, cloud density and the cloud shadow lookups.
 
 Features.part('cloud', (engine, feature) => {
+const { kits } = engine;
+const { NoiseWGSL } = kits.noise;
 const { MAX_LAYERS, MAX_FLASHES } = feature;
 
 // WGSL
@@ -18,29 +20,11 @@ fn hg(mu: f32, g: f32) -> f32 {
     let g2 = g * g;
     return (1.0 - g2) / (4.0 * PI * pow(max(1.0 + g2 - 2.0 * g * mu, 1e-4), 1.5));
 }
-fn hash12(p: vec2f) -> f32 {
-    var p3 = fract(vec3f(p.x, p.y, p.x) * 0.1031);
-    p3 += dot(p3, p3.yzx + 33.33);
-    return fract((p3.x + p3.y) * p3.z);
-}
-fn pcg(v: u32) -> u32 {
-    let s = v * 747796405u + 2891336453u;
-    let w = ((s >> ((s >> 28u) + 4u)) ^ s) * 277803737u;
-    return (w >> 22u) ^ w;
-}
-fn rnd(v: u32) -> f32 { return f32(pcg(v)) / 4294967295.0; }
-fn ign(p: vec2f) -> f32 { return fract(52.9829189 * fract(dot(p, vec2f(0.06711056, 0.00583715)))); }
-fn vnoise2(p: vec2f) -> f32 {
-    let i = floor(p);
-    let f = fract(p);
-    let u = f * f * (3.0 - 2.0 * f);
-    return mix(mix(hash12(i), hash12(i + vec2f(1.0, 0.0)), u.x), mix(hash12(i + vec2f(0.0, 1.0)), hash12(i + vec2f(1.0, 1.0)), u.x), u.y);
-}
-fn fbm2(p: vec2f, oct: i32) -> f32 {
-    var s = 0.0; var a = 0.5; var n = 0.0; var q = p;
-    for (var i = 0; i < oct; i++) { s += a * vnoise2(q); n += a; a *= 0.5; q = q * 2.03 + vec2f(17.1, -9.3); }
-    return s / n;
-}
+${NoiseWGSL.hash12('hash12')}
+${NoiseWGSL.pcg('pcg', 'rnd')}
+${NoiseWGSL.ign('ign')}
+${NoiseWGSL.value2('vnoise2', 'hash12')}
+${NoiseWGSL.fbm('fbm2', 'vnoise2', { octaves: 'param', shift: [17.1, -9.3], normalize: true })}
 fn aces(x: vec3f) -> vec3f {
     let a = x * (2.51 * x + 0.03);
     let b = x * (2.43 * x + 0.59) + 0.14;

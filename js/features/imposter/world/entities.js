@@ -2,22 +2,19 @@
 // Entities: terrain, props, comparisons and scatters.
 
 Features.part('imposter', (engine, feature) => {
-const { Common } = engine;
+const { Common, kits } = engine;
 const { DEG, clamp, lerp, smoothstep, v3 } = Common;
-const { FORCE, lin, quat, rng, noise3, ridged, fbm, Geo, MeshBuilder } = feature;
+const { seededRandom, valueNoise3, valueNoise3xz, ridgedMultifractal, fbm } = kits.noise;
+const { FORCE, lin, quat, Geo, MeshBuilder } = feature;
 
-// Each is constructed from a scenario definition ({ type, id, ... }) and spawned once, in scenario order.
-class Entity {
-    constructor(def, world) {
-        this.def = def;
-        this.world = world;
-        this.id = def.id;
-    }
-    spawn() {}
-    update(dt, t) {}
-}
+// the terrain's fbm: octaves of the xz plane of valueNoise3, each with its own seed
+const fbmXZ = (x, z, octaves, seed) => fbm(x, z, { octaves, seed, offset: [0, 0], seedStep: 1, noise: valueNoise3xz });
 
-// Heightfield ground: fbm hills, flattened inside `flat` [cx, cz, r0, r1]; a ring of ridged `mountains`
+// Each is constructed from a scenario definition ({ type, id, ... }) and spawned once, in scenario order (kits.world's
+// Entity).
+const { Entity } = kits.world;
+
+// Heightfield ground: fbm hills, flattened inside `flat` [cx, cz, r0, r1]; a ring of ridgedMultifractal `mountains`
 // { inner, outer, height, frequency } around `center`; single `peaks` [x, z, radius, height]. Built in
 // `chunks` x `chunks` pieces, each its own model, so the camera and every shadow cascade cull them. Vertex
 // colours come from `layers`: grass / dry grass, rock where steep (`rockSlope`: 1 - normal.y range) and
@@ -50,9 +47,9 @@ class Terrain extends Entity {
                 for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
                     const x = -S / 2 + i * step, z = -S / 2 + j * step, y = h(i, j);
                     const nrm = v3.norm([h(i - 1, j) - h(i + 1, j), 2 * step, h(i, j - 1) - h(i, j + 1)]), steep = 1 - nrm[1];
-                    let c = mix3(col.grass, col.dry, (noise3(x * 0.02, 0, z * 0.02, this.seed + 50) * 0.5 + 0.5) * 0.6);
-                    c = mix3(c, col.rock, smoothstep(s0, s1, steep + noise3(x * 0.05, 0, z * 0.05, this.seed + 55) * 0.06));
-                    const snow = smoothstep(l0, l1, y + noise3(x * 0.01, 0, z * 0.01, this.seed + 60) * 40) * (1 - smoothstep(0.3, 0.5, steep));
+                    let c = mix3(col.grass, col.dry, (valueNoise3(x * 0.02, 0, z * 0.02, this.seed + 50) * 0.5 + 0.5) * 0.6);
+                    c = mix3(c, col.rock, smoothstep(s0, s1, steep + valueNoise3(x * 0.05, 0, z * 0.05, this.seed + 55) * 0.06));
+                    const snow = smoothstep(l0, l1, y + valueNoise3(x * 0.01, 0, z * 0.01, this.seed + 60) * 40) * (1 - smoothstep(0.3, 0.5, steep));
                     g.vert([x, y, z], nrm, [x, z]);
                     g.col.push(...mix3(c, col.snow, snow));
                 }
@@ -71,17 +68,17 @@ class Terrain extends Entity {
 
     noise(x, z) {
         const f = this.freq;
-        let h = fbm(x * f, z * f, 5, this.seed) * this.amp + fbm(x * f * 0.3, z * f * 0.3, 3, this.seed + 9) * this.amp * 1.4;
+        let h = fbmXZ(x * f, z * f, 5, this.seed) * this.amp + fbmXZ(x * f * 0.3, z * f * 0.3, 3, this.seed + 9) * this.amp * 1.4;
         if (this.flat) { const [cx, cz, r0, r1] = this.flat; h *= smoothstep(r0, r1, Math.hypot(x - cx, z - cz)); }
         const m = this.mountains;
         if (m) {
             const [cx, cz] = m.center || [0, 0], ring = smoothstep(m.inner ?? 500, m.outer ?? 1000, Math.hypot(x - cx, z - cz));
             const mf = m.frequency ?? 0.002;
-            if (ring > 0) h += ring * (m.height ?? 200) * ridged(x * mf, z * mf, 6, this.seed + 20);
+            if (ring > 0) h += ring * (m.height ?? 200) * ridgedMultifractal(x * mf, z * mf, 6, this.seed + 20);
         }
         for (const [px, pz, rad, ph] of this.peaks) {
             const t = 1 - Math.hypot(x - px, z - pz) / rad;
-            if (t > 0) h += ph * Math.pow(smoothstep(0, 1, t), 1.6) * (0.7 + 0.5 * ridged(x * 0.004, z * 0.004, 5, this.seed + 30));
+            if (t > 0) h += ph * Math.pow(smoothstep(0, 1, t), 1.6) * (0.7 + 0.5 * ridgedMultifractal(x * 0.004, z * 0.004, 5, this.seed + 30));
         }
         return h;
     }
@@ -118,7 +115,7 @@ class Prop extends Entity {
 
     spinRot(t) {
         const s = this.def.spin;
-        return s ? quat.mul(quat.axis(s.axis || [0, 1, 0], (s.speed ?? 20) * DEG * t), this.rot0) : this.rot0;
+        return s ? quat.mul(quat.axisAngle(s.axis || [0, 1, 0], (s.speed ?? 20) * DEG * t), this.rot0) : this.rot0;
     }
 
     update(dt, t) { if (this.def.spin) this.arch.set(this.slot, this.base, this.spinRot(t), this.scale); }
@@ -150,20 +147,20 @@ class Compare extends Prop {
 // and so are ground steeper than `maxSlope` (1 - normal.y) or higher than `maxHeight` (treeline)
 class Scatter extends Entity {
     spawn() {
-        const e = this.def, w = this.world, arch = w.archetype(e.model), rnd = rng(e.seed ?? 1);
+        const e = this.def, w = this.world, arch = w.archetype(e.model), rnd = seededRandom(e.seed ?? 1);
         const [cx, cz] = e.center || [0, 0], inner = e.inner ?? 0, outer = e.outer ?? 100, count = e.count ?? 100;
         const [s0, s1] = Array.isArray(e.scale) ? e.scale : [e.scale ?? 1, e.scale ?? 1], spacing = e.spacing ?? 2, sink = e.sink ?? 0.15;
         let placed = 0;
         for (let tries = 0; placed < count && tries < count * 12; tries++) {
             const a = rnd() * Math.PI * 2, r = Math.sqrt(lerp(inner * inner, outer * outer, rnd()));
             const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r, s = lerp(s0, s1, rnd()), yaw = rnd() * Math.PI * 2;
-            const tilt = e.tilt ? quat.axis([rnd() - 0.5, 0, rnd() - 0.5], e.tilt * DEG * rnd()) : null;
+            const tilt = e.tilt ? quat.axisAngle([rnd() - 0.5, 0, rnd() - 0.5], e.tilt * DEG * rnd()) : null;
             if (w.terrain && !w.terrain.contains(x, z, spacing * s)) continue;
             if (e.maxHeight !== undefined && w.heightAt(x, z) > e.maxHeight) continue;
             if (e.maxSlope !== undefined && w.terrain && w.terrain.slope(x, z) > e.maxSlope) continue;
             if (w.occupied(x, z, spacing * s)) continue;
             w.occupy(x, z, spacing * s);
-            let q = quat.axis([0, 1, 0], yaw);
+            let q = quat.axisAngle([0, 1, 0], yaw);
             if (tilt) q = quat.mul(tilt, q);
             arch.add([x, w.heightAt(x, z) - sink * s, z], q, s, 0);
             placed++;

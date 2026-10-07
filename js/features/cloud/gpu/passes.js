@@ -3,12 +3,12 @@
 
 Features.part('cloud', (engine, feature) => {
 const { Common } = engine;
-const { smoothstep, makeBuffer } = Common;
+const { smoothstep, makeBuffer, bindLayout, bindGroup } = Common;
 const {
-    NOISE_SHAPE, NOISE_DETAIL, OCC_RES, CLOUD_TILE, WEATHER_RES, SHADOW_RES, GROUND_RES, FROXEL, fromHalf,
-    FrameBlock, BindingSet, makeLayout, makeGroup, WGSL_MATH, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_DENSITY,
-    WGSL_SHADOW_SAMPLE, WGSL_SHELTER, WGSL_OCCUPANCY, WGSL_NOISE, WGSL_WEATHER, WGSL_SHADOW, WGSL_GROUND,
-    WGSL_FROXEL, WGSL_SKIP_SAMPLE, WGSL_TILES, WGSL_MARCH, WGSL_RESOLVE, WGSL_TERRAIN,
+    NOISE_SHAPE, NOISE_DETAIL, OCC_RES, CLOUD_TILE, WEATHER_RES, SHADOW_RES, GROUND_RES, FROXEL, fromHalf, FrameBlock,
+    BindingSet, WGSL_MATH, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_DENSITY, WGSL_SHADOW_SAMPLE, WGSL_SHELTER,
+    WGSL_OCCUPANCY, WGSL_NOISE, WGSL_WEATHER, WGSL_SHADOW, WGSL_GROUND, WGSL_FROXEL, WGSL_SKIP_SAMPLE, WGSL_TILES,
+    WGSL_MARCH, WGSL_RESOLVE, WGSL_TERRAIN,
 } = feature;
 
 // GPU passes
@@ -19,10 +19,10 @@ class NoiseVolumes {
         const make = n => device.createTexture({ size: [n, n, n], dimension: '3d', format: 'rgba8unorm', usage: U.TEXTURE_BINDING | U.STORAGE_BINDING });
         this.shape = make(NOISE_SHAPE);
         this.detail = make(NOISE_DETAIL);
-        const layout = makeLayout(device, GPUShaderStage.COMPUTE, ['write3d:rgba8unorm', 'write3d:rgba8unorm']);
+        const layout = bindLayout(device, GPUShaderStage.COMPUTE, ['write3d:rgba8unorm', 'write3d:rgba8unorm']);
         const module = device.createShaderModule({ label: 'noise', code: WGSL_NOISE });
         const pl = device.createPipelineLayout({ bindGroupLayouts: [layout] });
-        const group = makeGroup(device, layout, [this.shape.createView({ dimension: '3d' }), this.detail.createView({ dimension: '3d' })], 'noise');
+        const group = bindGroup(device, layout, [this.shape.createView({ dimension: '3d' }), this.detail.createView({ dimension: '3d' })], 'noise');
         const enc = device.createCommandEncoder();
         const pass = enc.beginComputePass();
         pass.setBindGroup(0, group);
@@ -64,24 +64,24 @@ class WeatherPass {
         this.shadowView = this.shadow.createView();
 
         const wSet = new BindingSet(d, ['F', 'cells']);
-        const wOut = makeLayout(d, C, ['write:rgba16float', 'write:rgba16float', 'write:rgba16float', 'write:rgba16float']);
+        const wOut = bindLayout(d, C, ['write:rgba16float', 'write:rgba16float', 'write:rgba16float', 'write:rgba16float']);
         this.pWeather = computePipeline(d, 'weather', [wSet.layout, wOut], shaderSource(wSet, WGSL_WEATHER), 'weather');
         this.wGroup = wSet.group({ F: r.frameBuf, cells: r.cellBuf }, 'weather-in');
-        this.wOutGroup = makeGroup(d, wOut, [this.weatherView, this.anvilView, this.layerView, this.styleView], 'weather-out');
+        this.wOutGroup = bindGroup(d, wOut, [this.weatherView, this.anvilView, this.layerView, this.styleView], 'weather-out');
 
         const sSet = new BindingSet(d, ['F', 'shapeTex', 'detailTex', 'weatherTex', 'anvilTex', 'layerTex', 'styleTex', 'repSamp', 'clampSamp']);
-        const sOut = makeLayout(d, C, ['write:rgba16float']);
+        const sOut = bindLayout(d, C, ['write:rgba16float']);
         this.pShadow = computePipeline(d, 'shadow', [sSet.layout, sOut], shaderSource(sSet, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_DENSITY, WGSL_SHADOW), 'shadow');
         this.sGroup = sSet.group({ F: r.frameBuf, shapeTex: r.noise.shapeView, detailTex: r.noise.detailView, weatherTex: this.weatherView, anvilTex: this.anvilView, layerTex: this.layerView, styleTex: this.styleView, repSamp: r.repSamp, clampSamp: r.clampSamp }, 'shadow-in');
-        this.sOutGroup = makeGroup(d, sOut, [this.shadowView], 'shadow-out');
+        this.sOutGroup = bindGroup(d, sOut, [this.shadowView], 'shadow-out');
 
         // occupancy grid for the march's empty-space skipping
         this.occ = makeBuffer(d, OCC_RES * OCC_RES * 4, GPUBufferUsage.STORAGE);
         const oSet = new BindingSet(d, ['F', 'weatherTex', 'anvilTex', 'layerTex', 'styleTex']);
-        const oOut = makeLayout(d, C, ['storage']);
+        const oOut = bindLayout(d, C, ['storage']);
         this.pOcc = computePipeline(d, 'occupancy', [oSet.layout, oOut], shaderSource(oSet, WGSL_OCCUPANCY), 'occupancy');
         this.oGroup = oSet.group({ F: r.frameBuf, weatherTex: this.weatherView, anvilTex: this.anvilView, layerTex: this.layerView, styleTex: this.styleView }, 'occupancy-in');
-        this.oOutGroup = makeGroup(d, oOut, [this.occ], 'occupancy-out');
+        this.oOutGroup = bindGroup(d, oOut, [this.occ], 'occupancy-out');
 
         this.probes = [0, 1, 2].map(() => ({ buf: d.createBuffer({ size: 512, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ }), busy: false }));
         this.probe = { coverage: 0, top: 0, precip: 0, virga: 0, cover: 0 };
@@ -142,10 +142,10 @@ class GroundPass {
         }
         this.buffer = makeBuffer(d, init.byteLength, GPUBufferUsage.STORAGE, init);
         const set = new BindingSet(d, ['F', 'weatherTex', 'shadowTex', 'heightTex', 'clampSamp']);
-        const out = makeLayout(d, GPUShaderStage.COMPUTE, ['storage']);
+        const out = bindLayout(d, GPUShaderStage.COMPUTE, ['storage']);
         this.pipeline = computePipeline(d, 'ground', [set.layout, out], shaderSource(set, WGSL_WEATHER_SAMPLE, WGSL_SHADOW_SAMPLE, WGSL_GROUND), 'groundUpdate');
         this.group = set.group({ F: r.frameBuf, weatherTex: r.weatherPass.weatherView, shadowTex: r.weatherPass.shadowView, heightTex: r.heightView, clampSamp: r.clampSamp }, 'ground-in');
-        this.outGroup = makeGroup(d, out, [this.buffer], 'ground-out');
+        this.outGroup = bindGroup(d, out, [this.buffer], 'ground-out');
     }
 
     encode(enc, prof) {
@@ -167,10 +167,10 @@ class FroxelPass {
         this.r = r;
         this.tex = d.createTexture({ size: FROXEL, dimension: '3d', format: 'rgba16float', usage: U.TEXTURE_BINDING | U.STORAGE_BINDING });
         this.view = this.tex.createView({ dimension: '3d' });
-        const out = makeLayout(d, GPUShaderStage.COMPUTE, ['write3d:rgba16float']);
+        const out = bindLayout(d, GPUShaderStage.COMPUTE, ['write3d:rgba16float']);
         this.pipeline = computePipeline(d, 'froxel', [r.worldSet.layout, out],
             shaderSource(r.worldSet, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_DENSITY, WGSL_SHADOW_SAMPLE, WGSL_FROXEL), 'inject');
-        this.group = makeGroup(d, out, [this.view], 'froxel-out');
+        this.group = bindGroup(d, out, [this.view], 'froxel-out');
     }
 
     encode(enc, prof) {
@@ -188,12 +188,12 @@ class CloudPass {
     constructor(r) {
         const d = r.device, C = GPUShaderStage.COMPUTE;
         this.r = r;
-        this.marchOut = makeLayout(d, C, ['depth', 'write:rgba16float', 'write:r32float', 'tex3d', 'tex:uint']);
-        this.resolveIO = makeLayout(d, C, ['tex', 'tex:unfilterable-float', 'tex', 'write:rgba16float']);
+        this.marchOut = bindLayout(d, C, ['depth', 'write:rgba16float', 'write:r32float', 'tex3d', 'tex:uint']);
+        this.resolveIO = bindLayout(d, C, ['tex', 'tex:unfilterable-float', 'tex', 'write:rgba16float']);
         const rSet = new BindingSet(d, ['F', 'clampSamp']);
         this.pMarch = computePipeline(d, 'march', [r.worldSet.layout, this.marchOut],
             shaderSource(r.worldSet, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_DENSITY, WGSL_SHADOW_SAMPLE, WGSL_SKIP_SAMPLE, WGSL_SHELTER, WGSL_TERRAIN, WGSL_MARCH), 'march');
-        this.tileOut = makeLayout(d, C, ['write:rg32uint']);
+        this.tileOut = bindLayout(d, C, ['write:rg32uint']);
         this.pTiles = computePipeline(d, 'tiles', [r.worldSet.layout, this.tileOut],
             shaderSource(r.worldSet, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_DENSITY, WGSL_SKIP_SAMPLE, WGSL_TILES), 'tiles');
         this.pResolve = computePipeline(d, 'resolve', [rSet.layout, this.resolveIO], shaderSource(rSet, WGSL_SKY, WGSL_RESOLVE), 'resolve');
@@ -213,10 +213,10 @@ class CloudPass {
         this.tw = Math.ceil(w / CLOUD_TILE);
         this.th = Math.ceil(h / CLOUD_TILE);
         this.tiles = d.createTexture({ size: [this.tw, this.th], format: 'rg32uint', usage: U.TEXTURE_BINDING | U.STORAGE_BINDING });
-        this.tileGroup = makeGroup(d, this.tileOut, [this.tiles.createView()], 'tiles-out');
-        this.marchGroup = makeGroup(d, this.marchOut, [depthView, this.color.createView(), this.depth.createView(), this.r.froxelPass.view, this.tiles.createView()], 'march-out');
+        this.tileGroup = bindGroup(d, this.tileOut, [this.tiles.createView()], 'tiles-out');
+        this.marchGroup = bindGroup(d, this.marchOut, [depthView, this.color.createView(), this.depth.createView(), this.r.froxelPass.view, this.tiles.createView()], 'march-out');
         // resolveGroups[k] reads history k and writes history 1 - k
-        this.resolveGroups = [0, 1].map(k => makeGroup(d, this.resolveIO, [this.color.createView(), this.depth.createView(), hv[k], hv[1 - k]], `resolve-${k}`));
+        this.resolveGroups = [0, 1].map(k => bindGroup(d, this.resolveIO, [this.color.createView(), this.depth.createView(), hv[k], hv[1 - k]], `resolve-${k}`));
         this.histViews = hv;
     }
 

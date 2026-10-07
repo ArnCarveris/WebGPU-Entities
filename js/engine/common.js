@@ -3,13 +3,16 @@
 // A feature takes them from its factory's `engine` ({ Common } = engine); engine scripts use the global.
 //
 //   scalars      DEG, clamp, sat01, lerp, smoothstep
-//   v3, m4       3-vectors as arrays; column-major 4x4 (Float64Array), WebGPU clip space (depth 0..1)
+//   v3, quat, m4 3-vectors as arrays; quaternions [x, y, z, w]; column-major 4x4 (Float64Array), WebGPU clip space
+//                (depth 0..1); frustumPlanes
 //   yawPitch     the yaw / pitch (radians) of a fly camera looking along a direction
-//   random       mulberry32 (seeded generator), hash2 / vnoise / fbm (seeded 2D value noise)
 //   polylines    polylineLengths, polylineNearest, polylineBox on [x, z] points
-//   GPU          makeBuffer, gridIndices
-//   controls     PointerInput (look / act / keys on a world's canvas), TerrainFlyCamera (a free camera over a terrain)
-//   screen       Toast (a toast element of a world's HUD), LabelLayer (in-world labels on a 2D canvas)
+//   GPU          makeBuffer, gridIndices, bindLayout / bindGroup (bind groups from a list of binding kinds)
+//   text         fmtKm (m or km), fmtNum (k / M / G with a unit), fmtK (k / M counts)
+//   controls     PointerInput (look / act / keys on a world's canvas; a camera: kits.view's FirstPersonView)
+//
+// Bigger generic building blocks (random and noise, a first-person view, a world's HUD, terrain, transit lines...) are
+// kits (js/kits, see Features.KITS).
 
 const Common = (() => {
 const DEG = Math.PI / 180;
@@ -32,8 +35,62 @@ const v3 = {
     lerp: (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t],
 };
 
+// ------------------------------------------------------------------------------------------------ quaternions
+// [x, y, z, w]. Features add their own conventions (euler angles...) with { ...Common.quat, ... }.
+const quat = {
+    identity: () => [0, 0, 0, 1],
+    mul(a, b) {
+        return [
+            a[3] * b[0] + a[0] * b[3] + a[1] * b[2] - a[2] * b[1],
+            a[3] * b[1] - a[0] * b[2] + a[1] * b[3] + a[2] * b[0],
+            a[3] * b[2] + a[0] * b[1] - a[1] * b[0] + a[2] * b[3],
+            a[3] * b[3] - a[0] * b[0] - a[1] * b[1] - a[2] * b[2],
+        ];
+    },
+    conj: q => [-q[0], -q[1], -q[2], q[3]],
+    norm(q) { const l = Math.hypot(q[0], q[1], q[2], q[3]) || 1; return [q[0] / l, q[1] / l, q[2] / l, q[3] / l]; },
+    axisAngle(axis, rad) { const n = v3.norm(axis), s = Math.sin(rad / 2); return [n[0] * s, n[1] * s, n[2] * s, Math.cos(rad / 2)]; },
+    rotate(q, v) {
+        const u = [q[0], q[1], q[2]], t = v3.mul(v3.cross(u, v), 2);
+        return v3.add(v3.add(v, v3.mul(t, q[3])), v3.cross(u, t));
+    },
+    // yaw about Y, then pitch about X, then roll about Z (radians): Ry * Rx * Rz
+    yxz(yaw, pitch, roll) {
+        return quat.mul(quat.mul(quat.axisAngle([0, 1, 0], yaw), quat.axisAngle([1, 0, 0], pitch)), quat.axisAngle([0, 0, 1], roll));
+    },
+    axes: q => [quat.rotate(q, [1, 0, 0]), quat.rotate(q, [0, 1, 0]), quat.rotate(q, [0, 0, 1])],
+    fromAxes(X, Y, Z) {
+        const m00 = X[0], m10 = X[1], m20 = X[2], m01 = Y[0], m11 = Y[1], m21 = Y[2], m02 = Z[0], m12 = Z[1], m22 = Z[2];
+        const tr = m00 + m11 + m22;
+        let s;
+        if (tr > 0) { s = Math.sqrt(tr + 1) * 2; return quat.norm([(m21 - m12) / s, (m02 - m20) / s, (m10 - m01) / s, 0.25 * s]); }
+        if (m00 > m11 && m00 > m22) { s = Math.sqrt(1 + m00 - m11 - m22) * 2; return quat.norm([0.25 * s, (m01 + m10) / s, (m02 + m20) / s, (m21 - m12) / s]); }
+        if (m11 > m22) { s = Math.sqrt(1 + m11 - m00 - m22) * 2; return quat.norm([(m01 + m10) / s, 0.25 * s, (m12 + m21) / s, (m02 - m20) / s]); }
+        s = Math.sqrt(1 + m22 - m00 - m11) * 2; return quat.norm([(m02 + m20) / s, (m12 + m21) / s, 0.25 * s, (m10 - m01) / s]);
+    },
+    // shortest arc taking unit vector a onto unit vector b
+    fromTo(a, b) {
+        const d = v3.dot(a, b);
+        if (d < -0.999999) {
+            let ax = v3.cross([1, 0, 0], a);
+            if (v3.len(ax) < 1e-6) ax = v3.cross([0, 1, 0], a);
+            return quat.axisAngle(ax, Math.PI);
+        }
+        const c = v3.cross(a, b);
+        return quat.norm([c[0], c[1], c[2], 1 + d]);
+    },
+    // camera-style orientation: looks down -Z
+    look(fwd, up) {
+        const Z = v3.norm(v3.mul(fwd, -1));
+        let X = v3.cross(up, Z);
+        if (v3.len(X) < 1e-9) X = v3.cross(Math.abs(Z[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0], Z);
+        X = v3.norm(X);
+        return quat.fromAxes(X, v3.cross(Z, X), Z);
+    },
+};
+
 // --------------------------------------------------------------------------------------------- matrices
-// Features add their own (perspective, TRS...) with { ...Common.m4, ... }.
+// Features add their own with { ...Common.m4, ... }.
 const m4 = {
     identity() { const m = new Float64Array(16); m[0] = m[5] = m[10] = m[15] = 1; return m; },
     mul(a, b) {
@@ -48,6 +105,30 @@ const m4 = {
     reversedInfinite(fovy, aspect, near) {
         const f = 1 / Math.tan(fovy / 2);
         return new Float64Array([f / aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, 0, -1, 0, 0, near, 0]);
+    },
+    // depth 0 at the near plane, 1 at the far one
+    perspective(fovy, aspect, near, far) {
+        const f = 1 / Math.tan(fovy / 2), nf = 1 / (near - far);
+        return new Float64Array([f / aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, far * nf, -1, 0, 0, far * near * nf, 0]);
+    },
+    translate(t) { const m = m4.identity(); m[12] = t[0]; m[13] = t[1]; m[14] = t[2]; return m; },
+    rotX(a) { const c = Math.cos(a), s = Math.sin(a); return new Float64Array([1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, 0, 0, 0, 1]); },
+    rotY(a) { const c = Math.cos(a), s = Math.sin(a); return new Float64Array([c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, 0, 0, 0, 1]); },
+    rotZ(a) { const c = Math.cos(a), s = Math.sin(a); return new Float64Array([c, s, 0, 0, -s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]); },
+    // translation p, rotation q (a quaternion), scale s (a number or [x, y, z])
+    fromTRS(p, q, s) {
+        const [x, y, z, w] = q, [sx, sy, sz] = Array.isArray(s) ? s : [s, s, s];
+        const xx = x * x, yy = y * y, zz = z * z, xy = x * y, xz = x * z, yz = y * z, wx = w * x, wy = w * y, wz = w * z;
+        return new Float64Array([(1 - 2 * (yy + zz)) * sx, 2 * (xy + wz) * sx, 2 * (xz - wy) * sx, 0,
+            2 * (xy - wz) * sy, (1 - 2 * (xx + zz)) * sy, 2 * (yz + wx) * sy, 0,
+            2 * (xz + wy) * sz, 2 * (yz - wx) * sz, (1 - 2 * (xx + yy)) * sz, 0, p[0], p[1], p[2], 1]);
+    },
+    // a point (with the translation) or a direction (without) through m: [x, y, z]
+    point(m, p) {
+        return [m[0] * p[0] + m[4] * p[1] + m[8] * p[2] + m[12], m[1] * p[0] + m[5] * p[1] + m[9] * p[2] + m[13], m[2] * p[0] + m[6] * p[1] + m[10] * p[2] + m[14]];
+    },
+    dir(m, p) {
+        return [m[0] * p[0] + m[4] * p[1] + m[8] * p[2], m[1] * p[0] + m[5] * p[1] + m[9] * p[2], m[2] * p[0] + m[6] * p[1] + m[10] * p[2]];
     },
     // view matrix from the eye and its basis (rows: right, up, back)
     view(eye, r, u, f) {
@@ -88,48 +169,20 @@ const m4 = {
     },
 };
 
+// Frustum planes of a view-projection [nx, ny, nz, d], unit normals, inside when dot(n, p) + d >= 0: left, right,
+// bottom, top, near, far. Reversed infinite Z (m4.reversedInfinite) has no far plane: the 6th never culls.
+function frustumPlanes(m, { reversed = false } = {}) {
+    const row = r => [m[r], m[4 + r], m[8 + r], m[12 + r]];
+    const r0 = row(0), r1 = row(1), r2 = row(2), r3 = row(3);
+    const comb = (a, b, s) => a.map((x, i) => x + s * b[i]);
+    const planes = [comb(r3, r0, 1), comb(r3, r0, -1), comb(r3, r1, 1), comb(r3, r1, -1), ...(reversed ? [comb(r3, r2, -1)] : [r2, comb(r3, r2, -1)])]
+        .map(p => { const l = Math.hypot(p[0], p[1], p[2]) || 1; return p.map(x => x / l); });
+    if (reversed) planes.push([0, 0, 0, 1]);
+    return planes;
+}
+
 // a fly camera (forward = [-sin yaw cos pitch, sin pitch, -cos yaw cos pitch]) looking along d
 const yawPitch = d => ({ yaw: Math.atan2(-d[0], -d[2]), pitch: Math.asin(clamp(d[1], -1, 1)) });
-
-// ------------------------------------------------------------------------------------------------- random
-function mulberry32(seed) {
-    let a = seed >>> 0;
-    return () => {
-        a = (a + 0x6D2B79F5) >>> 0;
-        let t = a;
-        t = Math.imul(t ^ (t >>> 15), t | 1);
-        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-}
-
-function hash2(ix, iy, seed) {
-    let h = (Math.imul(ix, 374761393) + Math.imul(iy, 668265263) + Math.imul(seed, 1442695041)) | 0;
-    h = Math.imul(h ^ (h >>> 13), 1274126177);
-    h ^= h >>> 16;
-    return (h >>> 0) / 4294967296;
-}
-
-// value noise in [-1, 1]
-function vnoise(x, y, seed) {
-    const ix = Math.floor(x), iy = Math.floor(y), fx = x - ix, fy = y - iy;
-    const ux = fx * fx * (3 - 2 * fx), uy = fy * fy * (3 - 2 * fy);
-    const a = hash2(ix, iy, seed), b = hash2(ix + 1, iy, seed), c = hash2(ix, iy + 1, seed), d = hash2(ix + 1, iy + 1, seed);
-    return lerp(lerp(a, b, ux), lerp(c, d, ux), uy) * 2 - 1;
-}
-
-// fractal noise in about [-1, 1]; ridged gives sharp crests in [0, 1]
-function fbm(x, y, { octaves = 5, seed = 1, ridged = false, gain = 0.5 } = {}) {
-    let sum = 0, amp = 1, norm = 0, f = 1;
-    for (let o = 0; o < octaves; o++) {
-        const n = vnoise(x * f + o * 17.3, y * f - o * 9.1, seed + o * 31);
-        sum += (ridged ? 1 - Math.abs(n) : n) * amp;
-        norm += amp;
-        amp *= gain;
-        f *= 2.03;
-    }
-    return sum / norm;
-}
 
 // ----------------------------------------------------------------------------------------------- polylines
 // arc length at each point
@@ -177,11 +230,48 @@ function gridIndices(w) {
     return idx;
 }
 
+// bind group layout entries from binding kinds, in binding order: uniform, read (read-only storage), storage, tex[:sample
+// type], tex3d, array (2d-array), depth, sampler, write:<format> / write3d:<format> (write-only storage textures)
+function bindLayoutEntry(binding, visibility, kind) {
+    const [k, arg] = kind.split(':'), e = { binding, visibility };
+    if (k === 'uniform') e.buffer = { type: 'uniform' };
+    else if (k === 'read') e.buffer = { type: 'read-only-storage' };
+    else if (k === 'storage') e.buffer = { type: 'storage' };
+    else if (k === 'tex') e.texture = { sampleType: arg || 'float', viewDimension: '2d' };
+    else if (k === 'tex3d') e.texture = { sampleType: 'float', viewDimension: '3d' };
+    else if (k === 'array') e.texture = { sampleType: 'float', viewDimension: '2d-array' };
+    else if (k === 'depth') e.texture = { sampleType: 'depth', viewDimension: '2d' };
+    else if (k === 'sampler') e.sampler = { type: 'filtering' };
+    else if (k === 'write') e.storageTexture = { access: 'write-only', format: arg, viewDimension: '2d' };
+    else if (k === 'write3d') e.storageTexture = { access: 'write-only', format: arg, viewDimension: '3d' };
+    else throw new Error(`layout kind ${kind}`);
+    return e;
+}
+const bindResource = r => r instanceof GPUBuffer ? { buffer: r } : r;
+function bindLayout(device, visibility, kinds) {
+    return device.createBindGroupLayout({ entries: kinds.map((k, b) => bindLayoutEntry(b, visibility, k)) });
+}
+// resources (buffers, views, samplers) in binding order
+function bindGroup(device, layout, resources, label) {
+    return device.createBindGroup({ label, layout, entries: resources.map((r, binding) => ({ binding, resource: bindResource(r) })) });
+}
+
+// ----------------------------------------------------------------------------------------------------- text
+const fmtKm = d => d < 1000 ? `${d.toFixed(0)} m` : `${(d / 1000).toFixed(d < 10000 ? 1 : 0)} km`;
+function fmtNum(x, unit = '') {
+    const a = Math.abs(x);
+    if (a >= 1e9) return `${(x / 1e9).toFixed(2)}G${unit}`;
+    if (a >= 1e6) return `${(x / 1e6).toFixed(2)}M${unit}`;
+    if (a >= 1e4) return `${(x / 1e3).toFixed(1)}k${unit}`;
+    return `${x.toFixed(a < 10 ? 1 : 0)}${unit}`;
+}
+const fmtK = n => (n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'k' : String(Math.round(n)));
+
 // ---------------------------------------------------------------------------------------------- controls
 // Pointer and keys over a world's canvas (io: its InputRouter scope): left drag looks; the right button (or Ctrl + left)
-// acts, `acting` while held and once per press in consume().clicks.
+// acts, `acting` while held and once per press in consume().clicks. Without `act`, any button looks.
 class PointerInput {
-    constructor(io) {
+    constructor(io, { act = true } = {}) {
         const el = io.canvas;
         this.el = el;
         this.keys = new Set();
@@ -194,8 +284,8 @@ class PointerInput {
         io.listen(el, 'contextmenu', e => e.preventDefault());
         io.listen(el, 'pointerdown', e => {
             el.setPointerCapture(e.pointerId);
-            if (e.button === 2 || (e.button === 0 && e.ctrlKey)) { this.acting = true; this.clicks.push([e.clientX, e.clientY]); }
-            else if (e.button === 0) { this.looking = true; el.classList.add('drag'); }
+            if (act && (e.button === 2 || (e.button === 0 && e.ctrlKey))) { this.acting = true; this.clicks.push([e.clientX, e.clientY]); }
+            else if (e.button === 0 || !act) { this.looking = true; el.classList.add('drag'); }
         });
         io.listen(el, 'pointermove', e => {
             this.mouse = [e.clientX, e.clientY];
@@ -224,113 +314,9 @@ class PointerInput {
     }
 }
 
-// A free camera over a terrain: WASD, Space / C, Shift faster, Alt slower, the wheel sets the speed; it stays
-// `clearance` m above field.sample(x, z) and below `ceiling`.
-class TerrainFlyCamera {
-    constructor({ pos = [0, 200, 0], speed = 80, wheelStep = 1.2, minSpeed = 2, maxSpeed = 2000, clearance = 2, ceiling = Infinity } = {}) {
-        this.pos = [...pos];
-        this.yaw = 0;
-        this.pitch = 0;
-        this.fov = 60 * DEG;
-        this.speed = speed;
-        this.cfg = { wheelStep, minSpeed, maxSpeed, clearance, ceiling };
-    }
-
-    basis() {
-        const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw), cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
-        const fwd = [-sy * cp, sp, -cy * cp], right = [cy, 0, -sy];
-        return { fwd, right, up: v3.cross(right, fwd) };
-    }
-
-    lookAt(target) {
-        Object.assign(this, yawPitch(v3.norm(v3.sub(target, this.pos))));
-    }
-
-    // io: input.consume()
-    update(dt, io, input, field) {
-        const c = this.cfg;
-        this.yaw -= io.dx * 0.0025;
-        this.pitch = clamp(this.pitch - io.dy * 0.0025, -1.55, 1.55);
-        if (io.wheel) this.speed = clamp(this.speed * Math.pow(c.wheelStep, -io.wheel), c.minSpeed, c.maxSpeed);
-        const k = input.keys, { fwd, right } = this.basis();
-        let m = [0, 0, 0];
-        if (k.has('KeyW')) m = v3.add(m, fwd);
-        if (k.has('KeyS')) m = v3.sub(m, fwd);
-        if (k.has('KeyD')) m = v3.add(m, right);
-        if (k.has('KeyA')) m = v3.sub(m, right);
-        if (k.has('Space')) m[1] += 1;
-        if (k.has('KeyC')) m[1] -= 1;
-        const mul = (k.has('ShiftLeft') || k.has('ShiftRight') ? 5 : 1) * (k.has('AltLeft') ? 0.2 : 1);
-        this.pos = v3.add(this.pos, v3.mul(m, this.speed * mul * dt));
-        this.pos[1] = clamp(this.pos[1], field.sample(this.pos[0], this.pos[2]) + c.clearance, c.ceiling);
-    }
-
-    // world-space direction through canvas pixel (mx, my) of a w x h canvas
-    ray(mx, my, w, h) {
-        const { fwd, right, up } = this.basis(), t = Math.tan(this.fov / 2), a = w / h;
-        const x = (mx / w * 2 - 1) * t * a, y = (1 - my / h * 2) * t;
-        return v3.norm(v3.add(fwd, v3.add(v3.mul(right, x), v3.mul(up, y))));
-    }
-}
-
-// --------------------------------------------------------------------------------------------------- screen
-// a world's toast: shown for `ms` (kept up when ms <= 0)
-class Toast {
-    constructor(el) { this.el = el; }
-
-    show(msg, ms = 2200) {
-        this.el.textContent = msg;
-        this.el.style.display = 'block';
-        clearTimeout(this.timer);
-        if (ms > 0) this.timer = setTimeout(() => { this.el.style.display = 'none'; }, ms);
-    }
-}
-
-// in-world labels on a 2D canvas over the world: begin() sizes and clears it, place() projects a point, mark() draws one
-class LabelLayer {
-    constructor(canvas) {
-        this.canvas = canvas;
-        this.g = canvas.getContext('2d');
-        this.W = this.H = 0;
-        this.dpr = 1;
-    }
-
-    begin() {
-        const c = this.canvas, dpr = this.dpr = Math.min(window.devicePixelRatio || 1, 2);
-        const W = this.W = Math.floor(c.clientWidth * dpr), H = this.H = Math.floor(c.clientHeight * dpr);
-        if (c.width !== W || c.height !== H) { c.width = W; c.height = H; }
-        this.g.clearRect(0, 0, W, H);
-        return this.g;
-    }
-
-    // ready to write labels: 11 px monospace, vertically centred
-    font() {
-        this.g.font = `${11 * this.dpr}px 'Share Tech Mono', monospace`;
-        this.g.textBaseline = 'middle';
-    }
-
-    // canvas pixel [x, y] of world point p under viewProj, or null behind the eye or well off the screen
-    place(viewProj, p) {
-        const clip = m4.project(viewProj, p);
-        if (clip[3] <= 0) return null;
-        const x = (clip[0] / clip[3] * 0.5 + 0.5) * this.W, y = (0.5 - clip[1] / clip[3] * 0.5) * this.H;
-        return x < -50 || x > this.W + 50 || y < -20 || y > this.H + 20 ? null : [x, y];
-    }
-
-    // a diamond at [x, y] and the text to its right
-    mark([x, y], color, text) {
-        const g = this.g, dpr = this.dpr;
-        g.strokeStyle = g.fillStyle = color;
-        g.lineWidth = dpr;
-        g.beginPath();
-        g.moveTo(x, y - 4 * dpr); g.lineTo(x + 4 * dpr, y); g.lineTo(x, y + 4 * dpr); g.lineTo(x - 4 * dpr, y); g.closePath();
-        g.stroke();
-        g.fillText(text, x + 8 * dpr, y);
-    }
-}
-
 return {
-    DEG, clamp, sat01, lerp, smoothstep, v3, m4, yawPitch, mulberry32, hash2, vnoise, fbm,
-    polylineLengths, polylineNearest, polylineBox, makeBuffer, gridIndices, PointerInput, TerrainFlyCamera, Toast, LabelLayer,
+    DEG, clamp, sat01, lerp, smoothstep, v3, quat, m4, frustumPlanes, yawPitch,
+    polylineLengths, polylineNearest, polylineBox, makeBuffer, gridIndices, bindLayoutEntry, bindResource, bindLayout, bindGroup,
+    fmtKm, fmtNum, fmtK, PointerInput,
 };
 })();

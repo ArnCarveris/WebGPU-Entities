@@ -2,6 +2,8 @@
 // The phone pages (js/engine/handheld.js): the readout, runtime, lighting and bake options of the imposter world.
 
 Features.part('imposter', (engine, feature) => {
+const { kits } = engine;
+const { Pages } = kits.world;
 const { LOD_MODES, ATLAS_VIEWS, CASCADES, GRID_CHOICES, RES_CHOICES } = feature;
 
 // the readout and every control, on the engine's handheld (js/engine/handheld.js)
@@ -13,7 +15,7 @@ function phonePages(g) {
     const a = w && w.archetypes.get(st.focus), at = a && a.asset.atlas;
     const pick = (list, k) => ({ options: list.map(String), index: list.indexOf(P.bake[k]), pick: i => { P.bake[k] = list[i]; } });
     return [
-        { id: 'status', title: 'Status', sub: 'Frame, LOD, models and atlases', icon: [[52, 199, 89], 'I'], sections: Handheld.panel(g.hud.lines) },
+        Pages.status('Frame, LOD, models and atlases', [[52, 199, 89], 'I'], g.hud),
         { id: 'runtime', title: 'Runtime', sub: `LOD ${st.lodMode} · ${st.lodDistance.toFixed(0)} m · shadows ${st.shadows ? 'on' : 'off'}`, icon: [[0, 122, 255], 'R'], sections: [
             { header: 'LOD', cells: [
                 { choice: 'LOD', options: LOD_MODES, index: LOD_MODES.indexOf(st.lodMode), pick: i => g.set('lodMode', LOD_MODES[i]) },
