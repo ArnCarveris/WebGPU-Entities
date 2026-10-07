@@ -64,7 +64,7 @@ step is about 524 km (shown in the HUD), so the outpost collapses.
 | `camera`, `origin`, `lighting` | fov, `minAltitude`; rebase `distance` / `angle` / `scaleBase` / `frameRange`; exposure, sun |
 | `materials` | `albedo`, `pattern` (`flat`, `panels`, `rock`, `blink`, `windows`, `solar`, `hazard`, `regolith`), `scale`, `spec`, `shin`, `emissive` [r, g, b, strength], `rate` |
 | `models` | parts: `box` [x,y,z, sx,sy,sz], `cyl` [x,y,z, r,h] (+`r2`, `axis`, `seg`), `sphere` [x,y,z, r], `torus` [x,y,z, R,r], `rock` [x,y,z, r] (+`detail`) |
-| `entities` | `{ type, id, label, ...placement }`, where `type` maps to a class in `ENTITY_TYPES`: `body`, `prop` (+`spin`), `field` (`sphere` / `ring` / `disc` shapes, `count`, `size`, `seed`), `orbiter` (`orbit.period`) |
+| `entities` | `{ type, id, label, ...placement }`, where `type` maps to a class in `ENTITY_TYPES`: `body`, `prop` (+`spin` { `axis`, `rpm` or `speed` deg/s }), `field` (`sphere` / `ring` / `disc` shapes, `count`, `size`, `seed`), `orbiter` (`orbit.period`) |
 | placement | `pos` [m] · `parent` + `offset` · `orbit` { parent, radius or altitude, angle, incl, node } · `surface` { parent, lat, lon, alt, heading }; then `rot` [yaw, pitch, roll], `scale` |
 | `bookmarks` | `{ key, name, at: placement, look: entity id }` |
 

@@ -1,10 +1,10 @@
 'use strict';
-// Entities that add water: seas, lakes, springs, drains, rain and debris.
+// Entities that add water: seas, springs, drains, rain and debris (lakes are the terrain kit's).
 
 Features.part('water', (engine, feature) => {
-const { Common } = engine;
-const { clamp } = Common;
-const { floodFill, Entity } = feature;
+const { kits } = engine;
+const { floodFill } = kits.terrain;
+const { Entity } = feature;
 
 // --- water
 
@@ -16,15 +16,6 @@ class Sea extends Entity {
         floodFill(f, water, seeds, this.def.level);
     }
     spawn() { this.world.seaLevel = this.def.level; }
-}
-
-class Lake extends Entity {
-    get anchor() { const [x, z] = this.def.pos; return [x, this.def.level + 12, z]; }
-    fill(water) {
-        const f = this.world.field, n = f.n, [x, z] = this.def.pos;
-        const i = clamp(Math.round(f.ci(x)), 0, n - 1), j = clamp(Math.round(f.ci(z)), 0, n - 1);
-        this.cells = floodFill(f, water, [j * n + i], this.def.level);
-    }
 }
 
 class Spring extends Entity {
@@ -60,5 +51,5 @@ class Debris extends Entity {
     }
 }
 
-return { Sea, Lake, Spring, Drain, Rain, Debris };
+return { Sea, Spring, Drain, Rain, Debris };
 });

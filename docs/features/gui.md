@@ -58,7 +58,10 @@ js/main.js      entry point
 - **Entities**: `entities` lists `{ type, id, ... }`; `type` maps to a class in `ENTITY_TYPES`
   (`static`, `door`, `lamp`, `alarmBeacon`, `light`, `drone`, `securityCamera`, `avatar`,
   `terminal`, `easel`). Add a camera, light or easel by adding an entry. Up to 6 lights; the first
-  one also lights the bulb material.
+  one also lights the bulb material. `door`, `light` and `securityCamera` are the shared kinds of
+  `js/kits/entities/` (portal has them too): a door also takes `auto` / `radius` / `delay` / `locked`, a
+  light `signal` (`flicker` / `pulse`) besides `roomLights` / `door` / `alarmColor`, a camera `phase`.
+  `drone` is shared too: `center` + `radius` + `speed` (rad/s) patrol, `bob`, `pingEvery`, `light` { ahead, ... }.
 - **GUI surfaces**: `terminal` / `easel` entries carry a `gui` block (`size` in metres, `virtual`
   resolution, `range`, `crt`, `zOffset`) and their content (texts, codes, brushes, palette...).
 - **Phone pages**: `phone.pages` are data. Cells (`nav`, `switch`, `slider`, `label`, `action`,

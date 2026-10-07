@@ -23,6 +23,7 @@ class Heightfield extends kits.terrain.Heightfield {
     }
 
     paint(idx, channel, value) { const k = idx * 3 + channel; this.land[k] = Math.max(this.land[k], value); }
+    wet(idx, k) { this.paint(idx, 2, k); }
 
     // land use channel (0 town, 1 forest, 2 water, 3 the lamp share) at x, z, filtered like the GPU's landTex
     landAt(x, z, ch) {

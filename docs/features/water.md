@@ -138,7 +138,7 @@ Positions are metres: `[x, z]` on the map, with x east, z south, and the map cen
 | `coast` | terrain | lowers the map past `at` (along `dir`) to `floor` over `width` |
 | `dam` | terrain | wall `from` → `to`: `crest`, `top` width, `side` slope, `spillway` { `width`, `depth` }, `gap` { `at`, `width` }, `breachTime`. X breaches it and rebuilds it. |
 | `sea` | water | fills everything below `level` connected to the map edge, and holds the edge at that level |
-| `lake` | water | flood-fills from `pos` up to `level` |
+| `lake` | water | flood-fills from `pos` up to `level`; with a `radius` it also digs its own bowl (`depth`, `shore`, `seed`), as cloud's (the terrain kit's Lake) |
 | `spring` | water | `pos`, `rate` (m³/s), `radius`, `boost` |
 | `rain` | water | `rate` (mm/h), everywhere or over `pos` + `radius`; `enabled` |
 | `drain` | water | sink: `pos`, `rate` (m³/s), `radius` |

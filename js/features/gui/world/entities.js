@@ -3,7 +3,8 @@
 
 Features.part('gui', (engine, feature) => {
 const { kits } = engine;
-const { V3, M4, lerp, smooth01, deg, EaselGUI, PaintCanvas } = engine.kits.gui;
+const { V3, M4, EaselGUI, PaintCanvas } = engine.kits.gui;
+const { door, securityCamera, drone, LightSource } = kits.entities;
 const { TerminalGUI } = feature;
 
 // World entities. Each is constructed from a scenario definition ({ type, id, ... }).
@@ -16,7 +17,7 @@ class Entity extends kits.world.Entity {
     init(renderer) {}
     writeInstances(renderer) {}
     render(pass, ctx) {}        // ctx: { showAvatar, skip }
-    lights(out) {}              // push [x, y, z, intensity, r, g, b, 0]
+    lights(out, t) {}           // push [x, y, z, intensity, r, g, b, 0]
     collide(p) {}               // push the player's [x, y, z] out of the entity
 }
 
@@ -40,34 +41,19 @@ class ModelEntity extends Entity {
     }
 }
 
-// Door whose panels slide apart along their `slide` directions
-class SlidingDoor extends Entity {
+// Door (kits.entities door: open / target / speed, status, setOpen) whose panels slide apart along their `slide`
+// directions, `travel` m at full opening
+class SlidingDoor extends door(Entity) {
     init(renderer) {
         this.mesh = this.world.mesh(this.def.model);
         this.instance = renderer.allocInstances(this.def.panels.length);
-        this.target = 0;
-        this.progress = 0;
         this.lastWave = 0;
     }
 
     get name() { return this.def.name; }
-    get isOpen() { return this.target === 1; }
-    get passable() { return this.progress > 0.95; }
-    get openAmount() { return smooth01(this.progress); }
-    get status() {
-        if (this.isOpen) return this.progress > 0.99 ? 'open' : 'opening';
-        return this.progress < 0.01 ? 'sealed' : 'closing';
-    }
-
-    setOpen(open) {
-        if (this.isOpen === open) return false;
-        this.target = open ? 1 : 0;
-        return true;
-    }
 
     update(dt, t) {
-        const d = this.target - this.progress;
-        this.progress += Math.sign(d) * Math.min(Math.abs(d), dt * this.def.speed);
+        const d = this.step(dt);
         if (Math.abs(d) > 0.001 && t - this.lastWave > 0.5) {
             this.lastWave = t;
             this.world.waves.emit('door', this.position[0], this.position[2]);
@@ -137,70 +123,48 @@ class AlarmBeacon extends Entity {
     }
 }
 
-// Point light, optionally tied to the room lights, a door's opening or the alarm colour
+// Point light (kits.entities LightSource), optionally tied to the room lights, a door's opening or the alarm colour, or
+// flickering / pulsing
 class PointLight extends Entity {
-    lights(out) {
-        const d = this.def, w = this.world;
-        let intensity = d.intensity;
-        if (d.roomLights && !w.lightsOn) intensity = 0;
-        if (d.door) intensity *= lerp(d.door.min, 1, w.get(d.door.id).openAmount);
-        const color = w.alarm && d.alarmColor ? d.alarmColor : d.color;
-        out.push([...d.pos, intensity, ...color, 0]);
+    constructor(def, world) {
+        super(def, world);
+        this.source = new LightSource(def, world);
+    }
+
+    lights(out, t) {
+        const L = this.source;
+        out.push([...L.pos, L.intensityAt(t), ...L.colorNow, 0]);
     }
 }
 
-// Drone flying an elliptical patrol loop, pinging the radar and lighting its surroundings red
-class PatrolDrone extends ModelEntity {
+// Drone (kits.entities drone) flying an elliptical patrol loop, pinging the radar and lighting its surroundings red
+class PatrolDrone extends drone(ModelEntity) {
     init(renderer) {
         super.init(renderer);
-        this.angle = 0;
-        this.pos = [...this.def.center];
-        this.fwd = [0, 0, -1];
-        this.lastPing = 0;
         this.tint = [1, 0, 0, 0];   // blinking eye
     }
 
-    get position() { return this.pos; }
+    get position() { return this.at; }
 
     update(dt, t) {
-        const d = this.def;
-        this.angle += dt * d.speed;
-        const [rx, rz] = d.radius;
-        this.pos = [d.center[0] + rx * Math.cos(this.angle), d.center[1] + d.bob.amp * Math.sin(t * d.bob.freq), d.center[2] + rz * Math.sin(this.angle)];
-        this.fwd = V3.normalize([-rx * Math.sin(this.angle), 0, rz * Math.cos(this.angle)]);
-        this.matrix = M4.facing(this.pos, this.fwd);
-        if (t - this.lastPing > d.pingEvery) {
-            this.lastPing = t;
-            this.world.waves.emit('drone', this.pos[0], this.pos[2]);
-        }
+        super.update(dt, t);
+        this.matrix = M4.facing(this.at, this.fwd);
     }
 
-    lights(out) {
-        const e = this.def.eyeLight;
-        out.push([...V3.add(this.pos, V3.scale(this.fwd, e.ahead)), e.intensity, ...e.color, 0]);
+    ping() { this.world.waves.emit('drone', this.at[0], this.at[2]); }
+
+    lights(out, t) {
+        const L = this.light;
+        if (L) out.push([...L.pos, L.intensityAt(t), ...L.colorNow, 0]);
     }
 }
 
-// Security camera that pans; the CCTV system renders through the selected one
-class SecurityCamera extends ModelEntity {
-    init(renderer) {
-        super.init(renderer);
-        this.fwd = V3.normalize(V3.sub(this.def.target, this.def.pos));
-        this.panDeg = 0;
-    }
-
-    get name() { return this.def.name; }
-    get location() { return this.def.loc; }
-    get offline() { return !!this.def.offline; }
-
+// Security camera (kits.entities securityCamera) that pans, with a tally light; the CCTV system renders through the
+// selected one
+class SecurityCamera extends securityCamera(ModelEntity) {
     update(dt, t) {
-        const d = this.def;
-        const base = V3.normalize(V3.sub(d.target, d.pos));
-        const pan = d.sweep * Math.sin(t * d.speed + d.pos[0]);
-        this.panDeg = Math.round(deg(pan));
-        const c = Math.cos(pan), s = Math.sin(pan);
-        this.fwd = [base[0] * c + base[2] * s, base[1], -base[0] * s + base[2] * c];
-        this.matrix = M4.facing(d.pos, this.fwd);
+        super.update(dt, t);
+        this.matrix = M4.facing(this.def.pos, this.fwd);
         this.tint = [this.game.cctv.renderingCamera === this ? 1 : 0, 0, 0, 0];   // tally light
     }
 }

@@ -1,6 +1,5 @@
 'use strict';
-// The CPU heightfield: authored by entities, edited by tools, uploaded to the GPU by dirty rectangle;
-// and the flood fill that finds where standing water reaches.
+// The CPU heightfield: authored by entities, edited by tools, uploaded to the GPU by dirty rectangle.
 
 Features.part('water', (engine, feature) => {
 const { kits } = engine;
@@ -31,20 +30,5 @@ class Heightfield extends kits.terrain.Heightfield {
     }
 }
 
-// 4-connected flood fill of every cell below `level` reachable from the seeds; sets depth to the level
-function floodFill(field, water, seeds, level) {
-    const n = field.n, h = field.h, seen = new Uint8Array(n * n), stack = [];
-    for (const s of seeds) if (h[s] < level && !seen[s]) { seen[s] = 1; stack.push(s); }
-    let count = 0;
-    while (stack.length) {
-        const idx = stack.pop(), i = idx % n, j = (idx - i) / n;
-        water[idx] = Math.max(water[idx], level - h[idx]);
-        count++;
-        const nb = [i > 0 ? idx - 1 : -1, i < n - 1 ? idx + 1 : -1, j > 0 ? idx - n : -1, j < n - 1 ? idx + n : -1];
-        for (const q of nb) if (q >= 0 && !seen[q] && h[q] < level) { seen[q] = 1; stack.push(q); }
-    }
-    return count;
-}
-
-return { Heightfield, floodFill };
+return { Heightfield };
 });

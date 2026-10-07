@@ -5,6 +5,7 @@ Features.part('origin', (engine, feature) => {
 const { Common, kits } = engine;
 const { DEG, v3 } = Common;
 const { mulberry32 } = kits.noise;
+const { spinAngle } = kits.entities;
 const { SURFACES, quat, vec3Of } = feature;
 
 // World entities. Each is built from a scenario definition ({ type, id, ... }) and spawned once, in
@@ -47,7 +48,7 @@ class Body extends Entity {
     }
 }
 
-// One model instance; `spin` turns it about a local axis every frame
+// One model instance; `spin` { axis, rpm | speed (deg/s) } turns it about a local axis every frame
 class Prop extends Entity {
     spawn() {
         super.spawn();
@@ -61,7 +62,7 @@ class Prop extends Entity {
 
     update(dt, t) {
         const s = this.def.spin;
-        const q = quat.mul(this.frame.q, quat.axisAngle(s.axis || [0, 1, 0], t * (s.rpm || 1) * Math.PI / 30));
+        const q = quat.mul(this.frame.q, quat.axisAngle(s.axis || [0, 1, 0], spinAngle(s, t, { rpm: 1 })));
         this.inst.place(this.frame.pos, q, this.scale);
         this.world.store.touch(this.inst);
     }

@@ -224,9 +224,19 @@ js/kits/<kit>/              generic building blocks, not any one feature's (Feat
     view/                   FirstPersonView: a first-person eye with options (turn direction, look sensitivity, pitch
                             limit, keys, boost / slow, wheel speed, ground clearance): the engine's fly camera, the
                             cloud / water / imposter cameras and the portal / gui players' views
-    world/                  what every world has: the Entity base, WorldHud (toasts, in-world labels, the readout),
-                            Menu and Pages (handheld options and status), FeatureWorld (the host's interface)
-    terrain/                Heightfield (grid, sampling, normals, raycast), TerrainEntity, the tilt / hills /
+    world/                  what every world has: the Entity base and addEntity (a scenario def -> its feature's
+                            ENTITY_TYPES class, registered and spawned: every world builds its entities with it),
+                            WorldHud (toasts, in-world labels, the readout), Menu and Pages (handheld options and
+                            status), FeatureWorld (the host's interface)
+    entities/               the entity kinds several features have, each with the union of their options, over a
+                            feature's own entity base (securityCamera(Base), door(Base) mixins): security cameras
+                            (pan sweep / speed / phase; portal, gui), doors (open / target / speed, auto with radius
+                            and delay, locked, toggle / setOpen / status; portal, gui), LightSource (signal flicker /
+                            pulse, roomLights, door dimming, alarmColor; portal's lights, gui's light), spinAngle
+                            (prop spin in rpm or deg/s; origin, imposter), drone(Base) (a `center` + `radius` patrol
+                            loop or wandering a route its feature plans, waiting at closed gates; bob, facing, pingEvery,
+                            a riding `light` with ahead / drop; portal, gui). A new option goes here, not in a feature
+    terrain/                Heightfield (grid, sampling, normals, raycast, wet() land use), floodFill, TerrainEntity, the tilt / hills / lake /
                             mountain stamps (cloud, water)
     interior/               what every building and vehicle has by default: an Interior = Origin (its rigid local
                             frame; a vehicle's is its live pose) + VisArea (a box with door / window portals, folded

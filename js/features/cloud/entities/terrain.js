@@ -3,7 +3,7 @@
 
 Features.part('cloud', (engine, feature) => {
 const { Common, kits } = engine;
-const { lerp, smoothstep, polylineLengths, polylineNearest, polylineBox } = Common;
+const { smoothstep, polylineLengths, polylineNearest, polylineBox } = Common;
 const { fbm } = kits.noise;
 
 // Entities
@@ -31,7 +31,7 @@ class Entity extends kits.terrain.TerrainEntity {
 
 // --- terrain features
 
-const { Tilt, Hills, Mountain } = kits.terrain.terrainStamps(Entity, { peakLabel: 100 });
+const { Tilt, Hills, Mountain, Lake } = kits.terrain.terrainStamps(Entity, { peakLabel: 100, lake: { radius: 1000 } });
 
 // mountain range along a polyline: a ridged massif `width` wide, `height` above the plain
 class Range extends Entity {
@@ -65,19 +65,8 @@ class River extends Entity {
             if (dist >= halfW + bank + f.cell) return;
             const k = smoothstep(halfW, halfW + bank, dist);
             f.h[idx] -= depth * (1 - k);
-            f.paint(idx, 2, 1 - smoothstep(halfW - f.cell * 0.5, halfW + f.cell * 0.5, dist));
+            f.wet(idx, 1 - smoothstep(halfW - f.cell * 0.5, halfW + f.cell * 0.5, dist));
             f.paint(idx, 1, 0.5 * (1 - smoothstep(halfW, halfW + bank * 0.6, dist)));        // cottonwoods along the banks
-        });
-    }
-}
-
-class Lake extends Entity {
-    stamp(f) {
-        const d = this.def, [cx, cz] = d.pos, r = d.radius || 1000, reach = r * 1.6;
-        f.each(cx - reach, cz - reach, cx + reach, cz + reach, (idx, x, z) => {
-            const t = Math.hypot(x - cx, z - cz) / r + 0.25 * fbm(x / (r * 0.6), z / (r * 0.6), { octaves: 3, seed: 5 });
-            if (t < 1) { f.h[idx] = Math.min(f.h[idx], d.level - 6 * (1 - t)); f.paint(idx, 2, 1); }
-            else if (t < 1.6) f.h[idx] = Math.max(Math.min(f.h[idx], lerp(d.level + 2, f.h[idx], (t - 1) / 0.6)), d.level + 0.5);
         });
     }
 }

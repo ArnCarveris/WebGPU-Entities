@@ -2,6 +2,7 @@
 // The world: builds the scenario's entities into archetypes.
 
 Features.part('imposter', (engine, feature) => {
+const { kits } = engine;
 const { Archetype, ENTITY_TYPES } = feature;
 
 class World {
@@ -20,17 +21,7 @@ class World {
 
     async build() {
         this.lib.load(this.sc);
-        for (const def of this.sc.entities || []) {
-            const T = ENTITY_TYPES[def.type];
-            if (!T) { this.warnings.push(`unknown entity type "${def.type}"`); continue; }
-            try {
-                const e = new T(def, this);
-                e.spawn();
-                this.entities.push(e);
-            } catch (err) {
-                this.warnings.push(`${def.type} "${def.id || def.model || ''}": ${err.message}`);
-            }
-        }
+        for (const def of this.sc.entities || []) kits.world.addEntity(this, ENTITY_TYPES, def, { warnings: this.warnings, tolerant: true });
         this.warnings.push(...new Set(this.lib.warnings));
         this.list = [...this.archetypes.values()];
         for (const a of this.list) {

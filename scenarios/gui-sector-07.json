@@ -97,7 +97,7 @@
         {"type":"gui.light","id":"fillLight","pos":[0.5,3.1,3],"color":[0.55,0.6,0.72],"intensity":0.4,"roomLights":true},
         {
             "type": "gui.drone", "id": "drone", "model": "drone", "center": [0.2,2,1.4], "radius": [2.3,2.6], "speed": 0.3, "bob": {"amp":0.12,"freq":1.7},
-            "pingEvery": 3, "eyeLight": {"ahead":0.25,"intensity":0.35,"color":[1,0.12,0.08]}
+            "pingEvery": 3, "light": {"ahead":0.25,"intensity":0.35,"color":[1,0.12,0.08]}
         },
         {
             "type": "gui.door", "id": "hatchB", "name": "Hatch B", "model": "doorPanel", "pos": [1.8,1.3,-4], "travel": 1, "speed": 0.7,

@@ -2,6 +2,7 @@
 // The world: builds the scenario's entities into the heightfield and the initial water.
 
 Features.part('water', (engine, feature) => {
+const { kits } = engine;
 const { Heightfield, ENTITY_TYPES } = feature;
 
 class World {
@@ -16,13 +17,7 @@ class World {
         this.seaLevel = null;
         this.rainOn = false;
         this.boost = false;
-        for (const def of scenario.entities || []) {
-            const Type = ENTITY_TYPES[def.type];
-            if (!Type) throw new Error(`unknown entity type "${def.type}"`);
-            const e = new Type(def, this);
-            this.entities.push(e);
-            if (e.id) this.byId.set(e.id, e);
-        }
+        for (const def of scenario.entities || []) kits.world.addEntity(this, ENTITY_TYPES, def, { spawn: false });
         for (const e of this.entities) { e.stamp(this.field); this.field.updateRange(); }
         this.water = new Float32Array(this.field.n * this.field.n);
         for (const e of this.entities) e.fill(this.water);

@@ -20,6 +20,7 @@ const Features = {
         noise: { parts: ['random', 'value', 'wgsl'] },
         view: { parts: ['first-person'] },
         world: { parts: ['entity', 'hud', 'pages', 'feature-world'] },
+        entities: { uses: ['noise'], parts: ['spin', 'camera', 'door', 'light', 'drone'] },
         terrain: { uses: ['world', 'noise'], parts: ['heightfield', 'stamps'] },
         interior: { parts: ['origin', 'vis-area', 'interior'] },
         transit: { uses: ['interior'], parts: ['paths', 'line'] },
@@ -37,10 +38,10 @@ const Features = {
     USES: {
         cloud: ['noise', 'view', 'world', 'terrain', 'interior', 'transit'],
         water: ['noise', 'view', 'world', 'terrain'],
-        origin: ['noise', 'world'],
-        imposter: ['noise', 'view', 'world'],
-        portal: ['noise', 'view', 'world', 'interior', 'transit', 'gpu', 'gui'],
-        gui: ['noise', 'view', 'world', 'interior', 'gpu', 'gui'],
+        origin: ['noise', 'world', 'entities'],
+        imposter: ['noise', 'view', 'world', 'entities'],
+        portal: ['noise', 'view', 'world', 'entities', 'interior', 'transit', 'gpu', 'gui'],
+        gui: ['noise', 'view', 'world', 'entities', 'interior', 'gpu', 'gui'],
     },
     PARTS: {
         cloud: [

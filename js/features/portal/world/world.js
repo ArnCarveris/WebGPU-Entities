@@ -211,13 +211,7 @@ class World {
 
     // ---- entities ----
     spawnEntities() {
-        for (const def of this.scn.entities || []) {
-            const Type = ENTITY_TYPES[def.type];
-            if (!Type) { this.warnings.push(`unknown entity type "${def.type}"`); continue; }
-            const e = new Type(def, this);
-            e.spawn();
-            this.entities.push(e);
-        }
+        for (const def of this.scn.entities || []) kits.world.addEntity(this, ENTITY_TYPES, def, { warnings: this.warnings });
     }
 
     addDynamic(e) { this.dynamic.push(e); }

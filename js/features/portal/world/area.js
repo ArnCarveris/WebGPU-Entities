@@ -2,18 +2,15 @@
 // Areas and their lights.
 
 Features.part('portal', (engine, feature) => {
+const { kits } = engine;
 const { g2 } = feature;
 
 // Areas (FarCry1 VisArea / SECTR Sector) and the point lights that live in them.
 
-// Point light; `signal` modulates the intensity: flicker | pulse
-class PointLight {
+// Point light (kits.entities LightSource: `signal` flicker | pulse modulates the intensity) that may ride a vehicle
+class PointLight extends kits.entities.LightSource {
     constructor(def) {
-        this.pos = def.pos;
-        this.color = def.color || [1, 1, 1];
-        this.intensity = def.intensity ?? 1;
-        this.radius = def.radius || 8;
-        this.signal = def.signal;
+        super(def);
         this.vehicle = null;        // set when the light rides a vehicle (ride): pos is then `local` through its Origin
         this.local = null;
     }
@@ -25,13 +22,6 @@ class PointLight {
         this.local = this.pos.slice();
         let at = null, stamp = -1;
         Object.defineProperty(this, 'pos', { get: () => { if (stamp !== veh.poseStamp) { at = veh.origin.toWorld(this.local); stamp = veh.poseStamp; } return at; }, configurable: true });
-    }
-
-    intensityAt(t) {
-        let I = this.intensity;
-        if (this.signal === 'flicker') I *= (Math.sin(t * 23.0 + this.pos[0]) * Math.sin(t * 7.3 + 1.0 + this.pos[2]) > -0.25) ? 1 : 0.1;
-        else if (this.signal === 'pulse') I *= 0.2 + 0.8 * Math.max(0, Math.sin(t * 4.0));
-        return I;
     }
 }
 

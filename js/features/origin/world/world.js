@@ -2,7 +2,7 @@
 // The world: builds the scenario's entities and moves them.
 
 Features.part('origin', (engine, feature) => {
-const { Common } = engine;
+const { Common, kits } = engine;
 const { DEG, v3 } = Common;
 const {
     MAX_BODIES, quat, WorldPos, Model, GeometryPool, MaterialTable, Instance, InstanceStore, ENTITY_TYPES,
@@ -21,14 +21,7 @@ class World {
         this.landmarks = [];
         this.dynamic = [];
         this.sun = null;
-        for (const def of scenario.entities || []) {
-            const Type = ENTITY_TYPES[def.type];
-            if (!Type) throw new Error(`unknown entity type "${def.type}"`);
-            const e = new Type(def, this);
-            if (e.id) this.byId.set(e.id, e);
-            e.spawn();
-            this.entities.push(e);
-        }
+        for (const def of scenario.entities || []) kits.world.addEntity(this, ENTITY_TYPES, def);
         if (this.bodies.length > MAX_BODIES) throw new Error(`more than ${MAX_BODIES} bodies`);
         this.geometry = new GeometryPool(this.modelList);
         this.store = new InstanceStore(device, this.modelList);

@@ -4,7 +4,7 @@
 Features.part('portal', (engine, feature) => {
 const { Common, kits } = engine;
 const { v3 } = Common;
-const { mulberry32 } = kits.noise;
+const { door, securityCamera, drone } = kits.entities;
 const { MAX_LIGHTS, AXES, m4, IDENTITY, g2, newell, MeshBuilder, splitMesh, worldBounds, PointLight, SCREEN_GUIS } = feature;
 
 // World entities. Each is constructed from a scenario definition ({ type, ... }) and spawned once, in
@@ -327,9 +327,10 @@ class DoorPanel extends Member {
     }
 }
 
-// SECTR_Door: drives the Closed flag of its portal; `auto` doors open for nearby actors.
-// slide: right | left | up | down (in the portal frame), lift: pops the panel out first (hatches)
-class Door extends Entity {
+// SECTR_Door (kits.entities door: open / target / speed, auto, toggle): drives the Closed flag of its portal; `auto` doors
+// open for nearby actors; `locked` lives on the portal. slide: right | left | up | down (in the portal frame), lift: pops
+// the panel out first (hatches)
+class Door extends door(Entity) {
     spawn() {
         const w = this.world, e = this.def, P = w.portalById.get(e.portal);
         if (!P) { w.warnings.push(`door: unknown portal "${e.portal}"`); return; }
@@ -351,17 +352,9 @@ class Door extends Entity {
         const halves = splitMesh(b, [0, 0, 1, 0]);
         P.locked = !!e.locked;
         P.autoDoor = !!e.auto && !P.locked;
-        const startOpen = !!e.open && !e.auto;
         this.portal = P;
-        this.auto = !!e.auto;
         this.lift = e.lift || 0;
         this.slide = e.slide || 'right';
-        this.radius = e.radius || 3.2;
-        this.delay = e.delay ?? 1.2;
-        this.hold = 0;
-        this.open = startOpen ? 1 : 0;
-        this.target = this.open;
-        this.speed = e.speed || (e.auto ? 2.6 : 1.4);
         this.lightArea = P.front || P.back;
         this.model = IDENTITY;
         this.update(0, 0, []);
@@ -377,32 +370,21 @@ class Door extends Entity {
     }
 
     get name() { return this.portal.id; }
-
-    toggle() {
-        if (this.portal.locked) return 'locked';
-        if (this.auto) return 'auto';
-        this.target = this.target > 0.5 ? 0 : 1;
-        return 'ok';
-    }
+    get locked() { return this.portal.locked; }
 
     // A door aboard a vehicle is posed in the vehicle's frame (its portal's local pose; the world one follows through the
     // vehicle's Origin when read): moving the vehicle costs it nothing. Its panel is re-posed only while it moves (ver)
     update(dt, t, actors) {
         const P = this.portal, veh = P.vehicle;
-        if (this.auto && !P.locked) {
-            // aboard: nobody near the vehicle is near the door, without posing it
-            const near = (!veh || actors.some(a => veh.near(a, this.radius))) && actors.some(a => v3.dist(a, P.center) < this.radius);
-            if (near) { this.target = 1; this.hold = this.delay; }
-            else if ((this.hold -= dt) <= 0) this.target = 0;
-        }
-        const d = this.target - this.open;
-        this.open += Math.sign(d) * Math.min(Math.abs(d), this.speed * dt);
+        // aboard: nobody near the vehicle is near the door, without posing it
+        if (this.auto && !P.locked) this.sense((!veh || actors.some(a => veh.near(a, this.radius))) && actors.some(a => v3.dist(a, P.center) < this.radius), dt);
+        this.step(dt);
         P.closed = this.open < 0.02;
         if (this.ver !== undefined && this.posedOpen === this.open && this.posedOn === veh) return;     // (or it boarded: Vehicle.claim)
         this.posedOpen = this.open;
         this.posedOn = veh;
         this.ver = (this.ver || 0) + 1;
-        const F = veh ? P.local : P, ease = this.open * this.open * (3 - 2 * this.open);
+        const F = veh ? P.local : P, ease = this.openAmount;
         const lift = this.lift * Math.min(1, this.open * 4);
         const sd = { right: [F.right, P.w], left: [v3.mul(F.right, -1), P.w], up: [F.up, P.h], down: [v3.mul(F.up, -1), P.h] }[this.slide];
         const M = m4.basis(F.right, F.up, F.normal, v3.madd(v3.madd(F.center, sd[0], sd[1] * 0.97 * ease), F.normal, lift));
@@ -410,23 +392,26 @@ class Door extends Entity {
     }
 }
 
-// Dynamic SECTR Member that walks the sector graph between random areas, waiting at automatic doors
-class Drone extends Member {
+// A drone (kits.entities drone) that wanders the sector graph between random areas, waiting at automatic doors (its
+// gates are portals); a dynamic SECTR Member. A `center` + `radius` def patrols a loop instead
+class Drone extends drone(Member) {
     spawn() {
         const w = this.world, e = this.def, b = new MeshBuilder();
         w.addModel(b, e.model || 'drone', IDENTITY);
         this.chunk = w.pool.add(b, { name: 'drone', dynamic: true });
-        this.rnd = mulberry32(e.seed || 99);
-        this.pos = e.pos.slice();
-        this.yaw = 0;
-        this.speed = e.speed || 3;
-        this.queue = [];
-        this.wait = 0.5;
-        this.target = -1;
-        this.lightOn = !!e.light;
-        this.light = e.light ? new PointLight({ pos: e.pos.slice(), color: e.light.color, intensity: e.light.intensity, radius: e.light.radius }) : null;
         w.addDynamic(this);
         w.drones.push(this);
+    }
+
+    makeLight(spec) { return new PointLight(spec); }
+
+    // a random other area to fly to
+    wander() {
+        const w = this.world, cur = w.areaAt(this.pos);
+        for (let k = 0; k < 8; k++) {
+            this.target = Math.floor(this.rnd() * w.areas.length);
+            if (this.target !== cur && this.plan()) break;
+        }
     }
 
     plan() {
@@ -434,72 +419,31 @@ class Drone extends Member {
         const path = w.nav.findPath(from, this.target);
         if (!path) return false;
         this.queue = [{ pos: w.areas[from].hub }];
-        for (const step of path) this.queue.push({ pos: step.portal.navPoint(), portal: step.portal }, { pos: w.areas[step.area].hub });
+        for (const step of path) this.queue.push({ pos: step.portal.navPoint(), gate: step.portal }, { pos: w.areas[step.area].hub });
         return true;
     }
 
     update(dt, t) {
+        super.update(dt, t);
         const w = this.world;
-        if (!this.queue.length) {
-            this.wait -= dt;
-            if (this.wait <= 0) {
-                const cur = w.areaAt(this.pos);
-                for (let k = 0; k < 8; k++) {
-                    this.target = Math.floor(this.rnd() * w.areas.length);
-                    if (this.target !== cur && this.plan()) break;
-                }
-                this.wait = 1.0;
-            }
-        } else {
-            const wp = this.queue[0];
-            const d = v3.sub(wp.pos, this.pos), l = v3.len(d);
-            if (wp.portal && !wp.portal.navigable) {                          // a door got locked/closed on us: replan
-                if (!this.plan()) { this.queue = []; this.wait = 1.5; }
-            } else if (!(wp.portal && wp.portal.closed && l < 1.6)) {         // wait for an automatic door
-                const step = this.speed * dt;
-                if (l <= step) { this.pos = wp.pos.slice(); this.queue.shift(); }
-                else {
-                    this.pos = v3.madd(this.pos, d, step / l);
-                    if (Math.hypot(d[0], d[2]) > 0.05) {
-                        const want = Math.atan2(-d[0], -d[2]) * 180 / Math.PI;
-                        const dy = ((want - this.yaw + 540) % 360) - 180;
-                        this.yaw += dy * Math.min(1, dt * 6);
-                    }
-                }
-            }
-        }
-        const bob = Math.sin(t * 3) * 0.05;
-        this.place(m4.trs([this.pos[0], this.pos[1] + bob, this.pos[2]], this.yaw, 1));
+        this.place(m4.trs(this.at, this.yaw, 1));
         this.owners = w.areasOverlapping(this.min, this.max);                // SECTR Member: may span several sectors
         this.lightArea = w.areaAt(this.pos);
-        if (this.light) this.light.pos = [this.pos[0], this.pos[1] - 0.2, this.pos[2]];
     }
 }
 
-// A security camera: a viewpoint the gui kit's CctvSystem renders through (game/media.js), at `pos` looking at
-// `target`, panning `sweep` radians either way at `speed`. It has no geometry; its housing is a prop of its own.
-// def: { pos, target, sweep, speed, label, name, loc, offline }
-class SecurityCamera extends Entity {
+// A security camera (kits.entities securityCamera: pos, target, sweep, speed, phase, name, loc, offline): a viewpoint the
+// gui kit's CctvSystem renders through (game/media.js). It has no geometry; its housing is a prop of its own. Unlabelled
+// cameras are numbered CAM-01, CAM-02...
+class SecurityCamera extends securityCamera(Entity) {
     constructor(def, world) {
         super(def, world);
         this.label = def.label || def.id || `CAM-${String(world.cameras.length + 1).padStart(2, '0')}`;
-        this.fwd = v3.norm(v3.sub(def.target, def.pos));
     }
-
-    get position() { return this.def.pos; }
-    get name() { return this.def.name || this.label; }
-    get location() { return this.def.loc || ''; }
-    get offline() { return !!this.def.offline; }
 
     spawn() {
         this.world.cameras.push(this);
         this.world.addDynamic(this);
-    }
-
-    update(dt, t) {
-        const d = this.def, base = v3.norm(v3.sub(d.target, d.pos));
-        const pan = (d.sweep || 0) * Math.sin(t * (d.speed ?? 0.3) + d.pos[0]), c = Math.cos(pan), s = Math.sin(pan);
-        this.fwd = [base[0] * c + base[2] * s, base[1], -base[0] * s + base[2] * c];
     }
 }
 

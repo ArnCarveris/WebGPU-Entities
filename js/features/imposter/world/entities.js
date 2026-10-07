@@ -6,6 +6,7 @@ const { Common, kits } = engine;
 const { DEG, clamp, lerp, smoothstep, v3 } = Common;
 const { seededRandom, valueNoise3, valueNoise3xz, ridgedMultifractal, fbm } = kits.noise;
 const { FORCE, lin, quat, Geo, MeshBuilder } = feature;
+const { spinAngle } = kits.entities;
 
 // the terrain's fbm: octaves of the xz plane of valueNoise3, each with its own seed
 const fbmXZ = (x, z, octaves, seed) => fbm(x, z, { octaves, seed, offset: [0, 0], seedStep: 1, noise: valueNoise3xz });
@@ -101,7 +102,7 @@ class Terrain extends Entity {
 }
 
 // A model at pos (y above the ground unless `absolute`), rot (degrees), scale; `lod` forces mesh / imposter;
-// `spin` { axis, speed (deg/s) } turns it; `footprint` keeps scatters away
+// `spin` { axis, speed (deg/s) | rpm } turns it; `footprint` keeps scatters away
 class Prop extends Entity {
     spawn() {
         const e = this.def, w = this.world, p = e.pos || [0, 0, 0];
@@ -115,7 +116,7 @@ class Prop extends Entity {
 
     spinRot(t) {
         const s = this.def.spin;
-        return s ? quat.mul(quat.axisAngle(s.axis || [0, 1, 0], (s.speed ?? 20) * DEG * t), this.rot0) : this.rot0;
+        return s ? quat.mul(quat.axisAngle(s.axis || [0, 1, 0], spinAngle(s, t, { speed: 20 })), this.rot0) : this.rot0;
     }
 
     update(dt, t) { if (this.def.spin) this.arch.set(this.slot, this.base, this.spinRot(t), this.scale); }

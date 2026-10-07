@@ -139,8 +139,8 @@ class TerminalGUI extends EntityGUI {
         const hatch = { open: ['OPEN', C.green], opening: ['CYCLING', C.orange], closing: ['CYCLING', C.orange], sealed: ['SEALED', C.orange] }[door.status];
         const rows = [
             [door.name.toUpperCase(), hatch[0], hatch[1]],
-            ['PRESSURE', `${(101.3 - door.progress * 2.4 + Math.sin(t * 1.3) * 0.06).toFixed(1)} kPa`, C.white],
-            ['O2 LEVEL', `${(20.9 - door.progress * 0.6).toFixed(1)} %`, C.white],
+            ['PRESSURE', `${(101.3 - door.open * 2.4 + Math.sin(t * 1.3) * 0.06).toFixed(1)} kPa`, C.white],
+            ['O2 LEVEL', `${(20.9 - door.open * 0.6).toFixed(1)} %`, C.white],
             ['LIGHTING', world.lightsOn ? 'ONLINE' : 'OFFLINE', world.lightsOn ? C.green : C.red]
         ];
         rows.forEach(([label, val, c], i) => {

@@ -24,7 +24,7 @@ class Entity extends kits.terrain.TerrainEntity {
 
 // --- terrain features
 
-const { Tilt, Hills, Mountain } = kits.terrain.terrainStamps(Entity, { peakLabel: 10 });
+const { Tilt, Hills, Mountain, Lake } = kits.terrain.terrainStamps(Entity, { peakLabel: 10, lake: { label: 12 } });
 
 // carves a river valley along a polyline: channel bed from levels[0] to levels[1], smooth banks
 class Valley extends Entity {
@@ -112,5 +112,5 @@ class Dam extends Entity {
     }
 }
 
-return { Entity, Tilt, Hills, Mountain, Valley, Basin, Coast, Dam };
+return { Entity, Tilt, Hills, Mountain, Lake, Valley, Basin, Coast, Dam };
 });

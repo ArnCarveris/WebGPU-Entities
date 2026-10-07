@@ -2,7 +2,7 @@
 // The world: builds the scenario's entities on the terrain and runs them.
 
 Features.part('cloud', (engine, feature) => {
-const { Common } = engine;
+const { Common, kits } = engine;
 const { clamp, sat01, smoothstep } = Common;
 const {
     MAX_CELLS, MAX_MOTHERSHIPS, MAX_SHELVES, FAR_FLOATS, TOWN_BLOCK, FAR_LAMP_PITCH, FAR_LAMP_SIDE, FAR_LAMP_REACH,
@@ -116,13 +116,7 @@ class World {
     }
 
     add(def, spawn = true) {
-        const Type = ENTITY_TYPES[def.type];
-        if (!Type) throw new Error(`unknown entity type "${def.type}"`);
-        const e = new Type(def, this);
-        this.entities.push(e);
-        if (e.id) this.byId.set(e.id, e);
-        if (spawn) e.spawn();
-        return e;
+        return kits.world.addEntity(this, ENTITY_TYPES, def, { spawn });
     }
 
     get(id) { return this.byId.get(id); }

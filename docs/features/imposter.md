@@ -190,7 +190,7 @@ fence and a rock, baked together.
 | `type` | Keys |
 |---|---|
 | `terrain` | `size`, `res` (grid cells per side), `chunks` (per side), `height` + `frequency` (fbm hills), `seed`, `flat` [cx, cz, r0, r1] (flattened valley), `mountains` { `center`, `inner`, `outer`, `height`, `frequency` } (ridged ring), `peaks` [[x, z, radius, height], ...], `layers` { `grass`, `dry`, `rock`, `snow` colours, `rockSlope` [from, to] (1 - normal.y), `snowLine` [from, to] (height) }, `mat` (a neutral detail texture the layer colours tint), `castShadows` |
-| `prop` | `model`, `pos` (y above the ground unless `absolute`), `rot`, `scale`, `lod` (`mesh` / `imposter` forces it), `spin` { `axis`, `speed` deg/s }, `footprint` |
+| `prop` | `model`, `pos` (y above the ground unless `absolute`), `rot`, `scale`, `lod` (`mesh` / `imposter` forces it), `spin` { `axis`, `speed` deg/s or `rpm` }, `footprint` |
 | `compare` | `model`, `pos`, `gap`: the model twice, mesh on the left and imposter on the right |
 | `scatter` | `model`, `count`, `center` [x, z], `inner`, `outer`, `spacing` (radius), `scale` [min, max], `tilt`, `sink`, `maxSlope` (1 - normal.y), `maxHeight` (treeline), `seed` |
 

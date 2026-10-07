@@ -2,6 +2,7 @@
 // The world: builds the facility and its entities and runs them.
 
 Features.part('gui', (engine, feature) => {
+const { kits } = engine;
 const { clamp, MeshBuilder, MAX_LIGHTS } = engine.kits.gui;
 const { ENTITY_TYPES } = feature;
 
@@ -43,13 +44,7 @@ class World {
         this.meshes = new Map();
         this.guis = [];
 
-        for (const def of scenario.entities) {
-            const Type = ENTITY_TYPES[def.type];
-            if (!Type) throw new Error(`Unknown entity type "${def.type}"`);
-            const e = new Type(def, this);
-            this.entities.push(e);
-            if (def.id) this.byId.set(def.id, e);
-        }
+        for (const def of scenario.entities) kits.world.addEntity(this, ENTITY_TYPES, def, { spawn: false });
         this.guis = this.entities.flatMap((e) => e.guis);
     }
 
@@ -121,7 +116,7 @@ class World {
     // Uniform inputs shared by every view this frame
     frameState(t) {
         const lights = [];
-        for (const e of this.entities) e.lights(lights);
+        for (const e of this.entities) e.lights(lights, t);
         while (lights.length < MAX_LIGHTS) lights.push([0, 0, 0, 0, 0, 0, 0, 0]);
         const f = this.game.scenario.facility || {};
         return { time: t, lightsOn: this.lightsOn, alarmPulse: this.alarmPulse, lights, fog: f.fog ?? 0.05, ambient: f.ambient ?? 0 };

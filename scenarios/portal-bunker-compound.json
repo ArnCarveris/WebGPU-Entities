@@ -482,7 +482,7 @@
         {"type":"portal.helm","vehicle":"freighter","stand":[55,8,0.65],"reach":1.6,"wheel":{"pos":[55,9.2,1.82],"radius":0.34},"lever":{"pos":[55.55,9.1,2.05]}},
         {"type":"portal.light","pos":[55,10.9,-1],"color":[0.7,0.85,1],"intensity":1.6,"radius":5,"model":"coldLamp"},
         {"type":"portal.light","pos":[55,9.4,2.7],"color":[0.2,1,0.6],"intensity":1,"radius":3},
-        {"type":"portal.drone","model":"drone","pos":[0,1.8,5],"speed":3.2,"light":{"color":[1,0.25,0.15],"intensity":1.6,"radius":4}},
+        {"type":"portal.drone","model":"drone","pos":[0,1.8,5],"speed":3.2,"light":{"color":[1,0.25,0.15],"intensity":1.6,"radius":4,"drop":0.2}},
         {"type":"sound.bed","id":"wind","source":"brown","filters":[["bandpass",380,0.9]],"smooth":0.8,
             "gain":"portal.outdoor ? 0.05 + 0.02 * sin(time * 0.4) : 0.006","filter":[0,"300 + 120 * sin(time * 0.31)"]},
         {"type":"sound.bed","id":"surf","source":"white","filters":[["lowpass",900,0.7]],"smooth":1.5,

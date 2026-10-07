@@ -281,7 +281,7 @@ class Clearing extends Entity {
             const sd = d.size ? Math.hypot(Math.max(ox, 0), Math.max(oz, 0)) + Math.min(Math.max(ox, oz), 0) : Math.hypot(lx, lz) - hx;
             const k = d.inset ? smoothstep(-blend, 0, sd) : smoothstep(0, blend, sd);
             f.h[idx] = lerp(d.level, f.h[idx], k);
-            if (d.water) f.paint(idx, 2, 1 - smoothstep(0, f.cell, sd));
+            if (d.water) f.wet(idx, 1 - smoothstep(0, f.cell, sd));
         });
     }
 }

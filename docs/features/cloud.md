@@ -589,7 +589,7 @@ The weather map writes each genus's coverage into one channel of a layer map (`l
 | `mountain` | terrain | `pos`, `radius`, `height`, `roughness` |
 | `range` | terrain | ridged massif along `path`: `width`, `height`, `roughness`, `seed` |
 | `river` | terrain | carves and paints water along `path`: `width`, `depth`, `bank` |
-| `lake` | terrain | `pos`, `radius`, water `level` |
+| `lake` | terrain | `pos`, `radius` (1000), water `level`, `depth` (6), `shore` (0.25), `seed` (5); the terrain kit's Lake, shared with water |
 | `town` | terrain | `pos`, `radius`, `density` (street blocks) |
 | `forest` | terrain | `pos`, `radius`, `density`, `seed` |
 | `village` | structure | a village on a road, laid out from `seed` (below) |
