@@ -2,6 +2,7 @@
 // The base of every feature's adapter to the host (FeatureWorld, js/engine/host.js).
 
 Features.kit('world', (engine, kit) => {
+const { v3 } = engine.Common;
 // One world of a feature, as the host runs it. A feature extends this with createApp() (its engine: an App or Game with
 // start(), frame(now, dt, opts), and load(native) when it takes its scenario after starting) and what else the host
 // asks of it: depth(), stats(), handheld(), set(key, v), anchor(id), drop(files), ground(p), sheltered(p), views(). The host reads and moves the
@@ -34,8 +35,11 @@ class FeatureWorld {
     setMove(mode) { this.app.camera.setMode(mode); }
 
     // the viewpoints this world offers (the engine's View list, Host.viewList): [{ name, sub (a live line), go() }], from
-    // its scenario's view entities; a view that follows an entity with `each` is one per member of it (Entity.members)
-    views() { return []; }
+    // its scenario's view entities; a view that follows an entity with `each` is one per member of it (Entity.members).
+    // By default its native `views` ({ name, pos, look, fov (degrees) } in its frame), each moving the camera there.
+    views() {
+        return (this.fx.native?.views || []).map((v, i) => ({ key: i, name: v.name || `view ${i + 1}`, go: () => this.setView(FeatureWorld.lookFrom(v)) }));
+    }
 
     // the ground under p (this world's frame): the height of the highest thing to stand on at or below p[1] (null: none
     // here). The engine walks its camera on the highest ground of every shown world (Host.floorAt).
@@ -45,6 +49,13 @@ class FeatureWorld {
     // atmosphere world's rain and snow off the camera while any other shown world's interior holds it (Host.shelter)
     sheltered(p) { return null; }
 }
+
+// a view entity { pos, look, fov (degrees) } as a view { pos, fwd, up, fov (radians) }
+FeatureWorld.lookFrom = v => {
+    const pos = [...(v.pos || [0, 2, 0])], fwd = v3.norm(v3.sub(v.look || [pos[0], pos[1], pos[2] - 1], pos));
+    const up = v3.cross(v3.norm(v3.cross(fwd, [0, 1, 0])), fwd);
+    return v.fov ? { pos, fwd, up, fov: v.fov * Math.PI / 180 } : { pos, fwd, up };
+};
 
 // the HUD elements a world can ask for in its hudHtml: in-world labels (LabelLayer), toasts (Toast), a crosshair
 FeatureWorld.HUD = {

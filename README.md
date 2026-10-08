@@ -31,7 +31,8 @@ the engine's options: scenario, worlds (in a composition: show / hide each one, 
 <kbd>`</kbd>), view, move, sound, GPU.
 
 Views are the engine's too: the handheld's **View** lists the scenario's `view` entities and every world's own
-(`view` with `of`, `bookmark`; a world offers them through `views()`), and going to one of a world that
+(`view` with `of`, `bookmark`; a world offers them through `views()`, by default its `view` entities' `pos` / `look` /
+`fov`), so every scenario has some, and going to one of a world that
 can't take the camera moves the camera there. A world view that follows an entity with `"each": true` is one view per
 member of that entity, from data: `{ "type": "view", "of": "cloud", "name": "{label}", "follow": "bus", "each": true, "spot": "door" }`
 lists every bus of the line `bus` (named by `{label}`, with what it is doing under it); `spot` is where on it (a bus's

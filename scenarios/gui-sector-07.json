@@ -3,6 +3,12 @@
     "group": "Entity GUI",
     "entities": [
         {"type":"gui"},
+        {"type":"view","of":"gui","name":"Start","pos":[-0.75,1.6,-1.35],"look":[-0.71,1.54,-3.3]},
+        {"type":"view","of":"gui","name":"Ops terminal","pos":[-0.9,1.6,-0.9],"look":[-1.2,1.2,-3.39]},
+        {"type":"view","of":"gui","name":"Hatch B","pos":[1.8,1.6,-1.9],"look":[1.8,1.35,-4]},
+        {"type":"view","of":"gui","name":"Storage bay","pos":[0,1.6,-0.6],"look":[3.2,1,1.8]},
+        {"type":"view","of":"gui","name":"Main hall","pos":[-0.4,1.6,-1],"look":[0,1.4,4.8]},
+        {"type":"view","of":"gui","name":"Lamp rig","pos":[1.6,1.5,0.6],"look":[-0.8,3,-2]},
         {
             "type": "player", "start": {"pos":[-0.75,1.6,-1.35],"yaw":0.02,"pitch":-0.03}, "fovDeg": 60, "walkSpeed": 2.6, "runSpeed": 5,
             "stride": {"walk":0.72,"run":0.95}, "bounds": {"x":[-3.7,3.7],"z":[-3.3,5.6]}, "doorway": {"door":"hatchB","x":[1.15,2.45],"enterZ":-3.35,"minZ":-7.6}

@@ -4,6 +4,17 @@
     "entities": [
         {"type":"portal","name":"Bunker compound"},
         {"type":"camera","of":"portal","pos":[0,1.7,-16],"yaw":180,"pitch":-2,"fov":70},
+        {"type":"view","of":"portal","name":"Outside the bunker","pos":[0,1.7,-16],"look":[0,1.2,0]},
+        {"type":"view","of":"portal","name":"Compound overview","pos":[-30,26,-38],"look":[0,0,10]},
+        {"type":"view","of":"portal","name":"Entrance Hall","pos":[0,1.7,1.5],"look":[0,1.6,10]},
+        {"type":"view","of":"portal","name":"Control Room","pos":[-2.5,1.7,14],"look":[-10,1.4,21]},
+        {"type":"view","of":"portal","name":"Loft","pos":[-4,5.2,15],"look":[-10,4.6,20]},
+        {"type":"view","of":"portal","name":"Atrium","pos":[5,1.7,23],"look":[13,4,33]},
+        {"type":"view","of":"portal","name":"Storage","pos":[5,1.7,12],"look":[13,1.2,18]},
+        {"type":"view","of":"portal","name":"Brick Shed","pos":[21,1.7,-3],"look":[27,1.2,-9]},
+        {"type":"view","of":"portal","name":"Generator Room","pos":[-3,-2.3,7],"look":[-13,-2.6,11]},
+        {"type":"view","of":"portal","name":"Basement Hall","pos":[-15,-2.3,11],"look":[-23,-2.6,-5]},
+        {"type":"view","of":"portal","name":"Vault","pos":[-15,-2.3,-7],"look":[-23,-2.8,-13]},
         {
             "type": "player", "eyeHeight": 1.65, "radius": 0.3, "walkSpeed": 4.2, "runSpeed": 7.5, "stepHeight": 0.55, "jumpSpeed": 5.2, "gravity": 18,
             "climbSpeed": 2.4, "swim": {"speedFactor":0.45,"jumpSpeed":3.5,"depth":1.3}, "fly": {"speed":5,"runSpeed":14}, "turnSpeed": 1.8,

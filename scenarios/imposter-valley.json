@@ -4,6 +4,12 @@
     "entities": [
         {"type":"imposter","name":"Imposter Valley"},
         {"type":"camera","of":"imposter","pos":[0,2.6,24],"yaw":0,"pitch":-3,"fov":60,"speed":14},
+        {"type":"view","of":"imposter","name":"Start","pos":[0,2.6,24],"look":[0,1.3,-24]},
+        {"type":"view","of":"imposter","name":"Mesh vs imposter","pos":[0,4,17],"look":[0,3.2,0]},
+        {"type":"view","of":"imposter","name":"Showcase","pos":[5,5.2,-15],"look":[0,4.4,-24]},
+        {"type":"view","of":"imposter","name":"Over the village","pos":[0,110,300],"look":[0,10,80]},
+        {"type":"view","of":"imposter","name":"Forest edge","pos":[150,45,-150],"look":[450,25,-450]},
+        {"type":"view","of":"imposter","name":"Valley overview","pos":[-900,420,900],"look":[0,0,0]},
         {"type":"environment","value":"noon"},
         {"type":"lod","mode":"auto","distance":40,"fade":0.25,"far":2400},
         {"type":"shadows","enabled":true,"distance":1200,"resolution":2048,"lambda":0.85},
