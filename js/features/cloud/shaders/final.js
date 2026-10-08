@@ -67,6 +67,9 @@ fn cloudAt(uv: vec2f) -> vec4f {
     let c = textureSampleLevel(cloudTex, clampSamp, uv, 0.0);
     let r = F.post.x;
     if (r <= 0.0) { return c; }
+    // the smooth look blurs across more of a cloud: it smooths the half-resolution stair steps along the silhouettes,
+    // which crawl as the view moves, while the sky and the terrain's outline still differ too much to bleed in
+    let tol = mix(0.12, 0.35, F.look.x);
     let texel = r / F.screen.zw;
     var sum = c * 4.0;
     var wsum = 4.0;
@@ -74,7 +77,7 @@ fn cloudAt(uv: vec2f) -> vec4f {
         for (var x = -1; x <= 1; x++) {
             if (x == 0 && y == 0) { continue; }
             let s = textureSampleLevel(cloudTex, clampSamp, uv + vec2f(f32(x), f32(y)) * texel, 0.0);
-            let dt = (s.a - c.a) / 0.12;
+            let dt = (s.a - c.a) / tol;
             let w = select(2.0, 1.0, x != 0 && y != 0) * exp(-dt * dt);
             sum += s * w;
             wsum += w;

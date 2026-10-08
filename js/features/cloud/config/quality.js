@@ -11,7 +11,7 @@ const RENDER_MODES = ['shaded', 'no volumetrics', 'clouds only', 'precipitation 
 // resolution only turns into grain, and a steadier temporal resolve (longer history, bicubic, outliers clamped) that
 // keeps the interleaved march from shimmering; it skips the detail noise and samples a coarser mip, so it costs less
 const QUALITY = [
-    { name: 'low', scale: 0.5, steps: 64, light: 3, interleave: 4, detail: 10000, blur: 1.0, smooth: 1 },
+    { name: 'low', scale: 0.5, steps: 64, light: 3, interleave: 4, detail: 10000, blur: 1.5, smooth: 1 },
     { name: 'medium', scale: 0.5, steps: 96, light: 4, interleave: 4, detail: 16000, blur: 0.7 },
     { name: 'high', scale: 0.75, steps: 128, light: 5, interleave: 4, detail: 22000, blur: 0 },
     { name: 'ultra', scale: 1.0, steps: 160, light: 6, interleave: 1, detail: 30000, blur: 0 },
