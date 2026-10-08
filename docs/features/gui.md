@@ -85,7 +85,7 @@ the facility's game implements `renderView(enc, target, shot)` with its own rend
 the same with its portal traversal.
 This facility lends it its `phone.pages` (their root sections lead the root page), its `Bindings`, its apps (radar,
 camera, gallery, viewer, IPTV) and its render targets, and, while its player has the camera, its stride and lights.
-`gui.phone` keeps `links` and `pages`; the handheld's own look (model, screen, pose, `startShown`) is the `handheld`
+The `phone` entity keeps `links` and `pages`; the handheld's own look (model, screen, pose, `startShown`) is the `handheld`
 entity. A scenario's HUD is `handheld.page` entities (see the main [README](../../README.md#engine-entities)).
 
 ## Adding a new kind of screen
@@ -93,3 +93,5 @@ entity. A scenario's HUD is `handheld.page` entities (see the main [README](../.
 1. Subclass `EntityGUI` and implement `draw(dc, now)` (+ `onPress` etc.).
 2. Add an entity class that creates it, returns it from `get guis()` and calls `gui.setTransform()`.
 3. Register the entity in `ENTITY_TYPES` and place it in `scenario.entities`.
+
+In WebGPU Entities the class goes into a kit: add it to the entities kit's `fixtureTypes(Base, ...)` factory (`js/kits/`), list its type in `js/kits/types.js`, and map it in `ENTITY_TYPES` (`js/features/gui/world/entities.js`).

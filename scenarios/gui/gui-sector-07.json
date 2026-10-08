@@ -1,9 +1,9 @@
 {
     "$comment": "Sector 07's GUIs: its world-space screens (the airlock terminal, the easel), the settings of the apps on them and on the phone (CCTV, camera and photos, TV, radar), the handheld and its pages. scenarios/gui-sector-07.json includes them where the terminal stands.",
     "entities": [
-        {"type":"gui.cctv","resolution":[512,384],"fovY":1.2,"initial":2},
+        {"type":"cctv","resolution":[512,384],"fovY":1.2,"initial":2},
         {
-            "type": "gui.media",
+            "type": "media",
             "photo": {"size":[384,512],"atlas":2048,"capacity":20,"fovY":0.95},
             "video": {"size":[192,256],"fps":12,"pool":180,"maxSeconds":10},
             "seedShots": [
@@ -13,7 +13,7 @@
             ]
         },
         {
-            "type": "gui.iptv",
+            "type": "iptv",
             "hlsScript": "https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js",
             "cardTitle": "SECTOR 07 · ENGINEERING",
             "channels": [
@@ -53,7 +53,7 @@
             ]
         },
         {
-            "type": "gui.radar",
+            "type": "radar",
             "range": 9,
             "tracked": [
                 {"name":"Patrol drone","entity":"drone","color":[255,59,48],"shape":"pulse"},
@@ -68,7 +68,7 @@
             "startShown": true
         },
         {
-            "type": "gui.phone",
+            "type": "phone",
             "links": {"door":"hatchB","terminal":"terminal","easel":"easel"},
             "pages": {
                 "root": {
@@ -293,7 +293,7 @@
             }
         },
         {
-            "type": "gui.terminal",
+            "type": "terminal",
             "id": "terminal",
             "model": "terminal",
             "pos": [-1.2,1.5,-3.84],
@@ -316,7 +316,7 @@
             }
         },
         {
-            "type": "gui.easel",
+            "type": "easel",
             "id": "easel",
             "model": "easel",
             "pos": [-2.95,1.45,-2.3],

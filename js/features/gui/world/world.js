@@ -4,7 +4,7 @@
 Features.part('gui', (engine, feature) => {
 const { kits } = engine;
 const { clamp, MeshBuilder, MAX_LIGHTS } = engine.kits.gui;
-const { ENTITY_TYPES } = feature;
+const { ENTITY_TYPES, TerminalGUI } = feature;
 
 // The facility: entities built from scenario data, shared facility state and actions.
 
@@ -41,14 +41,31 @@ class World {
         this.waves = new SoundWaves(scenario.waves);
         this.entities = [];
         this.byId = new Map();
-        this.meshes = new Map();
+        this.modelMeshes = new Map();    // model name -> its renderer mesh (mesh())
         this.guis = [];
 
+        this.instances = [];            // what entities draw: instance handles (meshes.instance), in the order they were made
+        this.guiKinds = { terminal: TerminalGUI };     // the world's GUI kinds (a terminal's screen)
+        // the common mesh interface (kits.mesh): instances of the scenario's models, made at init (when there is a
+        // renderer), posed by matrix ({ matrix }; set(pose, i, { tint })), drawn every view unless opts.visible(ctx) says
+        // not or the view is opts.owner's own (ctx.skip)
+        this.meshes = {
+            instance: (model, pose, opts = {}) => {
+                const mesh = this.mesh(model), count = opts.count || 1, h = {
+                    mesh, count, first: this.renderer.allocInstances(count), matrices: [], tints: [], owner: opts.owner, visible: opts.visible,
+                    set: (p, i = 0, o = {}) => { h.matrices[i] = p.matrix; h.tints[i] = o.tint ?? null; },
+                };
+                if (pose) h.set(pose, 0, opts);
+                this.instances.push(h);
+                return h;
+            },
+        };
         for (const def of scenario.entities) kits.world.addEntity(this, ENTITY_TYPES, def, { spawn: false });
         this.guis = this.entities.flatMap((e) => e.guis);
     }
 
     init(renderer) {
+        this.renderer = renderer;
         for (const e of this.entities) e.init(renderer);
         for (const g of this.guis) g.attach(this.game);
     }
@@ -65,12 +82,12 @@ class World {
 
     // Model meshes are shared between entities that use the same model
     mesh(name) {
-        if (!this.meshes.has(name)) {
+        if (!this.modelMeshes.has(name)) {
             const parts = this.scenario.models[name];
             if (!parts) throw new Error(`No model "${name}"`);
-            this.meshes.set(name, this.game.renderer.createMesh(new MeshBuilder(this.game.renderer.worldMaterials).parts(parts)));
+            this.modelMeshes.set(name, this.game.renderer.createMesh(new MeshBuilder(this.game.renderer.worldMaterials).parts(parts)));
         }
-        return this.meshes.get(name);
+        return this.modelMeshes.get(name);
     }
 
     // ---- facility actions (terminal, phone) ----
@@ -123,13 +140,16 @@ class World {
     }
 
     writeInstances(renderer) {
-        for (const e of this.entities) e.writeInstances(renderer);
+        for (const h of this.instances) for (let i = 0; i < h.count; i++) renderer.setInstance(h.first + i, h.matrices[i], h.tints[i]);
         for (const g of this.guis) g.writeInstances(renderer);
     }
 
-    // Draw the world into a scene pass: entity meshes, then every GUI surface (anchor + GUI)
+    // Draw the world into a scene pass: entity meshes (but an owner's in its own view), then every GUI surface (anchor + GUI)
     render(pass, ctx) {
-        for (const e of this.entities) e.render(pass, ctx);
+        for (const h of this.instances) {
+            if ((h.owner && h.owner === ctx.skip) || (h.visible && !h.visible(ctx))) continue;
+            pass.mesh(h.mesh, h.first, h.count);
+        }
         for (const g of this.guis) g.render(pass);
     }
 

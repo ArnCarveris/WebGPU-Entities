@@ -1,67 +1,82 @@
 'use strict';
 // ScenarioFormat: everything is an entity.
 //
-// A scenario is one flat list of entities: { name, group, description, entities: [ { type, id?, ...fields } ] }.
-// Engine entities have plain types (camera, layer settings live on feature roots, hud.toast, handheld, handheld.page,
-// sound.*, link). A feature
-// world is a root entity whose type is the feature's name ({ type: "water", id: "river" }); everything that world
-// is made of is an entity of type "<feature>.<kind>": terrain stamps, lakes, storm cells, materials, models,
-// views, lighting presets, config blocks. Children belong to the only world of their feature, or to the one named
-// by `of` when a scenario has several.
+// A scenario is one flat list of entities: { name, group, description, entities: [ { type, id?, of?, ...fields } ] }.
+// Every type is one of js/kits/types.js (EntityTypes): types are the kits', not the features'. Engine entities
+// (camera, view, link, include, hud.toast, handheld, handheld.page, sound.*) drive the host. A feature world is a root
+// entity whose type is the feature's name ({ type: "water", id: "river" }); everything that world is made of is an
+// entity of a plain type: terrain stamps, lakes, storm cells, materials, models, views, lighting presets, config
+// blocks ({ type: "light" }, { type: "mountain" }). Such an entity belongs to the world named by `of`, or else to the
+// only world of the scenario that takes its type (any world when there is only one). `camera` and `view` are the
+// engine's unless they have `of` (then they are that world's camera block / one of its views).
 //
 // Each feature engine still reads its own native layout (materials as a map, views as a list, ...). SCHEMAS says
 // how a feature's entities map onto it, so toNative / fromNative convert both ways without per-feature code:
 //
-//   config   singleton blocks: native key -> one "<f>.<key>" entity holding its fields (non-objects as `value`)
-//   maps     native map (dotted path for nested ones) -> one "<f>.<type>" entity per key, the key as `id`
+//   config   singleton blocks: native key -> one entity of that type holding its fields (non-objects as `value`);
+//            `rename` gives a block whose key is taken (a feature's name, an engine type) another type
+//   maps     native map (dotted path for nested ones) -> one entity of `type` per key, the key as `id`
 //            (non-object values as `value`, or as the field named by `value`); `except` keys stay in the config block
-//   lists    native list -> one "<f>.<type>" entity per item, in order
+//   lists    native list -> one entity of that type per item, in order
 //            (a map value's or list item's own `type` field is kept in the field named after its slot type:
-//            a water tool { type: "pour" } is { type: "water.tool", tool: "pour" })
-//   (rest)   native `entities` list: "<f>.<native type>"
+//            a water tool { type: "pour" } is { type: "tool", tool: "pour" })
+//   kinds    the feature's own entity classes (its native `entities` list)
 //
 // include { scenario, as, skip, only, root }: the entities of another scenario, spliced in its place (resolveIncludes).
 // `as` renames its world (the root's id, `of` fields, and the world's name in the engine entities' expressions),
-// `skip` / `only` filter by type ("cloud.view", "sound.*"), `root` merges fields into its root entity (layer settings).
-// A composition is a few includes plus what joins them.
+// `skip` / `only` filter by type ("view", "sound.*"), `root` merges fields into its root entity (layer settings).
+// The included world's entities get its `of`. A composition is a few includes plus what joins them.
 
 const ScenarioFormat = (() => {
+    // js/kits/types.js: a script before this one in the page, a module in node
+    const Types = typeof EntityTypes !== 'undefined' ? EntityTypes : require('../kits/types.js');
+
     const SCHEMAS = {
         cloud: {
             title: 'Entity Cloud',
             config: ['terrain', 'render', 'weather', 'lighting', 'hurricane', 'streetLights'],
             maps: { 'weather.states': { type: 'weatherState' }, 'lighting.presets': { type: 'light' }, buildings: { type: 'building' } },
             lists: { clouds: 'cloudLayer', views: 'view' },
+            kinds: ['clearing', 'tilt', 'hills', 'mountain', 'range', 'river', 'lake', 'town', 'forest', 'village', 'busStation', 'bus',
+                'storm', 'supercell', 'squall', 'spawner'],
         },
         water: {
             title: 'Entity Water',
             config: ['terrain', 'sim', 'waves', 'water', 'lighting'],
+            rename: { water: 'waterShading' },
             maps: { lighting: { type: 'light', except: ['start'] } },
             lists: { tools: 'tool', views: 'view' },
+            kinds: ['tilt', 'hills', 'mountain', 'valley', 'basin', 'coast', 'dam', 'sea', 'lake', 'spring', 'drain', 'rain', 'debris'],
         },
         origin: {
             title: 'Entity Origin',
             config: ['start', 'camera', 'origin', 'lighting'],
+            rename: { origin: 'floatingOrigin' },
             maps: { materials: { type: 'material' }, models: { type: 'model', value: 'parts' } },
             lists: { bookmarks: 'bookmark' },
+            kinds: ['body', 'prop', 'field', 'orbiter'],
         },
         imposter: {
             title: 'Entity Imposter',
             config: ['camera', 'environment', 'lod', 'shadows', 'imposter', 'drop'],
+            rename: { imposter: 'imposterAtlas' },
             maps: { lighting: { type: 'light' }, materials: { type: 'material' }, models: { type: 'model' } },
             lists: {},
+            kinds: ['terrain', 'prop', 'compare', 'scatter'],
         },
         portal: {
             title: 'Entity Portal',
             config: ['camera', 'player', 'minimap', 'outdoor', 'cctv', 'media', 'iptv'],
             maps: { materials: { type: 'material' }, models: { type: 'model' } },
-            lists: { areas: 'area', portals: 'portal', occluders: 'occluder', vehicles: 'vehicle' },
+            lists: { areas: 'area', portals: 'visPortal', occluders: 'occluder', vehicles: 'vehicle' },
+            kinds: ['securityCamera', 'prop', 'light', 'stairs', 'hull', 'helm', 'door', 'drone'],
         },
         gui: {
             title: 'Entity GUI',
             config: ['player', 'facility', 'cctv', 'media', 'iptv', 'waves', 'radar', 'places', 'phone'],
             maps: { materials: { type: 'material' }, models: { type: 'model', value: 'parts' } },
             lists: {},
+            kinds: ['static', 'door', 'lamp', 'alarmBeacon', 'light', 'drone', 'securityCamera', 'avatar', 'terminal', 'easel'],
         },
     };
 
@@ -94,46 +109,82 @@ const ScenarioFormat = (() => {
         return { type, ...rest };
     };
 
-    // type names a feature's entities may take besides its native entity types
-    function slotTypes(schema) {
-        const m = new Map();
-        for (const k of schema.config) m.set(k, { kind: 'config', key: k });
+    // the types a feature's entities may take: type -> { kind: config | map | list | entity, key / path }
+    const slotCache = new Map();
+    function slotTypes(feature) {
+        if (slotCache.has(feature)) return slotCache.get(feature);
+        const schema = SCHEMAS[feature], m = new Map();
+        for (const k of schema.config) m.set(schema.rename?.[k] || k, { kind: 'config', key: k });
         for (const [path, spec] of Object.entries(schema.maps)) m.set(spec.type, { kind: 'map', path, spec });
         for (const [path, type] of Object.entries(schema.lists)) m.set(type, { kind: 'list', path });
+        for (const k of schema.kinds || []) {
+            if (m.has(k)) throw new Error(`${feature}: entity class "${k}" clashes with a schema slot`);
+            m.set(k, { kind: 'entity' });
+        }
+        for (const t of m.keys()) {
+            if (!Types.has(t)) throw new Error(`${feature}: type "${t}" is not in js/kits/types.js`);
+            if (SCHEMAS[t]) throw new Error(`${feature}: type "${t}" is a feature's name`);
+        }
+        slotCache.set(feature, m);
         return m;
     }
+    const takes = (feature, type) => slotTypes(feature).has(type);
+
+    // an engine entity: hud.* / sound.* / an engine type of js/kits/types.js, but `camera` / `view` only without `of`
+    const isEngine = e => typeof e.type === 'string' && (/^(hud|sound)\./.test(e.type) || Types.isEngine(e.type)) &&
+        !(e.of && (e.type === 'camera' || e.type === 'view'));
+    // an entity that belongs to a feature world
+    const isChild = e => typeof e.type === 'string' && !SCHEMAS[e.type] && !isEngine(e);
 
     // the feature roots of a scenario: [{ feature, id, def }]
     function roots(scenario) {
         return (scenario.entities || []).filter(e => SCHEMAS[e.type]).map(def => ({ feature: def.type, id: def.id || def.type, def }));
     }
 
+    // the world an entity belongs to: its `of`, the only world that takes its type, or the only world
+    function worldOf(e, all) {
+        const where = e.of ? ` (of "${e.of}")` : '';
+        if (!Types.has(e.type)) {
+            const dot = e.type.indexOf('.'), kind = e.type.slice(dot + 1);
+            const hint = dot > 0 && SCHEMAS[e.type.slice(0, dot)] && Types.has(kind) ? `: write it as "${kind}"` : ' (js/kits/types.js)';
+            throw new Error(`unknown entity type "${e.type}"${where}${hint}`);
+        }
+        if (e.of) {
+            const r = all.find(r => r.id === e.of);
+            if (!r) throw new Error(`${e.type}: no world "${e.of}" (worlds: ${all.map(r => r.id).join(', ')})`);
+            return r;
+        }
+        const fit = all.filter(r => takes(r.feature, e.type));
+        if (fit.length === 1) return fit[0];
+        if (fit.length > 1) throw new Error(`${e.type}: several worlds take it (${fit.map(r => r.id).join(', ')}), say which with "of"`);
+        if (all.length === 1) return all[0];
+        throw new Error(`${e.type}: no world of this scenario takes it`);
+    }
+
     // the entities of one feature world, in scenario order
     function childrenOf(scenario, root) {
-        const all = roots(scenario), same = all.filter(r => r.feature === root.feature);
-        const prefix = root.feature + '.';
-        return (scenario.entities || []).filter(e => typeof e.type === 'string' && e.type.startsWith(prefix) &&
-            (e.of ? e.of === root.id : same.length === 1 || same[0].id === root.id));
+        const all = roots(scenario);
+        return (scenario.entities || []).filter(e => isChild(e) && worldOf(e, all).id === root.id);
     }
 
     // feature entities -> the native scenario object that feature's engine reads
     function toNative(scenario, root) {
-        const schema = SCHEMAS[root.feature];
-        if (!schema) throw new Error(`unknown feature "${root.feature}"`);
-        const slots = slotTypes(schema), prefix = root.feature + '.';
+        if (!SCHEMAS[root.feature]) throw new Error(`unknown feature "${root.feature}"`);
+        const slots = slotTypes(root.feature);
         const native = { name: root.def.name || scenario.name || root.id };
         const entities = [];
         for (const e of childrenOf(scenario, root)) {
-            const kind = e.type.slice(prefix.length), slot = slots.get(kind);
-            if (!slot) { entities.push({ type: kind, ...strip(e) }); continue; }
+            const type = e.type, slot = slots.get(type);
+            if (!slot) throw new Error(`${root.id}: ${root.feature} has no "${type}"`);
+            if (slot.kind === 'entity') { entities.push({ type, ...strip(e) }); continue; }
             if (slot.kind === 'config') {
-                const body = 'value' in e && Object.keys(strip(e)).length === 1 ? e.value : untag(strip(e), kind);
-                const prev = native[kind];
-                native[kind] = isObj(prev) && isObj(body) ? { ...prev, ...body } : body;
+                const body = 'value' in e && Object.keys(strip(e)).length === 1 ? e.value : untag(strip(e), type);
+                const prev = native[slot.key];
+                native[slot.key] = isObj(prev) && isObj(body) ? { ...prev, ...body } : body;
             } else if (slot.kind === 'map') {
                 const key = e.id;
-                if (key === undefined) throw new Error(`${e.type} needs an id (its key in "${slot.path}")`);
-                const vk = slot.spec.value || 'value', body = untag(strip(e, ['id']), kind);
+                if (key === undefined) throw new Error(`${type} needs an id (its key in "${slot.path}")`);
+                const vk = slot.spec.value || 'value', body = untag(strip(e, ['id']), type);
                 const value = vk in body && Object.keys(body).length === 1 ? body[vk] : body;
                 let map = getPath(native, slot.path);
                 if (!isObj(map)) { map = {}; setPath(native, slot.path, map); }
@@ -141,7 +192,7 @@ const ScenarioFormat = (() => {
             } else {
                 let list = getPath(native, slot.path);
                 if (!Array.isArray(list)) { list = []; setPath(native, slot.path, list); }
-                list.push(untag(strip(e), kind));
+                list.push(untag(strip(e), type));
             }
         }
         native.entities = entities;
@@ -152,17 +203,19 @@ const ScenarioFormat = (() => {
     function fromNative(feature, native, id = feature) {
         const schema = SCHEMAS[feature];
         if (!schema) throw new Error(`unknown feature "${feature}"`);
-        const slots = slotTypes(schema), prefix = feature + '.';
+        const slots = slotTypes(feature);
         const root = { type: feature };
         if (id !== feature) root.id = id;
         if (native.name) root.name = native.name;
         const out = [root];
-        const of = id !== feature ? { of: id } : {};
+        // `of` when the world is renamed, and on camera / view (else they are the engine's)
+        const ent = (type, body) => ({ type, ...(id !== feature || Types.isEngine(type) ? { of: id } : {}), ...body });
         const known = new Set(['name', 'entities', ...schema.config, ...Object.keys(schema.lists), ...Object.keys(schema.maps).map(p => p.split('.')[0])]);
         for (const k of Object.keys(native)) if (!known.has(k)) throw new Error(`${feature}: native key "${k}" is not in its schema`);
         // config blocks, without the parts that are maps of their own
         for (const k of schema.config) {
             if (!(k in native)) continue;
+            const type = schema.rename?.[k] || k;
             let v = native[k];
             if (isObj(v)) {
                 v = { ...v };
@@ -171,30 +224,29 @@ const ScenarioFormat = (() => {
                     else if (path.startsWith(k + '.')) delete v[path.slice(k.length + 1)];
                 }
                 if (!Object.keys(v).length) continue;
-                out.push({ type: prefix + k, ...of, ...tag(v, k) });
-            } else out.push({ type: prefix + k, ...of, value: v });
+                out.push(ent(type, tag(v, type)));
+            } else out.push(ent(type, { value: v }));
         }
         for (const [path, spec] of Object.entries(schema.maps)) {
             const map = getPath(native, path);
             if (!isObj(map)) continue;
             for (const [key, v] of Object.entries(map)) {
                 if ((spec.except || []).includes(key)) continue;
-                out.push(isObj(v) ? { type: prefix + spec.type, id: key, ...of, ...tag(v, spec.type) } : { type: prefix + spec.type, id: key, ...of, [spec.value || 'value']: v });
+                out.push(isObj(v) ? ent(spec.type, { id: key, ...tag(v, spec.type) }) : ent(spec.type, { id: key, [spec.value || 'value']: v }));
             }
         }
         for (const [path, type] of Object.entries(schema.lists)) {
-            for (const item of getPath(native, path) || []) out.push({ type: prefix + type, ...of, ...tag(item, type) });
+            for (const item of getPath(native, path) || []) out.push(ent(type, tag(item, type)));
         }
         for (const e of native.entities || []) {
-            if (slots.has(e.type)) throw new Error(`${feature}: native entity type "${e.type}" clashes with a schema slot`);
             const { type, ...rest } = e;
-            out.push({ type: prefix + type, ...of, ...rest });
+            if (slots.get(type)?.kind !== 'entity') throw new Error(`${feature}: native entity type "${type}" is not one of its kinds`);
+            out.push(ent(type, rest));
         }
         return out;
     }
 
     // ------------------------------------------------------------------------------------------- includes
-    const ENGINE_TYPES = /^(hud\.|sound\.|handheld(\.|$)|link$|camera$)/;
     const glob = pat => new RegExp(`^${pat.split('*').map(x => x.replace(/[.+?^${}()|[\]\\]/g, '\\$&')).join('.*')}$`);
     const rename = (v, from, to) => {
         if (typeof v === 'string') return v === from ? to : v.replace(new RegExp(`(^|[^\\w.$'"])${from}(?=\\s*[.\\[])`, 'g'), `$1${to}`);
@@ -219,18 +271,18 @@ const ScenarioFormat = (() => {
                 if (from && to !== from) {
                     if (SCHEMAS[x.type] && (x.id || x.type) === from) x = { ...x, id: to };
                     else if (x.of === from) x = { ...x, of: to };
-                    if (ENGINE_TYPES.test(x.type || '')) x = rename(x, from, to);
+                    if (isEngine(x)) x = rename(x, from, to);
                 }
                 if (e.root && SCHEMAS[x.type] && x.id === to) x = { ...x, ...e.root, layer: { ...(x.layer || {}), ...(e.root.layer || {}) } };
-                // a world's children name it once there may be several of its feature
-                if (typeof x.type === 'string' && !SCHEMAS[x.type] && x.type.includes('.') && !ENGINE_TYPES.test(x.type) && !x.of && to) x = { ...x, of: to };
+                // a world's entities name it: the scenario it goes into may have other worlds that take their types
+                if (to && isChild(x) && !x.of) x = { ...x, of: to };
                 out.push(x);
             }
         }
         return { ...scenario, entities: out };
     }
 
-    return { SCHEMAS, roots, childrenOf, toNative, fromNative, resolveIncludes, isObj };
+    return { SCHEMAS, roots, childrenOf, worldOf, isEngine, takes, toNative, fromNative, resolveIncludes, isObj };
 })();
 
 if (typeof module !== 'undefined') module.exports = ScenarioFormat;

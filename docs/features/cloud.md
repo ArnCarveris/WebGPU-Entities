@@ -681,6 +681,8 @@ The cell moves through its life like this:
      storm cell into the weather map, or `null`.
 2. Register it in `ENTITY_TYPES` and add it to the scenario's `entities`.
 
+In WebGPU Entities the class goes into a kit: add it to the terrain, settlement, transit or weather kit's `terrainTypes / settlementTypes / busTypes / weatherTypes(Base, ...)` factory (`js/kits/`), list its type in `js/kits/types.js`, and map it in `ENTITY_TYPES` (`js/features/cloud/entities/types.js`).
+
 ## Layout (sections of the script in `index.html`)
 
 ```

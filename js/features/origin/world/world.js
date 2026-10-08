@@ -5,7 +5,7 @@ Features.part('origin', (engine, feature) => {
 const { Common, kits } = engine;
 const { DEG, v3 } = Common;
 const {
-    MAX_BODIES, quat, WorldPos, Model, GeometryPool, MaterialTable, Instance, InstanceStore, ENTITY_TYPES,
+    MAX_BODIES, SURFACES, quat, WorldPos, Model, GeometryPool, MaterialTable, Instance, InstanceStore, ENTITY_TYPES,
 } = feature;
 
 class World {
@@ -21,6 +21,16 @@ class World {
         this.landmarks = [];
         this.dynamic = [];
         this.sun = null;
+        this.surfaces = SURFACES;       // a body's surface name -> its shader's index
+        // the common mesh interface (kits.mesh): model instances (poses { pos: a WorldPos, q, scale }; opts tint, seed),
+        // re-uploaded when set once the store exists; rotations [yaw, pitch, roll] in degrees
+        this.meshes = {
+            instance: (model, p, opts) => {
+                const inst = this.addInstance(model, p.pos, p.q, p.scale, opts);
+                return { inst, radius: inst.model.radius, set: q => { inst.place(q.pos, q.q, q.scale); this.store?.touch(inst); } };
+            },
+            rotation: rot => quat.euler(rot),
+        };
         for (const def of scenario.entities || []) kits.world.addEntity(this, ENTITY_TYPES, def);
         if (this.bodies.length > MAX_BODIES) throw new Error(`more than ${MAX_BODIES} bodies`);
         this.geometry = new GeometryPool(this.modelList);

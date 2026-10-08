@@ -8,7 +8,7 @@ const { POLY_FLOATS, NEAR_PASS, aabbVisible, aabbContained, rectUnion } = featur
 
 // FrameBuilder: visibility entries -> object tree queries -> command list for Renderer.render.
 //
-// A GUI screen (o.gui, world/entities.js Screen) is drawn by a 'gui' command after its entry's objects: its quads are
+// A GUI screen (o.gui, a Screen entity: js/kits/entities/sectors.js) is drawn by a 'gui' command after its entry's objects: its quads are
 // depth-tested against them (just in front of its own surface) and masked by the entry's stencil ref like the rest.
 //
 // Stencil mode draws the portal tree depth-first. Each child's clipped portal polygon is marked into the

@@ -138,7 +138,7 @@ class Controls {
         a.hud.toast(host ? `${TORNADO[cat].name} tornado under ${host.def.label || host.id}` : `${TORNADO[cat].name} tornado: waiting for a supercell`);
     }
 
-    // to view v (cloud.view): its pos / look, or on what it follows (the entity `follow`, or `member` of it): boarding it
+    // to view v (a `view` entity): its pos / look, or on what it follows (the entity `follow`, or `member` of it): boarding it
     // (board(app, spot): a bus's seat or door), at a spot it laid out (a village's bus stop), or offset from its focus
     jump(v, member = null) {
         const a = this.app, cam = a.camera, e = member || (v.follow && a.world.get(v.follow));

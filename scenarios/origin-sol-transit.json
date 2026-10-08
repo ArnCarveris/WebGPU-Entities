@@ -3,138 +3,138 @@
     "group": "Entity Origin",
     "entities": [
         {"type":"origin","name":"Sol Transit"},
-        {"type":"origin.start","value":"1"},
-        {"type":"origin.camera","fov":60,"minAltitude":1.7},
-        {"type":"origin.origin","distance":512,"angle":0.25,"scaleBase":64,"frameRange":3,"maxScaleExp":44},
-        {"type":"origin.lighting","exposure":1.25,"sun":1.7},
-        {"type":"origin.material","id":"hull","albedo":[0.74,0.76,0.78],"pattern":"panels","scale":2,"spec":0.35,"shin":32},
-        {"type":"origin.material","id":"dark","albedo":[0.2,0.21,0.23],"pattern":"panels","scale":1,"spec":0.25,"shin":24},
-        {"type":"origin.material","id":"metal","albedo":[0.55,0.56,0.58],"spec":0.6,"shin":48},
-        {"type":"origin.material","id":"gold","albedo":[0.85,0.62,0.22],"pattern":"panels","scale":0.7,"spec":0.9,"shin":18},
-        {"type":"origin.material","id":"solar","albedo":[0.05,0.08,0.22],"pattern":"solar","scale":1,"spec":0.9,"shin":64},
-        {"type":"origin.material","id":"radiator","albedo":[0.92,0.92,0.94],"pattern":"panels","scale":0.8,"spec":0.1,"shin":8},
-        {"type":"origin.material","id":"habitat","albedo":[0.7,0.72,0.74],"pattern":"windows","scale":1.6,"spec":0.3,"shin":32,"emissive":[1,0.82,0.55,2.5]},
-        {"type":"origin.material","id":"glass","albedo":[0.35,0.5,0.58],"pattern":"windows","scale":2.4,"spec":1.2,"shin":96,"emissive":[1,0.85,0.6,1.4]},
-        {"type":"origin.material","id":"engine","albedo":[0.1,0.1,0.12],"emissive":[0.45,0.75,1,5]},
-        {"type":"origin.material","id":"lamp","albedo":[0.9,0.9,0.85],"emissive":[1,0.95,0.8,4]},
-        {"type":"origin.material","id":"beacon","albedo":[0.3,0.05,0.05],"pattern":"blink","emissive":[1,0.18,0.08,8],"rate":0.8},
-        {"type":"origin.material","id":"beaconG","albedo":[0.05,0.3,0.05],"pattern":"blink","emissive":[0.2,1,0.35,8],"rate":0.55},
-        {"type":"origin.material","id":"hazard","albedo":[0.95,0.72,0.1],"pattern":"hazard","scale":1.5,"spec":0.2,"shin":16},
-        {"type":"origin.material","id":"pad","albedo":[0.36,0.37,0.38],"pattern":"panels","scale":4,"spec":0.1,"shin":8},
-        {"type":"origin.material","id":"rock","albedo":[0.42,0.4,0.38],"pattern":"rock","spec":0.05,"shin":8},
-        {"type":"origin.material","id":"regolith","albedo":[0.46,0.46,0.45],"pattern":"rock","spec":0.02,"shin":4},
-        {"type":"origin.material","id":"ice","albedo":[0.72,0.8,0.88],"pattern":"rock","spec":0.5,"shin":40},
-        {"type":"origin.material","id":"container","albedo":[0.8,0.35,0.12],"pattern":"panels","scale":1.2,"spec":0.2,"shin":16},
+        {"type":"start","value":"1"},
+        {"type":"camera","of":"origin","fov":60,"minAltitude":1.7},
+        {"type":"floatingOrigin","distance":512,"angle":0.25,"scaleBase":64,"frameRange":3,"maxScaleExp":44},
+        {"type":"lighting","exposure":1.25,"sun":1.7},
+        {"type":"material","id":"hull","albedo":[0.74,0.76,0.78],"pattern":"panels","scale":2,"spec":0.35,"shin":32},
+        {"type":"material","id":"dark","albedo":[0.2,0.21,0.23],"pattern":"panels","scale":1,"spec":0.25,"shin":24},
+        {"type":"material","id":"metal","albedo":[0.55,0.56,0.58],"spec":0.6,"shin":48},
+        {"type":"material","id":"gold","albedo":[0.85,0.62,0.22],"pattern":"panels","scale":0.7,"spec":0.9,"shin":18},
+        {"type":"material","id":"solar","albedo":[0.05,0.08,0.22],"pattern":"solar","scale":1,"spec":0.9,"shin":64},
+        {"type":"material","id":"radiator","albedo":[0.92,0.92,0.94],"pattern":"panels","scale":0.8,"spec":0.1,"shin":8},
+        {"type":"material","id":"habitat","albedo":[0.7,0.72,0.74],"pattern":"windows","scale":1.6,"spec":0.3,"shin":32,"emissive":[1,0.82,0.55,2.5]},
+        {"type":"material","id":"glass","albedo":[0.35,0.5,0.58],"pattern":"windows","scale":2.4,"spec":1.2,"shin":96,"emissive":[1,0.85,0.6,1.4]},
+        {"type":"material","id":"engine","albedo":[0.1,0.1,0.12],"emissive":[0.45,0.75,1,5]},
+        {"type":"material","id":"lamp","albedo":[0.9,0.9,0.85],"emissive":[1,0.95,0.8,4]},
+        {"type":"material","id":"beacon","albedo":[0.3,0.05,0.05],"pattern":"blink","emissive":[1,0.18,0.08,8],"rate":0.8},
+        {"type":"material","id":"beaconG","albedo":[0.05,0.3,0.05],"pattern":"blink","emissive":[0.2,1,0.35,8],"rate":0.55},
+        {"type":"material","id":"hazard","albedo":[0.95,0.72,0.1],"pattern":"hazard","scale":1.5,"spec":0.2,"shin":16},
+        {"type":"material","id":"pad","albedo":[0.36,0.37,0.38],"pattern":"panels","scale":4,"spec":0.1,"shin":8},
+        {"type":"material","id":"rock","albedo":[0.42,0.4,0.38],"pattern":"rock","spec":0.05,"shin":8},
+        {"type":"material","id":"regolith","albedo":[0.46,0.46,0.45],"pattern":"rock","spec":0.02,"shin":4},
+        {"type":"material","id":"ice","albedo":[0.72,0.8,0.88],"pattern":"rock","spec":0.5,"shin":40},
+        {"type":"material","id":"container","albedo":[0.8,0.35,0.12],"pattern":"panels","scale":1.2,"spec":0.2,"shin":16},
         {
-            "type": "origin.model", "id": "gateway",
+            "type": "model", "id": "gateway",
             "parts": [{"cyl":[0,0,0,3.5,36],"axis":"z","seg":24,"mat":"hull"},{"box":[0,0,-4,7.3,1.1,18],"mat":"habitat"},{"cyl":[0,0,-22,2.2,8],"axis":"z","seg":16,"mat":"dark"},{"cyl":[0,0,-26.5,2.8,1],"axis":"z","seg":16,"mat":"metal"},{"cyl":[0,0,21,4.2,6],"axis":"z","seg":24,"mat":"gold"},{"cyl":[0,0,26,1.2,4],"r2":2.8,"axis":"z","seg":16,"mat":"dark"},{"box":[0,0,0,84,1.2,1.2],"mat":"metal"},{"box":[21,0,0,16,0.15,11],"mat":"solar"},{"box":[-21,0,0,16,0.15,11],"mat":"solar"},{"box":[36,0,0,12,0.15,11],"mat":"solar"},{"box":[-36,0,0,12,0.15,11],"mat":"solar"},{"box":[0,9,12,0.3,14,7],"mat":"radiator"},{"box":[0,-9,12,0.3,14,7],"mat":"radiator"},{"cyl":[5.5,0,-12,1.6,5],"axis":"x","seg":16,"mat":"hull"},{"cyl":[-5.5,0,-12,1.6,5],"axis":"x","seg":16,"mat":"hull"},{"sphere":[42.5,0,0,0.5],"seg":10,"mat":"beacon"},{"sphere":[-42.5,0,0,0.5],"seg":10,"mat":"beaconG"}]
         },
         {
-            "type": "origin.model", "id": "hab-ring",
+            "type": "model", "id": "hab-ring",
             "parts": [{"torus":[0,0,0,30,2.6],"axis":"z","seg":[72,10],"mat":"habitat"},{"box":[0,0,0,1,55,1],"mat":"metal"},{"box":[0,0,0,55,1,1],"mat":"metal"},{"cyl":[0,0,0,4.6,3],"axis":"z","seg":20,"mat":"dark"}]
         },
         {
-            "type": "origin.model", "id": "shuttle",
+            "type": "model", "id": "shuttle",
             "parts": [{"box":[0,0,0,3,2,10],"mat":"hull"},{"cyl":[0,0,-6.5,0.3,3],"r2":1.4,"axis":"z","seg":12,"mat":"hull"},{"box":[0,-0.6,1.5,10,0.3,4],"mat":"dark"},{"box":[0,1.4,3.5,0.3,2,2.5],"mat":"dark"},{"box":[0,0.6,-3.6,2.2,0.8,1.6],"mat":"glass"},{"cyl":[0.8,0,5.4,0.6,1.2],"axis":"z","seg":12,"mat":"engine"},{"cyl":[-0.8,0,5.4,0.6,1.2],"axis":"z","seg":12,"mat":"engine"}]
         },
         {
-            "type": "origin.model", "id": "pad",
+            "type": "model", "id": "pad",
             "parts": [{"cyl":[0,0.15,0,14,0.3],"seg":40,"mat":"pad"},{"cyl":[0,0.31,0,5,0.02],"seg":32,"mat":"hazard"},{"sphere":[14,0.4,0,0.25],"seg":8,"mat":"beacon"},{"sphere":[-14,0.4,0,0.25],"seg":8,"mat":"beacon"},{"sphere":[0,0.4,14,0.25],"seg":8,"mat":"beaconG"},{"sphere":[0,0.4,-14,0.25],"seg":8,"mat":"beaconG"}]
         },
         {
-            "type": "origin.model", "id": "dome",
+            "type": "model", "id": "dome",
             "parts": [{"sphere":[0,0,0,8],"seg":28,"mat":"glass"},{"cyl":[0,0.35,0,8.4,0.7],"seg":28,"mat":"hull"},{"box":[0,1.3,8.6,3,2.6,3],"mat":"hull"},{"box":[0,1.2,10.15,1.6,2.1,0.1],"mat":"lamp"}]
         },
         {
-            "type": "origin.model", "id": "hab",
+            "type": "model", "id": "hab",
             "parts": [{"cyl":[0,2.2,0,2.6,12],"axis":"x","seg":20,"mat":"habitat"},{"box":[4,0.6,0,0.4,1.2,3],"mat":"metal"},{"box":[-4,0.6,0,0.4,1.2,3],"mat":"metal"}]
         },
         {
-            "type": "origin.model", "id": "tower",
+            "type": "model", "id": "tower",
             "parts": [{"cyl":[0,9,0,0.35,18],"seg":8,"mat":"metal"},{"box":[0,0.3,0,3,0.6,3],"mat":"dark"},{"cyl":[0,18.2,0.8,2.8,0.5],"r2":0.4,"axis":"z","seg":20,"mat":"radiator"},{"sphere":[0,18.6,0,0.3],"seg":8,"mat":"beacon"}]
         },
-        {"type":"origin.model","id":"solar-array","parts":[{"box":[0,1.4,0,9,0.12,3.2],"mat":"solar"},{"cyl":[0,0.7,0,0.1,1.4],"seg":6,"mat":"metal"}]},
+        {"type":"model","id":"solar-array","parts":[{"box":[0,1.4,0,9,0.12,3.2],"mat":"solar"},{"cyl":[0,0.7,0,0.1,1.4],"seg":6,"mat":"metal"}]},
         {
-            "type": "origin.model", "id": "rover",
+            "type": "model", "id": "rover",
             "parts": [{"box":[0,0.75,0,2.2,0.9,3.6],"mat":"hull"},{"box":[0,1.4,0.4,1.8,0.5,1.8],"mat":"glass"},{"cyl":[1.25,0,1.2,0.5,0.4],"axis":"x","seg":12,"mat":"dark"},{"cyl":[-1.25,0,1.2,0.5,0.4],"axis":"x","seg":12,"mat":"dark"},{"cyl":[1.25,0,-1.2,0.5,0.4],"axis":"x","seg":12,"mat":"dark"},{"cyl":[-1.25,0,-1.2,0.5,0.4],"axis":"x","seg":12,"mat":"dark"},{"box":[0,0.8,-1.82,1.6,0.2,0.06],"mat":"lamp"}]
         },
-        {"type":"origin.model","id":"marker","parts":[{"cyl":[0,0.75,0,0.06,1.5],"seg":6,"mat":"metal"},{"sphere":[0,1.6,0,0.16],"seg":8,"mat":"beacon"}]},
+        {"type":"model","id":"marker","parts":[{"cyl":[0,0.75,0,0.06,1.5],"seg":6,"mat":"metal"},{"sphere":[0,1.6,0,0.16],"seg":8,"mat":"beacon"}]},
         {
-            "type": "origin.model", "id": "kuiper",
+            "type": "model", "id": "kuiper",
             "parts": [{"sphere":[0,0,0,16],"seg":28,"mat":"hull"},{"cyl":[0,0,0,3.5,150],"axis":"x","seg":16,"mat":"dark"},{"cyl":[0,0,0,3.5,150],"axis":"z","seg":16,"mat":"dark"},{"cyl":[0,0,0,2.5,70],"seg":12,"mat":"metal"},{"cyl":[75,0,0,9,22],"seg":24,"mat":"habitat"},{"cyl":[-75,0,0,9,22],"seg":24,"mat":"habitat"},{"cyl":[0,0,75,9,22],"seg":24,"mat":"habitat"},{"cyl":[0,0,-75,9,22],"seg":24,"mat":"habitat"},{"torus":[0,0,0,48,2.2],"seg":[64,8],"mat":"glass"},{"box":[0,30,0,40,0.3,14],"mat":"radiator"},{"box":[0,-30,0,40,0.3,14],"mat":"radiator"},{"sphere":[0,36,0,1.2],"seg":10,"mat":"beacon"},{"sphere":[0,-36,0,1.2],"seg":10,"mat":"beaconG"},{"sphere":[86,0,0,1],"seg":10,"mat":"lamp"},{"sphere":[-86,0,0,1],"seg":10,"mat":"lamp"}]
         },
         {
-            "type": "origin.model", "id": "container",
+            "type": "model", "id": "container",
             "parts": [{"box":[0,0,0,2.4,2.6,12],"mat":"container"},{"box":[0,0,6.05,2.5,2.7,0.1],"mat":"dark"},{"box":[0,0,-6.05,2.5,2.7,0.1],"mat":"dark"}]
         },
-        {"type":"origin.model","id":"rock","parts":[{"rock":[0,0,0,1],"detail":1,"mat":"rock"}]},
-        {"type":"origin.model","id":"boulder","parts":[{"rock":[0,0,0,1],"detail":1,"mat":"regolith"}]},
-        {"type":"origin.model","id":"ice-rock","parts":[{"rock":[0,0,0,1],"detail":0,"mat":"ice"}]},
-        {"type":"origin.bookmark","key":"1","name":"Gateway Station, low Earth orbit","at":{"parent":"gateway","offset":[55,22,-110]},"look":"gateway"},
-        {"type":"origin.bookmark","key":"2","name":"Shackleton Base, Moon surface","at":{"parent":"moonbase","offset":[-42,1.7,58]},"look":"moonbase"},
-        {"type":"origin.bookmark","key":"3","name":"Kuiper Outpost, Neptune orbit (4.5e12 m out)","at":{"parent":"kuiper","offset":[160,45,380]},"look":"kuiper"},
-        {"type":"origin.bookmark","key":"4","name":"Saturn ringlet","at":{"parent":"saturn","offset":[-120000000,22000000,-110000000]},"look":"saturn"},
-        {"type":"origin.bookmark","key":"5","name":"Earth and Moon","at":{"parent":"earth","offset":[-40000000,10000000,50000000]},"look":"earth"},
-        {"type":"origin.bookmark","key":"6","name":"The Sun","at":{"parent":"sun","offset":[0,400000000,3200000000]},"look":"sun"},
-        {"type":"origin.bookmark","key":"7","name":"Solar system overview","at":{"pos":[800000000000,5500000000000,4500000000000]},"look":"sun"},
-        {"type":"origin.body","id":"sun","label":"Sun","pos":[0,0,0],"radius":695700000,"surface":"star","color":[1,0.78,0.5],"emissive":14,"halo":6,"star":true},
+        {"type":"model","id":"rock","parts":[{"rock":[0,0,0,1],"detail":1,"mat":"rock"}]},
+        {"type":"model","id":"boulder","parts":[{"rock":[0,0,0,1],"detail":1,"mat":"regolith"}]},
+        {"type":"model","id":"ice-rock","parts":[{"rock":[0,0,0,1],"detail":0,"mat":"ice"}]},
+        {"type":"bookmark","key":"1","name":"Gateway Station, low Earth orbit","at":{"parent":"gateway","offset":[55,22,-110]},"look":"gateway"},
+        {"type":"bookmark","key":"2","name":"Shackleton Base, Moon surface","at":{"parent":"moonbase","offset":[-42,1.7,58]},"look":"moonbase"},
+        {"type":"bookmark","key":"3","name":"Kuiper Outpost, Neptune orbit (4.5e12 m out)","at":{"parent":"kuiper","offset":[160,45,380]},"look":"kuiper"},
+        {"type":"bookmark","key":"4","name":"Saturn ringlet","at":{"parent":"saturn","offset":[-120000000,22000000,-110000000]},"look":"saturn"},
+        {"type":"bookmark","key":"5","name":"Earth and Moon","at":{"parent":"earth","offset":[-40000000,10000000,50000000]},"look":"earth"},
+        {"type":"bookmark","key":"6","name":"The Sun","at":{"parent":"sun","offset":[0,400000000,3200000000]},"look":"sun"},
+        {"type":"bookmark","key":"7","name":"Solar system overview","at":{"pos":[800000000000,5500000000000,4500000000000]},"look":"sun"},
+        {"type":"body","id":"sun","label":"Sun","pos":[0,0,0],"radius":695700000,"surface":"star","color":[1,0.78,0.5],"emissive":14,"halo":6,"star":true},
         {
-            "type": "origin.body", "id": "earth", "label": "Earth", "pos": [149600000000,0,0], "radius": 6371000, "surface": "earth", "color": [0.3,0.5,0.9],
+            "type": "body", "id": "earth", "label": "Earth", "pos": [149600000000,0,0], "radius": 6371000, "surface": "earth", "color": [0.3,0.5,0.9],
             "atmosphere": {"color":[0.32,0.55,1],"height":100000}
         },
         {
-            "type": "origin.body", "id": "moon", "label": "Moon", "orbit": {"parent":"earth","radius":384400000,"angle":90}, "radius": 1737400, "surface": "rocky",
+            "type": "body", "id": "moon", "label": "Moon", "orbit": {"parent":"earth","radius":384400000,"angle":90}, "radius": 1737400, "surface": "rocky",
             "color": [0.44,0.44,0.42]
         },
         {
-            "type": "origin.body", "id": "mars", "label": "Mars", "pos": [-160000000000,0,165000000000], "radius": 3390000, "surface": "mars",
+            "type": "body", "id": "mars", "label": "Mars", "pos": [-160000000000,0,165000000000], "radius": 3390000, "surface": "mars",
             "color": [0.72,0.36,0.2], "atmosphere": {"color":[0.8,0.55,0.4],"height":40000}
         },
-        {"type":"origin.body","id":"jupiter","label":"Jupiter","pos":[500000000000,0,-550000000000],"radius":69900000,"surface":"gas","color":[0.85,0.72,0.56]},
-        {"type":"origin.body","id":"saturn","label":"Saturn","pos":[1200000000000,0,830000000000],"radius":58200000,"surface":"gas","color":[0.9,0.8,0.58]},
+        {"type":"body","id":"jupiter","label":"Jupiter","pos":[500000000000,0,-550000000000],"radius":69900000,"surface":"gas","color":[0.85,0.72,0.56]},
+        {"type":"body","id":"saturn","label":"Saturn","pos":[1200000000000,0,830000000000],"radius":58200000,"surface":"gas","color":[0.9,0.8,0.58]},
         {
-            "type": "origin.body", "id": "neptune", "label": "Neptune", "pos": [4200000000000,0,-1550000000000], "radius": 24600000, "surface": "ice",
+            "type": "body", "id": "neptune", "label": "Neptune", "pos": [4200000000000,0,-1550000000000], "radius": 24600000, "surface": "ice",
             "color": [0.3,0.45,0.95], "atmosphere": {"color":[0.35,0.55,1],"height":300000}
         },
-        {"type":"origin.prop","id":"gateway","label":"Gateway Station","model":"gateway","orbit":{"parent":"earth","altitude":420000,"angle":170}},
-        {"type":"origin.prop","model":"hab-ring","parent":"gateway","offset":[0,0,6],"spin":{"axis":[0,0,1],"rpm":1.2}},
-        {"type":"origin.orbiter","label":"Shuttle","model":"shuttle","orbit":{"parent":"gateway","radius":140,"period":75,"incl":20}},
+        {"type":"prop","id":"gateway","label":"Gateway Station","model":"gateway","orbit":{"parent":"earth","altitude":420000,"angle":170}},
+        {"type":"prop","model":"hab-ring","parent":"gateway","offset":[0,0,6],"spin":{"axis":[0,0,1],"rpm":1.2}},
+        {"type":"orbiter","label":"Shuttle","model":"shuttle","orbit":{"parent":"gateway","radius":140,"period":75,"incl":20}},
         {
-            "type": "origin.field", "label": "Gateway debris", "model": ["rock"], "parent": "gateway", "offset": [0,0,0], "shape": {"sphere":2500,"inner":180},
+            "type": "field", "label": "Gateway debris", "model": ["rock"], "parent": "gateway", "offset": [0,0,0], "shape": {"sphere":2500,"inner":180},
             "count": 4000, "size": [0.3,4], "seed": 11
         },
-        {"type":"origin.prop","id":"moonbase","label":"Shackleton Base","model":"pad","surface":{"parent":"moon","lat":12,"lon":135,"heading":0}},
-        {"type":"origin.prop","model":"dome","parent":"moonbase","offset":[32,0,-6]},
-        {"type":"origin.prop","model":"dome","parent":"moonbase","offset":[46,0,16],"scale":0.7},
-        {"type":"origin.prop","model":"hab","parent":"moonbase","offset":[30,0,22],"rot":[35,0,0]},
-        {"type":"origin.prop","model":"tower","parent":"moonbase","offset":[-26,0,-18]},
-        {"type":"origin.prop","model":"solar-array","parent":"moonbase","offset":[-10,0,-36],"rot":[0,0,-25]},
-        {"type":"origin.prop","model":"solar-array","parent":"moonbase","offset":[2,0,-36],"rot":[0,0,-25]},
-        {"type":"origin.prop","model":"solar-array","parent":"moonbase","offset":[14,0,-36],"rot":[0,0,-25]},
-        {"type":"origin.prop","model":"marker","parent":"moonbase","offset":[-14,0,30]},
-        {"type":"origin.prop","model":"marker","parent":"moonbase","offset":[18,0,42]},
-        {"type":"origin.orbiter","label":"Rover","model":"rover","orbit":{"parent":"moonbase","radius":58,"period":90,"height":0.5}},
+        {"type":"prop","id":"moonbase","label":"Shackleton Base","model":"pad","surface":{"parent":"moon","lat":12,"lon":135,"heading":0}},
+        {"type":"prop","model":"dome","parent":"moonbase","offset":[32,0,-6]},
+        {"type":"prop","model":"dome","parent":"moonbase","offset":[46,0,16],"scale":0.7},
+        {"type":"prop","model":"hab","parent":"moonbase","offset":[30,0,22],"rot":[35,0,0]},
+        {"type":"prop","model":"tower","parent":"moonbase","offset":[-26,0,-18]},
+        {"type":"prop","model":"solar-array","parent":"moonbase","offset":[-10,0,-36],"rot":[0,0,-25]},
+        {"type":"prop","model":"solar-array","parent":"moonbase","offset":[2,0,-36],"rot":[0,0,-25]},
+        {"type":"prop","model":"solar-array","parent":"moonbase","offset":[14,0,-36],"rot":[0,0,-25]},
+        {"type":"prop","model":"marker","parent":"moonbase","offset":[-14,0,30]},
+        {"type":"prop","model":"marker","parent":"moonbase","offset":[18,0,42]},
+        {"type":"orbiter","label":"Rover","model":"rover","orbit":{"parent":"moonbase","radius":58,"period":90,"height":0.5}},
         {
-            "type": "origin.field", "label": "", "model": ["boulder"], "parent": "moonbase", "offset": [0,0,0], "shape": {"disc":600,"inner":22,"sink":0.35},
+            "type": "field", "label": "", "model": ["boulder"], "parent": "moonbase", "offset": [0,0,0], "shape": {"disc":600,"inner":22,"sink":0.35},
             "count": 5000, "size": [0.15,2.8], "seed": 5
         },
         {
-            "type": "origin.field", "label": "Saturn ringlet", "model": ["ice-rock"], "parent": "saturn", "offset": [0,0,0], "rot": [0,0,26],
+            "type": "field", "label": "Saturn ringlet", "model": ["ice-rock"], "parent": "saturn", "offset": [0,0,0], "rot": [0,0,26],
             "shape": {"ring":[75000000,135000000],"thickness":3000}, "count": 100000, "size": [200,5000], "seed": 3
         },
-        {"type":"origin.prop","id":"kuiper","label":"Kuiper Outpost","model":"kuiper","orbit":{"parent":"neptune","altitude":3000000,"angle":200}},
-        {"type":"origin.prop","model":"hab-ring","parent":"kuiper","offset":[0,0,0],"rot":[0,90,0],"scale":2.4,"spin":{"axis":[0,0,1],"rpm":0.6}},
-        {"type":"origin.orbiter","label":"Tug","model":"shuttle","orbit":{"parent":"kuiper","radius":260,"period":110,"incl":-35},"scale":1.6},
+        {"type":"prop","id":"kuiper","label":"Kuiper Outpost","model":"kuiper","orbit":{"parent":"neptune","altitude":3000000,"angle":200}},
+        {"type":"prop","model":"hab-ring","parent":"kuiper","offset":[0,0,0],"rot":[0,90,0],"scale":2.4,"spin":{"axis":[0,0,1],"rpm":0.6}},
+        {"type":"orbiter","label":"Tug","model":"shuttle","orbit":{"parent":"kuiper","radius":260,"period":110,"incl":-35},"scale":1.6},
         {
-            "type": "origin.field", "label": "Cargo cloud", "model": ["container"], "parent": "kuiper", "offset": [0,0,0], "shape": {"sphere":900,"inner":160},
+            "type": "field", "label": "Cargo cloud", "model": ["container"], "parent": "kuiper", "offset": [0,0,0], "shape": {"sphere":900,"inner":160},
             "count": 1500, "size": [1,1], "seed": 21, "tint": 0.35
         },
         {
-            "type": "origin.field", "label": "Kuiper debris", "model": ["rock","ice-rock"], "parent": "kuiper", "offset": [0,0,0],
+            "type": "field", "label": "Kuiper debris", "model": ["rock","ice-rock"], "parent": "kuiper", "offset": [0,0,0],
             "shape": {"sphere":3000,"inner":220}, "count": 20000, "size": [0.5,28], "seed": 7
         },
         {
-            "type": "origin.field", "label": "", "model": ["rock"], "parent": "kuiper", "offset": [0,0,0], "shape": {"sphere":25000,"inner":3000}, "count": 50000,
+            "type": "field", "label": "", "model": ["rock"], "parent": "kuiper", "offset": [0,0,0], "shape": {"sphere":25000,"inner":3000}, "count": 50000,
             "size": [3,90], "seed": 8
         },
 

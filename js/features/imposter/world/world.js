@@ -3,7 +3,15 @@
 
 Features.part('imposter', (engine, feature) => {
 const { kits } = engine;
-const { Archetype, ENTITY_TYPES } = feature;
+const { Archetype, FORCE, Geo, MeshBuilder, lin, quat, ENTITY_TYPES } = feature;
+
+// A builder of the mesh interface for indexed surfaces (point / face) over a Geo with vertex colours; finish(): the Geo
+class GeoMesh {
+    constructor() { this.g = new Geo(); this.g.col = []; }
+    point(p, n, uv, color) { const i = this.g.vert(p, n, uv); this.g.col.push(...color); return i; }
+    face(a, b, c, d) { this.g.quad(a, b, c, d); }
+    finish() { return this.g; }
+}
 
 class World {
     constructor(game, scenario) {
@@ -17,6 +25,28 @@ class World {
         this.occ = new Map();           // spatial hash of footprints: 8 m cells -> [x, z, r, ...]
         this.occMax = 0;
         this.warnings = [];
+        // the common mesh interface (kits.mesh): instances are archetype slots (opts.lod: 'mesh' | 'imposter' forces how
+        // they draw), add() makes a generated asset (opts: key, material, castShadows) from an indexed surface built only
+        // when the library has none under that key; rotations as scenario `rot`s (a yaw, or [x, y, z] degrees); colours
+        // as hex strings, to linear
+        this.meshes = {
+            builder: () => new GeoMesh(),
+            add: (build, opts) => {
+                const asset = this.lib.generated(opts.key, () => {
+                    const b = new MeshBuilder();
+                    b.add((typeof build === 'function' ? build() : build).finish(), this.lib.material(opts.material));
+                    return b.finish();
+                });
+                asset.castShadows = opts.castShadows !== false;
+                return asset;
+            },
+            instance: (model, p, opts = {}) => {
+                const arch = this.archetype(model), slot = arch.add(p.pos, p.q, p.scale, FORCE[opts.lod] ?? 0);
+                return { arch, slot, set: q => arch.set(slot, q.pos, q.q, q.scale) };
+            },
+            rotation: rot => quat.euler(rot),
+            color: lin,
+        };
     }
 
     async build() {

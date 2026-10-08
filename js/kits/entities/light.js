@@ -10,7 +10,7 @@ const { lerp } = engine.Common;
 //   door        { id, min }: dimmed to `min` while that door (world.get(id), a kits.entities door) is shut
 //   alarmColor  its colour while its world's alarm is on (world.alarm)
 //   size        the emitter's size (m): how soft the shadows it casts are (0.1)
-// The world options need the light's `world`. def: { pos, color ([1, 1, 1]), intensity (1), radius (8), ... }
+// The world options need the light's `world`. A light may ride a vehicle (ride). def: { pos, color ([1, 1, 1]), intensity (1), radius (8), ... }
 class LightSource {
     constructor(def, world = null) {
         this.pos = def.pos;
@@ -23,6 +23,17 @@ class LightSource {
         this.door = def.door || null;
         this.alarmColor = def.alarmColor || null;
         this.world = world;
+        this.vehicle = null;        // set when the light rides a vehicle (ride): pos is then `local` through its Origin
+        this.local = null;
+    }
+
+    // ride vehicle veh (with an Origin, kits.interior, and a poseStamp): its position stays `local` in the vehicle's frame
+    // and is worked out through the vehicle's Origin when read after the vehicle moved (nothing to do per light when it moves)
+    ride(veh) {
+        this.vehicle = veh;
+        this.local = this.pos.slice();
+        let at = null, stamp = -1;
+        Object.defineProperty(this, 'pos', { get: () => { if (stamp !== veh.poseStamp) { at = veh.origin.toWorld(this.local); stamp = veh.poseStamp; } return at; }, configurable: true });
     }
 
     intensityAt(t) {

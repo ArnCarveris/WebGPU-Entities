@@ -30,7 +30,7 @@ const STENCIL = {
 const NEAR_PASS = 0.35;                // SECTR: IsPointInHull(cameraPos, maxNearClipDistance)
 const DEPTH_FORMAT = 'depth24plus-stencil8';
 const PATTERNS = { flat: 0, tiles: 1, panels: 2, noise: 3, grass: 4, hazard: 5, planks: 6, bricks: 7, screen: 8, rust: 9 };
-const AXES = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+const { AXES } = engine.kits.mesh;     // the world axes
 const DEFAULT_GLASS = [0.55, 0.7, 0.75, 0.12];
 
 return {

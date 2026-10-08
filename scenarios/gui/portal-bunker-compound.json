@@ -1,9 +1,9 @@
 {
     "$comment": "Bunker compound's GUIs: the settings of its screens' apps (CCTV, camera and photos, TV) and the handheld's pages. The consoles' screens are the portal feature's (js/features/portal/gui/screens.js), named by the props' screen.gui. scenarios/portal-bunker-compound.json includes them.",
     "entities": [
-        {"type":"portal.cctv","resolution":[512,384],"fovY":1.1,"initial":2,"far":320},
+        {"type":"cctv","resolution":[512,384],"fovY":1.1,"initial":2,"far":320},
         {
-            "type": "portal.media",
+            "type": "media",
             "photo": {"fovY":0.95},
             "far": 400,
             "seedShots": [
@@ -12,7 +12,7 @@
             ]
         },
         {
-            "type": "portal.iptv",
+            "type": "iptv",
             "hlsScript": "https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js",
             "cardTitle": "BUNKER COMPOUND · SECURITY",
             "channels": [

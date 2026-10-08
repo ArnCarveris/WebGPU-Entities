@@ -156,6 +156,8 @@ Positions are metres: `[x, z]` on the map, with x east, z south, and the map cen
      call `field.touch(rect)`. Only that rectangle is uploaded.
 2. Register it in `ENTITY_TYPES` and add it to the scenario's `entities`.
 
+In WebGPU Entities the class goes into a kit: add it to the terrain or hydrology kit's `terrainTypes / hydrologyTypes(Base, ...)` factory (`js/kits/`), list its type in `js/kits/types.js`, and map it in `ENTITY_TYPES` (`js/features/water/entities/types.js`).
+
 ## Layout (sections of the script in `index.html`)
 
 ```

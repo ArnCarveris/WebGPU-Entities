@@ -1,16 +1,30 @@
 'use strict';
-// Entities that stand on a heightfield, and the terrain stamps any of them can be.
+// Entities that stand on a heightfield, and the terrain stamps that raise or level it.
 
 Features.kit('terrain', (engine, kit) => {
 const { Common, kits } = engine;
-const { clamp, lerp, smoothstep } = Common;
+const { DEG, clamp, lerp, smoothstep, polylineLengths, polylineNearest, polylineBox } = Common;
 const { Entity } = kits.world;
 const { fbm } = kits.noise;
 const { floodFill } = kit;
 
-// An entity of a world with a heightfield (world.field): it may stamp(field) at build time, and its label stands
-// `labelHeight` m (default labelLift) over the ground at its labelPos or pos ([x, z]).
+// An entity of a world with a heightfield (world.field). Its world calls the hooks it has, all optional here:
+//   stamp(field)          shape the terrain and paint land use (build time)
+//   build(structures)     add meshes and shader boxes on the finished terrain (build time; worlds with structures)
+//   fill(water)           initial water depth per cell (build time; worlds with standing water)
+//   spawn()               register with the world
+//   sources(out)          per frame: push water sources / sinks, or add to out.rain (worlds with a water simulation)
+//   update(...)           per frame (the world's own arguments)
+//   features(out)         per frame: analytic sky features (supercell plates, shelf clouds)
+//   cell()                per frame: a storm cell for the GPU or null
+// It may set `dead` to be removed after the frame. Its label stands `labelHeight` m (default labelLift) over the ground
+// at its labelPos or pos ([x, z]).
 class TerrainEntity extends Entity {
+    constructor(def, world) {
+        super(def, world);
+        this.dead = false;
+    }
+
     get labelLift() { return 16; }
 
     // label anchor in world space
@@ -21,12 +35,17 @@ class TerrainEntity extends Entity {
     }
 
     stamp(field) {}
+    build(structures) {}
+    fill(water) {}
+    sources(out) {}
+    features(out) {}
+    cell() { return null; }
 }
 
-// The stamps every terrain world has, as subclasses of its own entity base (Base, a TerrainEntity): a tilt, hills,
-// mountains and lakes. A mountain's label stands `peakLabel` m higher than the base's labels. `lake` holds the feature's
-// lake defaults: `radius` (a lake without one leaves the terrain as it is) and `label` (m over the lake's level; else
-// it stands like any label).
+// The stamps that raise and level the ground, as subclasses of a world's own entity base (Base, a TerrainEntity): a
+// tilt, hills, mountains, mountain ranges, lakes and clearings. A mountain's label stands `peakLabel` m higher than the
+// base's labels. `lake` holds the feature's lake defaults: `radius` (a lake without one leaves the terrain as it is)
+// and `label` (m over the lake's level; else it stands like any label).
 function terrainStamps(Base, { peakLabel = 10, lake: lakeOpts = {} } = {}) {
     // global slope along `dir` (downhill): the far side is `drop` metres lower than the near side
     class Tilt extends Base {
@@ -55,6 +74,22 @@ function terrainStamps(Base, { peakLabel = 10, lake: lakeOpts = {} } = {}) {
                 const shape = Math.pow(1 - smoothstep(0, 1, t), 1.6);
                 const ridge = fbm(x / (r * 0.35), z / (r * 0.35), { octaves: 5, seed, ridged: true });
                 f.h[idx] += hgt * shape * (1 - rough + rough * 1.6 * ridge);
+            });
+        }
+    }
+
+    // mountain range along a polyline: a ridged massif `width` wide, `height` above the plain
+    class Range extends Base {
+        stamp(f) {
+            const d = this.def, pts = d.path, lens = polylineLengths(pts), w = d.width || 6000, hgt = d.height || 1500;
+            const rough = d.roughness ?? 0.5, seed = d.seed || 4, [x0, z0, x1, z1] = polylineBox(pts, w);
+            f.each(x0, z0, x1, z1, (idx, x, z) => {
+                const { dist } = polylineNearest(pts, lens, x + 1500 * fbm(x / 9000, z / 9000, { seed }), z);
+                const t = dist / w;
+                if (t >= 1) return;
+                const shape = Math.pow(1 - smoothstep(0, 1, t), 1.4);
+                const ridge = fbm(x / 3500, z / 3500, { octaves: 6, seed: seed + 3, ridged: true });
+                f.h[idx] += hgt * shape * (1 - rough + rough * 1.5 * ridge);
             });
         }
     }
@@ -88,7 +123,27 @@ function terrainStamps(Base, { peakLabel = 10, lake: lakeOpts = {} } = {}) {
         }
     }
 
-    return { Tilt, Hills, Mountain, Lake };
+    // Levels the ground to `level` over a rectangle (size [x, z] m, yaw degrees) or a disc (radius): a site where another
+    // world of a composition stands (js/engine/compositor.js). The ground eases back to the terrain over `blend` m,
+    // outside the site; with `inset` inside it instead, so the terrain meets the other world's edge at its own height
+    // and the levelled ground stays hidden under that world. `water` paints the site as water.
+    class Clearing extends Base {
+        stamp(f) {
+            const d = this.def, [cx, cz] = d.pos, blend = d.blend ?? 600, yaw = (d.yaw || 0) * DEG, cs = Math.cos(yaw), sn = Math.sin(yaw);
+            const [hx, hz] = d.size ? [d.size[0] / 2, d.size[1] / 2] : [d.radius || 1000, d.radius || 1000], reach = Math.hypot(hx, hz) + blend;
+            f.each(cx - reach, cz - reach, cx + reach, cz + reach, (idx, x, z) => {
+                const rx = x - cx, rz = z - cz, lx = rx * cs + rz * sn, lz = -rx * sn + rz * cs;
+                // signed distance to the site's edge (negative inside)
+                const ox = Math.abs(lx) - hx, oz = Math.abs(lz) - hz;
+                const sd = d.size ? Math.hypot(Math.max(ox, 0), Math.max(oz, 0)) + Math.min(Math.max(ox, oz), 0) : Math.hypot(lx, lz) - hx;
+                const k = d.inset ? smoothstep(-blend, 0, sd) : smoothstep(0, blend, sd);
+                f.h[idx] = lerp(d.level, f.h[idx], k);
+                if (d.water) f.wet(idx, 1 - smoothstep(0, f.cell, sd));
+            });
+        }
+    }
+
+    return { Tilt, Hills, Mountain, Range, Lake, Clearing };
 }
 
 return { TerrainEntity, terrainStamps };

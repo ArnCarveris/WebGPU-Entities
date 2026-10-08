@@ -5,16 +5,12 @@ Features.part('portal', (engine, feature) => {
 const { Common, kits } = engine;
 const { v3 } = Common;
 const { GridHash } = kits.interior;
+const { tiltAxes, worldBounds } = kits.mesh;
 const {
-    MAX_LIGHTS, THROUGH_FLOATS, AREA_FLOATS, AXES, IDENTITY, g2, GeometryPool, splitMesh, MaterialTable, BVHTree, QuadTree, pushSeg,
-    CollisionSet, Area, Portal, Occluder, LightTransport, Architecture, Outdoors, NavGraph, Vehicle, PowerGrid, ENTITY_TYPES,
+    MAX_LIGHTS, THROUGH_FLOATS, AREA_FLOATS, AXES, IDENTITY, g2, GeometryPool, MeshBuilder, splitMesh, MaterialTable, BVHTree, QuadTree,
+    pushSeg, CollisionSet, Area, Portal, Occluder, LightTransport, Architecture, Outdoors, NavGraph, Vehicle, PowerGrid, SCREEN_GUIS,
+    ENTITY_TYPES,
 } = feature;
-
-// a box part's axes, tilted `deg` about x (its top toward +z)
-function tiltAxes(deg) {
-    const a = deg * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
-    return [[1, 0, 0], [0, c, s], [0, -s, c]];
-}
 
 // World: built entirely from the scenario data.
 //
@@ -36,6 +32,18 @@ class World {
         this.hulls = [];
         this.screens = [];              // GUI screens (entities.js Screen)
         this.cameras = [];              // security cameras (entities.js SecurityCamera)
+        this.maxLights = MAX_LIGHTS;    // per area
+        this.guiKinds = SCREEN_GUIS;    // the GUI screens' kinds (gui/screens.js)
+        // the common mesh interface (kits.mesh): builders resolve material names and scenario models; static geometry
+        // goes into the area trees (addStatic: opts { name, owners, lightArea, vehicle, dockedOnly, solid, climbable }),
+        // parts are pool chunks drawn with their own matrix
+        this.meshes = {
+            builder: () => new MeshBuilder(m => this.mat(m), (b, name, M) => this.addModel(b, name, M)),
+            add: (b, opts) => this.addStatic(typeof b === 'function' ? b() : b, opts),
+            part: (b, opts) => this.pool.add(b, { ...opts, dynamic: true }),
+            bounds: (part, M) => worldBounds(M, part),
+            split: (b, plane) => splitMesh(b, plane),
+        };
         this.power = new PowerGrid(this);
         this.materials = new MaterialTable(scn.materials, this.warnings);
         this.nav = new NavGraph(this);
@@ -219,6 +227,9 @@ class World {
     }
 
     addDynamic(e) { this.dynamic.push(e); }
+
+    // a collision set with `cell` m cells (a vehicle's: kits.transit shipType)
+    collisionSet(cell) { return new CollisionSet(cell); }
 
     // outdoor objects -> one quadtree; each indoor area -> its own BVH (SECTR Members may be in several)
     buildTrees() {

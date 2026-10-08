@@ -5,17 +5,17 @@
     "description": "Entity GUI's facility (airlock terminal, CCTV, easel, handheld) stands at Entity Origin's Shackleton Base on the Moon. Fly around it with the floating-origin camera; ` hands the keys and the camera to the facility's player inside, with its world-space GUIs.",
     "entities": [
         {"type":"include","scenario":"origin-sol-transit","as":"sol","root":{"label":"Origin · Sol Transit","layer":{"sky":true,"focus":true}}},
-        {"type":"origin.prop","id":"sector07-site","label":"Sector 07","model":"marker","parent":"moonbase","offset":[-58,0,8],"rot":[90,0,0]},
-        {"type":"origin.bookmark","key":"8","name":"Sector 07, Shackleton Base","at":{"parent":"sector07-site","offset":[14,6,18]},"look":"sector07-site"},
-        {"type":"origin.start","value":"8"},
+        {"type":"prop","id":"sector07-site","label":"Sector 07","model":"marker","parent":"moonbase","offset":[-58,0,8],"rot":[90,0,0]},
+        {"type":"bookmark","key":"8","name":"Sector 07, Shackleton Base","at":{"parent":"sector07-site","offset":[14,6,18]},"look":"sector07-site"},
+        {"type":"start","value":"8"},
 
         {"type":"include","scenario":"gui-sector-07","as":"sector","skip":["hud.toast"],
             "root":{"label":"GUI · Sector 07","layer":{"transform":{"anchor":"sol:sector07-site","offset":[0,0.12,0]}}}},
         {"$comment":"seen from outside, the facility needs a far plane past its 100 m; the handheld waits in the pocket"},
-        {"type":"gui.player","far":4000},
+        {"type":"player","far":4000},
         {"type":"handheld","startShown":false},
         {"$comment":"out on the Moon the facility doesn't fade into its room's darkness, and the sunlit ground lights its walls a little"},
-        {"type":"gui.facility","fog":0.0005,"ambient":0.12},
+        {"type":"facility","fog":0.0005,"ambient":0.12},
 
         {"$comment":"the camera: sol's flight, or (` gives it the keys) the facility's player, each going on from where it was"},
         {"type":"camera","from":["sol","sector"],"carry":false},

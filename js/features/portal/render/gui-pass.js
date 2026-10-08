@@ -46,7 +46,7 @@ fn untonemapScreen(c: vec3f) -> vec3f { return -log(vec3f(1.0) - pow(min(c, vec3
 `;
 const RT_MAX = 1024;            // a fallback target's longest side, in texels
 
-// World-space GUI screens (world/entities.js Screen, gui/screens.js) drawn in the portal render pass, as a render
+// World-space GUI screens (kits.entities sectorTypes Screen, js/kits/entities/sectors.js; gui/screens.js) drawn in the portal render pass, as a render
 // extension (render/renderer.js): a 'gui' overlay command for every visible object with a GUI, right after its entry's
 // objects, in its draw slot (the screen's model matrix and fog chain; info.z = the GUI's virtual height).
 //

@@ -4,16 +4,16 @@
     "order": 3,
     "description": "Entity Portal's bunker compound (portal-room visibility, stencil-masked traversal, a freighter, drones) as an island in Entity Cloud's Reservoir: walk out of the bunker into the plains' weather. Indoors (a portal area that isn't the outdoors) the rain stays outside.",
     "entities": [
-        {"type":"include","scenario":"cloud-high-plains","as":"sky","skip":["cloud.view"],
+        {"type":"include","scenario":"cloud-high-plains","as":"sky","skip":["view"],
             "root":{"label":"Cloud · High Plains","layer":{"role":"atmosphere"}}},
-        {"type":"cloud.render","radar":false},
-        {"type":"cloud.weather","start":"overcast rain"},
-        {"type":"cloud.lighting","start":"afternoon"},
+        {"type":"render","radar":false},
+        {"type":"weather","start":"overcast rain"},
+        {"type":"lighting","start":"afternoon"},
 
         {"$comment":"the island stands in the Reservoir (level 1520): its sea is the lake's"},
         {"type":"include","scenario":"portal-bunker-compound","as":"bunker",
             "root":{"label":"Portal · Bunker compound","layer":{"transform":{"offset":[-11000,1521.2,15000]},"focus":true}}},
-        {"type":"portal.outdoor","fog":[0.62,0.66,0.72,0.0012],"sunDir":[0.857,0.242,-0.456],"sunColor":[1.1,0.95,0.8],
+        {"type":"outdoor","fog":[0.62,0.66,0.72,0.0012],"sunDir":[0.857,0.242,-0.456],"sunColor":[1.1,0.95,0.8],
             "skyTop":[0.35,0.42,0.55],"skyHorizon":[0.7,0.72,0.75]},
 
         {"type":"camera","from":"bunker"},

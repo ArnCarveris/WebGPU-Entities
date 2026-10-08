@@ -63,12 +63,12 @@ tools/              embed-scenarios.mjs: regenerate the script copies
 | `portals` | `center`, `size`, `normal`, `kind`, flags, `glass`, optional `front` / `back` |
 | `occluders` | `center`, `size`, `normal`, `autoOrient` |
 | `vehicles` | `hull`, `pivot`, `route`, `waves`, handling |
-| `entities` | `{ type, ... }`, where `type` maps to a class in `ENTITY_TYPES` (`js/world/entities.js`): `prop` (`solid`, `climbable`, `area`), `light`, `stairs`, `hull`, `helm`, `door`, `drone` (the shared kits.entities drone: wanders the nav graph from `pos` at `speed`, `seed`, `light` { color, intensity, radius, drop, ahead }, `bob`, `pingEvery`; a `center` + `radius` patrols a loop instead) |
+| `entities` | `{ type, ... }`, where `type` maps to a class in `ENTITY_TYPES` (`js/features/portal/world/entities.js`, the classes in `js/kits/entities/sectors.js`): `prop` (`solid`, `climbable`, `area`), `light`, `stairs`, `hull`, `helm`, `door`, `drone` (the shared kits.entities drone: wanders the nav graph from `pos` at `speed`, `seed`, `light` { color, intensity, radius, drop, ahead }, `bob`, `pingEvery`; a `center` + `radius` patrols a loop instead) |
 
 ### Adding a new kind of entity
 
 1. Subclass `Entity` (static geometry or controllers) or `Member` (a dynamic chunk drawn with its own
-   matrix) in `js/world/entities.js`.
+   matrix) in `js/kits/entities/sectors.js`.
 2. Build its geometry in `spawn()` with `world.addStatic` / `world.pool.add`, and call
    `world.addDynamic(this)` if it needs `update(dt, t, actors)`. Resolve references to vehicles or
    other entities in `link()`.
@@ -103,7 +103,7 @@ CCTV, the phone's camera) rebuilds the screens it sees, once per frame.
 
 **CCTV, the phone's camera, IPTV** (the gui kit's media systems, [`game/media.js`](../../js/features/portal/game/media.js)):
 `securityCamera` entities (`pos`, `target`, `sweep`, `speed`, `phase`, `label`, `name`, `loc`, `offline`; no geometry, their housings are props) feed
-the `cctv` screen kind (camera list + the selected feed). `portal.cctv`, `portal.media` and `portal.iptv` tune them, and
+the `cctv` screen kind (camera list + the selected feed). `cctv`, `media` and `iptv` entities tune them, and
 the handheld gets Camera, Photos and IPTV pages. Every picture is a view of the island rendered by the island
 (`Game.renderView`: its own portal traversal and frame into a view target, submitted before the main frame).
 

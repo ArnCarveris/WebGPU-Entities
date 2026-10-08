@@ -75,3 +75,5 @@ step is about 524 km (shown in the HUD), so the outpost collapses.
 2. If it moves, call `world.addDynamic(this)`. In `update(dt, t)`, re-`place()` its instances and call
    `world.store.touch(inst)`. That rewrites only its own 96-byte slots.
 3. Register it in `ENTITY_TYPES` and add it to the scenario's `entities`.
+
+In WebGPU Entities the class goes into a kit: add it to the entities kit's `spaceTypes(Base, ...)` factory (`js/kits/`), list its type in `js/kits/types.js`, and map it in `ENTITY_TYPES` (`js/features/origin/world/entities.js`).

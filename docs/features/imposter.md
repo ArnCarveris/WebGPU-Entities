@@ -197,6 +197,7 @@ fence and a rock, baked together.
 To add a kind of entity: subclass `Entity`, add instances in `spawn()` with
 `world.archetype(model).add(pos, quat, scale, force)`, move them in `update(dt, t)` with
 `archetype.set(...)`, and register the class in `ENTITY_TYPES`.
+In WebGPU Entities the class goes into a kit: add it to the entities kit's `groundProps(Base, ...)` factory (`js/kits/`), list its type in `js/kits/types.js`, and map it in `ENTITY_TYPES` (`js/features/imposter/world/entities.js`).
 
 ## Controls
 

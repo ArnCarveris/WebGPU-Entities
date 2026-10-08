@@ -6,13 +6,15 @@ const { Common, kits } = engine;
 const { clamp, sat01, smoothstep } = Common;
 const {
     MAX_CELLS, MAX_MOTHERSHIPS, MAX_SHELVES, FAR_FLOATS, TOWN_BLOCK, FAR_LAMP_PITCH, FAR_LAMP_SIDE, FAR_LAMP_REACH,
-    FAR_LAMP_H, MAX_GLOWS, pcg32, Heightfield, Town, LAMPS, Structures, StormCell, Supercell, HURRICANE, SquallLine,
+    FAR_LAMP_H, MAX_GLOWS, pcg32, Heightfield, Town, LAMPS, Structures, cloudMeshes, StormCell, Supercell, HURRICANE, SquallLine,
     Spawner, ENTITY_TYPES, WeatherSystem, RainZones, CloudLayers, Lightning,
 } = feature;
 
 class World {
     constructor(scenario) {
         this.scenario = scenario;
+        this.meshes = cloudMeshes;      // the common mesh interface (kits.mesh), for what draws itself (buses)
+        this.lamps = LAMPS;             // lamp kinds, for what lights itself (a bus's headlights, tail lights, cabin)
         const t = { size: 64000, resolution: 512, base: 1500, fieldSize: 800, pivots: 0.2, ...(scenario.terrain || {}) };
         this.terrain = t;
         this.field = new Heightfield(t.size, t.resolution, t.base);

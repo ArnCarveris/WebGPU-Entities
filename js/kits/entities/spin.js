@@ -1,5 +1,5 @@
 'use strict';
-// Spinning props: how far a `spin` has turned.
+// Spinning props: how far a `spin` has turned, and where that leaves a rotation.
 
 Features.kit('entities', (engine, kit) => {
 const { DEG } = engine.Common;
@@ -11,5 +11,12 @@ function spinAngle(s, t, fallback = { rpm: 1 }) {
     return (s.speed ?? fallback.speed) * DEG * t;
 }
 
-return { spinAngle };
+// q0 turned by its `spin` at t (spinAngle), with a world's quat (mul, axisAngle): about the spin's axis in q0's frame
+// (`local`, a prop's own axis), or else in the world's
+function spinQuat(quat, q0, s, t, fallback, local = false) {
+    const r = quat.axisAngle(s.axis || [0, 1, 0], spinAngle(s, t, fallback));
+    return local ? quat.mul(q0, r) : quat.mul(r, q0);
+}
+
+return { spinAngle, spinQuat };
 });

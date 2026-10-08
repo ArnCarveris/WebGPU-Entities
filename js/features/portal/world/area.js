@@ -7,23 +7,8 @@ const { g2 } = feature;
 
 // Areas (FarCry1 VisArea / SECTR Sector) and the point lights that live in them.
 
-// Point light (kits.entities LightSource: `signal` flicker | pulse modulates the intensity) that may ride a vehicle
-class PointLight extends kits.entities.LightSource {
-    constructor(def) {
-        super(def);
-        this.vehicle = null;        // set when the light rides a vehicle (ride): pos is then `local` through its Origin
-        this.local = null;
-    }
-
-    // ride vehicle veh: its position stays `local` in the vehicle's frame and is worked out through the vehicle's Origin
-    // when read after the vehicle moved (nothing to do per light when it moves)
-    ride(veh) {
-        this.vehicle = veh;
-        this.local = this.pos.slice();
-        let at = null, stamp = -1;
-        Object.defineProperty(this, 'pos', { get: () => { if (stamp !== veh.poseStamp) { at = veh.origin.toWorld(this.local); stamp = veh.poseStamp; } return at; }, configurable: true });
-    }
-}
+// Point lights are kits.entities LightSources (signal flicker | pulse; they may ride a vehicle)
+const PointLight = kits.entities.LightSource;
 
 // Extruded 2D shape (x, z) from y to y + height, with its own ambient, sun amount and fog.
 // Area 0 is the implicit outdoors (see Area.outdoors).

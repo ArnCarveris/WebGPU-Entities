@@ -26,7 +26,6 @@ const POOL_ALBEDO = [0.15, 0.165, 0.14];  // the ground under a real lamp far of
 const MAX_FAR_DYN = 32;              // slots after the static ones, rewritten each frame: the buses' lights
 const TOWN_BLOCK = 120, FAR_LAMP_PITCH = 40;  // m: townColor's street grid, and the fake street lamps' spacing along it
 const FAR_LAMP_SIDE = 5, FAR_LAMP_H = 7, FAR_LAMP_REACH = 1.5;     // m: their heads off the street's centre line (alternate sides), above the ground
-const ROAD_LAMP_STEP = 100;          // m between the pairs of street lamps along the bus road (BusLine.build)
 const POLE_DRAW = 1000;              // m: the fake lamps' poles and heads are drawn this close (instanced, World.nearPoles)
 const MAX_POLES = 2048;
 const MAX_GLOWS = 6;                 // light-pollution domes (cityGlow): the towns, and clusters of the structures' lamps
@@ -65,7 +64,7 @@ const GROUND_RES = 256;
 return {
     NEAR, MAX_CELLS, CELL_FLOATS, MAX_LAYERS, MAX_MOTHERSHIPS, MAX_SHELVES, MAX_FLASHES, MAX_BOLT_SEGS, MAX_BLOCKERS,
     BLOCK_GRID, BLOCK_RANGE, MAX_LIGHTS, LIGHT_RANGE, LIGHT_GRID, LIGHT_SPOT, LIGHT_CABIN, LIGHT_ROOM, ROOM_LIGHTS, ROOM_RANGE, FAR_FLOATS, POOL_ALBEDO,
-    MAX_FAR_DYN, FAR_LAMP_PITCH, TOWN_BLOCK, FAR_LAMP_SIDE, FAR_LAMP_H, FAR_LAMP_REACH, ROAD_LAMP_STEP, POLE_DRAW,
+    MAX_FAR_DYN, FAR_LAMP_PITCH, TOWN_BLOCK, FAR_LAMP_SIDE, FAR_LAMP_H, FAR_LAMP_REACH, POLE_DRAW,
     MAX_POLES, MAX_GLOWS, GLOW_GAIN, MAX_RAIN_ZONES, ZONE_STEP, ZONE_RADIUS, CLEAR_WIDE, CLEAR_RADIUS, MAX_DRIPS,
     DRIP_DENSITY, DRIP_PARTICLES, SPLASH_RADIUS, SPLASH_GRID, SPLASH_PIECES, SPLASH_MIST, SPLASH_PARTICLES, SPRAY,
     SPRAY_LAYERS, SPRAY_MIST, SPLASH_FADE, STRUCT_FLOATS, GRID_N, NOISE_SHAPE, NOISE_DETAIL, SHAPE_MIPS, OCC_RES, CLOUD_TILE,

@@ -6,15 +6,15 @@
     "entities": [
         {"type":"include","scenario":"origin-sol-transit","as":"sol","root":{"label":"Origin · Sol Transit","layer":{"sky":true,"focus":true}}},
         {"$comment":"where the valley stands: a site on the day side of the Earth, its frame the ground's (y up); sunProbe: its sun direction is in sol's stats"},
-        {"type":"origin.prop","id":"valley-site","label":"Imposter Valley","model":"marker","surface":{"parent":"earth","lat":30,"lon":160},"sunProbe":true},
-        {"type":"origin.bookmark","key":"8","name":"Imposter Valley, Earth","at":{"parent":"valley-site","offset":[-60,46,280]},"look":"valley-site"},
-        {"type":"origin.bookmark","key":"9","name":"Above the valley","at":{"parent":"valley-site","offset":[0,4000,9000]},"look":"valley-site"},
-        {"type":"origin.start","value":"8"},
+        {"type":"prop","of":"sol","id":"valley-site","label":"Imposter Valley","model":"marker","surface":{"parent":"earth","lat":30,"lon":160},"sunProbe":true},
+        {"type":"bookmark","key":"8","name":"Imposter Valley, Earth","at":{"parent":"valley-site","offset":[-60,46,280]},"look":"valley-site"},
+        {"type":"bookmark","key":"9","name":"Above the valley","at":{"parent":"valley-site","offset":[0,4000,9000]},"look":"valley-site"},
+        {"type":"start","value":"8"},
 
         {"$comment":"the valley rides on the site, 30 m up so its lowest ground stays above the sphere (the Earth curves 0.2 m away over its 1.6 km)"},
         {"type":"include","scenario":"imposter-valley","as":"valley",
             "root":{"label":"Imposter · Valley","layer":{"transform":{"anchor":"sol:valley-site","offset":[0,30,0]}}}},
-        {"type":"imposter.shadows","distance":800},
+        {"type":"shadows","distance":800},
 
         {"type":"camera","from":"sol"},
         {"$comment":"the valley's sun is the Sun as seen from the site"},

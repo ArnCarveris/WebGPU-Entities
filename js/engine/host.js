@@ -226,7 +226,7 @@ class Host {
     configure(scenario) {
         const ents = scenario.entities || [];
         // camera
-        const cam = this.cameraDef = ents.find(e => e.type === 'camera') || {};
+        const cam = this.cameraDef = ents.find(e => e.type === 'camera' && ScenarioFormat.isEngine(e)) || {};
         this.owners = [];
         if (cam.controller === 'fly') {
             this.fly = new FlyCamera(cam, this.router.scope('engine'), (x, y, z) => this.floorAt(x, y, z));
@@ -384,7 +384,7 @@ class Host {
     // Every view of the scenario, for the handheld's View: its `view` entities (composition space), then each world's own
     // (FeatureWorld.views: static ones, and one per member of a followed entity), each { key, name, sub, group, go }
     get viewList() {
-        const out = (this.scenario?.entities || []).filter(e => e.type === 'view')
+        const out = (this.scenario?.entities || []).filter(e => e.type === 'view' && ScenarioFormat.isEngine(e))
             .map((v, i) => ({ key: `engine/${i}`, name: v.name || `view ${i + 1}`, group: this.scenario.name, go: () => this.jumpView(v) }));
         for (const inst of this.instances) {
             let list = [];

@@ -7,6 +7,7 @@
 //                (depth 0..1); frustumPlanes
 //   yawPitch     the yaw / pitch (radians) of a fly camera looking along a direction
 //   polylines    polylineLengths, polylineNearest, polylineBox on [x, z] points
+//   GroundFrame  a centre [x, z] and yaw on the ground (what structures and settlements are laid out with)
 //   GPU          makeBuffer, gridIndices, bindLayout / bindGroup (bind groups from a list of binding kinds)
 //   text         fmtKm (m or km), fmtNum (k / M / G with a unit), fmtK (k / M counts)
 //   controls     PointerInput (look / act / keys on a world's canvas; a camera: kits.view's FirstPersonView)
@@ -112,6 +113,16 @@ const m4 = {
         return new Float64Array([f / aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, far * nf, -1, 0, 0, far * near * nf, 0]);
     },
     translate(t) { const m = m4.identity(); m[12] = t[0]; m[13] = t[1]; m[14] = t[2]; return m; },
+    // translation p, yaw `deg` degrees about y, scale s (a number or [x, y, z])
+    trs(p, deg = 0, s = 1) {
+        const r = deg * Math.PI / 180, c = Math.cos(r), sn = Math.sin(r);
+        const [sx, sy, sz] = Array.isArray(s) ? s : [s, s, s];
+        return new Float64Array([c * sx, 0, -sn * sx, 0, 0, sy, 0, 0, sn * sz, 0, c * sz, 0, p[0], p[1], p[2], 1]);
+    },
+    // columns x, y, z and origin o
+    basis(x, y, z, o) {
+        return new Float64Array([x[0], x[1], x[2], 0, y[0], y[1], y[2], 0, z[0], z[1], z[2], 0, o[0], o[1], o[2], 1]);
+    },
     rotX(a) { const c = Math.cos(a), s = Math.sin(a); return new Float64Array([1, 0, 0, 0, 0, c, s, 0, 0, -s, c, 0, 0, 0, 0, 1]); },
     rotY(a) { const c = Math.cos(a), s = Math.sin(a); return new Float64Array([c, 0, -s, 0, 0, 1, 0, 0, s, 0, c, 0, 0, 0, 0, 1]); },
     rotZ(a) { const c = Math.cos(a), s = Math.sin(a); return new Float64Array([c, s, 0, 0, -s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]); },
@@ -209,6 +220,15 @@ function polylineNearest(pts, lens, x, z) {
 function polylineBox(pts, pad) {
     const xs = pts.map(p => p[0]), zs = pts.map(p => p[1]);
     return [Math.min(...xs) - pad, Math.min(...zs) - pad, Math.max(...xs) + pad, Math.max(...zs) + pad];
+}
+
+// a frame on the ground: centre [x, z] and yaw; local x runs along (cos, sin) in xz, local z along (-sin, cos)
+class GroundFrame {
+    constructor(c, yaw) { this.c = c; this.yaw = yaw; this.cs = Math.cos(yaw); this.sn = Math.sin(yaw); }
+    static facing(c, z) { return new GroundFrame(c, Math.atan2(-z[0], z[1])); }      // local +z along z
+    at(lx, y, lz) { return [this.c[0] + lx * this.cs - lz * this.sn, y, this.c[1] + lx * this.sn + lz * this.cs]; }
+    xz(lx, lz) { const p = this.at(lx, 0, lz); return [p[0], p[2]]; }
+    turned(a) { return new GroundFrame(this.c, this.yaw + a); }
 }
 
 // ------------------------------------------------------------------------------------------------------ GPU
@@ -316,7 +336,7 @@ class PointerInput {
 
 return {
     DEG, clamp, sat01, lerp, smoothstep, v3, quat, m4, frustumPlanes, yawPitch,
-    polylineLengths, polylineNearest, polylineBox, makeBuffer, gridIndices, bindLayoutEntry, bindResource, bindLayout, bindGroup,
+    polylineLengths, polylineNearest, polylineBox, GroundFrame, makeBuffer, gridIndices, bindLayoutEntry, bindResource, bindLayout, bindGroup,
     fmtKm, fmtNum, fmtK, PointerInput,
 };
 })();

@@ -1,12 +1,12 @@
 'use strict';
 // The GUI screens of the bunker and the freighter: world-space EntityGUIs (the gui kit, js/kits/gui/) on the consoles,
-// generators and bridge (world/entities.js Screen draws them).
+// generators and bridge (the Screen entity, js/kits/entities/sectors.js, draws them).
 
 Features.part('portal', (engine, feature) => {
 const { clamp, col, deg, wrapIndex, pad3, cardinal, timeText, fitRect, EntityGUI } = engine.kits.gui;
 const { g2, RATED_RPM } = feature;
 
-// Every kind is an EntityGUI whose screen is a Screen entity (world/entities.js): `this.screen`, `this.world`, and once
+// Every kind is an EntityGUI whose screen is a Screen entity (js/kits/entities/sectors.js): `this.screen`, `this.world`, and once
 // the game has the world, `this.app` (the Game: player, fx). The base draws the frame (background, header, border);
 // a kind draws its body (drawBody) and handles its buttons (press). Kinds, by `screen.gui` in the scenario:
 //   facility    the island's areas on two levels: who is where, doors, power

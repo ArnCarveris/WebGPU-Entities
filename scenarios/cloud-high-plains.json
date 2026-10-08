@@ -3,171 +3,171 @@
     "group": "Entity Cloud",
     "entities": [
         {"type":"cloud","name":"High Plains"},
-        {"type":"cloud.terrain","size":64000,"resolution":512,"base":1500,"fieldSize":805,"pivots":0.22},
+        {"type":"terrain","size":64000,"resolution":512,"base":1500,"fieldSize":805,"pivots":0.22},
         {
-            "type": "cloud.render", "quality": 1, "shapeScale": 8000, "detailScale": 1400, "detailStrength": 0.5, "maxTop": 12500, "maxDistance": 60000,
+            "type": "render", "quality": 1, "shapeScale": 8000, "detailScale": 1400, "detailStrength": 0.5, "maxTop": 12500, "maxDistance": 60000,
             "weatherSize": 128000, "rainExtinction": 0.0024, "snowExtinction": 0.0036, "slant": 0.05, "fallSpeed": 40, "timeScale": 20, "particles": 24000
         },
-        {"type":"cloud.weather","start":"showers","transition":12,"cycle":{"enabled":false,"hold":45}},
-        {"type":"cloud.lighting","start":"afternoon"},
-        {"type":"cloud.hurricane","pos":[2000,-8000]},
-        {"type":"cloud.streetLights","radius":4000,"density":0.95},
+        {"type":"weather","start":"showers","transition":12,"cycle":{"enabled":false,"hold":45}},
+        {"type":"lighting","start":"afternoon"},
+        {"type":"hurricane","pos":[2000,-8000]},
+        {"type":"streetLights","radius":4000,"density":0.95},
         {
-            "type": "cloud.weatherState", "id": "clear", "coverage": 0.04, "base": 3600, "top": 4300, "density": 0.06, "cirrus": 0.4, "wind": [6,-2],
+            "type": "weatherState", "id": "clear", "coverage": 0.04, "base": 3600, "top": 4300, "density": 0.06, "cirrus": 0.4, "wind": [6,-2],
             "temperature": 24, "haze": 0.6, "drizzle": 0, "storms": 0, "power": 1, "lightning": 0
         },
         {
-            "type": "cloud.weatherState", "id": "fair cumulus", "coverage": 0.36, "base": 3800, "top": 5200, "density": 0.07, "cirrus": 0.15, "wind": [8,-3],
+            "type": "weatherState", "id": "fair cumulus", "coverage": 0.36, "base": 3800, "top": 5200, "density": 0.07, "cirrus": 0.15, "wind": [8,-3],
             "layers": {"altocumulus":0.1}, "temperature": 24, "haze": 0.8, "drizzle": 0, "storms": 0.2, "power": 0.5, "lightning": 0
         },
         {
-            "type": "cloud.weatherState", "id": "mackerel sky", "coverage": 0.1, "base": 3800, "top": 4800, "density": 0.06, "cirrus": 0.5, "wind": [10,-2],
+            "type": "weatherState", "id": "mackerel sky", "coverage": 0.1, "base": 3800, "top": 4800, "density": 0.06, "cirrus": 0.5, "wind": [10,-2],
             "layers": {"altocumulus":0.75}, "temperature": 20, "haze": 0.7, "drizzle": 0, "storms": 0, "power": 0.5, "lightning": 0
         },
         {
-            "type": "cloud.weatherState", "id": "warm front", "coverage": 0.08, "base": 3400, "top": 4400, "density": 0.06, "cirrus": 0.75, "wind": [11,3],
+            "type": "weatherState", "id": "warm front", "coverage": 0.08, "base": 3400, "top": 4400, "density": 0.06, "cirrus": 0.75, "wind": [11,3],
             "layers": {"altostratus":0.85,"altocumulus":0.2,"nimbostratus":0.2}, "temperature": 15, "haze": 1.2, "drizzle": 0, "storms": 0.1, "power": 0.6,
             "lightning": 0
         },
         {
-            "type": "cloud.weatherState", "id": "stratus deck", "coverage": 0.04, "base": 2600, "top": 3400, "density": 0.06, "cirrus": 0, "wind": [4,2],
+            "type": "weatherState", "id": "stratus deck", "coverage": 0.04, "base": 2600, "top": 3400, "density": 0.06, "cirrus": 0, "wind": [4,2],
             "layers": {"stratus":0.95}, "temperature": 12, "haze": 1.8, "drizzle": 0, "storms": 0, "power": 0.5, "lightning": 0
         },
         {
-            "type": "cloud.weatherState", "id": "showers", "coverage": 0.3, "base": 4100, "top": 6000, "density": 0.08, "cirrus": 0.25, "wind": [9,-4],
+            "type": "weatherState", "id": "showers", "coverage": 0.3, "base": 4100, "top": 6000, "density": 0.08, "cirrus": 0.25, "wind": [9,-4],
             "layers": {"altocumulus":0.15}, "temperature": 22, "haze": 1, "drizzle": 0, "storms": 1, "power": 1, "lightning": 0.4
         },
         {
-            "type": "cloud.weatherState", "id": "thunderstorm", "coverage": 0.48, "base": 3700, "top": 6200, "density": 0.09, "cirrus": 0.5, "wind": [12,-5],
+            "type": "weatherState", "id": "thunderstorm", "coverage": 0.48, "base": 3700, "top": 6200, "density": 0.09, "cirrus": 0.5, "wind": [12,-5],
             "layers": {"altostratus":0.2}, "temperature": 24, "haze": 1.2, "drizzle": 0, "storms": 2.2, "power": 1.4, "lightning": 1.6
         },
         {
-            "type": "cloud.weatherState", "id": "snow squalls", "coverage": 0.5, "base": 2700, "top": 4800, "density": 0.08, "cirrus": 0.1, "wind": [14,4],
+            "type": "weatherState", "id": "snow squalls", "coverage": 0.5, "base": 2700, "top": 4800, "density": 0.08, "cirrus": 0.1, "wind": [14,4],
             "layers": {"stratus":0.3,"altostratus":0.4}, "temperature": 4, "haze": 0.9, "drizzle": 0.12, "storms": 1.6, "power": 1.1, "lightning": 0
         },
         {
-            "type": "cloud.weatherState", "id": "overcast rain", "coverage": 0.25, "base": 2500, "top": 4300, "density": 0.06, "cirrus": 0, "wind": [7,-6],
+            "type": "weatherState", "id": "overcast rain", "coverage": 0.25, "base": 2500, "top": 4300, "density": 0.06, "cirrus": 0, "wind": [7,-6],
             "layers": {"nimbostratus":0.95,"stratus":0.45}, "temperature": 16, "haze": 1.6, "drizzle": 0.2, "storms": 0.3, "power": 0.8, "lightning": 0.1
         },
         {
-            "type": "cloud.weatherState", "id": "severe storms", "coverage": 0.5, "base": 3600, "top": 6200, "density": 0.09, "cirrus": 0.2, "wind": [12,-4],
+            "type": "weatherState", "id": "severe storms", "coverage": 0.5, "base": 3600, "top": 6200, "density": 0.09, "cirrus": 0.2, "wind": [12,-4],
             "layers": {"altostratus":0.75}, "temperature": 25, "haze": 0.7, "drizzle": 0, "storms": 1.5, "power": 1.4, "lightning": 2
         },
         {
-            "type": "cloud.weatherState", "id": "drizzle", "coverage": 0.04, "base": 2600, "top": 3300, "density": 0.06, "cirrus": 0, "wind": [3,-1],
+            "type": "weatherState", "id": "drizzle", "coverage": 0.04, "base": 2600, "top": 3300, "density": 0.06, "cirrus": 0, "wind": [3,-1],
             "layers": {"stratus":1,"nimbostratus":0.25}, "temperature": 12, "haze": 2.2, "drizzle": 0, "storms": 0, "power": 0.5, "lightning": 0, "rain": 0.8,
             "drops": 0
         },
         {
-            "type": "cloud.weatherState", "id": "light rain", "coverage": 0.1, "base": 2500, "top": 3800, "density": 0.06, "cirrus": 0, "wind": [4,-3],
+            "type": "weatherState", "id": "light rain", "coverage": 0.1, "base": 2500, "top": 3800, "density": 0.06, "cirrus": 0, "wind": [4,-3],
             "layers": {"nimbostratus":0.85,"stratus":0.35}, "temperature": 14, "haze": 1.5, "drizzle": 0, "storms": 0, "power": 0.5, "lightning": 0, "rain": 0.38,
             "drops": 0.35
         },
         {
-            "type": "cloud.weatherState", "id": "medium rain", "coverage": 0.15, "base": 2500, "top": 4000, "density": 0.06, "cirrus": 0, "wind": [5,-3],
+            "type": "weatherState", "id": "medium rain", "coverage": 0.15, "base": 2500, "top": 4000, "density": 0.06, "cirrus": 0, "wind": [5,-3],
             "layers": {"nimbostratus":0.95,"stratus":0.45}, "temperature": 15, "haze": 1.7, "drizzle": 0, "storms": 0.2, "power": 0.7, "lightning": 0, "rain": 1,
             "drops": 0.6
         },
         {
-            "type": "cloud.weatherState", "id": "downpour", "coverage": 0.3, "base": 2300, "top": 4600, "density": 0.07, "cirrus": 0, "wind": [6,-4],
+            "type": "weatherState", "id": "downpour", "coverage": 0.3, "base": 2300, "top": 4600, "density": 0.07, "cirrus": 0, "wind": [6,-4],
             "layers": {"nimbostratus":1,"stratus":0.6}, "temperature": 18, "haze": 2, "drizzle": 0, "storms": 0.4, "power": 1.2, "lightning": 0.2, "rain": 2.6,
             "drops": 1
         },
         {
-            "type": "cloud.weatherState", "id": "mixed rain", "coverage": 0.12, "base": 2500, "top": 4000, "density": 0.06, "cirrus": 0, "wind": [5,-3],
+            "type": "weatherState", "id": "mixed rain", "coverage": 0.12, "base": 2500, "top": 4000, "density": 0.06, "cirrus": 0, "wind": [5,-3],
             "layers": {"nimbostratus":0.95,"stratus":0.45}, "temperature": 15, "haze": 1.7, "drizzle": 0, "storms": 0, "power": 0.7, "lightning": 0, "rain": 0.38,
             "drops": 0.35,
             "zones": {"along":"bus","variants":["drizzle","light rain","medium rain","downpour"],"length":1200,"hold":[40,100],"dry":{"state":"clear","count":2}}
         },
-        {"type":"cloud.light","id":"storm dusk","azimuth":272,"elevation":3,"intensity":11,"exposure":0.7},
-        {"type":"cloud.light","id":"afternoon","azimuth":62,"elevation":14,"intensity":12,"exposure":0.44},
-        {"type":"cloud.light","id":"noon","azimuth":170,"elevation":62,"intensity":12,"exposure":0.36},
-        {"type":"cloud.light","id":"golden","azimuth":285,"elevation":7,"intensity":11,"exposure":0.55},
-        {"type":"cloud.light","id":"morning","azimuth":95,"elevation":14,"intensity":11,"exposure":0.48},
-        {"type":"cloud.light","id":"full moon","azimuth":160,"elevation":40,"intensity":2.4,"exposure":0.32,"moon":1},
-        {"type":"cloud.light","id":"moonrise","azimuth":100,"elevation":5,"intensity":2.2,"exposure":0.9,"moon":0.97},
-        {"type":"cloud.light","id":"half moon","azimuth":215,"elevation":30,"intensity":1.3,"exposure":0.65,"moon":0.5},
-        {"type":"cloud.light","id":"crescent","azimuth":255,"elevation":12,"intensity":0.6,"exposure":1.6,"moon":0.18},
-        {"type":"cloud.building","id":"house","lamps":0.5,"window":{"pitch":3.2}},
-        {"type":"cloud.building","id":"block","lamps":0.6,"furnish":"office"},
+        {"type":"light","id":"storm dusk","azimuth":272,"elevation":3,"intensity":11,"exposure":0.7},
+        {"type":"light","id":"afternoon","azimuth":62,"elevation":14,"intensity":12,"exposure":0.44},
+        {"type":"light","id":"noon","azimuth":170,"elevation":62,"intensity":12,"exposure":0.36},
+        {"type":"light","id":"golden","azimuth":285,"elevation":7,"intensity":11,"exposure":0.55},
+        {"type":"light","id":"morning","azimuth":95,"elevation":14,"intensity":11,"exposure":0.48},
+        {"type":"light","id":"full moon","azimuth":160,"elevation":40,"intensity":2.4,"exposure":0.32,"moon":1},
+        {"type":"light","id":"moonrise","azimuth":100,"elevation":5,"intensity":2.2,"exposure":0.9,"moon":0.97},
+        {"type":"light","id":"half moon","azimuth":215,"elevation":30,"intensity":1.3,"exposure":0.65,"moon":0.5},
+        {"type":"light","id":"crescent","azimuth":255,"elevation":12,"intensity":0.6,"exposure":1.6,"moon":0.18},
+        {"type":"building","id":"house","lamps":0.5,"window":{"pitch":3.2}},
+        {"type":"building","id":"block","lamps":0.6,"furnish":"office"},
         {
-            "type": "cloud.cloudLayer", "name": "stratus", "kind": "sheet", "base": 1750, "top": 2300, "density": 0.03, "mapScale": 26000, "shapeScale": 9000,
+            "type": "cloudLayer", "name": "stratus", "kind": "sheet", "base": 1750, "top": 2300, "density": 0.03, "mapScale": 26000, "shapeScale": 9000,
             "stretch": 2.5, "erosion": 0.15, "ambient": 0.75, "precip": 0.12
         },
         {
-            "type": "cloud.cloudLayer", "name": "nimbostratus", "kind": "sheet", "base": 2100, "top": 5600, "density": 0.02, "mapScale": 40000,
+            "type": "cloudLayer", "name": "nimbostratus", "kind": "sheet", "base": 2100, "top": 5600, "density": 0.02, "mapScale": 40000,
             "shapeScale": 12000, "stretch": 2, "erosion": 0.2, "ambient": 0.45, "precip": 0.55
         },
         {
-            "type": "cloud.cloudLayer", "name": "altostratus", "kind": "sheet", "base": 5800, "top": 6900, "density": 0.004, "mapScale": 50000,
+            "type": "cloudLayer", "name": "altostratus", "kind": "sheet", "base": 5800, "top": 6900, "density": 0.004, "mapScale": 50000,
             "shapeScale": 14000, "stretch": 4, "erosion": 0.1, "ambient": 0.9, "precip": 0
         },
         {
-            "type": "cloud.cloudLayer", "name": "altocumulus", "kind": "cellular", "base": 5200, "top": 5750, "density": 0.035, "mapScale": 18000,
+            "type": "cloudLayer", "name": "altocumulus", "kind": "cellular", "base": 5200, "top": 5750, "density": 0.035, "mapScale": 18000,
             "shapeScale": 5000, "stretch": 0.45, "erosion": 0.35, "ambient": 1, "precip": 0
         },
-        {"type":"cloud.view","name":"Airliner (photo view)","pos":[9000,7400,22000],"look":[3200,2500,0]},
-        {"type":"cloud.view","name":"Under the shaft","pos":[-1500,1560,9500],"look":[4000,3000,0]},
-        {"type":"cloud.view","name":"Plains overview","pos":[-20000,5200,26000],"look":[4000,2000,-6000]},
-        {"type":"cloud.view","name":"Above the anvils","pos":[12000,13800,18000],"look":[0,7000,-4000]},
-        {"type":"cloud.view","name":"Front Range","pos":[-12000,3600,9000],"look":[-28000,3200,-6000]},
-        {"type":"cloud.view","name":"Town street level","pos":[-4200,1640,10500],"look":[0,2600,-2000]},
-        {"type":"cloud.view","name":"Village bus stop","follow":"village","spot":"bus stop","weather":"mixed rain"},
-        {"type":"cloud.view","name":"Village bridges","follow":"village","spot":"bridges","weather":"overcast rain"},
-        {"type":"cloud.view","name":"Under the bridge","follow":"village","spot":"under the bridge","weather":"overcast rain"},
-        {"type":"cloud.view","name":"Bus station platform","follow":"station","spot":"platform","weather":"medium rain"},
-        {"type":"cloud.view","name":"Bus station forecourt","follow":"station","spot":"forecourt","weather":"downpour"},
-        {"type":"cloud.view","name":"Bus station overview","follow":"station","spot":"overview","weather":"light rain"},
-        {"type":"cloud.view","name":"On foot at the bus station","follow":"station","spot":"platform","weather":"mixed rain","walk":true},
-        {"type":"cloud.view","name":"Riding the bus","follow":"bus","spot":"seat","weather":"mixed rain","walk":true},
-        {"type":"cloud.view","name":"{label}","follow":"bus","each":true,"spot":"door"},
+        {"type":"view","of":"cloud","name":"Airliner (photo view)","pos":[9000,7400,22000],"look":[3200,2500,0]},
+        {"type":"view","of":"cloud","name":"Under the shaft","pos":[-1500,1560,9500],"look":[4000,3000,0]},
+        {"type":"view","of":"cloud","name":"Plains overview","pos":[-20000,5200,26000],"look":[4000,2000,-6000]},
+        {"type":"view","of":"cloud","name":"Above the anvils","pos":[12000,13800,18000],"look":[0,7000,-4000]},
+        {"type":"view","of":"cloud","name":"Front Range","pos":[-12000,3600,9000],"look":[-28000,3200,-6000]},
+        {"type":"view","of":"cloud","name":"Town street level","pos":[-4200,1640,10500],"look":[0,2600,-2000]},
+        {"type":"view","of":"cloud","name":"Village bus stop","follow":"village","spot":"bus stop","weather":"mixed rain"},
+        {"type":"view","of":"cloud","name":"Village bridges","follow":"village","spot":"bridges","weather":"overcast rain"},
+        {"type":"view","of":"cloud","name":"Under the bridge","follow":"village","spot":"under the bridge","weather":"overcast rain"},
+        {"type":"view","of":"cloud","name":"Bus station platform","follow":"station","spot":"platform","weather":"medium rain"},
+        {"type":"view","of":"cloud","name":"Bus station forecourt","follow":"station","spot":"forecourt","weather":"downpour"},
+        {"type":"view","of":"cloud","name":"Bus station overview","follow":"station","spot":"overview","weather":"light rain"},
+        {"type":"view","of":"cloud","name":"On foot at the bus station","follow":"station","spot":"platform","weather":"mixed rain","walk":true},
+        {"type":"view","of":"cloud","name":"Riding the bus","follow":"bus","spot":"seat","weather":"mixed rain","walk":true},
+        {"type":"view","of":"cloud","name":"{label}","follow":"bus","each":true,"spot":"door"},
         {
-            "type": "cloud.view", "name": "Shelf cloud", "follow": "squall", "offset": [7000,25,1500], "lookOffset": [-4000,2100,-2500], "lighting": "storm dusk",
+            "type": "view", "of": "cloud", "name": "Shelf cloud", "follow": "squall", "offset": [7000,25,1500], "lookOffset": [-4000,2100,-2500], "lighting": "storm dusk",
             "weather": "severe storms"
         },
-        {"type":"cloud.view","name":"Mothership","follow":"hero","offset":[-5500,25,8000],"lookOffset":[0,3000,0],"lighting":"afternoon","weather":"severe storms"},
-        {"type":"cloud.view","name":"Hurricane eye","pos":[0,3200,-5000],"look":[10000,8000,-14000],"hurricane":4,"lighting":"afternoon","weather":"fair cumulus"},
+        {"type":"view","of":"cloud","name":"Mothership","follow":"hero","offset":[-5500,25,8000],"lookOffset":[0,3000,0],"lighting":"afternoon","weather":"severe storms"},
+        {"type":"view","of":"cloud","name":"Hurricane eye","pos":[0,3200,-5000],"look":[10000,8000,-14000],"hurricane":4,"lighting":"afternoon","weather":"fair cumulus"},
         {
-            "type": "cloud.view", "name": "Hurricane from above", "pos": [-30000,16000,26000], "look": [2000,4000,-8000], "hurricane": 4, "lighting": "afternoon",
+            "type": "view", "of": "cloud", "name": "Hurricane from above", "pos": [-30000,16000,26000], "look": [2000,4000,-8000], "hurricane": 4, "lighting": "afternoon",
             "weather": "fair cumulus"
         },
-        {"type":"cloud.tilt","dir":[1,0],"drop":260},
-        {"type":"cloud.hills","amplitude":60,"scale":9000,"octaves":5,"seed":7},
-        {"type":"cloud.hills","amplitude":14,"scale":1400,"octaves":3,"seed":21,"ridged":true},
+        {"type":"tilt","dir":[1,0],"drop":260},
+        {"type":"hills","amplitude":60,"scale":9000,"octaves":5,"seed":7},
+        {"type":"hills","amplitude":14,"scale":1400,"octaves":3,"seed":21,"ridged":true},
         {
-            "type": "cloud.range", "id": "front-range", "label": "Front Range", "labelPos": [-27000,-4000],
+            "type": "range", "id": "front-range", "label": "Front Range", "labelPos": [-27000,-4000],
             "path": [[-30000,-34000],[-27500,-16000],[-28500,0],[-26500,14000],[-29000,34000]], "width": 9000, "height": 2500, "roughness": 0.6, "seed": 4
         },
-        {"type":"cloud.mountain","label":"Longs Peak","pos":[-28500,-9000],"radius":4500,"height":900,"roughness":0.5},
-        {"type":"cloud.mountain","pos":[-25000,21000],"radius":4000,"height":650,"roughness":0.5},
+        {"type":"mountain","label":"Longs Peak","pos":[-28500,-9000],"radius":4500,"height":900,"roughness":0.5},
+        {"type":"mountain","pos":[-25000,21000],"radius":4000,"height":650,"roughness":0.5},
         {
-            "type": "cloud.river", "id": "platte", "label": "South Platte",
+            "type": "river", "id": "platte", "label": "South Platte",
             "path": [[-24000,6000],[-15000,4000],[-6000,6500],[3000,3000],[12000,5500],[22000,1500],[34000,3000]], "width": 90, "depth": 8, "bank": 900
         },
-        {"type":"cloud.lake","label":"Reservoir","pos":[-11000,15000],"radius":1600,"level":1520},
-        {"type":"cloud.town","id":"town","label":"Brightfield","pos":[-4000,9000],"radius":4200,"density":0.95},
-        {"type":"cloud.town","label":"Greeley Flats","pos":[11000,-9000],"radius":2400,"density":0.85},
-        {"type":"cloud.town","pos":[19000,12000],"radius":1500,"density":0.7},
-        {"type":"cloud.forest","pos":[-24000,-2000],"radius":9000,"density":0.9,"seed":3},
-        {"type":"cloud.village","id":"village","label":"Millbrook","pos":[-12500,4700],"radius":380,"river":"platte","houses":28,"footbridge":170,"seed":9},
-        {"type":"cloud.busStation","id":"station","label":"Brightfield bus station","pos":[-3600,8400],"yaw":20,"length":96,"bays":20,"buses":5,"seed":3},
-        {"type":"cloud.bus","id":"bus","label":"Bus 7","from":"station","to":"village","speed":22,"village":10,"dwell":[60,30],"livery":[0.12,0.36,0.62]},
+        {"type":"lake","label":"Reservoir","pos":[-11000,15000],"radius":1600,"level":1520},
+        {"type":"town","id":"town","label":"Brightfield","pos":[-4000,9000],"radius":4200,"density":0.95},
+        {"type":"town","label":"Greeley Flats","pos":[11000,-9000],"radius":2400,"density":0.85},
+        {"type":"town","pos":[19000,12000],"radius":1500,"density":0.7},
+        {"type":"forest","pos":[-24000,-2000],"radius":9000,"density":0.9,"seed":3},
+        {"type":"village","id":"village","label":"Millbrook","pos":[-12500,4700],"radius":380,"river":"platte","houses":28,"footbridge":170,"seed":9},
+        {"type":"busStation","id":"station","label":"Brightfield bus station","pos":[-3600,8400],"yaw":20,"length":96,"bays":20,"buses":5,"seed":3},
+        {"type":"bus","id":"bus","label":"Bus 7","from":"station","to":"village","speed":22,"village":10,"dwell":[60,30],"livery":[0.12,0.36,0.62]},
         {
-            "type": "cloud.supercell", "id": "hero", "label": "Supercell", "pos": [1500,-2500], "radius": 6200, "top": 11800, "precip": 1, "core": 0.75,
+            "type": "supercell", "id": "hero", "label": "Supercell", "pos": [1500,-2500], "radius": 6200, "top": 11800, "precip": 1, "core": 0.75,
             "coreOffset": [900,800], "life": [900,2400,1200], "lightning": 5, "virga": 0.12, "pinned": true, "stackRadius": 1, "stackDrop": 1300,
             "stackHeight": 6000, "plates": 5, "twist": 0.5, "spin": 0.03, "wallCloud": 700, "wallRadius": 0.3, "green": 0.45
         },
         {
-            "type": "cloud.squall", "id": "squall", "label": "Squall line", "from": [-26000,-36000], "to": [-20000,34000], "count": 7, "radius": 4500,
+            "type": "squall", "id": "squall", "label": "Squall line", "from": [-26000,-36000], "to": [-20000,34000], "count": 7, "radius": 4500,
             "top": 10500, "precip": 0.9, "shelf": 1, "lip": 650, "shelfDepth": 7000, "tiers": 3, "bow": 5000, "lightning": 3, "drift": 0.6, "travel": 50000,
             "seed": 5
         },
         {
-            "type": "cloud.storm", "label": "Virga cell", "pos": [-14000,-15000], "radius": 3800, "top": 7200, "precip": 0.55, "core": 0.55,
+            "type": "storm", "label": "Virga cell", "pos": [-14000,-15000], "radius": 3800, "top": 7200, "precip": 0.55, "core": 0.55,
             "life": [600,1800,900], "lightning": 0, "virga": 0.75, "pinned": true
         },
         {
-            "type": "cloud.spawner", "id": "plains-cells", "area": [-40000,-40000,40000,40000], "rate": 9, "max": 22, "initial": 9, "seed": 12,
+            "type": "spawner", "id": "plains-cells", "area": [-40000,-40000,40000,40000], "rate": 9, "max": 22, "initial": 9, "seed": 12,
             "template": {"radius":[2200,5200],"top":[5500,11000],"precip":[0.25,0.95],"core":[0.35,0.6],"grow":[500,1000],"mature":[900,2400],"decay":[700,1400],"lightning":[0,4],"virga":[0,0.6],"drift":[0.8,1.2]}
         },
 

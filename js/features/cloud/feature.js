@@ -56,7 +56,7 @@ class CloudWorld extends FeatureWorld {
     get move() { return this.app.walker.active ? 'walk' : 'fly'; }
     setMove(mode) { this.app.controls.setWalk(mode === 'walk'); }
 
-    // its scenario's views (cloud.view): one each, or, following an entity with `each`, one per member of it (a bus line's
+    // its scenario's views (`view` entities): one each, or, following an entity with `each`, one per member of it (a bus line's
     // buses), named by `name` with {label} the member's, its sub line what the member is doing
     views() {
         const a = this.app, w = a.world;

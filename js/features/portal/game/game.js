@@ -191,7 +191,7 @@ class Game {
         }, target);
     }
 
-    // GUI screens (world/entities.js Screen): the interaction system (the gui kit) gives the nearest screen the view ray
+    // GUI screens (kits.entities sectorTypes Screen, js/kits/entities/sectors.js): the interaction system (the gui kit) gives the nearest screen the view ray
     // meets the cursor, if within the GUI's range; the screens in this frame's draws rebuild their GUI models (the
     // others aren't seen)
     updateScreens(now, eye, fwd, viewProj) {

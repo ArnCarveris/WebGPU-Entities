@@ -1,5 +1,5 @@
 'use strict';
-// The structures' lamps (colour, intensity, reach, cone) and colours.
+// The structures' lamps (colour, intensity, reach, cone) and colours (the mesh kit's).
 
 Features.part('cloud', (engine, feature) => {
 
@@ -18,13 +18,8 @@ const LAMPS = {
     flashlight: { color: [1.0, 0.94, 0.84], intensity: 30, range: 60, size: 0.8, cone: [22, 6] },
 };
 
-const STRUCT_COLORS = {
-    walls: [[0.78, 0.74, 0.66], [0.74, 0.72, 0.68], [0.70, 0.55, 0.38], [0.56, 0.32, 0.25], [0.58, 0.63, 0.64], [0.68, 0.64, 0.50]],
-    roofs: [[0.40, 0.15, 0.11], [0.22, 0.23, 0.25], [0.32, 0.23, 0.17], [0.28, 0.31, 0.28]],
-    plinth: [0.30, 0.29, 0.28], door: [0.22, 0.14, 0.09], window: [0.06, 0.08, 0.10], brick: [0.36, 0.20, 0.16],
-    asphalt: [0.12, 0.12, 0.13], paint: [0.72, 0.72, 0.66], gravel: [0.40, 0.37, 0.32], concrete: [0.50, 0.49, 0.47],
-    stone: [0.46, 0.43, 0.40], wood: [0.36, 0.25, 0.16], metal: [0.24, 0.26, 0.27], glass: [0.36, 0.42, 0.45], sign: [0.85, 0.70, 0.12],
-};
+// the structures' colours (walls, roofs, roads, materials): the mesh kit's
+const STRUCT_COLORS = engine.kits.mesh.PALETTE;
 
 return { LAMPS, STRUCT_COLORS };
 });
