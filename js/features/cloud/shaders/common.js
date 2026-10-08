@@ -169,8 +169,10 @@ fn convectiveDensity(p: vec3f, w: vec4f, an: vec4f, st: vec4f, detail: bool) -> 
     if (cov <= 0.0 || prof <= 0.0) { return 0.0; }
     let wd = windDir();
     let q = vec3f(p.x - F.wind.z - wd.x * (p.y - base) * 0.25, p.y, p.z - F.wind.w - wd.y * (p.y - base) * 0.25);
-    let s = textureSampleLevel(shapeTex, repSamp, q / F.noise.x, 0.0);
-    let wf = s.y * 0.625 + s.z * 0.25 + s.w * 0.125;
+    // smooth (F.look.x): a coarser mip, without the finest octaves, and the billows from the lowest Worley octave,
+    // broad and rounded
+    let s = textureSampleLevel(shapeTex, repSamp, q / F.noise.x, F.look.x * 2.0);
+    let wf = mix(s.y * 0.625 + s.z * 0.25 + s.w * 0.125, s.y * 0.85 + s.z * 0.15, F.look.x);
     var d = sat(remap(s.x, wf - 1.0, 1.0, 0.0, 1.0)) * prof;
     // mothership: smooth stacked plates around the rotating updraft
     if (st.x > 0.01) {
@@ -179,7 +181,10 @@ fn convectiveDensity(p: vec3f, w: vec4f, an: vec4f, st: vec4f, detail: bool) -> 
     }
     d = sat(remap(d, 1.0 - cov, 1.0, 0.0, 1.0)) * cov;
     if (d <= 0.0) { return 0.0; }
-    if (detail) {
+    // smooth: no detail noise; within the detail distance it is trimmed by what the erosion takes on average, so the
+    // near clouds keep the same mass without the fetch
+    if (detail && F.look.x > 0.5) { d = sat(remap(d, F.noise.z * 0.5, 1.0, 0.0, 1.0)); }
+    else if (detail) {
         let n = textureSampleLevel(detailTex, repSamp, q / F.noise.y + vec3f(0.0, F.up.w * 0.0004, 0.0), 0.0);
         let dw = n.x * 0.625 + n.y * 0.25 + n.z * 0.125;
         let e = mix(dw, 1.0 - dw, sat(h * 5.0));                     // wispy bases, billowy tops

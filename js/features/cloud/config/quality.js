@@ -6,9 +6,12 @@ const RENDER_MODES = ['shaded', 'no volumetrics', 'clouds only', 'precipitation 
 // scale: volumetric resolution; steps / light: march and light-march steps; interleave: march 1 of every 1, 2
 // (checkerboard) or 4 (one of each 2x2 block) pixels per frame, in turn, the resolve fills in the others from history;
 // detail: distance (m) within which the detail noise erodes clouds (beyond, cheaper LODs);
-// blur: radius (volumetric texels) of the edge-aware blur that smooths the clouds' march noise at low resolution
+// blur: radius (volumetric texels) of the edge-aware blur that smooths the clouds' march noise at low resolution;
+// smooth: soft painterly clouds (broad billows, powder-darkened clefts) instead of the eroded detail, which the low
+// resolution only turns into grain, and a steadier temporal resolve (longer history, bicubic, outliers clamped) that
+// keeps the interleaved march from shimmering; it skips the detail noise and samples a coarser mip, so it costs less
 const QUALITY = [
-    { name: 'low', scale: 0.5, steps: 64, light: 3, interleave: 4, detail: 10000, blur: 1.0 },
+    { name: 'low', scale: 0.5, steps: 64, light: 3, interleave: 4, detail: 10000, blur: 1.0, smooth: 1 },
     { name: 'medium', scale: 0.5, steps: 96, light: 4, interleave: 4, detail: 16000, blur: 0.7 },
     { name: 'high', scale: 0.75, steps: 128, light: 5, interleave: 4, detail: 22000, blur: 0 },
     { name: 'ultra', scale: 1.0, steps: 160, light: 6, interleave: 1, detail: 30000, blur: 0 },

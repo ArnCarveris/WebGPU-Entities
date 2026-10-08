@@ -152,7 +152,8 @@ fn hazeLight(mu: f32, sh: vec2f) -> vec3f {
 // dirY: the view ray's vertical direction, for the diffuse field's gradient (diffuseLook)
 // side: 1 near a cloud surface the view ray reached through open air, which the sky lights from the side; 0 deep in
 // cloud, where only the light that diffused down through the cloud above is left (marchSide)
-fn cloudLight(p: vec3f, mu: f32, dirY: f32, w: vec4f, lightSteps: i32, stepScale: f32, ambScale: f32, side: f32) -> vec3f {
+// dens: the cloud's extinction at p, for the smooth look's powder term
+fn cloudLight(p: vec3f, mu: f32, dirY: f32, w: vec4f, lightSteps: i32, stepScale: f32, ambScale: f32, side: f32, dens: f32) -> vec3f {
     let s = F.sunDir.xyz;
     var od = 0.0;
     var ls = 90.0 * stepScale;
@@ -171,6 +172,11 @@ fn cloudLight(p: vec3f, mu: f32, dirY: f32, w: vec4f, lightSteps: i32, stepScale
         sun += a * exp(-od * b) * mix(hg(mu, 0.8 * c), hg(mu, -0.25 * c), 0.3);
         a *= 0.55; b *= 0.35; c *= 0.6;
     }
+    // smooth look: the powder effect. Thin cloud scatters little of the sun back (in-scattering builds up with depth),
+    // so seen with the sun behind the eye the fringes and the clefts between billows go dim and the billows read round;
+    // towards the sun the forward peak keeps the edges bright (the silver lining)
+    let powder = 1.0 - exp(-dens / max(F.cloud.z, 1e-6) * 3.0);
+    sun *= mix(1.0, powder, F.look.x * 0.75 * sat(0.6 - 0.6 * mu));
     // sky light through the cloud above: deep in a storm only a few percent arrives; brighter looking up
     let base = F.cloud.x;
     let top = max(w.y, base + 400.0);
@@ -478,7 +484,7 @@ fn march(@builtin(global_invocation_id) gid: vec3u) {
                     let nl = i32(F.march.y);
                     let ls = select(select(nl, max(nl - 1, 2), t > detailDist), 2, t > detailDist * 2.5);
                     let tint = mix(vec3f(1.0), vec3f(0.62, 1.0, 0.72), cs.z);   // green storm light
-                    S += dc * cloudLight(p, mu, dir.y, w, ls, clamp(t / detailDist, 1.0, 3.0), cs.y, side) * tint;
+                    S += dc * cloudLight(p, mu, dir.y, w, ls, clamp(t / detailDist, 1.0, 3.0), cs.y, side, dc) * tint;
                     sigma += dc;
                     medium += dc;
                     emptyRun = 0;
@@ -590,6 +596,31 @@ const WGSL_RESOLVE = /* wgsl */`
 @group(1) @binding(2) var histTex: texture_2d<f32>;
 @group(1) @binding(3) var histOut: texture_storage_2d<rgba16float, write>;
 
+// the history at uv, Catmull-Rom filtered in 5 bilinear taps: bilinear history blurs a little more every frame the
+// view moves, which a long history (the smooth look) would pile up into smear; the bicubic keeps it sharp (its slight
+// overshoot is clamped to the neighbourhood like any history)
+fn historyCR(uv: vec2f) -> vec4f {
+    let size = vec2f(textureDimensions(histTex));
+    let sp = uv * size;
+    let tp = floor(sp - 0.5) + 0.5;
+    let f = sp - tp;
+    let w0 = f * (-0.5 + f * (1.0 - 0.5 * f));
+    let w1 = 1.0 + f * f * (-2.5 + 1.5 * f);
+    let w2 = f * (0.5 + f * (2.0 - 1.5 * f));
+    let w3 = f * f * (-0.5 + 0.5 * f);
+    let w12 = w1 + w2;
+    let t0 = (tp - 1.0) / size;
+    let t12 = (tp + w2 / w12) / size;
+    let t3 = (tp + 2.0) / size;
+    var c = textureSampleLevel(histTex, clampSamp, vec2f(t12.x, t0.y), 0.0) * (w12.x * w0.y);
+    c += textureSampleLevel(histTex, clampSamp, vec2f(t0.x, t12.y), 0.0) * (w0.x * w12.y);
+    c += textureSampleLevel(histTex, clampSamp, t12, 0.0) * (w12.x * w12.y);
+    c += textureSampleLevel(histTex, clampSamp, vec2f(t3.x, t12.y), 0.0) * (w3.x * w12.y);
+    c += textureSampleLevel(histTex, clampSamp, vec2f(t12.x, t3.y), 0.0) * (w12.x * w3.y);
+    let wsum = w12.x * w0.y + w0.x * w12.y + w12.x * w12.y + w3.x * w12.y + w12.x * w3.y;
+    return max(c / wsum, vec4f(0.0));
+}
+
 @compute @workgroup_size(8, 8)
 fn resolve(@builtin(global_invocation_id) gid: vec3u) {
     let size = vec2i(textureDimensions(curTex));
@@ -597,6 +628,7 @@ fn resolve(@builtin(global_invocation_id) gid: vec3u) {
     if (q.x >= size.x || q.y >= size.y) { return; }
     let il = i32(F.lod.x);
     let fresh = marchedNow(q);                   // marched this frame
+    let smoothLook = F.look.x > 0.5;            // the smooth look (QUALITY smooth)
     // neighbourhood statistics over pixels marched this frame: within 1 pixel (every pixel: the 3x3; checkerboard: the
     // centre and diagonals, or the four direct neighbours), within 2 when one pixel in four is marched (4 to 9 of them)
     var m1 = vec4f(0.0);
@@ -620,17 +652,27 @@ fn resolve(@builtin(global_invocation_id) gid: vec3u) {
     let box = select(1.6, 1.25, fresh);
     let mn = mean - sigma * box;
     let mx = mean + sigma * box;
-    let cur = select(mean, textureLoad(curTex, q, 0), fresh);
+    var cur = select(mean, textureLoad(curTex, q, 0), fresh);
+    // smooth look: a fresh march outside its neighbourhood's spread is noise (a lucky step through a bright billow);
+    // held within it, it no longer sparkles
+    if (smoothLook) { cur = clamp(cur, mean - sigma, mean + sigma); }
     let depth = select(dsum / n, textureLoad(curDepth, q, 0).x, fresh);
     let uv = (vec2f(q) + 0.5) / vec2f(size);
     let dir = rayDir(vec2f(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0));
-    let pc = F.prevViewProj * vec4f(F.cam.xyz + dir * depth, 1.0);
+    // where this point's cloud was a frame ago: the camera moved, and the wind carried the cloud (F.look.yz)
+    let pc = F.prevViewProj * vec4f(F.cam.xyz + dir * depth - vec3f(F.look.y, 0.0, F.look.z), 1.0);
     var o = cur;
     if (pc.w > 0.0 && F.near.z < 0.5) {
         let puv = vec2f(pc.x / pc.w * 0.5 + 0.5, 0.5 - pc.y / pc.w * 0.5);
         if (all(puv > vec2f(0.0)) && all(puv < vec2f(1.0))) {
-            let hist = clamp(textureSampleLevel(histTex, clampSamp, puv, 0.0), mn, mx);
-            o = mix(hist, cur, select(0.06, select(select(0.1, 0.18, il >= 2), 0.25, il >= 4), fresh));
+            var h = textureSampleLevel(histTex, clampSamp, puv, 0.0);
+            if (smoothLook) { h = historyCR(puv); }
+            let hist = clamp(h, mn, mx);
+            // smooth look: soft, slowly changing clouds keep a longer history, and the pixels not marched this frame
+            // keep theirs (clamped) instead of taking in their neighbours' mean, which shimmers as the marched pixel
+            // of each block cycles
+            let k = select(0.06, select(select(0.1, 0.18, il >= 2), 0.25, il >= 4), fresh);
+            o = mix(hist, cur, select(k, select(0.0, k * 0.25, fresh), smoothLook));
         }
     }
     textureStore(histOut, q, o);

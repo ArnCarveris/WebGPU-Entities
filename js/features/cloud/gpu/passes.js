@@ -5,24 +5,26 @@ Features.part('cloud', (engine, feature) => {
 const { Common } = engine;
 const { smoothstep, makeBuffer, bindLayout, bindGroup } = Common;
 const {
-    NOISE_SHAPE, NOISE_DETAIL, OCC_RES, CLOUD_TILE, WEATHER_RES, SHADOW_RES, GROUND_RES, FROXEL, fromHalf, FrameBlock,
+    NOISE_SHAPE, NOISE_DETAIL, SHAPE_MIPS, OCC_RES, CLOUD_TILE, WEATHER_RES, SHADOW_RES, GROUND_RES, FROXEL, fromHalf, FrameBlock,
     BindingSet, WGSL_MATH, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_DENSITY, WGSL_SHADOW_SAMPLE, WGSL_SHELTER, WGSL_BUILDING,
-    WGSL_OCCUPANCY, WGSL_NOISE, WGSL_WEATHER, WGSL_SHADOW, WGSL_GROUND, WGSL_FROXEL, WGSL_SKIP_SAMPLE, WGSL_TILES,
+    WGSL_OCCUPANCY, WGSL_NOISE, WGSL_NOISE_DOWN, WGSL_WEATHER, WGSL_SHADOW, WGSL_GROUND, WGSL_FROXEL, WGSL_SKIP_SAMPLE, WGSL_TILES,
     WGSL_MARCH, WGSL_RESOLVE, WGSL_TERRAIN,
 } = feature;
 
 // GPU passes
-// 3D noise volumes, baked once
+// 3D noise volumes, baked once. The shape volume has a short mip chain (box-filtered): the smooth look samples it
+// coarser, without its finest octaves
 class NoiseVolumes {
     constructor(device) {
         const U = GPUTextureUsage;
-        const make = n => device.createTexture({ size: [n, n, n], dimension: '3d', format: 'rgba8unorm', usage: U.TEXTURE_BINDING | U.STORAGE_BINDING });
-        this.shape = make(NOISE_SHAPE);
+        const make = (n, mips = 1) => device.createTexture({ size: [n, n, n], dimension: '3d', format: 'rgba8unorm', mipLevelCount: mips, usage: U.TEXTURE_BINDING | U.STORAGE_BINDING });
+        this.shape = make(NOISE_SHAPE, SHAPE_MIPS);
         this.detail = make(NOISE_DETAIL);
+        const mip = (t, l) => t.createView({ dimension: '3d', baseMipLevel: l, mipLevelCount: 1 });
         const layout = bindLayout(device, GPUShaderStage.COMPUTE, ['write3d:rgba8unorm', 'write3d:rgba8unorm']);
         const module = device.createShaderModule({ label: 'noise', code: WGSL_NOISE });
         const pl = device.createPipelineLayout({ bindGroupLayouts: [layout] });
-        const group = bindGroup(device, layout, [this.shape.createView({ dimension: '3d' }), this.detail.createView({ dimension: '3d' })], 'noise');
+        const group = bindGroup(device, layout, [mip(this.shape, 0), this.detail.createView({ dimension: '3d' })], 'noise');
         const enc = device.createCommandEncoder();
         const pass = enc.beginComputePass();
         pass.setBindGroup(0, group);
@@ -30,6 +32,14 @@ class NoiseVolumes {
         pass.dispatchWorkgroups(NOISE_SHAPE / 4, NOISE_SHAPE / 4, NOISE_SHAPE / 4);
         pass.setPipeline(device.createComputePipeline({ layout: pl, compute: { module, entryPoint: 'genDetail' } }));
         pass.dispatchWorkgroups(NOISE_DETAIL / 4, NOISE_DETAIL / 4, NOISE_DETAIL / 4);
+        const downLayout = bindLayout(device, GPUShaderStage.COMPUTE, ['tex3d', 'write3d:rgba8unorm']);
+        pass.setPipeline(device.createComputePipeline({ layout: device.createPipelineLayout({ bindGroupLayouts: [downLayout] }),
+            compute: { module: device.createShaderModule({ label: 'noise-mips', code: WGSL_NOISE_DOWN }), entryPoint: 'down' } }));
+        for (let l = 1; l < SHAPE_MIPS; l++) {
+            const n = Math.max(NOISE_SHAPE >> l, 1);
+            pass.setBindGroup(0, bindGroup(device, downLayout, [mip(this.shape, l - 1), mip(this.shape, l)], 'noise-mip'));
+            pass.dispatchWorkgroups(Math.ceil(n / 4), Math.ceil(n / 4), Math.ceil(n / 4));
+        }
         pass.end();
         device.queue.submit([enc.finish()]);
         this.shapeView = this.shape.createView({ dimension: '3d' });

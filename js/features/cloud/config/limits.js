@@ -50,6 +50,7 @@ const STRUCT_FLOATS = 10;            // structure mesh vertex: position, normal,
 const GRID_N = 512;                 // terrain mesh vertices per side (inner part covers the heightfield, outer rings run to the horizon)
 const NOISE_SHAPE = 128;
 const NOISE_DETAIL = 32;
+const SHAPE_MIPS = 3;               // the shape volume's mip chain (the smooth look samples mip 2)
 // occupancy grid for empty-space skipping: OCC_RES^2 columns over the weather map, 32 height cells each (one u32 of bits)
 const OCC_RES = 256;
 // cloud tile pre-pass: one ray per CLOUD_TILE^2 volumetric pixels finds the distance bins (64, square-root spaced out to
@@ -67,7 +68,7 @@ return {
     MAX_FAR_DYN, FAR_LAMP_PITCH, TOWN_BLOCK, FAR_LAMP_SIDE, FAR_LAMP_H, FAR_LAMP_REACH, ROAD_LAMP_STEP, POLE_DRAW,
     MAX_POLES, MAX_GLOWS, GLOW_GAIN, MAX_RAIN_ZONES, ZONE_STEP, ZONE_RADIUS, CLEAR_WIDE, CLEAR_RADIUS, MAX_DRIPS,
     DRIP_DENSITY, DRIP_PARTICLES, SPLASH_RADIUS, SPLASH_GRID, SPLASH_PIECES, SPLASH_MIST, SPLASH_PARTICLES, SPRAY,
-    SPRAY_LAYERS, SPRAY_MIST, SPLASH_FADE, STRUCT_FLOATS, GRID_N, NOISE_SHAPE, NOISE_DETAIL, OCC_RES, CLOUD_TILE,
+    SPRAY_LAYERS, SPRAY_MIST, SPLASH_FADE, STRUCT_FLOATS, GRID_N, NOISE_SHAPE, NOISE_DETAIL, SHAPE_MIPS, OCC_RES, CLOUD_TILE,
     TILE_COVER_PAD, WEATHER_RES, SHADOW_RES, GROUND_RES,
 };
 });

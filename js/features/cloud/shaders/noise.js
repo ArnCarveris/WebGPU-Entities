@@ -33,5 +33,19 @@ fn genDetail(@builtin(global_invocation_id) gid: vec3u) {
 }
 `;
 
-return { WGSL_NOISE };
+// one mip of a 3D volume from the one above it: the mean of each 2x2x2 block
+const WGSL_NOISE_DOWN = /* wgsl */`
+@group(0) @binding(0) var src: texture_3d<f32>;
+@group(0) @binding(1) var dst: texture_storage_3d<rgba8unorm, write>;
+
+@compute @workgroup_size(4, 4, 4)
+fn down(@builtin(global_invocation_id) gid: vec3u) {
+    if (any(gid >= textureDimensions(dst))) { return; }
+    var c = vec4f(0.0);
+    for (var i = 0u; i < 8u; i++) { c += textureLoad(src, gid * 2u + vec3u(i & 1u, (i >> 1u) & 1u, i >> 2u), 0); }
+    textureStore(dst, gid, c / 8.0);
+}
+`;
+
+return { WGSL_NOISE, WGSL_NOISE_DOWN };
 });

@@ -16,6 +16,8 @@ class FrameWriter {
         this.app = app;
         this.viewProj = new Float32Array(16);
         this.prevViewProj = null;
+        this.offset = null;             // the clouds' wind offset this frame, and the last frame's (prevOffset)
+        this.prevOffset = null;
         this.shadowKey = '';            // what the shadow map was last fully drawn for
         this.shadowSlices = 1;
         this.drops = null;              // (none until the first frame is written)
@@ -27,7 +29,7 @@ class FrameWriter {
     }
 
     // after the frame is submitted: its projection is the next one's history
-    advance() { this.prevViewProj = this.viewProj; }
+    advance() { this.prevViewProj = this.viewProj; this.prevOffset = this.offset; }
 
     write(dt, wdt) {
         const a = this.app, r = a.renderer, F = r.frame, cam = a.camera, w = a.world, c = w.weather.cur, cfg = a.cfg, q = QUALITY[a.quality];
@@ -103,6 +105,9 @@ class FrameWriter {
         this.shadowSlices = full ? 1 : SHADOW_SLICES;
         F.set('froxel', [FROXEL_NEAR, cfg.maxDistance, a.froxels ? 1 : 0, 0]);
         F.set('post', [q.blur || 0, a.tiles ? 1 : 0, a.radarTop || 0, cfg.bloomBolt]);
+        // how far the wind carried the clouds since the last frame: the resolve reprojects the history along with them
+        const off = this.offset = [...w.weather.offset], prev = this.prevOffset || off;
+        F.set('look', [q.smooth || 0, off[0] - prev[0], off[1] - prev[1], 0]);
         F.set('bloom', [a.bloom ? cfg.bloom : 0, cfg.bloomThreshold, cfg.bloomKnee, r.bloomViews?.length || 1]);
         // heavy rain: up to three times the drops (big drops, past intensity 0.6)
         const drops = this.drops = w.rainZones.drops(cam.pos[0], cam.pos[2], c.drops);
