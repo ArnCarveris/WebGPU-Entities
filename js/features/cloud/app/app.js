@@ -123,7 +123,7 @@ class App {
             if (this.walker.active && !locked) this.walker.update(dt, io, this.input, this);
             this.doors.update(dt, io);
             if (v3.len(v3.sub(before, this.camera.pos)) > 3000) this.reset = true;
-            this.surroundings.update();
+            this.surroundings.update(dt);
             this.sounds.update();
         }
         if (!render) return;
@@ -134,7 +134,7 @@ class App {
         fw.write(dt, this.wdt ?? 0);
         const enc = r.device.createCommandEncoder();
         const total = this.near.rain + this.near.snow;
-        const particles = total > 0.005 ? fw.splashStart + (this.near.rain > 0.02 ? SPLASH_PARTICLES : 0) : 0;
+        const particles = total > 0.001 ?fw.splashStart + (this.near.rain > 0.02 ? SPLASH_PARTICLES : 0) : 0;
         r.render(enc, fw.probeTexel, particles, w.lightning.count, QUALITY[this.quality].interleave, fw.shadowSlices, this.froxels, this.mode !== 1, this.tiles, this.bloom && this.cfg.bloom > 0);
         r.device.queue.submit([enc.finish()]);
         r.weatherPass.afterSubmit();
