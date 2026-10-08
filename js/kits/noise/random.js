@@ -32,5 +32,13 @@ function hash3(x, y, z, s) {
     return ((h ^ (h >>> 15)) >>> 0) / 4294967296;
 }
 
-return { mulberry32, seededRandom, hash2, hash3 };
+// the PCG hash of a u32, and it to [0, 1]: as NoiseWGSL.pcg's pcg / rnd in WGSL, so the CPU can pick what a shader picks
+function pcg(v) {
+    const s = (Math.imul(v >>> 0, 747796405) + 2891336453) >>> 0;
+    const w = Math.imul((s >>> ((s >>> 28) + 4)) ^ s, 277803737) >>> 0;
+    return ((w >>> 22) ^ w) >>> 0;
+}
+const pcgRandom = v => Math.fround(pcg(v)) / 4294967295;
+
+return { mulberry32, seededRandom, hash2, hash3, pcg, pcgRandom };
 });

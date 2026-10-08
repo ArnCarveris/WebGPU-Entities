@@ -16,7 +16,9 @@ const BLOCK_RANGE = 2500;            // only boxes this close to the camera (m) 
 const MAX_LIGHTS = 64;               // point and spot lights in the frame uniform (LightWriter.write), the most important first
 const LIGHT_RANGE = 700;             // m: lights further from the camera than this (less their reach) are left out
 const LIGHT_GRID = 32;               // cells per side over the lights' reach, each listing the lights that reach into it (2 x 32 bits)
-const LIGHT_CABIN = 1, LIGHT_SPOT = 2;  // light flags: a bus's cabin glow (not on the cabin's own surfaces), a spot (cone)
+const LIGHT_CABIN = 1, LIGHT_SPOT = 2;  // light flags: a bus's cabin glow (not on the cabin's own surfaces), a spot (cone),
+const LIGHT_ROOM = 4;                // a building's lit storey (out through its windows and doors only; the room has its own lamps)
+const ROOM_LIGHTS = 16, ROOM_RANGE = 160;  // at most this many lit storeys of the buildings within this many m become lights
 // distant lights by night (World.buildFarLights, WGSL_FAR): every lamp as a glowing point sprite, lighting nothing
 // per far light: [x, y, z, size (m)] [rgb intensity, fake] [axis, cos of the cone's edge (-2 none)] [cos of its core, range (m), ground height, -]
 const FAR_FLOATS = 16;
@@ -61,7 +63,7 @@ const GROUND_RES = 256;
 
 return {
     NEAR, MAX_CELLS, CELL_FLOATS, MAX_LAYERS, MAX_MOTHERSHIPS, MAX_SHELVES, MAX_FLASHES, MAX_BOLT_SEGS, MAX_BLOCKERS,
-    BLOCK_GRID, BLOCK_RANGE, MAX_LIGHTS, LIGHT_RANGE, LIGHT_GRID, LIGHT_SPOT, LIGHT_CABIN, FAR_FLOATS, POOL_ALBEDO,
+    BLOCK_GRID, BLOCK_RANGE, MAX_LIGHTS, LIGHT_RANGE, LIGHT_GRID, LIGHT_SPOT, LIGHT_CABIN, LIGHT_ROOM, ROOM_LIGHTS, ROOM_RANGE, FAR_FLOATS, POOL_ALBEDO,
     MAX_FAR_DYN, FAR_LAMP_PITCH, TOWN_BLOCK, FAR_LAMP_SIDE, FAR_LAMP_H, FAR_LAMP_REACH, ROAD_LAMP_STEP, POLE_DRAW,
     MAX_POLES, MAX_GLOWS, GLOW_GAIN, MAX_RAIN_ZONES, ZONE_STEP, ZONE_RADIUS, CLEAR_WIDE, CLEAR_RADIUS, MAX_DRIPS,
     DRIP_DENSITY, DRIP_PARTICLES, SPLASH_RADIUS, SPLASH_GRID, SPLASH_PIECES, SPLASH_MIST, SPLASH_PARTICLES, SPRAY,

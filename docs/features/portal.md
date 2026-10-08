@@ -249,7 +249,13 @@ half astern to full ahead, `A`/`D` turn the wheel (the rudder self-centres), `X`
   crew deck, bridge, engine room and hold at sea.
 
 Lighting is per area: a low ambient, a sun factor, fog and up to 12 point lights with
-`flicker`/`pulse` signals.
+`flicker`/`pulse` signals. Light also passes through portals (`js/world/light-transport.js`). Each area
+gets up to 16 lights from the areas behind its open portals, up to two portals away, and indoor areas
+get the sun through portals that lead outdoors. The scene shader lets such a light reach a point only
+along rays through every aperture it passes. The walls around a doorway, window or skylight shadow it,
+so it falls in the opening's shape, with a penumbra as soft as the emitter's `size` (default 0.1 m).
+Glass tints and dims it, and a sliding door passes light only through the part it has opened. An
+area's `sun` factor is unshadowed sun on top of that, for roofless areas.
 
 ## Controls
 

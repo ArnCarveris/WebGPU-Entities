@@ -353,6 +353,7 @@ class Door extends door(Entity) {
         P.locked = !!e.locked;
         P.autoDoor = !!e.auto && !P.locked;
         this.portal = P;
+        P.door = this;                  // its opening lets light through (world/light-transport.js)
         this.lift = e.lift || 0;
         this.slide = e.slide || 'right';
         this.lightArea = P.front || P.back;

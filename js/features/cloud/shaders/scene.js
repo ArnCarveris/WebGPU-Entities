@@ -3,7 +3,7 @@
 
 Features.part('cloud', (engine, feature) => {
 const {
-    LIGHT_CABIN, POOL_ALBEDO, FAR_LAMP_PITCH, TOWN_BLOCK, FAR_LAMP_SIDE, FAR_LAMP_H, POLE_DRAW, GRID_N, BUS, BUS_IN,
+    LIGHT_CABIN, LIGHT_ROOM, POOL_ALBEDO, FAR_LAMP_PITCH, TOWN_BLOCK, FAR_LAMP_SIDE, FAR_LAMP_H, POLE_DRAW, GRID_N, BUS, BUS_IN,
     INTERIOR_DRAW, BLD_ID,
 } = feature;
 
@@ -457,10 +457,13 @@ fn shadeInterior(p: vec3f, nIn: vec3f, colIn: vec3f, mat: u32, id: u32) -> vec3f
     let s = F.sunDir.xyz;
     var sun = 0.0;
     if (s.y > 0.0 && dot(n, s) > 0.0 && sh.x > 0.002) {
-        let w = throughWindow(b, q, bldDir(b, s));
-        if (w.w > 0.0) {
-            let e = bldWorld(b, w.xyz) + s * 0.1;
-            sun = shadowAt(e).x * structureLight(e, true, false).x;
+        // through the window or open door its ray leaves by, its edges softened by the sun's disc over the way there
+        let ds = bldDir(b, s);
+        let x = bldExit(b, q, ds);
+        if (x.x > -100.0) {
+            let w = 0.01 * x.y + 0.02;
+            let e = bldWorld(b, q + ds * x.y) + s * 0.1;
+            sun = smoothstep(-w, w, x.x) * shadowAt(e).x * structureLight(e, true, false).x;
         }
     }
     let dw = min(b.b.x - abs(q.x), b.b.y - abs(q.z));
@@ -469,8 +472,9 @@ fn shadeInterior(p: vec3f, nIn: vec3f, colIn: vec3f, mat: u32, id: u32) -> vec3f
     let sky = F.ambient.rgb * sh.y * (0.12 + 0.3 * near) * (0.75 + 0.25 * abs(n.y)) + F.sunCol.rgb * max(s.y, 0.0) * sh.x * (0.015 + 0.03 * near);
     let lamp = lampC * 0.13 * lit * (0.35 + 0.65 * sat(n.y * 0.5 + 0.5));
     let alb = colIn * (0.96 + 0.08 * vnoise2(vec2f(q.x + q.z, q.y) * 3.0));
-    // the lights: the shell keeps the street's out (lightSeen), a flashlight carried in lights the room
-    let lp = lampsAt(p + n * 0.02, n, v, 40.0, ${LIGHT_CABIN}u);
+    // the lights: the street's come in through the windows and open doors (lightSeen), a flashlight carried in lights the
+    // room; the lit storeys' are their own lamps (lamp)
+    let lp = lampsAt(p + n * 0.02, n, v, 40.0, ${LIGHT_CABIN | LIGHT_ROOM}u);
     var col = alb * (F.sunCol.rgb * max(dot(n, s), 0.0) * sun + sky + lamp + FLASH_COLOR * flashLit(p) * 0.004 * near + lp.d);
     if (mat == 4u) {
         let r = reflect(-v, n);

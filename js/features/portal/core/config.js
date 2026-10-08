@@ -3,7 +3,12 @@
 
 Features.part('portal', (engine, feature) => {
 const MAX_LIGHTS = 12;                 // point lights per area
-const AREA_FLOATS = 12 + MAX_LIGHTS * 8;
+const MAX_THROUGH = 16;                // lights per area that shine in through portals (world/light-transport.js)
+const THROUGH_FLOATS = 32;             // light (pos radius, colour) + two portal apertures (centre, right, up)
+const LIGHT_DEPTH = 2;                 // portals a light passes on its way into an area
+const SUN_SOFT = 0.01;                 // the sun's penumbra (m) per metre from the aperture
+const SUN_FAR = 1000;                  // how far toward the sun the scene shader puts it, to trace it like a point light
+const AREA_FLOATS = 12 + MAX_LIGHTS * 8 + MAX_THROUGH * THROUGH_FLOATS;
 const MAT_FLOATS = 12;
 const MAX_DRAWS = 4096;
 const DRAW_STRIDE = 256;
@@ -29,7 +34,7 @@ const AXES = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
 const DEFAULT_GLASS = [0.55, 0.7, 0.75, 0.12];
 
 return {
-    MAX_LIGHTS, AREA_FLOATS, MAT_FLOATS, MAX_DRAWS, DRAW_STRIDE, MAX_FOG_PORTALS, DRAW_FLOATS, MAX_LINE_VERTS,
+    MAX_LIGHTS, MAX_THROUGH, THROUGH_FLOATS, LIGHT_DEPTH, SUN_SOFT, SUN_FAR, AREA_FLOATS, MAT_FLOATS, MAX_DRAWS, DRAW_STRIDE, MAX_FOG_PORTALS, DRAW_FLOATS, MAX_LINE_VERTS,
     MAX_POLY_VERTS, POLY_FLOATS, MAX_DEPTH, MAX_ENTRIES, STENCIL, NEAR_PASS, DEPTH_FORMAT, PATTERNS, AXES, DEFAULT_GLASS,
 };
 });

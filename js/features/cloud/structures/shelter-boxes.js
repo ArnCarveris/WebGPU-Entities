@@ -43,10 +43,13 @@ class ShelterBoxes {
 
     // a shader box (see WGSL_SHELTER): frame f around local (ox, oz), half sizes, bottom / top at its centre, sky
     // occlusion under it, slope (m per m along local x), the lowest ground it shades (default: its bottom), and enclosed
-    // (a building's interior: what is inside it is sheltered whichever way the rain blows, blockerRain)
+    // (a building's interior: what is inside it is sheltered whichever way the rain blows, blockerRain). Returns the box:
+    // a building's shell sets its `building` (its id), so light passes its windows and open doors (lightSeen)
     add(f, ox, oz, hx, hz, y0, y1, ao = 0, slope = 0, base = y0, enclosed = false) {
         const [x, z] = f.xz(ox, oz);
-        this.list.push({ x, z, hx, hz, cs: f.cs, sn: f.sn, y0, y1, ao, slope, base, enclosed });
+        const b = { x, z, hx, hz, cs: f.cs, sn: f.sn, y0, y1, ao, slope, base, enclosed, building: -1 };
+        this.list.push(b);
+        return b;
     }
 
     // a roof edge rain runs off (see drip in WGSL): the rectangle around local (ox, oz) in frame f, half sizes hx, hz, at
@@ -74,7 +77,7 @@ class ShelterBoxes {
             this.listed = list;
             this.data ??= new Float32Array(MAX_BLOCKERS * 12);
             this.data.fill(0);
-            list.forEach((b, i) => this.data.set([b.x, b.z, b.hx, b.hz, b.cs, b.sn, b.y0, b.y1, b.ao, b.slope, b.dyn ? 1 : 0, b.enclosed ? 1 : 0], i * 12));
+            list.forEach((b, i) => this.data.set([b.x, b.z, b.hx, b.hz, b.cs, b.sn, b.y0, b.y1, b.ao, b.slope, b.dyn ? 1 : 0, b.building >= 0 ? 2 + b.building : b.enclosed ? 1 : 0], i * 12));
             this.lo = Math.min(...list.map(b => Math.min(b.base, b.y0 - Math.abs(b.slope) * b.hx)));
             this.hi = Math.max(...list.map(b => b.y1 + Math.abs(b.slope) * b.hx));
         }

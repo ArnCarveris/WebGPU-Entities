@@ -8,7 +8,7 @@ const { DEG, clamp, lerp } = Common;
 const { mulberry32 } = kits.noise;
 const { Interior, Origin } = kits.interior;
 const {
-    STRUCT_FLOATS, BUILDING_TYPES, BLD_ID, FURNITURE, FURNITURE_ITEMS, FURNITURE_COLORS, rectMinusHoles,
+    STRUCT_FLOATS, BUILDING_TYPES, BUILDING_DOORS, BLD_ID, FURNITURE, FURNITURE_ITEMS, FURNITURE_COLORS, rectMinusHoles,
     STRUCT_COLORS,
 } = feature;
 
@@ -73,7 +73,7 @@ class Buildings {
         const overlaps = (a, b) => a[0] < b[1] && a[1] > b[0] && a[2] < b[3] && a[3] > b[2];
 
         // openings: the doors, then windows on every storey of the faces that have them (spread evenly, clear of the
-        // corners and the doors: the same layout inWindow in WGSL assumes)
+        // corners and the doors: the same layout openingEdge in WGSL assumes)
         const doors = (T.doors || [{ face: '-z', at: 0 }]).map(d => {
             const w = d.width ?? T.door.width, lim = FACES[d.face].len / 2 - t - 0.2 - w / 2;
             return { face: d.face, w, h: Math.min(d.height ?? T.door.height, H - 0.3), at: clamp(d.at ?? 0, -lim, lim) };
@@ -258,10 +258,11 @@ class Buildings {
         }
         // the shell: enclosed, so nothing falls inside it however the wind blows (unless the archetype says otherwise)
         const roofTop = R.kind !== 'gable' && (R.overhang ?? 0.25) <= 0.5 ? top + (R.thick ?? 0.5) : top;
-        S.boxes.add(f, 0, 0, hx, hz, gLo, roofTop, 0, 0, gLo, T.shelter !== false);
+        S.boxes.add(f, 0, 0, hx, hz, gLo, roofTop, 0, 0, gLo, T.shelter !== false).building = id;     // (light through its openings)
         // (each flight's start and its direction up it, in the world: to walk it in tests and tours)
         const stairs = flights.map(fl => { const [x, z] = fl.fc.o(fl.up ? fl.a0 - 0.6 : fl.a1 + 0.6, fl.d0 + fl.sw / 2); return { at: f.at(x, floor + fl.s * H, z), dir: wdir(fl.up ? fl.fc.U : [-fl.fc.U[0], -fl.fc.U[1]]) }; });
-        const b = { id, f, hx, hz, t, floor, top, n, H, stairs, centre: [f.c[0], floor + n * H / 2, f.c[1]], range: [iv0, S.iv.length / STRUCT_FLOATS],
+        if (doors.length > BUILDING_DOORS) console.warn(`building ${id}: only its first ${BUILDING_DOORS} doors let light through`);
+        const b = { id, f, hx, hz, t, floor, top, n, H, stairs, doors, centre: [f.c[0], floor + n * H / 2, f.c[1]], range: [iv0, S.iv.length / STRUCT_FLOATS],
             record: [f.c[0], f.c[1], f.cs, f.sn, hx, hz, floor, H, n, W.sill, W.height, W.pitch, W.width, t, T.lamps ?? 0.5, faceMask] };
         // its interior (kits.interior): the rooms inside the walls in its own frame (origin on the floor at its centre), seen
         // from outside through its windows and its doors while they are open; a weather shelter unless the archetype says not
@@ -274,6 +275,19 @@ class Buildings {
             lo: [-hx + t, -0.2, -hz + t], hi: [hx - t, top - floor, hz - t], portals, shelter: T.shelter !== false }));
         this.list.push(b);
         return { id, floor, top };
+    }
+
+    // its GPU record (WGSL_BUILDING): the static part, then each door (BUILDING_DOORS) as it stands now: [face (1 -z,
+    // 2 +z, 3 -x, 4 +x; 0 none) + how far its leaf has swung (0..1; 0 shut), its centre along the face's local axis (x
+    // for the z faces, z for the x ones), width, height]. Its leaf is hinged at the low end of that axis on the -z and +x
+    // faces, at the high end on the others (Buildings.add)
+    record(b) {
+        const doors = new Array(BUILDING_DOORS * 4).fill(0);
+        b.doors.slice(0, BUILDING_DOORS).forEach((d, i) => {
+            const face = { '-z': 1, '+z': 2, '-x': 3, '+x': 4 }[d.face];
+            doors.splice(i * 4, 4, face + Math.min(d.leaf.open, 0.999), face === 1 || face === 4 ? d.at : -d.at, d.w, d.h);
+        });
+        return [...b.record, ...doors];
     }
 
     // the building p is inside (its interior), or null: the few buildings in p's cell of the InteriorIndex, O(1)

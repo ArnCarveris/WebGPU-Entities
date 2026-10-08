@@ -197,7 +197,7 @@ js/engine/
 js/kits/<kit>/              generic building blocks, not any one feature's (Features.kit), loaded with the first
                             feature that lists them in Features.USES (the engine's: Features.ENGINE_KITS, at boot);
                             their exports are engine.kits.<kit> (Features.kits)
-    noise/                  seeded random (mulberry32, seededRandom, hashes), value noise 2D / 3D, fbm with options,
+    noise/                  seeded random (mulberry32, seededRandom, hashes, pcg / pcgRandom as WGSL's), value noise 2D / 3D, fbm with options,
                             ridged multifractal; NoiseWGSL: the shaders' hashes, value noise (± gradient), fbm and
                             tileable Perlin / Worley, each under the name its shader calls it (the gui kit's included)
     gpu/                    StencilLayout: a depth-stencil target's bits shared out by name. Users reserve slots
@@ -232,7 +232,7 @@ js/kits/<kit>/              generic building blocks, not any one feature's (Feat
                             feature's own entity base (securityCamera(Base), door(Base) mixins): security cameras
                             (pan sweep / speed / phase; portal, gui), doors (open / target / speed, auto with radius
                             and delay, locked, toggle / setOpen / status; portal, gui), LightSource (signal flicker /
-                            pulse, roomLights, door dimming, alarmColor; portal's lights, gui's light), spinAngle
+                            pulse, roomLights, door dimming, alarmColor, size; portal's lights, gui's light), spinAngle
                             (prop spin in rpm or deg/s; origin, imposter), drone(Base) (a `center` + `radius` patrol
                             loop or wandering a route its feature plans, waiting at closed gates; bob, facing, pingEvery,
                             a riding `light` with ahead / drop; portal, gui). A new option goes here, not in a feature

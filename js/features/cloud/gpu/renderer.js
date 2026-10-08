@@ -149,8 +149,9 @@ class Renderer {
         const dm = S.doors.mesh();
         this.doorV = { n: dm.length / STRUCT_FLOATS, buf: dm.length ? makeBuffer(d, dm.length * 4, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST, new Float32Array(dm)) : null };
         const rec = new Float32Array(Math.max(1, S.buildings.list.length) * BUILDING_FLOATS);
-        S.buildings.list.forEach((b, i) => rec.set(b.record, i * BUILDING_FLOATS));
-        this.buildingBuf = makeBuffer(d, rec.byteLength, GPUBufferUsage.STORAGE, rec);
+        S.buildings.list.forEach((b, i) => rec.set(S.buildings.record(b), i * BUILDING_FLOATS));
+        this.buildingBuf = makeBuffer(d, rec.byteLength, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST, rec);
+        this.buildingRec = rec;
         this.interiorDraws = [];
         // the distant lights: the static ones (World.buildFarLights), then MAX_FAR_DYN slots for the buses' (LightWriter.writeFar)
         this.farBuf?.destroy();
@@ -183,6 +184,12 @@ class Renderer {
 
     // the door leaves as they stand now (Doors.mesh, same size every time)
     writeDoors(mesh) { if (this.doorV.buf) this.device.queue.writeBuffer(this.doorV.buf, 0, new Float32Array(mesh)); }
+
+    // the buildings' records again (their doors moved: the light through them, WGSL_BUILDING)
+    writeBuildings(B) {
+        B.list.forEach((b, i) => this.buildingRec.set(B.record(b), i * BUILDING_FLOATS));
+        this.device.queue.writeBuffer(this.buildingBuf, 0, this.buildingRec);
+    }
 
     resize(scale) {
         const [w, h] = this.fx.size();

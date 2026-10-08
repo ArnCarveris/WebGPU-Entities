@@ -188,7 +188,7 @@
         },
         {
             "type": "portal.area", "id": "atrium", "name": "Atrium", "shape": [[4,22],[14,22],[14,34],[4,34]], "y": 0, "height": 8, "ambient": [0.07,0.08,0.1],
-            "sun": 0.35, "fog": [0.35,0.4,0.45,0.006], "hub": [7,2.2,26], "materials": {"floor":"tiles","wall":"plaster","ceiling":"panel"}
+            "fog": [0.35,0.4,0.45,0.006], "hub": [7,2.2,26], "materials": {"floor":"tiles","wall":"plaster","ceiling":"panel"}
         },
         {
             "type": "portal.area", "id": "storage", "name": "Storage", "shape": [[4,11],[14,11],[14,19],[4,19]], "y": 0, "height": 3,
@@ -232,7 +232,7 @@
         },
         {
             "type": "portal.area", "id": "ship_bridge", "name": "Freighter Bridge", "shape": [[52,-4],[58,-4],[58,3],[52,3]], "y": 8, "height": 3,
-            "ambient": [0.03,0.035,0.04], "sun": 0.15, "terrain": false, "nav": false,
+            "ambient": [0.03,0.035,0.04], "terrain": false, "nav": false,
             "materials": {"floor":"woodfloor","wall":"shipwall","ceiling":"panel","exterior":"shipwhite","roof":"shipdeck"}
         },
         {"type":"portal.portal","id":"p_entry","kind":"door","center":[0,1.4,0],"size":[2.2,2.8],"normal":[0,0,1]},

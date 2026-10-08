@@ -4,7 +4,7 @@
 Features.part('portal', (engine, feature) => {
 const { kits } = engine;
 const { NoiseWGSL } = kits.noise;
-const { MAX_LIGHTS, MAX_FOG_PORTALS } = feature;
+const { MAX_LIGHTS, MAX_THROUGH, MAX_FOG_PORTALS, SUN_FAR } = feature;
 
 // WGSL sources. The scene shader indexes the per-area lighting table and the material table (storage
 // buffers) with the draw's area and each vertex's material id.
@@ -15,7 +15,11 @@ struct Globals {
     skyTop: vec4f, skyHorizon: vec4f, params: vec4f,
 };
 struct Light { posRad: vec4f, color: vec4f };
-struct Area { ambient: vec4f, fog: vec4f, info: vec4f, lights: array<Light, ${MAX_LIGHTS}> };
+// a light shining in through portals (world/light-transport.js): posRad.w = 0 is the sun; ap = up to two apertures
+// (centre, right and up half extents) it must pass, ap[0].w = the emitter's size, ap[1].w = how many apertures
+struct Through { posRad: vec4f, color: vec4f, ap: array<vec4f, 6> };
+// info: x = sun amount, y = own lights, z = lights through portals
+struct Area { ambient: vec4f, fog: vec4f, info: vec4f, lights: array<Light, ${MAX_LIGHTS}>, through: array<Through, ${MAX_THROUGH}> };
 struct Material { albedo: vec4f, params: vec4f, emissive: vec4f };
 @group(0) @binding(0) var<uniform> G: Globals;
 @group(0) @binding(1) var<storage, read> areas: array<Area>;
@@ -155,6 +159,21 @@ fn surface(m: Material, lp: vec3f, n: vec3f) -> vec4f {
     return vec4f(col, em);
 }
 
+// how much of a light at L reaches p through a portal aperture (centre c, half extents r, u): the segment from p to L
+// must cross it. Its edges cast a penumbra as wide as an emitter of that size at L makes it at p
+fn aperture(p: vec3f, L: vec3f, c: vec3f, r: vec3f, u: vec3f, size: f32) -> f32 {
+    let n = normalize(cross(r, u));
+    let sp = dot(p - c, n);
+    let sl = dot(L - c, n);
+    if (sp * sl > 0.0 || abs(sp - sl) < 1e-5) { return 0.0; }
+    let h = p + (L - p) * (sp / (sp - sl)) - c;
+    let rl = max(length(r), 1e-4);
+    let ul = max(length(u), 1e-4);
+    let edge = min(rl - abs(dot(h, r)) / rl, ul - abs(dot(h, u)) / ul);
+    let w = size * abs(sp) / max(abs(sl), 1e-3) + 0.01;
+    return smoothstep(-w, w, edge);
+}
+
 @fragment fn fs(i: VOut) -> @location(0) vec4f {
     let m = mats[i.mat];
     let ai = u32(D.info.x);
@@ -181,6 +200,32 @@ fn surface(m: Material, lp: vec3f, n: vec3f) -> vec4f {
         let ndl = max(dot(N, L), 0.0);
         let H = normalize(L + V);
         col += (albedo + vec3f(pow(max(dot(N, H), 0.0), 32.0) * m.params.y)) * ndl * lc.rgb * lc.w * att;
+    }
+    // lights of the areas behind the portals, and the sun through them: only along rays through their apertures
+    let through = u32(areas[ai].info.z);
+    for (var k = 0u; k < through; k++) {
+        let T = areas[ai].through[k];
+        var lc = T.color.rgb * T.color.w;
+        var L = normalize(G.sunDir.xyz);
+        var lp = i.wpos + L * ${SUN_FAR}.0;
+        var att = 1.0;
+        var shine = 48.0;
+        if (T.posRad.w > 0.0) {
+            lp = T.posRad.xyz;
+            let dv = lp - i.wpos;
+            let dist = length(dv);
+            L = dv / max(dist, 1e-4);
+            att = pow(clamp(1.0 - dist / T.posRad.w, 0.0, 1.0), 2.0);
+            shine = 32.0;
+        } else {
+            lc *= G.sunColor.rgb;
+        }
+        let ndl = max(dot(N, L), 0.0);
+        if (ndl * att <= 0.0) { continue; }
+        var vis = aperture(i.wpos, lp, T.ap[0].xyz, T.ap[1].xyz, T.ap[2].xyz, T.ap[0].w);
+        if (T.ap[1].w > 1.5) { vis *= aperture(i.wpos, lp, T.ap[3].xyz, T.ap[4].xyz, T.ap[5].xyz, T.ap[0].w); }
+        let H = normalize(L + V);
+        col += (albedo + vec3f(pow(max(dot(N, H), 0.0), shine) * m.params.y)) * ndl * lc * att * vis;
     }
     col += m.emissive.rgb * m.emissive.w * s.a;
     return vec4f(tonemap(applyFog(col, i.wpos, areas[ai].fog)), 1.0);

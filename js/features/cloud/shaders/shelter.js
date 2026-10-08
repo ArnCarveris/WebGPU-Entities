@@ -2,7 +2,7 @@
 // WGSL for structures in the shaders: boxes that shade sun and rain, lamps, buildings and the bus cabin.
 
 Features.part('cloud', (engine, feature) => {
-const { BLOCK_GRID, LIGHT_GRID, LIGHT_SPOT, BUS_LEAF } = feature;
+const { BLOCK_GRID, LIGHT_GRID, LIGHT_SPOT, LIGHT_ROOM, BUS_LEAF } = feature;
 
 // needs F. Structures (houses, the bus stop, bridge decks) stand in the shaders as up to MAX_BLOCKERS boxes, each turned
 // by its yaw and sheared along its local x by a slope (bridge decks follow their arch). Box k in F.blockers:
@@ -129,8 +129,9 @@ fn cabinSpan(o: vec3f, d: vec3f) -> vec2f {
 }
 
 // The lights (LightWriter.write): street lamps, porch lights and the bus station's canopy by night, the buses' headlights,
-// tail lights and cabin glow, and the flashlight. Light k at p: its intensity over the distance squared, windowed to 0 at
-// its range, inside its cone for a spot; *l is the unit direction to it. No shadows (lightSeen)
+// tail lights and cabin glow, the lit rooms of the buildings near, and the flashlight. Light k at p: its intensity over
+// the distance squared, windowed to 0 at its range, inside its cone for a spot; *l is the unit direction to it. Shadows:
+// lightSeen
 fn lightAt(k: i32, p: vec3f, l: ptr<function, vec3f>) -> vec3f {
     let A = F.lights[k * 4];
     let d = A.xyz - p;
@@ -150,24 +151,33 @@ fn lightAt(k: i32, p: vec3f, l: ptr<function, vec3f>) -> vec3f {
     return B.rgb * a;
 }
 
-// no box between p and light k blocks it: the boxes it can reach (F.lightMask), entered between the two, or an enclosed
-// one (a building's shell) that holds p but not the light, so walls keep the street lamps out of the rooms and a flashlight
-// in a room in it
-fn lightSeen(k: i32, p: vec3f) -> bool {
-    let L = F.lights[k * 4].xyz - p;
+// how much of light k reaches p past the boxes it can reach (F.lightMask): one entered between the two blocks it, as does
+// an enclosed one that holds p but not the light; but where a building's shell (blockers .w = 2 + its id) has p on one
+// side and the light on the other, the light passes its windows and open doors (bldPass, WGSL_BUILDING): the street lamps
+// and headlights shine into the rooms through them, a lit room or a flashlight in it out onto the street
+fn lightSeen(k: i32, p: vec3f) -> f32 {
+    let A = F.lights[k * 4].xyz;
+    let L = A - p;
     let eps = 0.02 / max(length(L), 0.05);
+    let size = sqrt(F.lights[k * 4 + 3].y);
     let m = F.lightMask[k];
+    var vis = 1.0;
     for (var w = 0u; w < 4u; w++) {
         var bits = m[w];
         while (bits != 0u) {
             let b = i32(w * 32u + countTrailingZeros(bits));
             bits &= bits - 1u;
             let s = blockerSpan(b, p, L);
-            if (s.x > eps && s.x <= s.y && s.x < 1.0) { return false; }
-            if (F.blockers[b * 3 + 2].w > 0.5 && s.x < 0.0 && s.y > 0.0 && s.y < 1.0) { return false; }
+            let encl = F.blockers[b * 3 + 2].w;
+            let into = s.x > eps && s.x <= s.y && s.x < 1.0;                 // entered on the way to the light
+            let held = encl > 0.5 && s.x < 0.0 && s.y > 0.0 && s.y < 1.0;     // holds p, not the light
+            if (!into && !held) { continue; }
+            if (encl < 1.5 || (into && s.y < 1.0)) { return 0.0; }          // not a shell, or in and out of it again
+            vis *= bldPass(u32(encl - 1.5), select(A, p, held), select(p, A, held), size, !held);
+            if (vis <= 0.0) { return 0.0; }
         }
     }
-    return true;
+    return vis;
 }
 
 // what the lights give a surface at p (normal n, the view reflected about it r): diffuse irradiance (d) and a normalized
@@ -187,10 +197,11 @@ fn lampsAt(p: vec3f, n: vec3f, v: vec3f, shin: f32, skip: u32) -> Lamps {
             let c = lightAt(k, p, &l);
             let nl = dot(n, l);
             if (nl <= 0.0 || c.r + c.g + c.b < 1e-5) { continue; }
-            if (!lightSeen(k, p)) { continue; }
-            o.d += c * nl;
+            let seen = lightSeen(k, p);
+            if (seen <= 0.0) { continue; }
+            o.d += c * nl * seen;
             let h = normalize(l + v);
-            o.s += c * nl * pow(max(dot(n, h), 0.0), shin) * (shin + 8.0) / (8.0 * PI);
+            o.s += c * nl * seen * pow(max(dot(n, h), 0.0), shin) * (shin + 8.0) / (8.0 * PI);
         }
     }
     return o;
@@ -207,7 +218,8 @@ fn lightCell(p: vec3f) -> vec2u {
 }
 
 // the lights on a raindrop, snowflake or splash at p (seen from the camera): rain scatters forward, so drops between the eye
-// and a lamp glow. Not shadowed (the particles under roofs are gone already); lights far from the camera are skipped
+// and a lamp glow. Not shadowed (the particles under roofs are gone already), so not the lit rooms (only their windows
+// let their light out); lights far from the camera are skipped
 fn lampsOnDrop(p: vec3f) -> vec3f {
     var o = vec3f(0.0);
     let e = normalize(F.cam.xyz - p);
@@ -217,6 +229,7 @@ fn lampsOnDrop(p: vec3f) -> vec3f {
         while (bits != 0u) {
             let k = i32(w * 32u + countTrailingZeros(bits));
             bits &= bits - 1u;
+            if ((u32(F.lights[k * 4 + 3].x) & ${LIGHT_ROOM}u) != 0u) { continue; }
             var l = vec3f(0.0, 1.0, 0.0);
             let c = lightAt(k, p, &l);
             o += c * (0.06 + 1.2 * hg(dot(-l, e), 0.6));
@@ -261,13 +274,14 @@ fn coneSpan(A: vec3f, D: vec3f, ce: f32, ro: vec3f, dir: vec3f, ta: f32, tb: f32
 // passes nearest the light for a wide light, and sampled equiangularly for a narrow beam (dense near the light; jit
 // staggers the samples per pixel, the march's history averages them). Not shadowed: the chord ends at the surface in the
 // pixel, so a lamp behind a wall adds only the far tail of its halo, which is faint (and in rain the drops round a corner
-// do glow)
+// do glow). Not the lit rooms: their light is outside only past their windows
 fn lampScatter(ro: vec3f, dir: vec3f, tEnd: f32, jit: f32) -> vec3f {
     let sigma = F.lightInfo.w;
     if (sigma <= 0.0) { return vec3f(0.0); }
     var o = vec3f(0.0);
     let cnt = i32(F.lightInfo.x);
     for (var k = 0; k < cnt; k++) {
+        if ((u32(F.lights[k * 4 + 3].x) & ${LIGHT_ROOM}u) != 0u) { continue; }
         let A = F.lights[k * 4];
         let oc = A.xyz - ro;
         let tc = dot(oc, dir);
@@ -311,14 +325,16 @@ fn lampScatter(ro: vec3f, dir: vec3f, tEnd: f32, jit: f32) -> vec3f {
 }
 `;
 
-// needs F, buildings. Building `id` (Buildings.add) in buildings[id * 4 ..]:
+// needs F, buildings. Building `id` (Buildings.add) in buildings[id * 6 ..]:
 //   [centre x, z, cos yaw, sin yaw] [half size x, z, floor (m), storey height] [storeys, sill, window height, pitch]
 //   [window width, wall thickness, share of storeys lit, faces with windows (bits: 1 -z, 2 +z, 4 -x, 8 +x)]
+//   two doors as they stand (Buildings.record): [face 1..4 (-z +z -x +x; 0 none) + its leaf's swing 0..1, centre along
+//   the face's local axis, width, height]
 // Its interior, glass and door vertices carry material + id * BLD_ID. All of it is O(1) per pixel: the window pattern is
-// a formula (the same one the mesh was built with), so the sun through a window is one box exit.
+// a formula (the same one the mesh was built with), so the light through a window or a door is one box exit.
 const WGSL_BUILDING = /* wgsl */`
-struct Bld { a: vec4f, b: vec4f, c: vec4f, d: vec4f };
-fn bld(id: u32) -> Bld { let k = id * 4u; return Bld(buildings[k], buildings[k + 1u], buildings[k + 2u], buildings[k + 3u]); }
+struct Bld { a: vec4f, b: vec4f, c: vec4f, d: vec4f, e: vec4f, f: vec4f };
+fn bld(id: u32) -> Bld { let k = id * 6u; return Bld(buildings[k], buildings[k + 1u], buildings[k + 2u], buildings[k + 3u], buildings[k + 4u], buildings[k + 5u]); }
 
 // world to the building's frame (local x along (cos, sin), z along (-sin, cos), y stays the world height), and back
 fn bldLocal(b: Bld, p: vec3f) -> vec3f { let r = p.xz - b.a.xy; return vec3f(r.x * b.a.z + r.y * b.a.w, p.y, -r.x * b.a.w + r.y * b.a.z); }
@@ -327,35 +343,72 @@ fn bldWorld(b: Bld, q: vec3f) -> vec3f { return vec3f(b.a.x + q.x * b.a.z - q.z 
 fn bldCentre(b: Bld) -> vec3f { return vec3f(b.a.x, b.b.z + b.c.x * b.b.w * 0.5, b.a.y); }
 fn bldStorey(b: Bld, y: f32) -> f32 { return clamp(floor((y - b.b.z) / b.b.w), 0.0, b.c.x - 1.0); }
 
-// the lamps of storey s are on: a share of the storeys (b.d.z), picked by a hash
+// the lamps of storey s are on: a share of the storeys (b.d.z), picked by a hash (LightWriter.roomLights picks the same)
 fn storeyLit(id: u32, b: Bld, s: f32) -> f32 { return select(0.0, 1.0, rnd(id * 131u + u32(s) * 7u + 3u) < b.d.z); }
 
-// u along a wall len m long, yr above its storey's floor, is in a window: they are spread evenly over the wall, keeping
-// clear of its corners (as Buildings.add lays them out)
-fn inWindow(b: Bld, u: f32, len: f32, yr: f32) -> bool {
-    let usable = len - 2.0 * (b.d.y + 0.2);
-    let nw = max(1.0, floor(usable / b.c.w));
-    let cell = usable / nw;
-    let k = (u + usable * 0.5) / cell;
-    return k >= 0.0 && k < nw && abs(fract(k) - 0.5) * cell < b.d.x * 0.5 && yr > b.c.y && yr < b.c.y + b.c.z;
+// how far (m) x along face f (1 -z, 2 +z, 3 -x, 4 +x; x is local x on the z faces, local z on the x ones), yr above the
+// floor of storey s, is inside an opening of it, negative outside them all: its windows, spread evenly over it clear of
+// its corners and, on the ground floor, of its doors (as Buildings.add lays them out), and its doors as their leaves
+// stand (one swung by a hides cos a of its width from its hinge, seen square on)
+fn openingEdge(b: Bld, f: f32, x: f32, yr: f32, s: f32) -> f32 {
+    var e = -1e3;
+    let usable = select(2.0 * b.b.y, 2.0 * b.b.x, f < 2.5) - 2.0 * (b.d.y + 0.2);
+    if ((u32(b.d.w + 0.5) & (1u << u32(f - 1.0))) != 0u && usable >= b.d.x) {
+        let nw = max(1.0, floor(usable / b.c.w));
+        let cell = usable / nw;
+        let uc = -usable * 0.5 + (clamp(floor((x + usable * 0.5) / cell), 0.0, nw - 1.0) + 0.5) * cell;
+        var skip = false;
+        if (s == 0.0) {
+            for (var i = 0; i < 2; i++) {
+                let r = select(b.f, b.e, i == 0);
+                if (floor(r.x) == f && abs(uc - r.y) < (r.z + b.d.x) * 0.5 + 0.25) { skip = true; }
+            }
+        }
+        if (!skip) { e = min(b.d.x * 0.5 - abs(x - uc), min(yr - b.c.y, b.c.y + b.c.z - yr)); }
+    }
+    if (s == 0.0) {
+        for (var i = 0; i < 2; i++) {
+            let r = select(b.f, b.e, i == 0);
+            let open = fract(r.x);
+            if (floor(r.x) != f || open <= 0.0) { continue; }
+            let cover = r.z * cos(open * ${(95 * Math.PI / 180).toFixed(5)});
+            let low = f == 1.0 || f == 4.0;
+            let x0 = r.y - r.z * 0.5 + select(0.0, cover, low);
+            let x1 = r.y + r.z * 0.5 - select(cover, 0.0, low);
+            e = max(e, min(min(x - x0, x1 - x), min(yr, r.w - yr)));
+        }
+    }
+    return e;
 }
 
-// the ray from q (building frame, inside) along local d leaves the building through a window of q's own storey (the floors
-// above and below it are in the way of the others): xyz where it leaves, w 1 if through glass
-fn throughWindow(b: Bld, q: vec3f, d: vec3f) -> vec4f {
+// where the ray from q (building frame, inside its shell) along d leaves the shell: x how far into the opening it leaves
+// by (openingEdge: a window of q's own storey or a ground floor door; the floors and the roof are in the way of the rest,
+// -1e3), y the multiple of d to there
+fn bldExit(b: Bld, q: vec3f, d: vec3f) -> vec2f {
     let lo = vec3f(-b.b.x, b.b.z, -b.b.y);
     let hi = vec3f(b.b.x, b.b.z + b.c.x * b.b.w, b.b.y);
     let inv = 1.0 / select(d, vec3f(1e-6), abs(d) < vec3f(1e-6));
     let t = max((lo - q) * inv, (hi - q) * inv);
     let te = min(t.x, min(t.y, t.z));
     let e = q + d * te;
-    let yr = e.y - b.b.z - bldStorey(b, q.y) * b.b.w;
-    if (te == t.y || yr < 0.0 || yr > b.b.w) { return vec4f(e, 0.0); }
-    let faces = u32(b.d.w + 0.5);
-    var hit = false;
-    if (te == t.x) { hit = inWindow(b, e.z, 2.0 * b.b.y, yr) && (faces & select(4u, 8u, d.x > 0.0)) != 0u; }
-    else { hit = inWindow(b, e.x, 2.0 * b.b.x, yr) && (faces & select(1u, 2u, d.z > 0.0)) != 0u; }
-    return vec4f(e, select(0.0, 1.0, hit));
+    let s = bldStorey(b, q.y);
+    let yr = e.y - b.b.z - s * b.b.w;
+    if (te == t.y || yr < 0.0 || yr > b.b.w) { return vec2f(-1e3, te); }
+    if (te == t.x) { return vec2f(openingEdge(b, select(3.0, 4.0, d.x > 0.0), e.z, yr, s), te); }
+    return vec2f(openingEdge(b, select(1.0, 2.0, d.z > 0.0), e.x, yr, s), te);
+}
+
+// how much of a light passes the shell of building id between pi (inside it) and po (outside): what the opening the
+// segment leaves by lets through, its edges as soft as an emitter of that size (m) at the light's end makes them (srcIn:
+// the light is the inside end)
+fn bldPass(id: u32, pi: vec3f, po: vec3f, size: f32, srcIn: bool) -> f32 {
+    let b = bld(id);
+    let q = bldLocal(b, pi);
+    let x = bldExit(b, q, bldLocal(b, po) - q);
+    if (x.y >= 1.0) { return 1.0; }
+    if (x.x < -100.0) { return 0.0; }
+    let w = size * select(x.y / max(1.0 - x.y, 1e-3), (1.0 - x.y) / max(x.y, 1e-3), srcIn) + 0.02;
+    return smoothstep(-w, w, x.x);
 }
 
 // what a lamp-lit room adds to a window seen from outside

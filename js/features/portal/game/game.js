@@ -169,7 +169,7 @@ class Game {
         this.media.frame(now);
 
         const lines = this.debugLines.build(vis, o, o.freeze ? this.frozen : null, player.cam.fov);
-        R.render({ globals: this.globals(viewProj, eye, t, W, H, mode === 'stencil'), areas: w.lightingTable(t), draws: fr.draws, cmds: fr.cmds, polys: fr.polys, stencil: mode === 'stencil', lines: lines.data, lineDepthCount: lines.depthCount });
+        R.render({ globals: this.globals(viewProj, eye, t, W, H, mode === 'stencil'), areas: w.lightingTable(t, eye), draws: fr.draws, cmds: fr.cmds, polys: fr.polys, stencil: mode === 'stencil', lines: lines.data, lineDepthCount: lines.depthCount });
 
         if (o.map) this.minimap.draw(vis);
         this.hud.tick(now, vis);
@@ -186,7 +186,7 @@ class Game {
         const fr = this.viewBuilder.build(vis, mode, W, H);
         this.buildScreens(this.viewBuilder.stamp, this.frameNow);
         this.renderer.render({
-            globals: this.globals(viewProj, s.eye, t, W, H, mode === 'stencil'), areas: w.lightingTable(t), draws: fr.draws, cmds: fr.cmds,
+            globals: this.globals(viewProj, s.eye, t, W, H, mode === 'stencil'), areas: w.lightingTable(t, s.eye), draws: fr.draws, cmds: fr.cmds,
             polys: fr.polys, stencil: mode === 'stencil', lines: NO_LINES, lineDepthCount: 0,
         }, target);
     }
@@ -232,11 +232,11 @@ class Game {
     // Globals uniform: view-projection (+ inverse), eye, sun, sky colours, time, viewport and whether the
     // scene shader fogs through portals (stencil mode)
     globals(viewProj, eye, t, W, H, portalFog) {
-        const sc = this.world.scn.outdoor || {}, g = new Float32Array(56);
+        const w = this.world, sc = w.scn.outdoor || {}, g = new Float32Array(56);
         g.set(viewProj, 0);
         g.set(m4.invert(viewProj), 16);
         g.set([eye[0], eye[1], eye[2], 1], 32);
-        g.set([...v3.norm(sc.sunDir || [0.4, 0.8, 0.3]), 0], 36);
+        g.set([...v3.norm(w.sunDir), 0], 36);
         g.set([...(sc.sunColor || [1.2, 1.1, 1.0]), 1], 40);
         g.set([...(sc.skyTop || [0.3, 0.55, 1.3]), 1], 44);
         g.set([...(sc.skyHorizon || [1.0, 1.15, 1.35]), 1], 48);

@@ -6,7 +6,7 @@ const { Common } = engine;
 const { smoothstep, makeBuffer, bindLayout, bindGroup } = Common;
 const {
     NOISE_SHAPE, NOISE_DETAIL, OCC_RES, CLOUD_TILE, WEATHER_RES, SHADOW_RES, GROUND_RES, FROXEL, fromHalf, FrameBlock,
-    BindingSet, WGSL_MATH, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_DENSITY, WGSL_SHADOW_SAMPLE, WGSL_SHELTER,
+    BindingSet, WGSL_MATH, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_DENSITY, WGSL_SHADOW_SAMPLE, WGSL_SHELTER, WGSL_BUILDING,
     WGSL_OCCUPANCY, WGSL_NOISE, WGSL_WEATHER, WGSL_SHADOW, WGSL_GROUND, WGSL_FROXEL, WGSL_SKIP_SAMPLE, WGSL_TILES,
     WGSL_MARCH, WGSL_RESOLVE, WGSL_TERRAIN,
 } = feature;
@@ -192,7 +192,7 @@ class CloudPass {
         this.resolveIO = bindLayout(d, C, ['tex', 'tex:unfilterable-float', 'tex', 'write:rgba16float']);
         const rSet = new BindingSet(d, ['F', 'clampSamp']);
         this.pMarch = computePipeline(d, 'march', [r.worldSet.layout, this.marchOut],
-            shaderSource(r.worldSet, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_DENSITY, WGSL_SHADOW_SAMPLE, WGSL_SKIP_SAMPLE, WGSL_SHELTER, WGSL_TERRAIN, WGSL_MARCH), 'march');
+            shaderSource(r.worldSet, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_DENSITY, WGSL_SHADOW_SAMPLE, WGSL_SKIP_SAMPLE, WGSL_SHELTER, WGSL_BUILDING, WGSL_TERRAIN, WGSL_MARCH), 'march');
         this.tileOut = bindLayout(d, C, ['write:rg32uint']);
         this.pTiles = computePipeline(d, 'tiles', [r.worldSet.layout, this.tileOut],
             shaderSource(r.worldSet, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_DENSITY, WGSL_SKIP_SAMPLE, WGSL_TILES), 'tiles');

@@ -21,7 +21,7 @@ class DoorControl {
             wk.aim = door;
             wk.prompt = door ? `E ${door.target > 0.5 ? 'shut' : 'open'} the door` : '';
         }
-        if (S.doors.update(dt)) a.renderer.writeDoors(S.doors.mesh());
+        if (S.doors.update(dt)) { a.renderer.writeDoors(S.doors.mesh()); a.renderer.writeBuildings(S.buildings); }
     }
 }
 

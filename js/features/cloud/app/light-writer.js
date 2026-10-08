@@ -6,8 +6,10 @@ Features.part('cloud', (engine, feature) => {
 const { Common, kits } = engine;
 const { DEG, clamp, smoothstep, v3 } = Common;
 const { GridHash } = kits.interior;
+const { pcgRandom } = kits.noise;
 const {
-    MAX_LIGHTS, LIGHT_GRID, MAX_POLES, MAX_FAR_DYN, FAR_FLOATS, LIGHT_RANGE, LIGHT_CABIN, LIGHT_SPOT, POLE_DRAW,
+    MAX_LIGHTS, LIGHT_GRID, MAX_POLES, MAX_FAR_DYN, FAR_FLOATS, LIGHT_RANGE, LIGHT_CABIN, LIGHT_SPOT, LIGHT_ROOM, ROOM_LIGHTS,
+    ROOM_RANGE, POLE_DRAW,
     GLOW_GAIN, LAMPS, ShelterBoxes, Structures,
 } = feature;
 
@@ -22,7 +24,8 @@ class LightWriter {
         this.farDyn = new Float32Array(MAX_FAR_DYN * FAR_FLOATS);
     }
 
-    // The lights (lightAt in WGSL): the flashlight (L) first, then by night the structures' lamps and the buses' lights,
+    // The lights (lightAt in WGSL): the flashlight (L) first, then by night the structures' lamps, the lit rooms of the
+    // buildings near (roomLights) and the buses' lights,
     // nearest the camera first (by the distance to the edge of their reach), at most MAX_LIGHTS. They fade out toward
     // the furthest one taken, so none pops in or out. Their intensities are adapted to the exposure, as the eye adapts to
     // lamps. Each lists the frame's boxes (ShelterBoxes.write) that can stand between it and what it lights: all those
@@ -37,6 +40,7 @@ class LightWriter {
         }
         if (night) {
             all.push(...this.nearLamps(w.structures.fixtures.lights, cam));
+            this.roomLights(w.structures.buildings, cam, all);
             w.nearFakeLamps(cam, LIGHT_RANGE + LAMPS.sodium.range, all);    // the fake street lamps near: real lights now
             // the buses within reach (the InteriorIndex, not every bus), in their order
             const buses = w.structures.interiors.near(cam, LIGHT_RANGE + 80, 'vehicle').map(it => it.owner).sort((p, q) => p.slot - q.slot);
@@ -51,7 +55,7 @@ class LightWriter {
         const boxes = w.structures.boxes.listed || [];
         list.slice(0, MAX_LIGHTS).forEach(([dist, l], i) => {
             const k = l.intensity * adapt * (1 - smoothstep(cut * 0.7, cut, dist)), c = l.cone;
-            data.set([...l.pos, l.range, ...l.color.map(x => x * k), c ? c[0] : -2, ...l.dir, c ? c[1] : 1, (l.cabin ? LIGHT_CABIN : 0) | (c ? LIGHT_SPOT : 0), (l.size ?? 0.5) ** 2], i * 16);
+            data.set([...l.pos, l.range, ...l.color.map(x => x * k), c ? c[0] : -2, ...l.dir, c ? c[1] : 1, (l.cabin ? LIGHT_CABIN : 0) | (c ? LIGHT_SPOT : 0) | (l.room ? LIGHT_ROOM : 0), (l.size ?? 0.5) ** 2], i * 16);
             boxes.forEach((b, j) => {
                 const e = Math.hypot(b.hx, b.hz), sl = Math.abs(b.slope) * b.hx;
                 if (Math.hypot(b.x - l.pos[0], b.z - l.pos[2]) > l.range + e) return;
@@ -87,6 +91,26 @@ class LightWriter {
         F.setBits('lightMask', mask);
         F.set('lightInfo', [Math.min(list.length, MAX_LIGHTS), night ? 1 : 0, cut, sigma]);
         this.writeFar(F, night, adapt);
+    }
+
+    // the lit storeys of the buildings within ROOM_RANGE of the camera (the InteriorIndex, not every building), nearest
+    // first, at most ROOM_LIGHTS: each a light under its ceiling as wide as the room (LAMPS.room), that the building's
+    // shell lets out only through its windows and open doors (lightSeen); its own surfaces have their lamps (LIGHT_ROOM).
+    // Lit as storeyLit in WGSL picks them
+    roomLights(B, cam, out) {
+        const L = LAMPS.room, near = [];
+        for (const it of B.S.interiors.near(cam, ROOM_RANGE, 'building')) {
+            const b = it.owner, d = Math.hypot(b.centre[0] - cam[0], b.centre[2] - cam[2]);
+            if (d < ROOM_RANGE) near.push([d, b]);
+        }
+        near.sort((p, q) => p[0] - q[0] || p[1].id - q[1].id);
+        let n = 0;
+        for (const [, b] of near) for (let s = 0; s < b.n && n < ROOM_LIGHTS; s++) {
+            if (pcgRandom(b.id * 131 + s * 7 + 3) >= b.record[14]) continue;
+            out.push({ pos: b.f.at(0, b.floor + (s + 1) * b.H - 0.5, 0), dir: [0, -1, 0], color: L.color, intensity: L.intensity,
+                range: Math.max(b.hx, b.hz) + L.range, size: L.size * Math.min(b.hx, b.hz), room: true });
+            n++;
+        }
     }
 
     // the structures' lamps that can reach within LIGHT_RANGE of the camera, in the order they were built: from a GridHash

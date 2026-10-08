@@ -344,11 +344,13 @@ building's own spec (size, storeys, colours, roof, doors). A village's houses ta
   windows are opaque panes (`fsPane`) that reflect the sky. Over the last 40 m before that distance the glass blends into
   the pane, so the switch does not show. Both tests use the distance to the building's centre, on the CPU and the GPU.
 - **Light inside** (`shadeInterior`): sky light through the windows, more near the outer walls than deep in the room,
-  plus some light bounced off sunlit floors. The sun comes in only where its ray leaves through a window of the same
-  storey, and only where nothing outside (another building, the eaves) and no cloud shades it. That is one box exit,
-  because the window layout is a formula the shader shares with the mesh (`throughWindow`), so the sun falls in
-  window-shaped patches on the floor. Each storey's lamps are on or off by a hash, for a share of the storeys (`lamps`).
-  A lit storey glows in its windows from outside, near and far.
+  plus some light bounced off sunlit floors. The sun comes in only where its ray leaves the shell through an opening: a
+  window of the same storey, or an open ground-floor door. It also needs nothing outside (another building, the eaves)
+  and no cloud to shade it. That is one box exit, because the window layout is a formula the shader shares with the mesh,
+  and the doors are in the building's record (`bldExit`, `openingEdge`). So the sun falls in window- and door-shaped
+  patches on the floor and walls, with soft edges that widen with the distance from the opening. Each storey's lamps
+  are on or off by a hash, for a share of the storeys (`lamps`). A lit storey glows in its windows from outside, near
+  and far, and by night its light falls out through them too (see **Lights**).
 - **Doors** (`E`): each door's leaf is hinged on the inner side of the opening and swings 95° into the room
   (`DOOR_SPEED`). Leaves are a small vertex buffer rebuilt only while one moves. A shut leaf is a solid across the
   opening; an open one is a solid along the inner wall. Solids are switched with `off`, which `collideWalker` skips.
@@ -360,8 +362,9 @@ building's own spec (size, storeys, colours, roof, doors). A village's houses ta
   shafts are taken out of the march there. The test is the same ray-box span as the rain shadow, so it costs nothing
   extra per box. A flat roof that hardly overhangs shares the shell's box.
 
-Data per building for the GPU sits in a static storage buffer (`buildings`, 4 `vec4f` each: frame, sizes, storeys,
-window layout, lamps). Interior, glass and door vertices carry `material + id × BLD_ID`, so shading a pixel is O(1)
+Data per building for the GPU sits in a storage buffer (`buildings`, 6 `vec4f` each: frame, sizes, storeys, window
+layout, lamps, then its first two doors as they stand: face, centre, width, height and how far the leaf has swung). The
+buffer is rewritten only while a door moves. Interior, glass and door vertices carry `material + id × BLD_ID`, so shading a pixel is O(1)
 whatever the building count. Each frame the CPU picks the interiors within `INTERIOR_DRAW` whose bounding sphere is in
 view and draws their vertex ranges. On the test machine (Brave, 1925 × 925, medium, medium rain) the scene pass took
 +0.03 ms at the village bus stop, +0.13 ms on the bus station platform and none at town street level, against the
@@ -457,6 +460,10 @@ spot light (`LAMPS` holds their colours, intensities, reach and cones):
 - **Bus station**: LED lamp posts round the forecourt (clear of the buses' way in), the canopy's soffit strips glowing
   with a light for each stretch of them, and the town blocks' and the terminal's door lamps.
 - **Houses**: a lamp over the door of a share of them (`porch`).
+- **Lit rooms**: by night, each lit storey of the buildings within `ROOM_RANGE` (160 m), at most `ROOM_LIGHTS` (16),
+  nearest first, is a light under its ceiling as wide as the room (`LAMPS.room`, flag `LIGHT_ROOM`). The shell lets it
+  out only through the windows and open doors, so it falls on the ground, the street and the neighbours' walls in
+  their shapes. Its own room is lit by its lamps as before, and its light does not scatter in the air or on the drops.
 - **Buses**: two headlight beams ahead and a little down, a red tail light (brighter while braking), and the cabin's
   lamps, which shine out through the windows onto the road beside the bus.
 - **Flashlight** (`L`, day or night): a narrow beam along the view, from the hand on foot.
@@ -471,10 +478,13 @@ only loops over those. They light everything:
   and a normalized Blinn-Phong highlight as sharp as the surface is glossy, so wet roads and puddles carry the lamps'
   reflections and glass shows them as points. Lamp diffusers (material 7) glow by night.
 - **Shadows** (`lightSeen`): the structure boxes between a light and the point (`lightMask` lists, per light, the boxes
-  within its reach) shade it, so houses, decks and the buses cast shadows from the street lamps. An enclosed box (a
-  building's shell) that holds the point but not the light also blocks it, so the street stays out of the rooms while a
-  flashlight carried in lights them. A box that holds the light and is not enclosed is left out: a bus's lights and a
-  flashlight aboard shine out of it.
+  within its reach) shade it, so houses, decks and the buses cast shadows from the street lamps. An enclosed box that
+  holds the point but not the light also blocks it. A building's shell (its box carries the building's id) is a portal
+  instead. When the point is on one side of it and the light on the other, the light passes only where the segment
+  between them leaves the shell through a window of the inside end's storey or an open door (`bldPass`). Its edge is as
+  soft as the light's size makes it at that distance. So street lamps and headlights shine into the rooms through
+  them, and a lit room or a flashlight in it shines out. A segment that goes in and out of a shell again is blocked. A
+  box that holds the light and is not enclosed is left out: a bus's lights and a flashlight aboard shine out of it.
 - **Rain, snow and splashes** (`lampsOnDrop`): the near-field particles take the light at their place, scattered
   forward, so drops between the eye and a lamp glow.
 - **The air** (`lampScatter`, in the march): halos round the lamps and the beams of the headlights and the flashlight.

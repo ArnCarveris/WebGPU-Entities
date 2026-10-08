@@ -14,6 +14,7 @@ const LAMPS = {
     headlight: { color: [1.0, 0.95, 0.86], intensity: 600, range: 75, size: 0.3, cone: [32, 10] },
     tail: { color: [1.0, 0.06, 0.03], intensity: 2.2, range: 7, size: 0.4 },
     cabin: { color: [1.0, 0.93, 0.80], intensity: 6, range: 9, size: 1.2 },        // a bus's cabin, out through its windows
+    room: { color: [1.0, 0.86, 0.66], intensity: 40, range: 16, size: 0.35 },      // a lit storey, out through its windows and doors (size: x its smaller half size)
     flashlight: { color: [1.0, 0.94, 0.84], intensity: 30, range: 60, size: 0.8, cone: [22, 6] },
 };
 

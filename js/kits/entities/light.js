@@ -9,6 +9,7 @@ const { lerp } = engine.Common;
 //   roomLights  off while its world's room lights are (world.lightsOn === false)
 //   door        { id, min }: dimmed to `min` while that door (world.get(id), a kits.entities door) is shut
 //   alarmColor  its colour while its world's alarm is on (world.alarm)
+//   size        the emitter's size (m): how soft the shadows it casts are (0.1)
 // The world options need the light's `world`. def: { pos, color ([1, 1, 1]), intensity (1), radius (8), ... }
 class LightSource {
     constructor(def, world = null) {
@@ -16,6 +17,7 @@ class LightSource {
         this.color = def.color || [1, 1, 1];
         this.intensity = def.intensity ?? 1;
         this.radius = def.radius || 8;
+        this.size = def.size ?? 0.1;
         this.signal = def.signal;
         this.roomLights = !!def.roomLights;
         this.door = def.door || null;

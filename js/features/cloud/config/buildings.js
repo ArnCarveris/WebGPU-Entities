@@ -52,13 +52,14 @@ const FURNITURE_ITEMS = {
 };
 const FURNITURE_COLORS = { fabric: [0.30, 0.34, 0.42], white: [0.82, 0.81, 0.78], dark: [0.16, 0.16, 0.17], wood: [0.46, 0.32, 0.20], linen: [0.86, 0.84, 0.80], metal: [0.40, 0.42, 0.44] };
 const INTERIOR_DRAW = 160;   // m from a building's centre: its interior and see-through glass are drawn; further off, opaque panes (fsPane)
-const BUILDING_FLOATS = 16;  // per building in the `buildings` storage buffer (see WGSL_BUILDING)
+const BUILDING_FLOATS = 24;  // per building in the `buildings` storage buffer (see WGSL_BUILDING): 16 static, 2 doors x 4
+const BUILDING_DOORS = 2;    // doors per building the shaders know of (light through them, WGSL_BUILDING)
 const BLD_ID = 256;          // interior, glass and door vertices: material + building index * BLD_ID
 const DOOR_SPEED = 1.6;      // door swing, fraction of its travel per s
 const DOOR_REACH = 2.4;      // m: E opens or closes the door in view this close to the eye
 
 return {
-    WALK, BUILDING_TYPES, FURNITURE, FURNITURE_ITEMS, FURNITURE_COLORS, INTERIOR_DRAW, BUILDING_FLOATS, BLD_ID,
+    WALK, BUILDING_TYPES, FURNITURE, FURNITURE_ITEMS, FURNITURE_COLORS, INTERIOR_DRAW, BUILDING_FLOATS, BUILDING_DOORS, BLD_ID,
     DOOR_SPEED, DOOR_REACH,
 };
 });

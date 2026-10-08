@@ -6,8 +6,8 @@ const { Common, kits } = engine;
 const { v3 } = Common;
 const { GridHash } = kits.interior;
 const {
-    MAX_LIGHTS, AREA_FLOATS, AXES, IDENTITY, g2, GeometryPool, splitMesh, MaterialTable, BVHTree, QuadTree, pushSeg,
-    CollisionSet, Area, Portal, Occluder, Architecture, Outdoors, NavGraph, Vehicle, PowerGrid, ENTITY_TYPES,
+    MAX_LIGHTS, THROUGH_FLOATS, AREA_FLOATS, AXES, IDENTITY, g2, GeometryPool, splitMesh, MaterialTable, BVHTree, QuadTree, pushSeg,
+    CollisionSet, Area, Portal, Occluder, LightTransport, Architecture, Outdoors, NavGraph, Vehicle, PowerGrid, ENTITY_TYPES,
 } = feature;
 
 // a box part's axes, tilted `deg` about x (its top toward +z)
@@ -59,11 +59,15 @@ class World {
         this.buildTrees();
         this.buildCollision();
         this.water?.update(this.hulls);
+        this.lightTransport = new LightTransport(this);
         this.totalTris = this.objects.reduce((s, o) => s + o.chunk.count / 3, 0);
         for (const w of this.warnings) console.warn('[scenario]', w);
     }
 
     mat(name) { return this.materials.index(name); }
+
+    // toward the sun (not normalized)
+    get sunDir() { return this.scn.outdoor?.sunDir || [0.4, 0.8, 0.3]; }
 
     // ---- areas (FarCry VisArea / SECTR Sector) ----
     buildAreas() {
@@ -306,17 +310,19 @@ class World {
         this.water?.update(this.hulls);
     }
 
-    // per-area lighting table (static lights + dynamic lights of the frame); an area without power keeps its emergency
-    // beacons only
-    lightingTable(t) {
+    // per-area lighting table: its own lights (static + dynamic ones of the frame; an area without power keeps its
+    // emergency beacons only), then those that shine in through its portals (LightTransport, ranked for the view from eye)
+    lightingTable(t, eye) {
         const data = new Float32Array(this.areas.length * AREA_FLOATS);
-        const dyn = this.areas.map(() => []);
-        for (const e of this.dynamic) if (e.light && e.lightOn) dyn[e.lightArea].push(e.light);
+        const on = this.areas.map(() => []);
+        for (const e of this.dynamic) if (e.light && e.lightOn) on[e.lightArea].push(e.light);
+        this.areas.forEach((a, i) => on[i].push(...(this.power.powered(i) ? a.lights : a.lights.filter(L => L.signal === 'pulse'))));
+        const through = this.lightTransport.gather(on, t, eye);
         this.areas.forEach((a, i) => {
-            const own = this.power.powered(i) ? a.lights : a.lights.filter(L => L.signal === 'pulse');
-            const o = i * AREA_FLOATS, lights = dyn[i].concat(own).slice(0, MAX_LIGHTS);
-            data.set([a.ambient[0], a.ambient[1], a.ambient[2], 0, a.fog[0], a.fog[1], a.fog[2], a.fog[3], a.sun, lights.length, 0, 0], o);
+            const o = i * AREA_FLOATS, lights = on[i].slice(0, MAX_LIGHTS), into = through[i];
+            data.set([a.ambient[0], a.ambient[1], a.ambient[2], 0, a.fog[0], a.fog[1], a.fog[2], a.fog[3], a.sun, lights.length, into.length, 0], o);
             lights.forEach((L, k) => data.set([L.pos[0], L.pos[1], L.pos[2], L.radius, L.color[0], L.color[1], L.color[2], L.intensityAt(t)], o + 12 + k * 8));
+            into.forEach((x, k) => LightTransport.write(data, o + 12 + MAX_LIGHTS * 8 + k * THROUGH_FLOATS, x));
         });
         return data;
     }
