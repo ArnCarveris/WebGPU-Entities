@@ -1,0 +1,53 @@
+{
+    "$comment": "the handheld's pages of Riverlands (scenarios/water-riverlands.json includes them)",
+    "entities": [
+        {
+            "type": "handheld.page",
+            "id": "controls",
+            "of": "water",
+            "title": "Controls",
+            "nav": {"icon":[[0,122,255],"W"]},
+            "sections": [
+                {
+                    "header": "MOVE",
+                    "cells": [
+                        {"type":"label","title":"Look","value":"drag"},
+                        {"type":"label","title":"Move","value":"W A S D"},
+                        {"type":"label","title":"Up / down","value":"Space / C"},
+                        {"type":"label","title":"Faster","value":"Shift ×5"},
+                        {"type":"label","title":"Speed","value":"wheel"},
+                        {"type":"label","title":"Walk / fly","value":"H"}
+                    ]
+                },
+                {
+                    "header": "TOOLS",
+                    "cells": [
+                        {"type":"label","title":"Use the tool","value":"right drag"},
+                        {"type":"label","title":"Brush size","value":"[ ]"}
+                    ]
+                },
+                {
+                    "header": "WATER",
+                    "cells": [
+                        {"type":"label","title":"Boost springs","value":"B"},
+                        {"type":"label","title":"Rain","value":"R"},
+                        {"type":"label","title":"Breach / rebuild dams","value":"X"},
+                        {"type":"label","title":"Reset water","value":"N"},
+                        {"type":"label","title":"Sim steps / frame","value":", ."}
+                    ]
+                },
+                {
+                    "header": "VIEW",
+                    "cells": [
+                        {"type":"label","title":"Render mode","value":"M"},
+                        {"type":"label","title":"Next view","value":"V"},
+                        {"type":"label","title":"Lighting","value":"G"},
+                        {"type":"label","title":"Labels","value":"L"},
+                        {"type":"label","title":"Pause","value":"P"}
+                    ],
+                    "footer": "Or drop a scenario .json on the page."
+                }
+            ]
+        }
+    ]
+}

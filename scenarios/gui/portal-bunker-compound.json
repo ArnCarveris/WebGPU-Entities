@@ -1,0 +1,107 @@
+{
+    "$comment": "Bunker compound's GUIs: the settings of its screens' apps (CCTV, camera and photos, TV) and the handheld's pages. The consoles' screens are the portal feature's (js/features/portal/gui/screens.js), named by the props' screen.gui. scenarios/portal-bunker-compound.json includes them.",
+    "entities": [
+        {"type":"portal.cctv","resolution":[512,384],"fovY":1.1,"initial":2,"far":320},
+        {
+            "type": "portal.media",
+            "photo": {"fovY":0.95},
+            "far": 400,
+            "seedShots": [
+                {"label":"Harbour","pos":[5.5,6.2,-0.6],"target":[50,2,10]},
+                {"label":"Control Room","pos":[-2.5,1.7,14],"target":[-9,1.2,21]}
+            ]
+        },
+        {
+            "type": "portal.iptv",
+            "hlsScript": "https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js",
+            "cardTitle": "BUNKER COMPOUND · SECURITY",
+            "channels": [
+                {"name":"Test Card","sub":"Sector 07 engineering","kind":"card","color":[142,142,147]},
+                {"name":"Compound CCTV","sub":"Security feed · selected camera","kind":"cctv","color":[52,199,89]},
+                {
+                    "name": "Big Buck Bunny",
+                    "sub": "Mux test stream · VOD",
+                    "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+                    "color": [255,149,0]
+                },
+                {
+                    "name": "Live Test Feed",
+                    "sub": "Unified Streaming · live",
+                    "url": "https://demo.unified-streaming.com/k8s/live/stable/live.isml/.m3u8",
+                    "live": true,
+                    "color": [255,59,48]
+                },
+                {
+                    "name": "Tears of Steel",
+                    "sub": "Unified Streaming · VOD",
+                    "url": "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8",
+                    "color": [0,122,255]
+                },
+                {
+                    "name": "Angel One",
+                    "sub": "Shaka Player demo · VOD",
+                    "url": "https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8",
+                    "color": [175,82,222]
+                },
+                {
+                    "name": "Bip-Bop",
+                    "sub": "Apple test stream · VOD",
+                    "url": "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8",
+                    "color": [48,176,199]
+                }
+            ]
+        },
+        {
+            "type": "handheld.page",
+            "id": "controls",
+            "of": "portal",
+            "title": "Controls",
+            "nav": {"icon":[[255,149,0],"P"]},
+            "sections": [
+                {
+                    "header": "MOVE",
+                    "cells": [
+                        {"type":"label","title":"Mouse look","value":"click"},
+                        {"type":"label","title":"Move","value":"W A S D"},
+                        {"type":"label","title":"Jump","value":"Space"},
+                        {"type":"label","title":"Run","value":"Shift"},
+                        {"type":"label","title":"Walk / fly","value":"H"},
+                        {"type":"label","title":"Ladders","value":"W / S"},
+                        {"type":"label","title":"Fly up / down","value":"E / Q"}
+                    ]
+                },
+                {
+                    "header": "SHIP",
+                    "cells": [
+                        {"type":"label","title":"Take / leave the helm","value":"F"},
+                        {"type":"label","title":"Throttle","value":"W / S"},
+                        {"type":"label","title":"Steer","value":"A / D"},
+                        {"type":"label","title":"Stop","value":"X"}
+                    ]
+                },
+                {
+                    "header": "WORLD",
+                    "cells": [
+                        {"type":"label","title":"Door at hand","value":"F"},
+                        {"type":"label","title":"Reset","value":"R"},
+                        {"type":"label","title":"Teleport","value":"minimap click"},
+                        {"type":"label","title":"Map near / island","value":"N"},
+                        {"type":"label","title":"Map","value":"M"}
+                    ]
+                },
+                {
+                    "header": "PORTALS",
+                    "cells": [
+                        {"type":"label","title":"Portal culling","value":"1"},
+                        {"type":"label","title":"Freeze visibility","value":"2"},
+                        {"type":"label","title":"Masking","value":"3"},
+                        {"type":"label","title":"Portal lines","value":"4"},
+                        {"type":"label","title":"Area volumes","value":"5"},
+                        {"type":"label","title":"Occluders","value":"6"}
+                    ],
+                    "footer": "Portal lines: green passed, cyan sky only, amber culled, red closed, violet occluder. Or drop a scenario .json on the page."
+                }
+            ]
+        }
+    ]
+}

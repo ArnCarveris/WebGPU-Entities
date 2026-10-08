@@ -1,0 +1,44 @@
+{
+    "$comment": "the handheld's pages of Sol Transit (scenarios/origin-sol-transit.json includes them)",
+    "entities": [
+        {
+            "type": "handheld.page",
+            "id": "controls",
+            "of": "origin",
+            "title": "Controls",
+            "nav": {"icon":[[88,86,214],"O"]},
+            "sections": [
+                {
+                    "header": "MOVE",
+                    "cells": [
+                        {"type":"label","title":"Look","value":"drag"},
+                        {"type":"label","title":"Move","value":"W A S D"},
+                        {"type":"label","title":"Up / down (origin +Y)","value":"Space / C"},
+                        {"type":"label","title":"Roll","value":"Q / E"},
+                        {"type":"label","title":"×10 / ×0.1","value":"Shift / Ctrl"},
+                        {"type":"label","title":"Speed","value":"wheel"}
+                    ]
+                },
+                {
+                    "header": "ORIGIN",
+                    "cells": [
+                        {"type":"label","title":"Translation rebasing","value":"T"},
+                        {"type":"label","title":"Rotation rebasing","value":"R"},
+                        {"type":"label","title":"Scale rebasing","value":"G"},
+                        {"type":"label","title":"Rebase every frame","value":"O"},
+                        {"type":"label","title":"Field density","value":"[ ]"}
+                    ]
+                },
+                {
+                    "header": "VIEW",
+                    "cells": [
+                        {"type":"label","title":"Labels","value":"L"},
+                        {"type":"label","title":"Pause","value":"P"},
+                        {"type":"label","title":"Bookmarks","value":"1 - 9"}
+                    ],
+                    "footer": "Or drop a scenario .json on the page."
+                }
+            ]
+        }
+    ]
+}

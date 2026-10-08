@@ -30,6 +30,6 @@
 
         {"type":"camera","from":"valley"},
         {"type":"link","to":"valley.light","value":"sky.light == 'golden' || sky.light == 'storm dusk' || sky.light == 'morning' ? 'plains golden' : sky.light == 'noon' ? 'plains noon' : contains(sky.light, 'moon') || sky.light == 'crescent' ? 'plains night' : 'plains afternoon'"},
-        {"type":"handheld.page","id":"weather","title":"Weather","nav":{"section":"SCENARIO","sub":"Weather and the valley","icon":[[52,199,89],"V"]},"sections":[{"header":"WEATHER","cells":[{"type":"label","title":"Weather","expr":"{sky.weather}"},{"type":"label","title":"Light","expr":"{sky.light} → {valley.light}"},{"type":"label","title":"Rain here","expr":"{sky.rain|pct}"},{"type":"label","title":"Storm cells","expr":"{sky.cells}"},{"type":"label","title":"Flashes","expr":"{sky.flashes}"}]},{"header":"VALLEY","cells":[{"type":"label","title":"Instances","expr":"{valley.instances|int}"},{"type":"label","title":"Meshes","expr":"{valley.meshes}"},{"type":"label","title":"Imposters","expr":"{valley.imposters}"}],"footer":"` cycles the keys: the sky takes 1-9 weather, T lighting."}]}
+        {"$comment":"the handheld's pages: scenarios/gui/compose-valley-weather.json","type":"include","scenario":"gui/compose-valley-weather"}
     ]
 }

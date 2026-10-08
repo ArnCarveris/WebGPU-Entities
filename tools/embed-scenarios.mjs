@@ -4,6 +4,9 @@
 //   scenarios/embedded.js   all of scenarios/*.json plus the catalog, for index.html opened from disk (browsers block
 //                           fetch() on file:// pages, but run <script> files)
 //
+// The folders under scenarios/ hold parts of scenarios (scenarios/gui/: each scenario's GUIs), included by
+// id ("gui/water-riverlands"): embedded too, but not listed.
+//
 // The .json files stay the source of truth: run this after adding or editing one.
 //
 //   node tools/embed-scenarios.mjs
@@ -21,7 +24,10 @@ const GROUPS = ['Compositions', 'Entity Cloud', 'Entity Water', 'Entity Origin',
 
 const embedded = {}, index = [];
 const files = readdirSync(dir).filter(f => f.endsWith('.json') && f !== 'index.json');
-const raw = Object.fromEntries(files.map(f => [f.replace(/\.json$/, ''), JSON.parse(readFileSync(join(dir, f), 'utf8'))]));   // fail loudly on invalid JSON
+const parts = readdirSync(dir, { withFileTypes: true }).filter(d => d.isDirectory())
+    .flatMap(d => readdirSync(join(dir, d.name)).filter(f => f.endsWith('.json')).map(f => `${d.name}/${f}`));
+const raw = Object.fromEntries([...files, ...parts].map(f => [f.replace(/\.json$/, ''), JSON.parse(readFileSync(join(dir, f), 'utf8'))]));   // fail loudly on invalid JSON
+for (const f of parts) embedded[`scenarios/${f}`] = raw[f.replace(/\.json$/, '')];
 for (const file of files) {
     const id = file.replace(/\.json$/, ''), s = raw[id];
     const full = await ScenarioFormat.resolveIncludes(s, async inc => {

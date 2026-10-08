@@ -1,0 +1,23 @@
+{
+    "$comment": "the handheld's pages of Sector 07 on the Moon (scenarios/compose-moonbase-sector07.json includes them)",
+    "entities": [
+        {
+            "type": "handheld.page",
+            "id": "moon",
+            "title": "Moon",
+            "nav": {"section":"SCENARIO","sub":"Where the facility stands","icon":[[88,86,214],"M"]},
+            "sections": [
+                {
+                    "header": "SECTOR 07 ON THE MOON",
+                    "cells": [
+                        {"type":"label","title":"Near","expr":"{sol.body}"},
+                        {"type":"label","title":"Altitude","expr":"{sol.altitude|dist}"},
+                        {"type":"label","title":"Facility lights","expr":"{sector.lightsOn ? 'on' : 'off'}"},
+                        {"type":"label","title":"Alarm","expr":"{sector.alarm ? 'on' : 'off'}"}
+                    ],
+                    "footer": "` hands the keys and the camera between Entity Origin's flight and the facility's player."
+                }
+            ]
+        }
+    ]
+}

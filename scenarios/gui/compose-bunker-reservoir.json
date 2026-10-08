@@ -1,0 +1,30 @@
+{
+    "$comment": "the handheld's pages of Bunker on the Reservoir (scenarios/compose-bunker-reservoir.json includes them)",
+    "entities": [
+        {
+            "type": "handheld.page",
+            "id": "reservoir",
+            "title": "Reservoir",
+            "nav": {"section":"SCENARIO","sub":"Area, weather, storms","icon":[[255,149,0],"B"]},
+            "sections": [
+                {
+                    "header": "BUNKER",
+                    "cells": [
+                        {"type":"label","title":"Area","expr":"{bunker.area}"},
+                        {"type":"label","title":"Rain","expr":"{bunker.outdoor ? 'falls here' : 'stays out (indoors)'}"}
+                    ]
+                },
+                {
+                    "header": "WEATHER",
+                    "cells": [
+                        {"type":"label","title":"Weather","expr":"{sky.weather}"},
+                        {"type":"label","title":"Rain here","expr":"{sky.rain|pct}"},
+                        {"type":"label","title":"Storm cells","expr":"{sky.cells}"},
+                        {"type":"label","title":"Flashes","expr":"{sky.flashes}"}
+                    ],
+                    "footer": "` cycles the keys: the sky takes 1-9 weather."
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,68 @@
+{
+    "$comment": "the handheld's pages of High Plains (scenarios/cloud-high-plains.json includes them)",
+    "entities": [
+        {
+            "type": "handheld.page",
+            "id": "controls",
+            "of": "cloud",
+            "title": "Controls",
+            "nav": {"icon":[[48,176,199],"C"]},
+            "sections": [
+                {
+                    "header": "MOVE",
+                    "cells": [
+                        {"type":"label","title":"Look","value":"drag"},
+                        {"type":"label","title":"Move","value":"W A S D"},
+                        {"type":"label","title":"Up / down","value":"Space / C"},
+                        {"type":"label","title":"Faster","value":"Shift ×5"},
+                        {"type":"label","title":"Speed","value":"wheel"},
+                        {"type":"label","title":"Walk / fly","value":"H"},
+                        {"type":"label","title":"Door, sit / stand","value":"E"}
+                    ]
+                },
+                {
+                    "header": "WEATHER",
+                    "cells": [
+                        {"type":"label","title":"Weather","value":"1 - 9"},
+                        {"type":"label","title":"Auto weather","value":"0"},
+                        {"type":"label","title":"Rain","value":"N"},
+                        {"type":"label","title":"Cloud","value":"J"},
+                        {"type":"label","title":"Lightning","value":"K"},
+                        {"type":"label","title":"Weather time","value":", ."},
+                        {"type":"label","title":"Storm cell here","value":"right click"}
+                    ]
+                },
+                {
+                    "header": "SKY & LIGHT",
+                    "cells": [
+                        {"type":"label","title":"Lighting","value":"T"},
+                        {"type":"label","title":"Move the sun","value":"arrows"},
+                        {"type":"label","title":"Flashlight","value":"L"}
+                    ]
+                },
+                {
+                    "header": "RENDERING",
+                    "cells": [
+                        {"type":"label","title":"Quality","value":"Q"},
+                        {"type":"label","title":"Render mode","value":"M"},
+                        {"type":"label","title":"Froxels","value":"F"},
+                        {"type":"label","title":"Tiles","value":"G"},
+                        {"type":"label","title":"Bloom","value":"O"}
+                    ]
+                },
+                {
+                    "header": "TOOLS",
+                    "cells": [
+                        {"type":"label","title":"View","value":"V"},
+                        {"type":"label","title":"Bus","value":"B"},
+                        {"type":"label","title":"Buses ×10","value":"hold Z"},
+                        {"type":"label","title":"Radar","value":"R"},
+                        {"type":"label","title":"Labels","value":"I"},
+                        {"type":"label","title":"Sound","value":"U"}
+                    ],
+                    "footer": "Or drop a scenario .json on the page."
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,366 @@
+{
+    "$comment": "Sector 07's GUIs: its world-space screens (the airlock terminal, the easel), the settings of the apps on them and on the phone (CCTV, camera and photos, TV, radar), the handheld and its pages. scenarios/gui-sector-07.json includes them where the terminal stands.",
+    "entities": [
+        {"type":"gui.cctv","resolution":[512,384],"fovY":1.2,"initial":2},
+        {
+            "type": "gui.media",
+            "photo": {"size":[384,512],"atlas":2048,"capacity":20,"fovY":0.95},
+            "video": {"size":[192,256],"fps":12,"pool":180,"maxSeconds":10},
+            "seedShots": [
+                {"label":"Main hall","pos":[1.5,2.2,5.3],"target":[-1,1.2,-3]},
+                {"label":"Hatch B","pos":[0.9,1.65,-1.2],"target":[1.9,1.3,-4]},
+                {"label":"Ops terminal","pos":[-0.3,1.6,-2.3],"target":[-1.3,1.5,-3.84]}
+            ]
+        },
+        {
+            "type": "gui.iptv",
+            "hlsScript": "https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js",
+            "cardTitle": "SECTOR 07 · ENGINEERING",
+            "channels": [
+                {"name":"Test Card","sub":"Sector 07 engineering","kind":"card","color":[142,142,147]},
+                {"name":"Sector 07 CCTV","sub":"Security feed · terminal camera","kind":"cctv","color":[52,199,89]},
+                {
+                    "name": "Big Buck Bunny",
+                    "sub": "Mux test stream · VOD",
+                    "url": "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
+                    "color": [255,149,0]
+                },
+                {
+                    "name": "Live Test Feed",
+                    "sub": "Unified Streaming · live",
+                    "url": "https://demo.unified-streaming.com/k8s/live/stable/live.isml/.m3u8",
+                    "live": true,
+                    "color": [255,59,48]
+                },
+                {
+                    "name": "Tears of Steel",
+                    "sub": "Unified Streaming · VOD",
+                    "url": "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8",
+                    "color": [0,122,255]
+                },
+                {
+                    "name": "Angel One",
+                    "sub": "Shaka Player demo · VOD",
+                    "url": "https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8",
+                    "color": [175,82,222]
+                },
+                {
+                    "name": "Bip-Bop",
+                    "sub": "Apple test stream · VOD",
+                    "url": "https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_fmp4/master.m3u8",
+                    "color": [48,176,199]
+                }
+            ]
+        },
+        {
+            "type": "gui.radar",
+            "range": 9,
+            "tracked": [
+                {"name":"Patrol drone","entity":"drone","color":[255,59,48],"shape":"pulse"},
+                {"name":"Ops terminal","entity":"terminal","color":[90,200,250],"shape":"diamond"},
+                {"name":"Hatch B","entity":"hatchB","color":[255,149,0],"shape":"bar"},
+                {"nearest":"securityCamera","prefix":"Nearest ","color":[255,214,10],"shape":"camera"}
+            ]
+        },
+        {
+            "$comment": "the engine's handheld comes out at once here; the facility lends it these pages (their root sections lead its root page), its bindings and apps",
+            "type": "handheld",
+            "startShown": true
+        },
+        {
+            "type": "gui.phone",
+            "links": {"door":"hatchB","terminal":"terminal","easel":"easel"},
+            "pages": {
+                "root": {
+                    "title": "Debug Sheet",
+                    "sections": [
+                        {
+                            "header": "TOOLS",
+                            "cells": [
+                                {
+                                    "type": "nav",
+                                    "page": "radar",
+                                    "title": "Radar",
+                                    "sub": "Compass, tracking, noise",
+                                    "icon": [[52,199,89],"R"]
+                                },
+                                {
+                                    "type": "nav",
+                                    "page": "camera",
+                                    "title": "Camera",
+                                    "sub": "Photos & video of the facility",
+                                    "icon": [[142,142,147],"C"]
+                                },
+                                {
+                                    "type": "nav",
+                                    "page": "tv",
+                                    "title": "IPTV",
+                                    "subBind": "iptv.summary",
+                                    "icon": [[255,59,48],"TV"]
+                                },
+                                {
+                                    "type": "nav",
+                                    "page": "photos",
+                                    "title": "Photos",
+                                    "subBind": "media.summary",
+                                    "icon": [[175,82,222],"P"]
+                                },
+                                {
+                                    "type": "nav",
+                                    "page": "airlock",
+                                    "title": "Airlock",
+                                    "sub": "Hatch & CCTV overrides",
+                                    "icon": [[255,149,0],"A"]
+                                },
+                                {
+                                    "type": "nav",
+                                    "page": "rendering",
+                                    "title": "Rendering",
+                                    "sub": "View & lighting",
+                                    "icon": [[0,122,255],"V"]
+                                },
+                                {
+                                    "type": "nav",
+                                    "page": "audio",
+                                    "title": "Audio",
+                                    "sub": "Sound & footsteps",
+                                    "icon": [[255,45,85],"S"]
+                                }
+                            ]
+                        },
+                        {
+                            "header": "QUICK TOGGLES",
+                            "cells": [
+                                {"type":"switch","bind":"lights","title":"Room lights"},
+                                {"type":"switch","bind":"alarm","title":"Alarm"},
+                                {"type":"switch","bind":"stencil","title":"Stencil GUI mask"}
+                            ]
+                        },
+                        {
+                            "header": "PLAYER",
+                            "cells": [
+                                {"type":"label","title":"Position","bind":"player.position"},
+                                {"type":"label","title":"Heading","bind":"player.heading"},
+                                {"type":"label","title":"Noise","bind":"player.noise"},
+                                {"type":"label","title":"Frame rate","bind":"stats.fps"}
+                            ]
+                        },
+                        {
+                            "header": "INFO",
+                            "cells": [
+                                {"type":"nav","page":"controls","title":"Controls","icon":[[99,99,102],"K"]},
+                                {"type":"nav","page":"stats","title":"Render stats","icon":[[48,176,199],"#"]},
+                                {"type":"nav","page":"about","title":"About this demo","icon":[[0,122,255],"i"]}
+                            ]
+                        }
+                    ]
+                },
+                "airlock": {
+                    "title": "Airlock",
+                    "sections": [
+                        {
+                            "header": "HATCH B",
+                            "cells": [
+                                {"type":"label","title":"Status","bind":"hatch.status"},
+                                {"type":"action","action":"toggleHatch","titleBind":"hatch.action"},
+                                {"type":"label","title":"Access code","bind":"hatch.code"}
+                            ]
+                        },
+                        {
+                            "header": "SECURITY",
+                            "cells": [
+                                {"type":"picker","bind":"cctv","page":"pick:cctv","title":"CCTV camera"},
+                                {"type":"action","action":"showCctvOnTerminal","title":"Show on terminal"}
+                            ],
+                            "footer": "Switches the wall terminal to its CCTV tab."
+                        }
+                    ]
+                },
+                "rendering": {
+                    "title": "Rendering",
+                    "sections": [
+                        {
+                            "header": "VIEW",
+                            "cells": [
+                                {"type":"slider","bind":"fov","title":"Field of view"},
+                                {"type":"slider","bind":"lamp","title":"Lamp intensity"}
+                            ]
+                        },
+                        {
+                            "header": "GUI SURFACES",
+                            "cells": [{"type":"switch","bind":"stencil","title":"Stencil GUI mask"}],
+                            "footerBind": "stencil.description"
+                        }
+                    ]
+                },
+                "audio": {
+                    "title": "Audio",
+                    "sections": [
+                        {
+                            "header": "OUTPUT",
+                            "cells": [
+                                {"type":"switch","bind":"sound","title":"Sound"},
+                                {"type":"slider","bind":"stepVolume","title":"Footstep volume"}
+                            ]
+                        }
+                    ]
+                },
+                "controls": {
+                    "title": "Controls",
+                    "sections": [
+                        {
+                            "header": "MOVEMENT",
+                            "cells": [
+                                {"type":"label","title":"Move","value":"W A S D"},
+                                {"type":"label","title":"Run","value":"Shift"},
+                                {"type":"label","title":"Look","value":"Drag"},
+                                {"type":"label","title":"Step","value":"Scroll wheel"}
+                            ]
+                        },
+                        {
+                            "header": "SCREENS",
+                            "cells": [
+                                {"type":"label","title":"Use a screen","value":"Aim + click"},
+                                {"type":"label","title":"Scroll a list","value":"Scroll wheel"},
+                                {"type":"label","title":"Drag a slider","value":"Click + drag"},
+                                {"type":"label","title":"Paint (easel)","value":"Drag · wheel = size"},
+                                {"type":"label","title":"Phone","value":"Tab / Esc"}
+                            ],
+                            "footer": "Wall screens only react within 3.6 m, like Doom 3. The phone always does."
+                        }
+                    ]
+                },
+                "stats": {
+                    "title": "Render stats",
+                    "sections": [
+                        {
+                            "header": "FRAME",
+                            "cells": [
+                                {"type":"label","title":"Frame rate","bind":"stats.fps"},
+                                {"type":"label","title":"Resolution","bind":"stats.resolution"},
+                                {"type":"label","title":"GUI mask","bind":"stats.guiMask"},
+                                {"type":"label","title":"GUI surfaces","bind":"stats.guiSurfaces"}
+                            ]
+                        },
+                        {
+                            "header": "GUI MODELS",
+                            "cells": [
+                                {"type":"label","title":"Terminal","bind":"stats.terminal"},
+                                {"type":"label","title":"Easel","bind":"stats.easel"},
+                                {"type":"label","title":"Phone","bind":"stats.phone"}
+                            ]
+                        },
+                        {
+                            "header": "RENDER TARGETS",
+                            "cells": [
+                                {"type":"label","title":"CCTV feed","bind":"stats.cctv"},
+                                {"type":"label","title":"Phone camera","bind":"stats.camera"},
+                                {"type":"label","title":"Photos stored","bind":"stats.photos"},
+                                {"type":"label","title":"Video frames","bind":"stats.videoFrames"},
+                                {"type":"label","title":"IPTV texture","bind":"stats.iptv"}
+                            ],
+                            "footer": "Render targets only render while a screen is showing them."
+                        }
+                    ]
+                },
+                "about": {
+                    "title": "About",
+                    "sections": [
+                        {
+                            "header": "ENTITY GUI // WEBGPU",
+                            "cells": [
+                                {
+                                    "type": "text",
+                                    "text": "Every screen here is an EntityGUI: a Doom 3-style GUI surface that emits textured quads in its own virtual screen space and is placed on its entity through the surface's texture axes."
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "Each surface writes its own stencil value, so a GUI never z-fights, stays hidden behind things in front of it and can't draw through another GUI."
+                                },
+                                {
+                                    "type": "text",
+                                    "text": "The whole facility, including these pages, is described by data in js/scenario.js."
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "pick:cctv": {"title":"CCTV camera","sections":[{"optionsBind":"cctv"}]},
+                "radar": {"title":"Radar","app":"radar"},
+                "camera": {"title":"Camera","app":"camera"},
+                "photos": {"title":"Photos","app":"photos"},
+                "tv": {"title":"IPTV","app":"tv"}
+            }
+        },
+        {
+            "type": "gui.terminal",
+            "id": "terminal",
+            "model": "terminal",
+            "pos": [-1.2,1.5,-3.84],
+            "yaw": 0,
+            "gui": {
+                "id": "terminal",
+                "size": [1.6,1.2],
+                "virtual": [640,480],
+                "crt": true,
+                "range": 3.6,
+                "anchorMaterial": "glass",
+                "maxVerts": 24000
+            },
+            "content": {
+                "door": "hatchB",
+                "hatchCode": "396",
+                "titles": {"main":"SECTOR 07 // AIRLOCK CONTROL","cctv":"SECTOR 07 // SECURITY","keypad":"AUTHORIZATION REQUIRED"},
+                "scopeLabel": "REACTOR FEED // CH-2",
+                "memo": ["PDA MEMO: 'hatch code is 3-9-6,","  somebody change it already'","                    - maint."]
+            }
+        },
+        {
+            "type": "gui.easel",
+            "id": "easel",
+            "model": "easel",
+            "pos": [-2.95,1.45,-2.3],
+            "yaw": 1.13,
+            "collider": 0.75,
+            "gui": {
+                "id": "easel",
+                "size": [1.2,0.9],
+                "virtual": [640,480],
+                "zOffset": 0.004,
+                "range": 3.6,
+                "anchorMaterial": "darkMetal",
+                "maxVerts": 12000
+            },
+            "paint": {
+                "resolution": [1016,912],
+                "area": {"x":120,"y":12,"w":508,"h":456},
+                "paper": [0.95,0.93,0.88],
+                "maxDabs": 4096,
+                "size": {"min":2,"max":60,"initial":14},
+                "initialColor": 3,
+                "palette": [
+                    [28,28,30],
+                    [245,243,238],
+                    [128,128,132],
+                    [220,38,38],
+                    [249,115,22],
+                    [250,204,21],
+                    [34,197,94],
+                    [20,184,166],
+                    [37,99,235],
+                    [79,70,229],
+                    [168,85,247],
+                    [120,72,40]
+                ],
+                "brushes": [
+                    {"name":"ROUND BRUSH","type":0,"sizeMul":1,"spacing":0.15,"flow":0.35,"preview":"soft"},
+                    {"name":"INK PEN","type":1,"sizeMul":0.35,"spacing":0.12,"flow":1,"preview":"zigzag"},
+                    {"name":"AIRBRUSH","type":2,"sizeMul":2.2,"spacing":0.2,"flow":0.25,"preview":"spray","spray":true},
+                    {"name":"MARKER","type":3,"sizeMul":1.2,"spacing":0.08,"flow":0.1,"angle":0.6,"preview":"chisel"},
+                    {"name":"CHARCOAL","type":4,"sizeMul":0.9,"spacing":0.15,"flow":0.7,"preview":"grain"},
+                    {"name":"ERASER","type":5,"sizeMul":1.4,"spacing":0.12,"flow":1,"preview":"eraser","eraser":true}
+                ]
+            }
+        }
+    ]
+}

@@ -124,7 +124,7 @@ the engines work) are the original READMEs, in [docs/features](docs/features).
 | `camera` | `from: "<world>"` or `["a", "b"]`, `carry` · or `controller: "fly"`, `pos`, `look`, `fov`, `speed` · `mode: "walk"` | which world's camera drives the others, or the engine's free camera (WASD, drag, wheel, Space / C); `mode` starts it walking (<kbd>H</kbd> switches) |
 | `view` | `name`, `pos`, `look`, `fov` | a viewpoint in composition space, picked on the handheld's View |
 | `link` | `to: "<world>.<param>"`, `value: expr` | sets a world's parameter from an expression every frame (when it changes) |
-| `include` | `scenario`, `as`, `skip`, `only`, `root` | splices another scenario's entities: `as` renames its world (and its name in expressions), `skip` / `only` filter by type (`"cloud.view"`, `"sound.*"`), `root` merges fields into its root |
+| `include` | `scenario`, `as`, `skip`, `only`, `root` | splices another scenario's entities, or a part kept in its own file (`"gui/<id>"`: a scenario's GUIs, under `scenarios/gui/`): `as` renames its world (and its name in expressions), `skip` / `only` filter by type (`"cloud.view"`, `"sound.*"`), `root` merges fields into its root |
 | `handheld` | `startShown`, `title`, `fovDeg`, `pose`, `screen`, `model`, `materials`, `lighting`, `sounds` | the engine's handheld, in every scenario (<kbd>TAB</kbd> / <kbd>Esc</kbd>, or the corner chip): merged over its defaults, later entities winning |
 | `handheld.page` | `id`, `of`, `title`, `nav: { section, sub, icon }`, `sections` | a page of the handheld, the scenario's HUD: cells `label` `text` `nav` `switch` `slider` `picker` `action`; `label` / `text` take `expr`, a template of the frame scope (`"{sky.rain\|pct}"`); `nav` lists it in that section of the root page, `of` ties it to a world |
 | `hud.toast` | `text`, `ms`, `delay` | a message once the scenario starts |
@@ -255,6 +255,7 @@ js/features/<feature>/      each original engine, split into parts with one resp
                             Heightfield...). phone-pages.js builds the world's handheld pages, and feature.js extends
                             FeatureWorld (createApp, depth, stats, set, anchor, handheld)
 scenarios/*.json            the scenarios (index.json and embedded.js are generated)
+scenarios/gui/*.json        each scenario's GUIs (screens, their apps' settings, the handheld's pages), included by it ({ "type": "include", "scenario": "gui/<id>" })
 tools/embed-scenarios.mjs   catalog + embedded copy
 tools/import-native.mjs     import a scenario of the original demos
 docs/features/*.md          the original demos' READMEs
