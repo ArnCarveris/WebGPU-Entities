@@ -7,6 +7,9 @@ const RENDER_MODES = ['shaded', 'no volumetrics', 'clouds only', 'precipitation 
 // (checkerboard) or 4 (one of each 2x2 block) pixels per frame, in turn, the resolve fills in the others from history;
 // detail: distance (m) within which the detail noise erodes clouds (beyond, cheaper LODs);
 // blur: radius (volumetric texels) of the edge-aware blur that smooths the clouds' march noise at low resolution;
+// dynamic: the lowest volumetric scale the dynamic resolution may go down to (DynamicScale), to hold FRAME_BUDGET;
+// steady: the resolve keeps the history of the pixels not marched this frame and weighs a fresh march by this share of
+// the usual weight (bicubic history): the interleaved march at full detail without shimmer;
 // smooth: soft painterly clouds (broad billows, powder-darkened clefts) instead of the eroded detail, which the low
 // resolution only turns into grain, and a steadier temporal resolve (longer history, bicubic, outliers clamped) that
 // keeps the interleaved march from shimmering; it skips the detail noise and samples a coarser mip, so it costs less
@@ -14,12 +17,15 @@ const QUALITY = [
     { name: 'low', scale: 0.5, steps: 64, light: 3, interleave: 4, detail: 10000, blur: 1.5, smooth: 1 },
     { name: 'medium', scale: 0.5, steps: 96, light: 4, interleave: 4, detail: 16000, blur: 0.7 },
     { name: 'high', scale: 0.75, steps: 128, light: 5, interleave: 4, detail: 22000, blur: 0 },
-    { name: 'ultra', scale: 1.0, steps: 160, light: 6, interleave: 1, detail: 30000, blur: 0 },
+    { name: 'ultra', scale: 0.75, steps: 160, light: 6, interleave: 4, detail: 30000, blur: 0, steady: 1, dynamic: 0.5 },
 ];
 // froxel lighting volume: frustum cells across x, y and exponential depth slices from FROXEL_NEAR (m) to the march distance
 const FROXEL = [160, 96, 128];
 const FROXEL_NEAR = 40;
-const SHADOW_SLICES = 4;             // the cloud shadow map refreshes 1/4 of its rows per frame while nothing jumps
+// the GPU time per frame the dynamic resolution holds (ms): 144 Hz with a margin
+const FRAME_BUDGET = 6.3;
+const SHADOW_SLICES = 16;            // the cloud shadow map refreshes 1/16 of its rows per frame while nothing jumps (a
+                                     // texel is ~330 m; the clouds drift a hundredth of one per frame)
 const RENDER_DEFAULTS = {
     quality: 1, shapeScale: 11000, detailScale: 1700, detailStrength: 0.32, maxTop: 12500, maxDistance: 60000, weatherSize: 128000,
     rainExtinction: 0.0011, snowExtinction: 0.0026, slant: 0.09, fallSpeed: 40, timeScale: 20, particles: 24000,
@@ -27,5 +33,5 @@ const RENDER_DEFAULTS = {
 };
 const BLOOM_LEVELS = 6;              // bloom mip chain from half resolution down (fewer where the screen is small)
 
-return { RENDER_MODES, QUALITY, FROXEL, FROXEL_NEAR, SHADOW_SLICES, RENDER_DEFAULTS, BLOOM_LEVELS };
+return { RENDER_MODES, QUALITY, FROXEL, FROXEL_NEAR, FRAME_BUDGET, SHADOW_SLICES, RENDER_DEFAULTS, BLOOM_LEVELS };
 });

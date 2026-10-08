@@ -97,9 +97,10 @@ class FrameWriter {
         F.set('ground', [w.terrain.fieldSize, w.terrain.pivots, GROUND_RES, a.mode]);
         F.set('cirrus', [cfg.maxTop + 800, c.cirrus, 9000, c.drizzle]);
         F.set('march', [q.steps, q.light, cfg.maxDistance, a.radar ? 1 : 0]);
-        // the shadow map refreshes a slice of rows per frame, unless the map moved or the sun / weather jumped
-        const shadowKey = `${wo[0]},${wo[1]},${sky.dir.map(v => v.toFixed(2))},${w.weather.target},${w.weather.blend < 1 || w.rainZones.blend < 1}`;
-        const full = a.reset || shadowKey !== this.shadowKey || w.weather.blend < 1 || w.rainZones.blend < 1;
+        // the weather and shadow maps refresh a slice of rows per frame, unless the map moved or the sun / weather jumped (a new target
+        // weather starts its blend with one full refresh; the blend itself is gradual enough for the slices to follow)
+        const shadowKey = `${wo[0]},${wo[1]},${sky.dir.map(v => v.toFixed(2))},${w.weather.target}`;
+        const full = a.reset || shadowKey !== this.shadowKey;
         this.shadowKey = shadowKey;
         F.set('lod', [q.interleave, full ? 1 : SHADOW_SLICES, full ? 0 : a.frameNo % SHADOW_SLICES, q.detail]);
         this.shadowSlices = full ? 1 : SHADOW_SLICES;
@@ -107,7 +108,7 @@ class FrameWriter {
         F.set('post', [q.blur || 0, a.tiles ? 1 : 0, a.radarTop || 0, cfg.bloomBolt]);
         // how far the wind carried the clouds since the last frame: the resolve reprojects the history along with them
         const off = this.offset = [...w.weather.offset], prev = this.prevOffset || off;
-        F.set('look', [q.smooth || 0, off[0] - prev[0], off[1] - prev[1], 0]);
+        F.set('look', [q.smooth || 0, off[0] - prev[0], off[1] - prev[1], q.steady || 0]);
         F.set('bloom', [a.bloom ? cfg.bloom : 0, cfg.bloomThreshold, cfg.bloomKnee, r.bloomViews?.length || 1]);
         // heavy rain: up to three times the drops (big drops, past intensity 0.6)
         const drops = this.drops = w.rainZones.drops(cam.pos[0], cam.pos[2], c.drops);

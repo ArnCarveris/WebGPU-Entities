@@ -96,6 +96,77 @@ fn tiles(@builtin(global_invocation_id) gid: vec3u) {
 }
 `;
 
+// needs F
+const WGSL_HAZE = /* wgsl */`
+fn hazeDensity(y: f32) -> f32 { return F.zenith.w * exp(-max(y - F.misc.z, 0.0) / F.horizon.w); }
+
+// optical depth of the haze along a straight segment
+fn hazeOD(y0: f32, y1: f32, len: f32) -> f32 {
+    let H = F.horizon.w;
+    let a = exp(-max(y0 - F.misc.z, 0.0) / H);
+    let b = exp(-max(y1 - F.misc.z, 0.0) / H);
+    let dy = y1 - y0;
+    if (abs(dy) < 1.0) { return F.zenith.w * a * len; }
+    return F.zenith.w * H * len * (a - b) / dy;
+}
+
+// tends to the horizon sky colour far away; sunlit haze adds forward scattering, so cloud shadows cut crepuscular rays
+// (phase: hazePhase(mu), constant along a ray, so the march evaluates it once)
+fn hazePhase(mu: f32) -> f32 { return hg(mu, 0.78) * 0.025 + hg(mu, 0.3) * 0.02 + hg(mu, 0.6) * 0.015; }
+fn hazeLight(phase: f32, sh: vec2f) -> vec3f {
+    return F.horizon.rgb * (0.45 + 0.55 * sh.y) + F.sunCol.rgb * sh.x * phase;
+}
+
+// the haze's light at p (phase: hazePhase of the view ray): below the cloud base + 700 m from the froxel volume's
+// sample fx there (sun and sky under the cloud, lightning, the towns' glow), above it the open sky's
+fn hazeLightAt(p: vec3f, phase: f32, fx: vec4f) -> vec3f {
+    if (p.y < F.cloud.x + 700.0) {
+        var glow = vec3f(0.0);
+        if (F.glowInfo.x > 0.0) { glow = GLOW_COLOR * fx.w; }
+        return hazeLight(phase, fx.xy) + glow + FLASH_COLOR * fx.z * 0.05;
+    }
+    var glow = vec3f(0.0);
+    if (F.glowInfo.x > 0.0) { glow = cityGlow(p); }
+    return hazeLight(phase, vec2f(1.0)) + glow;
+}
+`;
+
+// Haze integrated along each froxel column (after the froxel injection): per cell, the light the haze scatters
+// towards the eye from the camera to the cell's centre (rgb, after the haze in front of it) and the haze's
+// transmittance over that stretch (a). The march reads it where cloud or precipitation changes its transmittance and
+// once at its end, instead of evaluating the haze at every step: in cloud-free air the haze between two reads is just
+// the difference of the integral. Each stretch's optical depth is integrated over its height (hazeOD), its light is
+// the mean of the cells' at its ends. Lit as the march lit it per step (cloud shadows cut the same light shafts).
+const WGSL_HAZE_INTEGRATE = /* wgsl */`
+@group(1) @binding(0) var froxelIn: texture_3d<f32>;
+@group(1) @binding(1) var hazeOut: texture_storage_3d<rgba16float, write>;
+
+@compute @workgroup_size(8, 8)
+fn hazeIntegrate(@builtin(global_invocation_id) gid: vec3u) {
+    let n = textureDimensions(hazeOut);
+    if (any(gid.xy >= n.xy)) { return; }
+    let c = (vec2f(gid.xy) + 0.5) / vec2f(n.xy);
+    let v = F.fwd.xyz + F.right.xyz * (c.x * 2.0 - 1.0) + F.up.xyz * (c.y * 2.0 - 1.0);   // per metre of view depth
+    let vl = length(v);
+    let phase = hazePhase(dot(v / vl, F.sunDir.xyz));
+    var I = vec3f(0.0);
+    var Th = 1.0;
+    var zPrev = 0.0;
+    var lPrev = vec3f(0.0);
+    for (var k = 0u; k < n.z; k++) {
+        let z = F.froxel.x * pow(F.froxel.y / F.froxel.x, (f32(k) + 0.5) / f32(n.z));
+        let p = F.cam.xyz + v * z;
+        let L = hazeLightAt(p, phase, textureLoad(froxelIn, vec3u(gid.xy, k), 0));
+        let tr = exp(-hazeOD(F.cam.y + v.y * zPrev, p.y, (z - zPrev) * vl));
+        I += Th * select(0.5 * (L + lPrev), L, k == 0u) * (1.0 - tr);
+        Th *= tr;
+        textureStore(hazeOut, vec3u(gid.xy, k), vec4f(I, Th));
+        zPrev = z;
+        lPrev = L;
+    }
+}
+`;
+
 const WGSL_MARCH = /* wgsl */`
 const SPRAY = ${SPRAY.toFixed(4)};
 @group(1) @binding(0) var depthTex: texture_depth_2d;
@@ -103,6 +174,7 @@ const SPRAY = ${SPRAY.toFixed(4)};
 @group(1) @binding(2) var outDepth: texture_storage_2d<r32float, write>;
 @group(1) @binding(3) var froxelTex: texture_3d<f32>;
 @group(1) @binding(4) var tileTex: texture_2d<u32>;
+@group(1) @binding(5) var hazeTex: texture_3d<f32>;
 
 // distance bins where the tile pre-pass found cloud, over this pixel's tile and its 8 neighbours (pixel jitter, rays
 // between tile centres), widened by one bin each way
@@ -118,33 +190,35 @@ fn tileMask(px: vec2u) -> vec2u {
     return m | up | down;
 }
 
-// sun transmittance, sky light, lightning and the towns' glow (its strength, cityGlow / GLOW_COLOR) at p, from the froxel volume
-fn froxelAt(p: vec3f) -> vec4f {
+// p's coordinates in the froxel volume
+fn froxelUVW(p: vec3f) -> vec3f {
     let v = p - F.cam.xyz;
     let z = max(dot(v, F.fwd.xyz), F.froxel.x);
     let r = F.right.xyz;
     let u = F.up.xyz;
-    let uvw = vec3f(dot(v, r) / (dot(r, r) * z) * 0.5 + 0.5, dot(v, u) / (dot(u, u) * z) * 0.5 + 0.5,
-                    log(z / F.froxel.x) / log(F.froxel.y / F.froxel.x));
-    return textureSampleLevel(froxelTex, clampSamp, uvw, 0.0);
+    return vec3f(dot(v, r) / (dot(r, r) * z) * 0.5 + 0.5, dot(v, u) / (dot(u, u) * z) * 0.5 + 0.5,
+                 log(z / F.froxel.x) / log(F.froxel.y / F.froxel.x));
 }
 
-fn hazeDensity(y: f32) -> f32 { return F.zenith.w * exp(-max(y - F.misc.z, 0.0) / F.horizon.w); }
+// sun transmittance, sky light, lightning and the towns' glow (its strength, cityGlow / GLOW_COLOR) at p, from the froxel volume
+fn froxelAt(p: vec3f) -> vec4f { return textureSampleLevel(froxelTex, clampSamp, froxelUVW(p), 0.0); }
 
-// optical depth of the haze along a straight segment
-fn hazeOD(y0: f32, y1: f32, len: f32) -> f32 {
-    let H = F.horizon.w;
-    let a = exp(-max(y0 - F.misc.z, 0.0) / H);
-    let b = exp(-max(y1 - F.misc.z, 0.0) / H);
-    let dy = y1 - y0;
-    if (abs(dy) < 1.0) { return F.zenith.w * a * len; }
-    return F.zenith.w * H * len * (a - b) / dy;
-}
-
-// tends to the horizon sky colour far away; sunlit haze adds forward scattering, so cloud shadows cut crepuscular rays
-fn hazeLight(mu: f32, sh: vec2f) -> vec3f {
-    let glow = hg(mu, 0.78) * 0.025 + hg(mu, 0.3) * 0.02;
-    return F.horizon.rgb * (0.45 + 0.55 * sh.y) + F.sunCol.rgb * sh.x * (glow + hg(mu, 0.6) * 0.015);
+// Haze from the integrated froxel columns (WGSL_HAZE_INTEGRATE): the march's haze from where it last read it (hz: its
+// light rgb and transmittance a there, at distance *hzT) on to distance t along the ray. The haze between is the
+// difference of the integral, seen through the transmittance *T the ray had there; *T, the depth sums and hz move on.
+fn hazeTo(t: f32, ro: vec3f, dir: vec3f, col: ptr<function, vec3f>, T: ptr<function, f32>, hz: ptr<function, vec4f>,
+          hzT: ptr<function, f32>, depthAcc: ptr<function, f32>, wsum: ptr<function, f32>) {
+    if (t <= *hzT) { return; }
+    let h = textureSampleLevel(hazeTex, clampSamp, froxelUVW(ro + dir * t), 0.0);
+    let k = *T / max((*hz).a, 1e-6);
+    let tn = min(k * h.a, *T);
+    *col += k * max(h.rgb - (*hz).rgb, vec3f(0.0));
+    let dT = *T - tn;
+    *depthAcc += (*hzT + t) * 0.5 * dT;
+    *wsum += dT;
+    *T = tn;
+    *hz = h;
+    *hzT = t;
 }
 
 // radiance scattered towards the eye by cloud at p
@@ -438,6 +512,12 @@ fn march(@builtin(global_invocation_id) gid: vec3u) {
         // the stretch of the ray inside the bus's cabin (one box test per ray): no rain, snow or haze in there
         let cab = cabinSpan(ro, dir);
         let snowPhase = mix(hg(mu, 0.45), hg(mu, 0.0), 0.6);
+        let hazeG = hazePhase(mu);
+        // haze: from the integrated froxel columns where the froxel volume is on, else evaluated at every step
+        let hazeFroxel = froxels && doHaze;
+        var hz = vec4f(0.0, 0.0, 0.0, 1.0);
+        var hzT = t0;
+        if (hazeFroxel && t0 > F.froxel.x) { hz = textureSampleLevel(hazeTex, clampSamp, froxelUVW(ro + dir * t0), 0.0); }
         for (var i = 0; i < N; i++) {
             let fa = f32(i) / f32(N);
             let fb = f32(i + 1) / f32(N);
@@ -445,6 +525,7 @@ fn march(@builtin(global_invocation_id) gid: vec3u) {
             let ds = span * (fb * fb - fa * fa);
             let t = t0 + span * fs * fs;
             if (t >= tornT) {
+                if (hazeFroxel) { hazeTo(tornT, ro, dir, &col, &T, &hz, &hzT, &depthAcc, &wsum); }
                 col += T * torn.rgb;
                 let dT = T * (1.0 - torn.w);
                 depthAcc += tornT * dT;
@@ -456,7 +537,6 @@ fn march(@builtin(global_invocation_id) gid: vec3u) {
             let p = ro + dir * t;
             var sigma = 0.0;
             var S = vec3f(0.0);
-            let side = select(0.0, exp(-odIn * 0.35), airSeen);
             var medium = 0.0;       // cloud and precipitation extinction at this step (not haze)
             var cloudy = doClouds && p.y > F.layerInfo.z && p.y < F.features.z;
             // distance bins without cloud in the tile pre-pass
@@ -484,6 +564,7 @@ fn march(@builtin(global_invocation_id) gid: vec3u) {
                     let nl = i32(F.march.y);
                     let ls = select(select(nl, max(nl - 1, 2), t > detailDist), 2, t > detailDist * 2.5);
                     let tint = mix(vec3f(1.0), vec3f(0.62, 1.0, 0.72), cs.z);   // green storm light
+                    let side = select(0.0, exp(-odIn * 0.35), airSeen);
                     S += dc * cloudLight(p, mu, dir.y, w, ls, clamp(t / detailDist, 1.0, 3.0), cs.y, side, dc) * tint;
                     sigma += dc;
                     medium += dc;
@@ -501,14 +582,21 @@ fn march(@builtin(global_invocation_id) gid: vec3u) {
                 if (F.glowInfo.x > 0.0) { if (froxels) { glow = GLOW_COLOR * fx.w; } else { glow = cityGlow(p); } }
                 if (doPrecip) {
                     let src = precipSourceAt(p);
-                    var pd = precipDensity(p, src);
-                    var sd = rainSpray(p, ro, dir, t0 + span * fa * fa, t0 + span * fb * fb, src, lift);
+                    // no precipitation where this air's weather has none (both are 0 below 0.003): skip the curtains'
+                    // noise and the spray's terrain lookups
+                    var pd = vec2f(0.0);
+                    var sd = 0.0;
+                    if (src.z >= 0.003) {
+                        pd = precipDensity(p, src);
+                        sd = rainSpray(p, ro, dir, t0 + span * fa * fa, t0 + span * fb * fb, src, lift);
+                    }
                     if (sheltered && pd.x + pd.y + sd > 0.0) { let k = rainReaches(p); pd *= k; sd *= k; }
                     if (pd.x + pd.y + sd > 0.0) {
                         // the diffuse light under the cloud: what the column lets through (sh.y), brighter looking up,
                         // and what the ground bounces up where the sun reaches it
                         // (deep in the rain), or with sky from the side near a shaft's edge seen from outside (side)
                         let deepAmb = sh.y * diffuseLook((sh.y - 0.12) / 0.88, dir.y);
+                        let side = select(0.0, exp(-odIn * 0.35), airSeen);
                         let amb = F.ambient.rgb * mix(deepAmb, 0.25 + 0.75 * sh.y, side) + F.sunCol.rgb * max(F.sunDir.y, 0.0) * 0.02 * sh.x + glow;
                         S += pd.x * (F.sunCol.rgb * sh.x * rainPhase + amb * 0.85) * 0.9;
                         S += pd.y * (F.sunCol.rgb * sh.x * snowPhase * 0.6 + amb * 1.25) * 0.95;
@@ -521,21 +609,22 @@ fn march(@builtin(global_invocation_id) gid: vec3u) {
                         medium += pd.x + pd.y + sd;
                     }
                 }
-                if (doHaze) {
+                if (doHaze && !hazeFroxel) {
                     let hd = hazeDensity(p.y);
                     var fl = fx.z;
                     if (fl < 0.0) { fl = flashLit(p); }
-                    S += hd * (hazeLight(mu, sh) + glow + FLASH_COLOR * fl * 0.05);   // the air under a storm lights up too
+                    S += hd * (hazeLight(hazeG, sh) + glow + FLASH_COLOR * fl * 0.05);   // the air under a storm lights up too
                     sigma += hd;
                 }
-            } else if (doHaze) {
+            } else if (doHaze && !hazeFroxel) {
                 let hd = hazeDensity(p.y);
-                S += hd * hazeLight(mu, vec2f(1.0));
+                S += hd * hazeLight(hazeG, vec2f(1.0));
                 if (F.glowInfo.x > 0.0) { S += hd * cityGlow(p); }
                 sigma += hd;
             }
             if (medium < 1e-5) { airSeen = true; odIn = 0.0; } else { odIn += medium * ds; }
             if (sigma > 1e-8) {
+                if (hazeFroxel) { hazeTo(t, ro, dir, &col, &T, &hz, &hzT, &depthAcc, &wsum); }
                 let tr = exp(-sigma * ds);
                 col += T * S / sigma * (1.0 - tr);
                 let dT = T * (1.0 - tr);
@@ -546,6 +635,7 @@ fn march(@builtin(global_invocation_id) gid: vec3u) {
                 if (T < 0.004) { T = 0.0; break; }
             }
         }
+        if (hazeFroxel && T > 0.0) { hazeTo(t1, ro, dir, &col, &T, &hz, &hzT, &depthAcc, &wsum); }
     }
 
     // the tornado beyond the cloud march (or on a ray that misses the cloud slab)
@@ -564,7 +654,7 @@ fn march(@builtin(global_invocation_id) gid: vec3u) {
         let tr = exp(-od);
         var glow = vec3f(0.0);
         if (F.glowInfo.x > 0.0) { glow = cityGlow(ro + dir * mix(a, sceneT, 0.5)); }   // the domes over the far towns
-        col += T * (hazeLight(mu, vec2f(1.0)) + glow) * (1.0 - tr);
+        col += T * (hazeLight(hazePhase(mu), vec2f(1.0)) + glow) * (1.0 - tr);
         T *= tr;
     }
 
@@ -629,6 +719,7 @@ fn resolve(@builtin(global_invocation_id) gid: vec3u) {
     let il = i32(F.lod.x);
     let fresh = marchedNow(q);                   // marched this frame
     let smoothLook = F.look.x > 0.5;            // the smooth look (QUALITY smooth)
+    let steady = F.look.w > 0.0;                 // the steady resolve (QUALITY steady: the fresh march's weight scale)
     // neighbourhood statistics over pixels marched this frame: within 1 pixel (every pixel: the 3x3; checkerboard: the
     // centre and diagonals, or the four direct neighbours), within 2 when one pixel in four is marched (4 to 9 of them)
     var m1 = vec4f(0.0);
@@ -666,18 +757,35 @@ fn resolve(@builtin(global_invocation_id) gid: vec3u) {
         let puv = vec2f(pc.x / pc.w * 0.5 + 0.5, 0.5 - pc.y / pc.w * 0.5);
         if (all(puv > vec2f(0.0)) && all(puv < vec2f(1.0))) {
             var h = textureSampleLevel(histTex, clampSamp, puv, 0.0);
-            if (smoothLook) { h = historyCR(puv); }
+            if (smoothLook || steady) { h = historyCR(puv); }
             let hist = clamp(h, mn, mx);
             // smooth look: soft, slowly changing clouds keep a longer history, and the pixels not marched this frame
             // keep theirs (clamped) instead of taking in their neighbours' mean, which shimmers as the marched pixel
             // of each block cycles
             let k = select(0.06, select(select(0.1, 0.18, il >= 2), 0.25, il >= 4), fresh);
             o = mix(hist, cur, select(k, select(0.0, k * 0.25, fresh), smoothLook));
+            // steady (ultra): an interleaved march at full detail, kept steady: a march weighs less, and the pixels not
+            // marched this frame keep their history rather than take in their neighbours' mean (it shimmers as the
+            // marched pixel cycles)
+            if (steady && !smoothLook) { o = mix(hist, cur, select(0.0, k * F.look.w, fresh)); }
         }
     }
     textureStore(histOut, q, o);
 }
 `;
 
-return { WGSL_FROXEL, WGSL_SKIP_SAMPLE, WGSL_TILES, WGSL_MARCH, WGSL_RESOLVE };
+// the history resampled into a resized one (CloudPass.resize)
+const WGSL_HISTORY_COPY = /* wgsl */`
+@group(1) @binding(0) var src: texture_2d<f32>;
+@group(1) @binding(1) var dst: texture_storage_2d<rgba16float, write>;
+
+@compute @workgroup_size(8, 8)
+fn copyHistory(@builtin(global_invocation_id) gid: vec3u) {
+    let n = textureDimensions(dst);
+    if (any(gid.xy >= n)) { return; }
+    textureStore(dst, gid.xy, textureSampleLevel(src, clampSamp, (vec2f(gid.xy) + 0.5) / vec2f(n), 0.0));
+}
+`;
+
+return { WGSL_FROXEL, WGSL_SKIP_SAMPLE, WGSL_TILES, WGSL_HAZE, WGSL_HAZE_INTEGRATE, WGSL_MARCH, WGSL_RESOLVE, WGSL_HISTORY_COPY };
 });

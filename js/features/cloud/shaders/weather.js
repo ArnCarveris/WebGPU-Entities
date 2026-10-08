@@ -39,7 +39,10 @@ fn zoneAt(xz: vec2f) -> vec2f {
 @group(1) @binding(3) var styleOut: texture_storage_2d<rgba16float, write>;
 
 @compute @workgroup_size(8, 8)
-fn weather(@builtin(global_invocation_id) gid: vec3u) {
+fn weather(@builtin(global_invocation_id) g: vec3u) {
+    // time slicing, as the shadow map: this frame refreshes every S-th row, starting at the slice index (the map drifts
+    // a fraction of a texel per frame)
+    let gid = vec3u(g.x, g.y * u32(max(F.lod.y, 1.0)) + u32(F.lod.z), 0u);
     let n = u32(F.wdomain.w);
     if (gid.x >= n || gid.y >= n) { return; }
     let xz = F.wdomain.xy + (vec2f(gid.xy) + 0.5) / f32(n) * F.wdomain.z;

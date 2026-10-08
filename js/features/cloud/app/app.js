@@ -9,9 +9,29 @@ const { clamp, v3, PointerInput } = Common;
 const { FirstPersonView } = kits.view;
 const SLOW_ALT = { keys: ['AltLeft'], factor: 0.2 };       // Alt held: a fifth of the speed
 const {
-    SPLASH_PARTICLES, RENDER_DEFAULTS, QUALITY, World, Renderer, Walker, Hud, AppMenus, CloudPicker, Controls,
+    SPLASH_PARTICLES, RENDER_DEFAULTS, QUALITY, FRAME_BUDGET, World, Renderer, Walker, Hud, AppMenus, CloudPicker, Controls,
     KeyCommands, DoorControl, Surroundings, SoundEvents, LightWriter, FrameWriter,
 } = feature;
+
+// Dynamic resolution: the volumetric scale between the preset's (q.scale) and its floor (q.dynamic), stepped by 0.05 to
+// keep the GPU time per frame (the profiler's, smoothed) under FRAME_BUDGET. Down at once by as much as the overshoot
+// needs (the volumetrics cost about the scale squared); up a step only when that estimate of the next step's cost (an
+// overestimate: part of the frame does not scale) still leaves a margin, and at most every half second, so it settles
+// instead of hunting. Dense weather (snow squalls, downpours) is soft: a lower scale hardly shows.
+class DynamicScale {
+    constructor() { this.scale = 0; this.at = -1e9; }
+    update(q, gpuMs, now) {
+        if (!this.scale || this.scale > q.scale || this.scale < q.dynamic) this.scale = q.scale;
+        if (gpuMs > 0 && now - this.at > 0.5) {
+            let s = this.scale;
+            if (gpuMs > FRAME_BUDGET) s = Math.floor(s * Math.sqrt(FRAME_BUDGET / gpuMs) * 20) / 20;
+            else if (gpuMs * ((s + 0.05) / s) ** 2 < FRAME_BUDGET * 0.95) s = s + 0.05;
+            s = Math.min(q.scale, Math.max(q.dynamic, Math.round(s * 20) / 20));
+            if (s !== this.scale) { this.scale = s; this.at = now; }
+        }
+        return this.scale;
+    }
+}
 
 class App {
     constructor(fx) {
@@ -50,6 +70,7 @@ class App {
         this.sounds = new SoundEvents(this);
         this.lights = new LightWriter(this);
         this.frameWriter = new FrameWriter(this);
+        this.dynamicScale = new DynamicScale();
     }
 
     async start() {
@@ -106,7 +127,9 @@ class App {
             this.sounds.update();
         }
         if (!render) return;
-        if (r.resize(QUALITY[this.quality].scale)) this.reset = true;
+        // the volumetric resolution: the preset's, or lower while the GPU time is over budget (a resize keeps the history)
+        const q = QUALITY[this.quality];
+        r.resize(q.dynamic && r.profiler.enabled ? this.dynamicScale.update(q, r.profiler.total, this.time) : q.scale);
         const fw = this.frameWriter;
         fw.write(dt, this.wdt ?? 0);
         const enc = r.device.createCommandEncoder();

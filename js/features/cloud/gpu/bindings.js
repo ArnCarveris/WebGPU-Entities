@@ -46,7 +46,7 @@ const FRAME_LAYOUT = [
     ['lod', 'vec4f'],       // march interleave (1, 2, 4), shadow map slices, slice this frame, detail distance (m)
     ['froxel', 'vec4f'],    // near, far (m), froxels on, -
     ['post', 'vec4f'],      // cloud blur radius (volumetric texels), cloud tile pre-pass on, radar top (fraction of the screen height), bolt bloom gain
-    ['look', 'vec4f'],      // smooth clouds (0 .. 1: broad soft billows, no detail erosion, powder), cloud drift since the last frame x, z (m), -
+    ['look', 'vec4f'],      // smooth clouds (0 .. 1: broad soft billows, no detail erosion, powder), cloud drift since the last frame x, z (m), steady resolve (the fresh march's weight scale, 0 off)
     ['bloom', 'vec4f'],     // strength (0 off), threshold, soft knee (exposed radiance), levels in the chain
     ['blocks', 'vec4f'],    // structure boxes: count, lowest bottom, highest top (m), -
     ['blockBox', 'vec4f'],  // their bounds x0, z0, x1, z1, padded for the shadows and rain shadows they cast
