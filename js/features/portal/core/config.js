@@ -31,7 +31,7 @@ const NEAR_PASS = 0.35;                // SECTR: IsPointInHull(cameraPos, maxNea
 const DEPTH_FORMAT = 'depth24plus-stencil8';
 const PATTERNS = { flat: 0, tiles: 1, panels: 2, noise: 3, grass: 4, hazard: 5, planks: 6, bricks: 7, screen: 8, rust: 9 };
 const { AXES } = engine.kits.mesh;     // the world axes
-const DEFAULT_GLASS = [0.55, 0.7, 0.75, 0.12];
+const { DEFAULT_GLASS } = engine.kits.interior;      // a portal's default glass (the interior kit's)
 
 return {
     MAX_LIGHTS, MAX_THROUGH, THROUGH_FLOATS, LIGHT_DEPTH, SUN_SOFT, SUN_FAR, AREA_FLOATS, MAT_FLOATS, MAX_DRAWS, DRAW_STRIDE, MAX_FOG_PORTALS, DRAW_FLOATS, MAX_LINE_VERTS,

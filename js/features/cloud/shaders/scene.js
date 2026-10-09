@@ -4,7 +4,7 @@
 Features.part('cloud', (engine, feature) => {
 const {
     LIGHT_CABIN, LIGHT_ROOM, POOL_ALBEDO, FAR_LAMP_PITCH, TOWN_BLOCK, FAR_LAMP_SIDE, FAR_LAMP_H, POLE_DRAW, GRID_N, BUS, BUS_IN,
-    INTERIOR_DRAW, BLD_ID,
+    INTERIOR_DRAW, BLD_ID, BLD_LIT, BLD_STACK,
 } = feature;
 
 // needs F, heightTex, clampSamp: the terrain's height and normal at xz (beyond the heightfield it flattens to the base)
@@ -359,6 +359,57 @@ struct StructOut { @builtin(position) pos: vec4f, @location(0) world: vec3f, @lo
     return o;
 }
 
+// a building's interior vertex, in its Origin's frame (Buildings.localize): to clip space with busU.mvp, built in
+// doubles about the camera for the building drawn (its slot in busData, FrameWriter), and to the world with busU.model
+// for its lighting. One of a storey many share (BLD_STACK) stands one storey higher per instance (the draw's first
+// instance is how many storeys above the one it was built at)
+@vertex fn vsInterior(@location(0) p: vec3f, @location(1) n: vec3f, @location(2) c: vec4f, @builtin(instance_index) ii: u32) -> StructOut {
+    let m = u32(c.a + 0.5);
+    var q = p;
+    if ((m & ${BLD_STACK}u) != 0u) { q.y += f32(ii) * bld(m / ${BLD_ID}u).b.w; }
+    var o: StructOut;
+    o.world = (busU.model * vec4f(q, 1.0)).xyz;
+    o.n = (busU.model * vec4f(n, 0.0)).xyz;
+    o.col = c;
+    o.pos = busU.mvp * vec4f(q, 1.0);
+    return o;
+}
+
+// a box instance (Lifts: the cars, their doors, the landing doors), in its building's Origin frame as an interior's
+// vertex is (busU): a unit cube scaled by its half sizes (b.xyz), turned by its yaw (a.w) about its centre (a.xyz); its
+// colour (c.rgb) and material (b.w, as an interior's)
+@vertex fn vsBox(@location(0) p: vec3f, @location(1) n: vec3f, @location(2) c: vec4f, @location(3) ia: vec4f, @location(4) ib: vec4f, @location(5) ic: vec4f) -> StructOut {
+    let cs = cos(ia.w);
+    let sn = sin(ia.w);
+    let l = p * ib.xyz;
+    let q = ia.xyz + vec3f(l.x * cs - l.z * sn, l.y, l.x * sn + l.z * cs);
+    var o: StructOut;
+    o.world = (busU.model * vec4f(q, 1.0)).xyz;
+    o.n = (busU.model * vec4f(n.x * cs - n.z * sn, n.y, n.x * sn + n.z * cs, 0.0)).xyz;
+    o.col = vec4f(ic.rgb, ib.w);
+    o.pos = busU.mvp * vec4f(q, 1.0);
+    return o;
+}
+
+// a world-space GUI (the gui kit's EntityGUI, drawn into its own texture: GuiTargets): a screen that glows, the eye
+// adapted to it as to the lamps; dark glass where the GUI leaves it clear
+@group(2) @binding(0) var panelSamp: sampler;
+@group(2) @binding(1) var panelTex: texture_2d<f32>;
+struct PanelOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f };
+
+@vertex fn vsPanel(@location(0) p: vec3f, @location(1) uv: vec2f) -> PanelOut {
+    var o: PanelOut;
+    o.uv = uv;
+    o.pos = F.viewProj * vec4f(p, 1.0);
+    return o;
+}
+
+@fragment fn fsPanel(i: PanelOut) -> @location(0) vec4f {
+    let t = textureSample(panelTex, panelSamp, i.uv);
+    let c = pow(max(t.rgb, vec3f(0.0)), vec3f(2.2)) * 0.9 / max(F.sunCol.w, 0.2) + vec3f(0.004, 0.005, 0.006) * (1.0 - t.a);
+    return vec4f(c, 0.0);
+}
+
 @fragment fn fsStruct(i: StructOut) -> @location(0) vec4f {
     let mat = i32(i.col.a + 0.5);
     if (mat == 7) { return vec4f(lampGlow(i.world, i.n, i.col.rgb), 0.0); }
@@ -443,15 +494,26 @@ fn shadeCabin(p: vec3f, nIn: vec3f, colIn: vec3f, mat: i32) -> vec3f {
 
 // inside building id (WGSL_BUILDING): no weather; sky light that comes in through the windows (more near the outer walls
 // than deep in the room), the sun where its ray leaves through a window of the same storey and nothing outside shades
-// it, the ceiling lamps of the storey if they are on (the eye adapts to them, as in the bus), a little of a flash
-fn shadeInterior(p: vec3f, nIn: vec3f, colIn: vec3f, mat: u32, id: u32) -> vec3f {
+// it (in a planned building, only into the rooms on the façade it comes in by), the ceiling lamps of the storey if
+// they are on (the eye adapts to them, as in the bus), a little of a flash. m: the vertex's material code (its material,
+// flags, building id). A lift car (BLD_LIT) is lit by its own lamp only
+fn shadeInterior(p: vec3f, nIn: vec3f, colIn: vec3f, m: u32) -> vec3f {
+    let mat = m & 7u;
+    let id = m / ${BLD_ID}u;
     let b = bld(id);
     let v = normalize(F.cam.xyz - p);
     var n = normalize(nIn);
     if (dot(n, v) < 0.0) { n = -n; }
     let q = bldLocal(b, p + n * 0.02);
-    let lit = storeyLit(id, b, bldStorey(b, q.y));
     let lampC = vec3f(1.0, 0.9, 0.74) / max(F.sunCol.w, 0.2);
+    if ((m & ${BLD_LIT}u) != 0u) {
+        if (mat == 7u) { return colIn * lampC * 1.8; }
+        var c = colIn * (0.96 + 0.08 * vnoise2(vec2f(q.x + q.z, q.y) * 3.0)) * lampC * 0.3 * (0.4 + 0.6 * sat(n.y * 0.5 + 0.5));
+        if (mat == 4u) { c += lampC * 0.08 * (0.04 + 0.96 * pow(1.0 - max(dot(n, v), 0.0), 5.0)); }
+        return c;
+    }
+    let storey = bldStorey(b, q.y);
+    let lit = storeyLit(id, b, storey);
     let sh = shadowAt(p);
     if (mat == 7u) { return colIn * mix(F.ambient.rgb * sh.y * 0.08, lampC * 1.6, lit); }        // the lamps themselves
     let s = F.sunDir.xyz;
@@ -462,12 +524,18 @@ fn shadeInterior(p: vec3f, nIn: vec3f, colIn: vec3f, mat: u32, id: u32) -> vec3f
         let x = bldExit(b, q, ds);
         if (x.x > -100.0) {
             let w = 0.01 * x.y + 0.02;
-            let e = bldWorld(b, q + ds * x.y) + s * 0.1;
+            let el = q + ds * x.y;
+            let e = bldWorld(b, el) + s * 0.1;
             sun = smoothstep(-w, w, x.x) * shadowAt(e).x * structureLight(e, true, false).x;
+            // rooms off a corridor: the partitions keep it in the rooms of the façade it comes in by
+            if (b.g.x + b.g.y > 0.0 && !bldHall(b, storey)) {
+                let viaX = abs(abs(el.x) - b.b.x) < 0.05;
+                if (select(abs(el.z - q.z), abs(el.x - q.x), viaX) > select(b.g.y, b.g.x, viaX) + b.d.y + 0.1) { sun = 0.0; }
+            }
         }
     }
     let dw = min(b.b.x - abs(q.x), b.b.y - abs(q.z));
-    let near = 1.0 - smoothstep(0.3, 5.0, dw);
+    let near = 1.0 - smoothstep(0.3, select(5.0, 11.0, b.g.x + b.g.y > 0.0), dw);       // (a curtain wall's deep floors: further)
     // and what the sunlit floors and walls bounce around the room (where the sun comes in at all)
     let sky = F.ambient.rgb * sh.y * (0.12 + 0.3 * near) * (0.75 + 0.25 * abs(n.y)) + F.sunCol.rgb * max(s.y, 0.0) * sh.x * (0.015 + 0.03 * near);
     let lamp = lampC * 0.13 * lit * (0.35 + 0.65 * sat(n.y * 0.5 + 0.5));
@@ -483,10 +551,10 @@ fn shadeInterior(p: vec3f, nIn: vec3f, colIn: vec3f, mat: u32, id: u32) -> vec3f
     return col;
 }
 
-// a building's interior (drawn within INTERIOR_DRAW of it): walls' inner faces, floors, stairs, furniture, lamps
+// a building's interior (its storeys within INTERIOR_DRAW): walls' inner faces, floors, stairs, furniture, lamps; the lift cars
 @fragment fn fsInterior(i: StructOut) -> @location(0) vec4f {
     let m = u32(i.col.a + 0.5);
-    return vec4f(shadeInterior(i.world, i.n, i.col.rgb, m & 7u, m / ${BLD_ID}u), 0.0);
+    return vec4f(shadeInterior(i.world, i.n, i.col.rgb, m), 0.0);
 }
 
 // a door leaf, open or shut: lit as the interior on its inner side, by the weather on its outer one
@@ -497,7 +565,7 @@ fn shadeInterior(p: vec3f, nIn: vec3f, colIn: vec3f, mat: u32, id: u32) -> vec3f
     var n = normalize(i.n);
     if (dot(n, F.cam.xyz - i.world) < 0.0) { n = -n; }
     let q = bldLocal(b, i.world + n * 0.03);
-    if (abs(q.x) < b.b.x - b.d.y + 0.01 && abs(q.z) < b.b.y - b.d.y + 0.01) { return vec4f(shadeInterior(i.world, n, i.col.rgb, m & 7u, id), 0.0); }
+    if (abs(q.x) < b.b.x - b.d.y + 0.01 && abs(q.z) < b.b.y - b.d.y + 0.01) { return vec4f(shadeInterior(i.world, n, i.col.rgb, m), 0.0); }
     return vec4f(shadeStruct(i.world, n, i.col.rgb, i32(m & 7u)).rgb, 0.0);
 }
 
@@ -506,7 +574,7 @@ fn shadeInterior(p: vec3f, nIn: vec3f, colIn: vec3f, mat: u32, id: u32) -> vec3f
 @fragment fn fsPane(i: StructOut) -> @location(0) vec4f {
     let id = u32(i.col.a + 0.5) / ${BLD_ID}u;
     let b = bld(id);
-    if (distance(F.cam.xyz, bldCentre(b)) < ${INTERIOR_DRAW}.0) { discard; }
+    if (bldStoreyDist(b, i.world.y) < ${INTERIOR_DRAW}.0) { discard; }
     return vec4f(shadeStruct(i.world, i.n, i.col.rgb, 5).rgb + windowGlow(id, b, i.world.y), 0.0);
 }
 

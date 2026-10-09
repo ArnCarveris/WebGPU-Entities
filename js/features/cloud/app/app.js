@@ -10,7 +10,7 @@ const { FirstPersonView } = kits.view;
 const SLOW_ALT = { keys: ['AltLeft'], factor: 0.2 };       // Alt held: a fifth of the speed
 const {
     SPLASH_PARTICLES, RENDER_DEFAULTS, QUALITY, FRAME_BUDGET, World, Renderer, Walker, Hud, AppMenus, CloudPicker, Controls,
-    KeyCommands, DoorControl, Surroundings, SoundEvents, LightWriter, FrameWriter,
+    KeyCommands, DoorControl, LiftControl, Surroundings, SoundEvents, LightWriter, FrameWriter,
 } = feature;
 
 // Dynamic resolution: the volumetric scale between the preset's (q.scale) and its floor (q.dynamic), stepped by 0.05 to
@@ -66,6 +66,7 @@ class App {
         this.controls = new Controls(this);
         this.keys = new KeyCommands(this);
         this.doors = new DoorControl(this);
+        this.liftControl = new LiftControl(this);
         this.surroundings = new Surroundings(this);
         this.sounds = new SoundEvents(this);
         this.lights = new LightWriter(this);
@@ -121,6 +122,7 @@ class App {
             if (!this.paused) w.lightning.around(w, this.camera.pos, dt);
             // on foot after the bus has moved, so a rider's eye is where the bus is this frame
             if (this.walker.active && !locked) this.walker.update(dt, io, this.input, this);
+            this.liftControl.update(dt, io, now);
             this.doors.update(dt, io);
             if (v3.len(v3.sub(before, this.camera.pos)) > 3000) this.reset = true;
             this.surroundings.update(dt);

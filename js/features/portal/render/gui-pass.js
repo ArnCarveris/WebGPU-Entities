@@ -3,31 +3,12 @@
 
 Features.part('portal', (engine, feature) => {
 const { RenderExtensions } = engine.kits.gpu;
-const { GuiAtlas, GUI_VERTEX_LAYOUT } = engine.kits.gui;
+const { GuiAtlas, GUI_VERTEX_LAYOUT, GuiTargets } = engine.kits.gui;
 const { WGSL_GUI, WGSL_WORLD } = feature;
 
-// the fallback's two shaders: a GUI model flat into its render target (premultiplied alpha), and the screen's glass
-// showing it: the world shader's own vertex stage (the same module code and entry, so exactly the glass's depth) with
-// a fragment stage that maps the glass's local position (virtual units) to the target and shades it like the quads
-const WGSL_FLAT = /* wgsl */`
-struct Flat { size: vec4f };
-@group(0) @binding(0) var<uniform> F: Flat;
-@group(1) @binding(0) var guiSampler: sampler;
-@group(1) @binding(1) var guiTex: texture_2d<f32>;
-struct O { @builtin(position) pos: vec4f, @location(0) uv: vec2f, @location(1) color: vec4f };
-@vertex fn vs(@location(0) p: vec2f, @location(1) uv: vec2f, @location(2) c: vec4f) -> O {
-    var o: O;
-    o.pos = vec4f(p.x / F.size.x * 2.0 - 1.0, 1.0 - p.y / F.size.y * 2.0, 0.0, 1.0);
-    o.uv = uv;
-    o.color = c;
-    return o;
-}
-@fragment fn fs(i: O) -> @location(0) vec4f {
-    let c = textureSample(guiTex, guiSampler, i.uv) * i.color;
-    return vec4f(c.rgb * c.a, c.a);
-}
-`;
-
+// the fallback's screen: the glass showing its GUI's render target (the gui kit's GuiTargets): the world shader's own
+// vertex stage (the same module code and entry, so exactly the glass's depth) with a fragment stage that maps the
+// glass's local position (virtual units) to the target and shades it like the quads
 const WGSL_SCREEN = WGSL_WORLD + /* wgsl */`
 @group(2) @binding(0) var screenSampler: sampler;
 @group(2) @binding(1) var screenTex: texture_2d<f32>;
@@ -68,7 +49,8 @@ class GuiPass {
         this.stencil = { 'gui.surface': { values: 1, min: 0 } };
         this.materials = new Map();     // name -> { shading, view, group }
         this.mirror = null;             // another renderer (the handheld's) that gets these materials too
-        this.targets = new WeakMap();   // the fallback: GUI -> { texture, view, group (the glass's), flat (its pass's), version }
+        this.flat = null;               // the fallback: the GUIs' render targets (GuiTargets)
+        this.glass = new WeakMap();     // and per GUI, the glass's bind group showing its target
         this.commands = { gui: (c, x) => this.draw(c, x) };
     }
 
@@ -93,19 +75,8 @@ class GuiPass {
     }
 
     async initFallback(r, ctx) {
-        const device = r.device;
-        this.flatBgl = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX, buffer: { type: 'uniform' } }] });
-        const module = device.createShaderModule({ code: WGSL_FLAT });
-        this.flatPipe = device.createRenderPipeline({
-            label: 'gui.flat',
-            layout: device.createPipelineLayout({ bindGroupLayouts: [this.flatBgl, this.bgl] }),
-            vertex: { module, entryPoint: 'vs', buffers: [GUI_VERTEX_LAYOUT] },
-            fragment: { module, entryPoint: 'fs', targets: [{ format: r.format, blend: {
-                color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' }, alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' },
-            } }] },
-            primitive: { topology: 'triangle-list' },
-        });
-        ctx.modules.screen = device.createShaderModule({ code: WGSL_SCREEN });
+        this.flat = new GuiTargets(r.device, r.format, { max: RT_MAX, layout: this.bgl });
+        ctx.modules.screen = r.device.createShaderModule({ code: WGSL_SCREEN });
     }
 
     pipelines(ctx) {
@@ -136,42 +107,19 @@ class GuiPass {
     // the GUI shader places quads with y up from the virtual height
     info(o) { return o.gui ? o.gui.vh : undefined; }
 
-    // the fallback, before the frame's pass: the GUI models its commands draw, into their render targets
+    // the fallback, before the frame's pass: the GUI models its commands draw, into their render targets (once however
+    // many views draw them, and only when they changed)
     prepare(f, enc, target) {
         if (this.surface.capacity > 0) return;
         const skip = target?.material;
-        for (const c of f.cmds) {
-            if (c.op !== 'gui' || !c.gui.model.count) continue;
-            const rt = this.target(c.gui), m = c.gui.model;
-            if (rt.version === m.version) continue;
-            rt.version = m.version;
-            const pass = enc.beginRenderPass({ colorAttachments: [{ view: rt.view, clearValue: { r: 0, g: 0, b: 0, a: 0 }, loadOp: 'clear', storeOp: 'store' }] });
-            pass.setPipeline(this.flatPipe);
-            pass.setBindGroup(0, rt.flat);
-            pass.setVertexBuffer(0, m.buffer);
-            this.drawSurfaces(pass, m, skip, 1);
-            pass.end();
-        }
+        for (const c of f.cmds) if (c.op === 'gui' && c.gui.model.count) this.flat.update(enc, c.gui, this.materials, skip);
     }
 
-    // a GUI's render target: its virtual screen's aspect, at most RT_MAX texels on its longest side
+    // the glass's bind group showing a GUI's render target
     target(gui) {
-        let rt = this.targets.get(gui);
-        if (rt) return rt;
-        const device = this.device, k = Math.min(1, RT_MAX / Math.max(gui.vw, gui.vh));
-        const texture = device.createTexture({
-            size: [Math.max(1, Math.round(gui.vw * k)), Math.max(1, Math.round(gui.vh * k))], format: this.format,
-            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-        });
-        const view = texture.createView(), size = device.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-        device.queue.writeBuffer(size, 0, new Float32Array([gui.vw, gui.vh, 0, 0]));
-        rt = {
-            texture, view, version: -1,
-            group: this.group('gui', view),
-            flat: device.createBindGroup({ layout: this.flatBgl, entries: [{ binding: 0, resource: { buffer: size } }] }),
-        };
-        this.targets.set(gui, rt);
-        return rt;
+        let g = this.glass.get(gui);
+        if (!g) this.glass.set(gui, g = { group: this.group('gui', this.flat.target(gui).view) });
+        return g;
     }
 
     // a model's surfaces, each with its material's texture (bind group `slot`); a view target's own material is skipped

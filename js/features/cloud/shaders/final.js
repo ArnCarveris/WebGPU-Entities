@@ -433,7 +433,7 @@ struct PaneOut { @builtin(position) pos: vec4f, @location(0) world: vec3f, @loca
 
 @fragment fn fsWindow(i: PaneOut) -> @location(0) vec4f {
     let b = bld(i.id);
-    let dc = distance(F.cam.xyz, bldCentre(b));
+    let dc = bldStoreyDist(b, i.world.y);
     if (dc >= ${INTERIOR_DRAW}.0) { discard; }
     let p = i.world;
     let v = normalize(F.cam.xyz - p);

@@ -120,6 +120,11 @@
         {"type":"view","of":"cloud","name":"Bus station overview","follow":"station","spot":"overview","weather":"light rain"},
         {"type":"view","of":"cloud","name":"On foot at the bus station","follow":"station","spot":"platform","weather":"mixed rain","walk":true},
         {"type":"view","of":"cloud","name":"Riding the bus","follow":"bus","spot":"seat","weather":"mixed rain","walk":true},
+        {"type":"view","of":"cloud","name":"Spire lobby (on foot)","follow":"spire","spot":"lobby","walk":true},
+        {"type":"view","of":"cloud","name":"Spire sky lobby (on foot)","follow":"spire","spot":"sky lobby","walk":true},
+        {"type":"view","of":"cloud","name":"Spire observation deck (on foot)","follow":"spire","spot":"deck","walk":true,"weather":"fair cumulus"},
+        {"type":"view","of":"cloud","name":"Spire from the plaza","follow":"spire","spot":"plaza"},
+        {"type":"view","of":"cloud","name":"Spire above the clouds","follow":"spire","spot":"above the clouds","weather":"fair cumulus"},
         {"type":"view","of":"cloud","name":"{label}","follow":"bus","each":true,"spot":"door"},
         {
             "type": "view", "of": "cloud", "name": "Shelf cloud", "follow": "squall", "offset": [7000,25,1500], "lookOffset": [-4000,2100,-2500], "lighting": "storm dusk",
@@ -151,6 +156,7 @@
         {"type":"forest","pos":[-24000,-2000],"radius":9000,"density":0.9,"seed":3},
         {"type":"village","id":"village","label":"Millbrook","pos":[-12500,4700],"radius":380,"river":"platte","houses":28,"footbridge":170,"seed":9},
         {"type":"busStation","id":"station","label":"Brightfield bus station","pos":[-3600,8400],"yaw":20,"length":96,"bays":20,"buses":5,"seed":3},
+        {"type":"skyscraper","id":"spire","label":"Brightfield Spire","pos":[-3643,8517],"yaw":20,"level":0,"seed":5},
         {"type":"bus","id":"bus","label":"Bus 7","from":"station","to":"village","speed":22,"village":10,"dwell":[60,30],"livery":[0.12,0.36,0.62]},
         {
             "type": "supercell", "id": "hero", "label": "Supercell", "pos": [1500,-2500], "radius": 6200, "top": 11800, "precip": 1, "core": 0.75,
@@ -191,6 +197,8 @@
         {"type":"sound.cue","on":"busDoor","when":"dist < 80","parts":[
             {"shot":{"source":"white","filter":"highpass","freq":3000,"q":0.7,"env":[[0.03,"0.35 / (1 + dist / 5)"],[0.5,"0.175 / (1 + dist / 5)"],[0.9,0]]}},
             {"shot":{"source":"brown","filter":"lowpass","freq":140,"q":1,"env":[[0.01,"0.525 / (1 + dist / 5)"],[0.2,0]]},"delay":0.9}]},
+        {"type":"sound.cue","on":"liftButton","parts":[
+            {"shot":{"source":"white","filter":"bandpass","freq":2600,"q":40,"env":[[0.005,0.12],[0.09,0]]}}]},
         {"type":"sound.cue","on":"step","parts":[
             {"shot":{"source":"brown","filter":"lowpass","freq":300,"q":1,"env":[[0.01,"(run ? 0.32 : 0.22) * rand(0.8, 1.2)"],[0.12,0]]}},
             {"shot":{"source":"white","filter":"wet ? 'bandpass' : 'highpass'","freq":"wet ? 1800 : 2500","q":"wet ? 1.2 : 0.5","env":[[0.005,"(run ? 0.16 : 0.11) * (wet ? 0.6 : 0.3)"],["wet ? 0.18 : 0.07",0]]}}]},

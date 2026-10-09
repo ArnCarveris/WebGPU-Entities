@@ -6,7 +6,7 @@
 Features.part('cloud', (engine, feature) => {
 const { Common, kits } = engine;
 const { lerp, v3 } = Common;
-const { STRUCT_COLORS, Solids, ShelterBoxes, Doors, Buildings, Fixtures } = feature;
+const { STRUCT_COLORS, Solids, ShelterBoxes, Doors, Buildings, Fixtures, BLD_LIT, BLD_ID } = feature;
 
 class Structures {
     // types: the scenario's `buildings` (see Buildings)
@@ -17,12 +17,34 @@ class Structures {
         this.solids = new Solids();
         this.boxes = new ShelterBoxes();
         this.interiors = new kits.interior.InteriorIndex(32);   // every building's and bus's interior (kits.interior)
+        // the planned buildings' rooms as areas and portals (the interior kit's AreaSet: the portal feature's), bucketed
+        // by 8 m height bands (a tower's storeys over the same footprint); area 0 the outdoors. Portals wait for finish()
+        this.areas = new kits.interior.AreaSet({ bandH: 8 });
+        this.areas.areas.push(kits.interior.Area.outdoors());
+        this.portalDefs = [];
+        this.landings = [];              // the landing doors' portals: { P, y, cars (its shaft's) } (closed unless a car is there, open)
         this.doors = new Doors(this);
+        // the cars in the buildings' cores (the transit kit's Lifts), their parts as interiors' materials (a car's lit by its lamp)
+        this.lifts = new kits.transit.Lifts({ material: (b, mat, lit) => mat + (lit ? BLD_LIT : 0) + b.id * BLD_ID });
         this.buildings = new Buildings(this, types);
         this.fixtures = new Fixtures(this);
     }
 
     ground(x, z) { return this.field.surface(x, z); }
+
+    // every entity built: the areas indexed (areaAt), the portals made (each finds its areas either side, as the portal
+    // feature's do), the towers' sections joined, the portals out to the outdoors in a BVH (they stand storey over storey)
+    finish() {
+        const A = this.areas;
+        for (const b of this.buildings.list) if (b.plan && b.above?.plan) this.buildings.joins(b);
+        A.indexAreas();
+        for (const { def, landing } of this.portalDefs) {
+            const P = A.addPortal(def);
+            if (P && landing) this.landings.push({ P, y: landing.y, cars: this.lifts.shaftCars(landing.f, landing.rect) });
+        }
+        this.portalDefs = [];
+        A.indexOutdoorPortals(kits.interior.BVHTree);
+    }
 
     tri(a, b, c, col, mat = 0) {
         const n = v3.norm(v3.cross(v3.sub(b, a), v3.sub(c, a)));          // facing either way: the shader turns it to the eye

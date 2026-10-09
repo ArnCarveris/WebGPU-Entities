@@ -2,8 +2,9 @@
 // The renderer: owns the GPU resources and encodes a frame.
 
 Features.part('cloud', (engine, feature) => {
-const { Common } = engine;
+const { Common, kits } = engine;
 const { makeBuffer, gridIndices, bindLayout, bindGroup } = Common;
+const { GuiAtlas, GuiTargets, DeviceContext } = kits.gui;
 const {
     MAX_CELLS, CELL_FLOATS, MAX_BOLT_SEGS, FAR_FLOATS, MAX_FAR_DYN, FAR_LAMP_H, FAR_LAMP_REACH, MAX_POLES,
     STRUCT_FLOATS, GRID_N, BLOOM_LEVELS, BUILDING_FLOATS, FrameBlock, WORLD_BINDINGS, BindingSet, WGSL_SKY,
@@ -11,6 +12,10 @@ const {
     WGSL_SCENE, WGSL_FINAL, WGSL_BLOOM, GroundFrame, STRUCT_COLORS, Structures, NoiseVolumes, shaderSource,
     WeatherPass, GroundPass, FroxelPass, CloudPass, GpuProfiler,
 } = feature;
+const { BOX_FLOATS } = kits.transit;
+const MAX_BOXES = 4096;          // lift parts drawn a frame (vsBox)
+const MAX_ORIGINS = 96;          // buildings whose interiors (and lifts) are drawn a frame, each in its Origin's frame (busData slots)
+const MAX_PANELS = 16;           // world-space GUIs drawn a frame (vsPanel)
 
 // Renderer
 class Renderer {
@@ -36,6 +41,7 @@ class Renderer {
         this.froxelPass = new FroxelPass(this);
         this.cloudPass = new CloudPass(this);
         this.createPipelines();
+        await this.initGui();
         const gi = gridIndices(GRID_N);
         this.terrainIndex = makeBuffer(d, gi.byteLength, B.INDEX, gi);
         this.terrainCount = gi.length;
@@ -43,10 +49,47 @@ class Renderer {
         this.scale = 0.5;
     }
 
+    // the world-space GUIs (the lifts' panels): each drawn into a texture of its own (the gui kit's GuiTargets) with the
+    // gui kit's atlas, then shown on a quad in the scene (vsPanel); the box instances of the lifts (vsBox)
+    async initGui() {
+        const d = this.device;
+        await GuiAtlas.loadFonts();
+        this.guiTargets = new GuiTargets(d, 'rgba8unorm', { max: 512 });
+        this.atlas = new GuiAtlas();
+        this.guiTargets.registerMaterial('atlas', this.atlas.upload(this));
+        this.dc = new DeviceContext(this.atlas);
+        this.panelGroups = new WeakMap();           // GUI target -> its bind group (group 2 of pPanel)
+        this.panelData = new Float32Array(MAX_PANELS * 6 * 5);
+        this.panelBuf = makeBuffer(d, this.panelData.byteLength, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST);
+        this.panelDraws = [];
+        const scene = this.sceneModule, empty = d.createBindGroupLayout({ entries: [] });
+        this.emptyGroup = d.createBindGroup({ layout: empty, entries: [] });
+        this.pPanel = d.createRenderPipeline({
+            label: 'vsPanel', layout: d.createPipelineLayout({ bindGroupLayouts: [this.worldSet.layout, empty, this.guiTargets.layout] }),
+            vertex: { module: scene, entryPoint: 'vsPanel', buffers: [{ arrayStride: 20, attributes: [
+                { shaderLocation: 0, offset: 0, format: 'float32x3' }, { shaderLocation: 1, offset: 12, format: 'float32x2' }] }] },
+            fragment: { module: scene, entryPoint: 'fsPanel', targets: [{ format: 'rgba16float' }] },
+            primitive: { topology: 'triangle-list', cullMode: 'none' },
+            depthStencil: { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'greater' },
+        });
+        this.boxData = new Float32Array(MAX_BOXES * BOX_FLOATS);
+        this.boxBuf = makeBuffer(d, this.boxData.byteLength, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST);
+        this.boxCount = 0;
+        this.boxGroups = [];
+        this.originCount = 0;
+    }
+
+    // the panels to draw this frame: [{ gui, corners: [top left, top right, bottom right, bottom left] }]
+    setPanels(list) {
+        const D = this.panelData, uv = [[0, 0], [1, 0], [1, 1], [0, 1]];
+        this.panelDraws = list.slice(0, MAX_PANELS);
+        this.panelDraws.forEach((p, i) => [0, 1, 2, 0, 2, 3].forEach((k, j) => D.set([...p.corners[k], ...uv[k]], (i * 6 + j) * 5)));
+    }
+
     createPipelines() {
         const d = this.device;
         this.screenLayout = bindLayout(d, GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, ['tex', 'tex', 'depth', 'tex']);
-        const scene = d.createShaderModule({ label: 'scene', code: shaderSource(this.worldSet, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_SHADOW_SAMPLE, WGSL_SHELTER, WGSL_BUILDING, WGSL_TERRAIN, wgslBus(1), WGSL_SCENE) });
+        const scene = this.sceneModule = d.createShaderModule({ label: 'scene', code: shaderSource(this.worldSet, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_SHADOW_SAMPLE, WGSL_SHELTER, WGSL_BUILDING, WGSL_TERRAIN, wgslBus(1), WGSL_SCENE) });
         const final = d.createShaderModule({ label: 'final', code: shaderSource(this.worldSet, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_SHADOW_SAMPLE, WGSL_SHELTER, WGSL_BUILDING, WGSL_TERRAIN, wgslBus(2), WGSL_FINAL) });
         const layoutA = d.createPipelineLayout({ bindGroupLayouts: [this.worldSet.layout] });
         const layoutB = d.createPipelineLayout({ bindGroupLayouts: [this.worldSet.layout, this.screenLayout] });
@@ -74,7 +117,15 @@ class Renderer {
         this.pStruct = pipe(layoutA, scene, 'vsStruct', 'fsStruct', 'rgba16float', { write: true, compare: 'greater' }, undefined, structVerts);
         this.pBus = pipe(layoutBus, scene, 'vsBus', 'fsBus', 'rgba16float', { write: true, compare: 'greater' }, undefined, structVerts);
         // buildings (Buildings.add): interiors near them, door leaves, the opaque panes far off, the glass near
-        this.pInterior = pipe(layoutA, scene, 'vsStruct', 'fsInterior', 'rgba16float', { write: true, compare: 'greater' }, undefined, structVerts);
+        this.pInterior = pipe(layoutBus, scene, 'vsInterior', 'fsInterior', 'rgba16float', { write: true, compare: 'greater' }, undefined, structVerts);
+        // the lifts' parts: a unit cube per instance (Lifts.instances), shaded as the interior they stand in
+        const boxVerts = [structVerts[0], { arrayStride: BOX_FLOATS * 4, stepMode: 'instance', attributes: [3, 4, 5].map((k, i) => ({ shaderLocation: k, offset: i * 16, format: 'float32x4' })) }];
+        this.pBox = pipe(layoutBus, scene, 'vsBox', 'fsInterior', 'rgba16float', { write: true, compare: 'greater' }, undefined, boxVerts);
+        const U = new Structures(null);
+        U.cur = [];
+        U.prism(new GroundFrame([0, 0], 0), 0, 0, 1, 1, -1, 1, [1, 1, 1], 0);
+        const cm = new Float32Array(U.cur);
+        this.cube = { n: cm.length / STRUCT_FLOATS, buf: makeBuffer(d, cm.byteLength, GPUBufferUsage.VERTEX, cm) };
         this.pDoor = pipe(layoutA, scene, 'vsStruct', 'fsDoor', 'rgba16float', { write: true, compare: 'greater' }, undefined, structVerts);
         this.pPane = pipe(layoutA, scene, 'vsStruct', 'fsPane', 'rgba16float', { write: true, compare: 'greater' }, undefined, structVerts);
         // the distant lights (vsFar): a quad per instance, added
@@ -170,7 +221,9 @@ class Renderer {
                 glass: gv.length ? makeBuffer(d, gv.byteLength, GPUBufferUsage.VERTEX, gv) : null };
         });
         this.busUBuf?.destroy();
-        this.busData = new Float32Array(Math.max(1, world.buses.length) * BUS_UNIFORM / 4);
+        // (and after the buses' slots, MAX_ORIGINS for the buildings drawn: their Origins about the camera, FrameWriter)
+        this.originSlot0 = world.buses.length;
+        this.busData = new Float32Array((world.buses.length + MAX_ORIGINS) * BUS_UNIFORM / 4);
         this.busUBuf = d.createBuffer({ size: this.busData.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.busGroup = d.createBindGroup({ label: 'bus', layout: this.busLayout, entries: [{ binding: 0, resource: { buffer: this.busUBuf, size: 208 } }] });
         this.busDraws = [];
@@ -311,7 +364,18 @@ class Renderer {
         const q = this.device.queue, prof = this.profiler;
         q.writeBuffer(this.frameBuf, 0, this.frame.data);
         q.writeBuffer(this.cellBuf, 0, this.cellData);
-        if (this.busDraws.length) q.writeBuffer(this.busUBuf, 0, this.busData);
+        if (this.busDraws.length || this.originCount) q.writeBuffer(this.busUBuf, 0, this.busData, 0, (this.originSlot0 + this.originCount) * BUS_UNIFORM / 4);
+        if (this.boxCount) q.writeBuffer(this.boxBuf, 0, this.boxData, 0, this.boxCount * BOX_FLOATS);
+        if (this.panelDraws.length) {
+            q.writeBuffer(this.panelBuf, 0, this.panelData, 0, this.panelDraws.length * 30);
+            // each GUI into its texture (when its model changed), before the scene pass shows it
+            for (const p of this.panelDraws) {
+                const rt = this.guiTargets.update(enc, p.gui);
+                let g = this.panelGroups.get(rt);
+                if (!g) this.panelGroups.set(rt, g = this.guiTargets.group(rt.view));
+                p.group = g;
+            }
+        }
         this.weatherPass.encode(enc, probeTexel, prof, shadowSlices);
         this.groundPass.encode(enc, prof);
 
@@ -343,10 +407,28 @@ class Renderer {
         }
         // buildings: interiors within INTERIOR_DRAW (vertex ranges, nearest first), door leaves, and the panes of the
         // windows further off (fsPane drops those of the near ones)
+        // (a storey many share is drawn instanced: [first, count, storeys, how many storeys up the first is])
+        // (each in its building's Origin frame: the slot FrameWriter gave it)
         if (this.interiorDraws.length) {
             a.setPipeline(this.pInterior);
             a.setVertexBuffer(0, this.interior.buf);
-            for (const [first, count] of this.interiorDraws) a.draw(count, 1, first);
+            let slot = -1;
+            for (const [first, count, inst, base, , k] of this.interiorDraws) {
+                if (k !== slot) { a.setBindGroup(1, this.busGroup, [k * BUS_UNIFORM]); slot = k; }
+                a.draw(count, inst, first, base);
+            }
+        }
+        if (this.boxCount) {
+            a.setPipeline(this.pBox);
+            a.setVertexBuffer(0, this.cube.buf);
+            a.setVertexBuffer(1, this.boxBuf);
+            for (const g of this.boxGroups) { a.setBindGroup(1, this.busGroup, [g.slot * BUS_UNIFORM]); a.draw(this.cube.n, g.count, 0, g.first); }
+        }
+        if (this.panelDraws.length) {
+            a.setPipeline(this.pPanel);
+            a.setBindGroup(1, this.emptyGroup);
+            a.setVertexBuffer(0, this.panelBuf);
+            this.panelDraws.forEach((p, i) => { a.setBindGroup(2, p.group); a.draw(6, 1, i * 6); });
         }
         if (this.doorV.n) { a.setPipeline(this.pDoor); a.setVertexBuffer(0, this.doorV.buf); a.draw(this.doorV.n); }
         if (this.paneV.n) { a.setPipeline(this.pPane); a.setVertexBuffer(0, this.paneV.buf); a.draw(this.paneV.n); }

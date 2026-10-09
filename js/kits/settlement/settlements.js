@@ -342,14 +342,15 @@ function settlementTypes(Base) {
                 bus(new GroundFrame(f.xz(lx, -11), f.yaw), 12.2);
             }
 
-            // town-centre blocks around the forecourt: flat roofs, window bands per storey
-            const blocks = [[-L - 10, 52, 22, 9], [-L + 40, 50, 16, 8], [-L + 82, 54, 24, 10], [L + 4, 48, 14, 9],
+            // town-centre blocks around the forecourt (none overlapping, a street's width apart): flat roofs, rooms off a
+            // corridor round a core with stairs and a lift (the `block` archetype's plan)
+            const blocks = [[-L - 10, 52, 22, 9], [-L + 40, 50, 16, 8], [-L + 78, 54, 18, 10], [L + 22, 50, 12, 9],
                 [L + 38, 6, 10, 20], [-L - 10, -52, 24, 10], [-L + 44, -50, 18, 9], [L - 6, -54, 20, 11], [-L - 62, 6, 9, 18]];
             // each with its door on the side facing the forecourt
             blocks.forEach(([bx, bz, bhx, bhz], k) => {
                 const storeys = 2 + Math.floor(rnd() * 4), col = C.walls[Math.floor(rnd() * C.walls.length)];
                 const face = Math.abs(bx) - L > Math.abs(bz) ? (bx > 0 ? '-x' : '+x') : (bz > 0 ? '-z' : '+z');
-                S.buildings.add(new GroundFrame(f.xz(bx, bz), f.yaw), { type: d.blockType || 'block', w: 2 * bhx, d: 2 * bhz, storeys, base: gLo,
+                S.buildings.add(new GroundFrame(f.xz(bx, bz), f.yaw), { type: d.blockType || 'block', name: `Block ${k + 1}`, w: 2 * bhx, d: 2 * bhz, storeys, base: gLo,
                     floor: gHi + 0.3, color: col, doors: [{ face, at: r(-3, 3) }], seed: 101 + k, roof: { kind: 'flat', overhang: 0.25, thick: 0.5, color: C.concrete, drip: false } });
             });
 
@@ -371,7 +372,55 @@ function settlementTypes(Base) {
         }
     }
 
-    return { Village, BusStation };
+    // A skyscraper (the world's buildings.tower: a lobby in a podium, sections stepping in, a curtain wall, rooms off a
+    // corridor round a core of stairs and lifts, sky lobbies, an observation deck, a spire) on a paved plaza. The ground
+    // is levelled under it (`level` m round `pos`; 0: as it is, when it stands in another's levelled ground, a bus
+    // station's). Parameters: pos, yaw (degrees), label, and the tower's own (zone, sections, lobby, podium, spire,
+    // zonesPerSection, color, seed). Viewpoints (`spot`): "lobby", "sky lobby", "deck" (the observation deck), "plaza",
+    // "above the clouds"
+    class Skyscraper extends Base {
+        stamp(f) {
+            const d = this.def, [cx, cz] = d.pos, r0 = d.level ?? 120, r1 = r0 + 250;
+            if (!r0) return;
+            let sum = 0, n = 0;
+            f.each(cx - r0, cz - r0, cx + r0, cz + r0, (idx, x, z) => { if (Math.hypot(x - cx, z - cz) < r0) { sum += f.h[idx]; n++; } });
+            const flat = n ? sum / n : f.sample(cx, cz);
+            f.each(cx - r1, cz - r1, cx + r1, cz + r1, (idx, x, z) => {
+                const k = 1 - smoothstep(r0, r1, Math.hypot(x - cx, z - cz));
+                if (k > 0) f.h[idx] = lerp(f.h[idx], flat, k);
+            });
+        }
+
+        get anchor() { const p = this.def.pos; return [p[0], (this.top ?? this.world.field.sample(p[0], p[1])) + 60, p[1]]; }
+        get focus() { const p = this.def.pos; return [p[0], this.world.field.sample(p[0], p[1]), p[1]]; }
+
+        build(S) {
+            const d = this.def, f = new GroundFrame(d.pos, (d.yaw ?? 0) * DEG);
+            const T = this.tower = S.buildings.tower(f, { name: d.label || 'Tower', ...d });
+            this.top = T.top;
+            const lobby = T.lobby, hp = lobby.hx, y0 = lobby.floor;
+            // the plaza: paving round the podium, lamps at its corners
+            const P = hp + 24, strip = (x0, z0, x1, z1) => S.strip(f.xz(x0, (z0 + z1) / 2), f.xz(x1, (z0 + z1) / 2), (z1 - z0) / 2, [0.58, 0.57, 0.54], 0, 0.1);
+            strip(-P, -P, P, -hp);
+            strip(-P, hp, P, P);
+            strip(-P, -hp, -hp, hp);
+            strip(hp, -hp, P, hp);
+            for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) S.fixtures.lamp(...f.xz(sx * (P - 2), sz * (P - 2)), [-sx * f.cs + sz * f.sn, -sx * f.sn - sz * f.cs], 'led', { height: 8, reach: 1.8 });
+            // viewpoints: on foot in the lobby (facing the lifts), at the first sky lobby, on the observation deck looking
+            // out over the clouds; in an express car; out on the plaza looking up; flying beside the crown
+            const sky = T.stop(1 + T.zone), top = T.stop(T.storeys);
+            const deckB = top.building, dz = deckB.hz - deckB.t - 2.5;
+            this.spots = {
+                lobby: { pos: f.at(0, y0 + 1.62, -hp + 8), look: f.at(0, y0 + 2.4, 0) },
+                'sky lobby': { pos: f.at(0, sky.y + 1.62, -sky.building.hz + 3), look: f.at(0, sky.y + 1.62, -sky.building.hz - 40) },
+                deck: { pos: f.at(0, top.y + 1.62, -dz), look: f.at(0, top.y - 60, -dz - 400) },
+                plaza: { pos: f.at(-hp - 18, y0 + 1.7, -hp - 20), look: f.at(0, y0 + 220, 0) },
+                'above the clouds': { pos: f.at(-220, top.y + 40, -300), look: f.at(0, top.y - 200, 0) },
+            };
+        }
+    }
+
+    return { Village, BusStation, Skyscraper };
 }
 
 return { settlementTypes };

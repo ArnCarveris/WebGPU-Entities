@@ -76,9 +76,11 @@ class Walker {
         this.busYaw = bus.yaw;
     }
 
-    // world: the terrain or the highest box top under the feet (within a step); the walls and floors of buses near it too
+    // world: the terrain or the highest box top under the feet (within a step); the walls and floors of buses and lift
+    // cars near it too, and the landing doors that are shut
     floorAt(app, p, below) {
-        const w = app.world, boxes = w.structures.solids.near(p[0], p[2], 2);
+        const w = app.world, boxes = w.structures.solids.near(p[0], p[2], 2, p[1]);
+        for (const b of w.structures.lifts.colliders(p)) boxes.push(b);
         for (const bus of w.buses) {
             if (Math.hypot(p[0] - bus.pose.x, p[2] - bus.pose.z) > 10) continue;
             for (const b of bus.colliders()) {
@@ -129,6 +131,9 @@ class Walker {
                 this.bus = null;
             }
         } else {
+            // standing in a lift car: up or down with it
+            const car = app.world.structures.lifts.carAt(this.feet);
+            if (car) this.feet[1] += car.el.dy;
             const p = this.feet, y0 = p[1], was = [p[0], p[2]], f0 = app.world.field;
             p[0] += mx; p[2] += mz;
             let g = this.floorAt(app, p, -Infinity);

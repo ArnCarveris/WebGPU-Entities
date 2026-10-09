@@ -38,7 +38,7 @@ const EntityTypes = (() => {
     });
     def('hydrology', { sea: 'sea level', spring: 'a water source', drain: 'a water sink', rain: 'rain over an area', debris: 'floating debris' });
     def('weather', { storm: 'a storm cell', supercell: 'a supercell', squall: 'a squall line', spawner: 'spawns storm cells' });
-    def('settlement', { village: 'a village on a road', busStation: "a town's bus station" });
+    def('settlement', { village: 'a village on a road', busStation: "a town's bus station", skyscraper: 'a skyscraper: sky lobbies, lifts, an observation deck' });
     def('transit', { bus: 'a bus line with its fleet', vehicle: 'a vehicle on a route (portal: the freighter)' });
     def('interior', {
         building: 'a building archetype (storeys, windows, doors, furniture)',

@@ -147,6 +147,18 @@ const m4 = {
         return new Float64Array([r[0], u[0], b[0], 0, r[1], u[1], b[1], 0, r[2], u[2], b[2], 0,
             -v3.dot(r, eye), -v3.dot(u, eye), -v3.dot(b, eye), 1]);
     },
+    // the model-view of frame m (column-major, model to world) for the eye and its basis, built in doubles about the eye:
+    // what is near the eye keeps its precision however far from the world's origin both are (an f32 world-space vertex a
+    // few kilometres out is millimetres off)
+    aboutEye(m, eye, r, u, f) {
+        const rows = [r, u, [-f[0], -f[1], -f[2]]], mv = new Float64Array(16);
+        for (let c = 0; c < 4; c++) for (let k = 0; k < 3; k++) {
+            const col = c < 3 ? [m[c * 4], m[c * 4 + 1], m[c * 4 + 2]] : [m[12] - eye[0], m[13] - eye[1], m[14] - eye[2]];
+            mv[c * 4 + k] = v3.dot(rows[k], col);
+        }
+        mv[15] = 1;
+        return mv;
+    },
     lookAt(eye, target, up) {
         const z = v3.norm(v3.sub(eye, target)), x = v3.norm(v3.cross(up, z)), y = v3.cross(z, x);
         return new Float64Array([x[0], y[0], z[0], 0, x[1], y[1], z[1], 0, x[2], y[2], z[2], 0,

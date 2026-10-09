@@ -333,8 +333,11 @@ fn lampScatter(ro: vec3f, dir: vec3f, tEnd: f32, jit: f32) -> vec3f {
 // Its interior, glass and door vertices carry material + id * BLD_ID. All of it is O(1) per pixel: the window pattern is
 // a formula (the same one the mesh was built with), so the light through a window or a door is one box exit.
 const WGSL_BUILDING = /* wgsl */`
-struct Bld { a: vec4f, b: vec4f, c: vec4f, d: vec4f, e: vec4f, f: vec4f };
-fn bld(id: u32) -> Bld { let k = id * 6u; return Bld(buildings[k], buildings[k + 1u], buildings[k + 2u], buildings[k + 3u], buildings[k + 4u], buildings[k + 5u]); }
+struct Bld { a: vec4f, b: vec4f, c: vec4f, d: vec4f, e: vec4f, f: vec4f, g: vec4f, h: vec4f };
+fn bld(id: u32) -> Bld {
+    let k = id * 8u;
+    return Bld(buildings[k], buildings[k + 1u], buildings[k + 2u], buildings[k + 3u], buildings[k + 4u], buildings[k + 5u], buildings[k + 6u], buildings[k + 7u]);
+}
 
 // world to the building's frame (local x along (cos, sin), z along (-sin, cos), y stays the world height), and back
 fn bldLocal(b: Bld, p: vec3f) -> vec3f { let r = p.xz - b.a.xy; return vec3f(r.x * b.a.z + r.y * b.a.w, p.y, -r.x * b.a.w + r.y * b.a.z); }
@@ -342,6 +345,25 @@ fn bldDir(b: Bld, d: vec3f) -> vec3f { return vec3f(d.x * b.a.z + d.z * b.a.w, d
 fn bldWorld(b: Bld, q: vec3f) -> vec3f { return vec3f(b.a.x + q.x * b.a.z - q.z * b.a.w, q.y, b.a.y + q.x * b.a.w + q.z * b.a.z); }
 fn bldCentre(b: Bld) -> vec3f { return vec3f(b.a.x, b.b.z + b.c.x * b.b.w * 0.5, b.a.y); }
 fn bldStorey(b: Bld, y: f32) -> f32 { return clamp(floor((y - b.b.z) / b.b.w), 0.0, b.c.x - 1.0); }
+
+// how far (m) the camera is from the storey of the building that height y is on: within INTERIOR_DRAW its rooms are drawn
+// (FrameWriter makes the same test per storey), so its windows are see-through there
+fn bldStoreyDist(b: Bld, y: f32) -> f32 {
+    let s = bldStorey(b, y);
+    let lo = vec3f(-b.b.x, b.b.z + s * b.b.w, -b.b.y);
+    let hi = vec3f(b.b.x, lo.y + b.b.w, b.b.y);
+    let q = bldLocal(b, F.cam.xyz);
+    return distance(q, clamp(q, lo, hi));
+}
+
+// a planned building's storey s is an open hall (a lobby: the sun reaches anywhere in it) rather than rooms off a
+// corridor (it reaches only the rooms on the façade it comes in by, b.g.xy deep): its ground floor (h.z), its top (h.w),
+// or every h.x-th storey from b.g.z on, offset by h.y (a tower's sky lobbies)
+fn bldHall(b: Bld, s: f32) -> bool {
+    if (s == 0.0 && b.h.z > 0.5) { return true; }
+    if (s == b.c.x - 1.0 && b.h.w > 0.5) { return true; }
+    return b.h.x > 0.5 && s >= b.g.z && (u32(s + b.h.y) % u32(b.h.x)) == 0u;
+}
 
 // the lamps of storey s are on: a share of the storeys (b.d.z), picked by a hash (LightWriter.roomLights picks the same)
 fn storeyLit(id: u32, b: Bld, s: f32) -> f32 { return select(0.0, 1.0, rnd(id * 131u + u32(s) * 7u + 3u) < b.d.z); }

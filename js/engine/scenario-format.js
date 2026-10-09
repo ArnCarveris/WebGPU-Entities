@@ -37,7 +37,7 @@ const ScenarioFormat = (() => {
             config: ['terrain', 'render', 'weather', 'lighting', 'hurricane', 'streetLights'],
             maps: { 'weather.states': { type: 'weatherState' }, 'lighting.presets': { type: 'light' }, buildings: { type: 'building' } },
             lists: { clouds: 'cloudLayer', views: 'view' },
-            kinds: ['clearing', 'tilt', 'hills', 'mountain', 'range', 'river', 'lake', 'town', 'forest', 'village', 'busStation', 'bus',
+            kinds: ['clearing', 'tilt', 'hills', 'mountain', 'range', 'river', 'lake', 'town', 'forest', 'village', 'busStation', 'skyscraper', 'bus',
                 'storm', 'supercell', 'squall', 'spawner'],
         },
         water: {

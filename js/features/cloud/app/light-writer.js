@@ -105,11 +105,15 @@ class LightWriter {
         }
         near.sort((p, q) => p[0] - q[0] || p[1].id - q[1].id);
         let n = 0;
-        for (const [, b] of near) for (let s = 0; s < b.n && n < ROOM_LIGHTS; s++) {
-            if (pcgRandom(b.id * 131 + s * 7 + 3) >= b.record[14]) continue;
-            out.push({ pos: b.f.at(0, b.floor + (s + 1) * b.H - 0.5, 0), dir: [0, -1, 0], color: L.color, intensity: L.intensity,
-                range: Math.max(b.hx, b.hz) + L.range, size: L.size * Math.min(b.hx, b.hz), room: true });
-            n++;
+        // each building's storeys outward from the camera's height (of a tower's thousand storeys, those near it)
+        for (const [, b] of near) {
+            const s0 = clamp(Math.floor((cam[1] - b.floor) / b.H), 0, b.n - 1);
+            for (let d = 0; d < b.n && n < ROOM_LIGHTS && d * b.H <= ROOM_RANGE; d++) for (const s of d ? [s0 - d, s0 + d] : [s0]) {
+                if (s < 0 || s >= b.n || n >= ROOM_LIGHTS || pcgRandom(b.id * 131 + s * 7 + 3) >= b.record[14]) continue;
+                out.push({ pos: b.f.at(0, b.floor + (s + 1) * b.H - 0.5, 0), dir: [0, -1, 0], color: L.color, intensity: L.intensity,
+                    range: Math.max(b.hx, b.hz) + L.range, size: L.size * Math.min(b.hx, b.hz), room: true });
+                n++;
+            }
         }
     }
 

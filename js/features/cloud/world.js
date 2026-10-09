@@ -33,6 +33,7 @@ class World {
         this.hurricanePos = scenario.hurricane?.pos || [0, 0];
         this.hurricaneCat = 0;
         for (const e of this.entities) e.build(this.structures);
+        this.structures.finish();
         // the lit town (streetLights): painted like a town entity, its streets given the fake lamps
         const sl = scenario.streetLights;
         this.streetLights = sl ? { pos: sl.pos || this.hurricanePos, radius: sl.radius || 4000, density: sl.density ?? 0.95 } : null;
@@ -171,6 +172,7 @@ class World {
         // a tornado touches down over some seconds, and lifts at once
         this.tornadoGrow = this.tornadoHost ? Math.min(1, (this.tornadoGrow || 0) + dt / 8) : 0;
         for (const e of [...this.entities]) e.update(dt, wdt, t);
+        this.structures.lifts.update(dt, this.busBoost);            // (Z runs them ten times as fast too)
         if (this.entities.some(e => e.dead)) {
             this.entities = this.entities.filter(e => !e.dead);
             for (const [k, e] of this.byId) if (e.dead) this.byId.delete(k);

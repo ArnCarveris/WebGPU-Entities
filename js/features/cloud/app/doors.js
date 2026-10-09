@@ -19,7 +19,7 @@ class DoorControl {
         }
         if (wk.active && !wk.bus) {
             wk.aim = door;
-            wk.prompt = door ? `E ${door.target > 0.5 ? 'shut' : 'open'} the door` : '';
+            wk.prompt = door ? `E ${door.target > 0.5 ? 'shut' : 'open'} the door` : wk.liftPrompt || '';
         }
         if (S.doors.update(dt)) { a.renderer.writeDoors(S.doors.mesh()); a.renderer.writeBuildings(S.buildings); }
     }

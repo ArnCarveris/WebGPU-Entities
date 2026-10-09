@@ -8,8 +8,15 @@ const { Common } = engine;
 const { clamp, sat01, v3, m4, frustumPlanes } = Common;
 const {
     NEAR, WEATHER_RES, GROUND_RES, DRIP_PARTICLES, CELL_FLOATS, QUALITY, SHADOW_SLICES, FROXEL_NEAR, rainFall,
-    BUS_DRAW, BUS, INTERIOR_DRAW, BUS_UNIFORM, Sky,
+    BUS_DRAW, BUS, INTERIOR_DRAW, BUS_UNIFORM, Sky, RoomVis,
 } = feature;
+
+// a world-space GUI's corners in the world (its surface matrix: columns right, up, normal, position): top left, top
+// right, bottom right, bottom left, as its texture's u, v run
+function panelCorners(gui) {
+    const m = gui.surfaceMatrix, w = gui.width / 2, h = gui.height / 2, at = (x, y) => [0, 1, 2].map(k => m[12 + k] + m[k] * x + m[4 + k] * y + m[8 + k] * 0.002);
+    return [at(-w, h), at(w, h), at(w, -h), at(-w, -h)];
+}
 
 class FrameWriter {
     constructor(app) {
@@ -47,30 +54,57 @@ class FrameWriter {
             const k = bus.slot;
             const m = bus.model, dist = Math.hypot(m[12] - cam.pos[0], m[13] - cam.pos[1], m[14] - cam.pos[2]);
             if (dist > BUS_DRAW) return;
-            const b = [-fwd[0], -fwd[1], -fwd[2]], rows = [right, up, b], mv = new Array(16).fill(0);
-            for (let c = 0; c < 4; c++) for (let r2 = 0; r2 < 3; r2++) {
-                const col = c < 3 ? [m[c * 4], m[c * 4 + 1], m[c * 4 + 2]] : [m[12] - cam.pos[0], m[13] - cam.pos[1], m[14] - cam.pos[2]];
-                mv[c * 4 + r2] = v3.dot(rows[r2], col);
-            }
-            mv[15] = 1;
             const o = k * BUS_UNIFORM / 4;
-            r.busData.set(m4.mul(proj, mv), o);
+            r.busData.set(m4.mul(proj, m4.aboutEye(m, cam.pos, right, up, fwd)), o);
             r.busData.set(m, o + 16);
             r.busData.set(bus.inverse, o + 32);
             r.busData.set([bus.v, bus.doors, 0, 0], o + 48);
             draws.push([dist, k]);
         });
         r.busDraws = draws.sort((p, q2) => p[0] - q2[0] || p[1] - q2[1]).map(e => e[1]);
-        // building interiors within INTERIOR_DRAW of their centre (the same test fsWindow and fsPane make) that the camera
-        // is in or sees into through a portal (a window, an open door) in the view frustum, nearest first: only the
-        // InteriorIndex cells within INTERIOR_DRAW are visited, whatever the number of buildings
-        const seen = w.structures.interiors.seen(cam.pos, frustumPlanes(this.viewProj, { reversed: true }), INTERIOR_DRAW, 'building');
-        r.interiorDraws = seen.map(([, it]) => it.owner.range).map(([a, b]) => [a, b - a]).filter(e => e[1] > 0);
-        // the cabin the rain and the march leave out: the bus ridden, or the nearest
+        // building interiors: the rooms of the planned ones the portal traversal reaches (RoomVis: the interior kit's
+        // PortalVis, from the camera's room, or from outside through the windows of the storeys within INTERIOR_DRAW,
+        // the same test fsWindow and fsPane make); the unplanned ones (one room each) within INTERIOR_DRAW of their box
+        // that the camera is in or sees into through a portal in the view frustum: only the InteriorIndex cells within
+        // INTERIOR_DRAW are visited, whatever the number of buildings
+        const planes = frustumPlanes(this.viewProj, { reversed: true }), S = w.structures, inside = [];
+        for (const [, it] of S.interiors.seen(cam.pos, planes, INTERIOR_DRAW, 'building')) S.buildings.draws(it.owner, inside);
+        this.roomVis ??= new RoomVis(S);
+        if (this.roomVis.S !== S) this.roomVis = new RoomVis(S);
+        this.rooms = this.roomVis.compute(cam.pos, this.viewProj, r.width, r.height, inside, near);
+        // the lifts' cars and landing doors near, their panels
+        r.boxGroups = S.lifts.instances(cam.pos, r.boxData);
+        r.boxCount = r.boxGroups.reduce((n, g) => n + g.count, 0);
+        // each building drawn, in its Origin's frame: its model-view built in doubles about the camera, in a slot of
+        // busData after the buses' (the interiors' and the lifts' draws name it)
+        const slots = new Map();
+        const slotOf = b => {
+            let k = slots.get(b);
+            if (k !== undefined) return k;
+            if (slots.size >= r.busData.length / (BUS_UNIFORM / 4) - r.originSlot0) return -1;
+            k = r.originSlot0 + slots.size;
+            slots.set(b, k);
+            const M = b.interior.origin.M, o = k * BUS_UNIFORM / 4;
+            r.busData.set(m4.mul(proj, m4.aboutEye(M, cam.pos, right, up, fwd)), o);
+            r.busData.set(M, o + 16);
+            r.busData.set([0, 0, 0, 0], o + 48);
+            return k;
+        };
+        r.interiorDraws = inside.map(d => [d[0], d[1], d[2], d[3], d[4], slotOf(d[4])]).filter(d => d[5] >= 0).sort((p, q) => p[5] - q[5]);
+        for (const g of r.boxGroups) g.slot = slotOf(g.b);
+        r.boxGroups = r.boxGroups.filter(g => g.slot >= 0);
+        r.originCount = slots.size;
+        r.setPanels(a.liftControl.shown.map(gui => ({ gui, corners: panelCorners(gui) })));
+        // the cabin the rain and the march leave out: the bus ridden, or the nearest; else the building the camera is in
         if (a.rideBus) {
             F.set('busInv', a.rideBus.inverse);
             F.set('cabinLo', [-BUS.hl, BUS.skirt, -BUS.hw, 1]);
             F.set('cabinHi', [BUS.hl, BUS.roof, BUS.hw, 0]);
+        } else if (a.indoors) {
+            const b = a.indoors, { cs, sn, c } = b.f, tx = c[0], tz = c[1];
+            F.set('busInv', [cs, 0, -sn, 0, 0, 1, 0, 0, sn, 0, cs, 0, -(cs * tx + sn * tz), -b.floor, -(-sn * tx + cs * tz), 1]);
+            F.set('cabinLo', [-b.hx + b.t, -0.2, -b.hz + b.t, 1]);
+            F.set('cabinHi', [b.hx - b.t, b.top - b.floor, b.hz - b.t, 0]);
         } else F.set('cabinLo', [0, 0, 0, 0]);
         // weather map follows the camera, snapped to its texels so it does not swim
         const ws = cfg.weatherSize, texel = ws / WEATHER_RES;

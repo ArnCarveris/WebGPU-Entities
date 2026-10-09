@@ -4,7 +4,7 @@
 Features.part('portal', (engine, feature) => {
 const { Common, kits } = engine;
 const { v3 } = Common;
-const { GridHash } = kits.interior;
+const { GridHash, AreaSet } = kits.interior;
 const { tiltAxes, worldBounds } = kits.mesh;
 const {
     MAX_LIGHTS, THROUGH_FLOATS, AREA_FLOATS, AXES, IDENTITY, g2, GeometryPool, MeshBuilder, splitMesh, MaterialTable, BVHTree, QuadTree,
@@ -12,14 +12,16 @@ const {
     ENTITY_TYPES,
 } = feature;
 
-// World: built entirely from the scenario data.
+// World: built entirely from the scenario data; its areas, portals and occluders are an AreaSet (kits.interior: areaAt,
+// the outdoor portal tree, the PortalVis graph).
 //
 // Build order: materials -> areas -> portals -> occluders -> generated architecture -> outdoors
 // (terrain, scatter, seabed) -> entities -> vehicles (claim what is inside their hulls) -> link entities
 // -> object trees -> collision -> sea surface.
 
-class World {
+class World extends AreaSet {
     constructor(scn) {
+        super();
         this.scn = scn;
         this.warnings = [];
         this.pool = new GeometryPool();
@@ -85,42 +87,7 @@ class World {
         this.indexAreas();
     }
 
-    // the areas in GridHashes over their footprints, so areaAt is O(1) however many there are: the world's in one, each
-    // vehicle's in its own, in its frame (its Origin), so they move with it for free
-    indexAreas() {
-        this.areaGrid = new GridHash(16);
-        for (const veh of this.vehicles || []) { veh.areaGrid = new GridHash(16); veh.areaReach = 0; }
-        for (const a of this.areas) {
-            if (a.index === 0) continue;
-            const veh = a.vehicle;
-            (veh ? veh.areaGrid : this.areaGrid).insert(a, ...a.bbox);
-            // how far from its origin a vehicle's areas reach: further off, p is in none of them (no transform needed)
-            if (veh) for (const x of [a.bbox[0], a.bbox[2]]) for (const z of [a.bbox[1], a.bbox[3]]) for (const y of [a.y, a.top]) veh.areaReach = Math.max(veh.areaReach, Math.hypot(x, y, z));
-        }
-    }
-
-    areaIndex(id) {
-        if (id === undefined || id === null) return undefined;
-        if (!this.areaById.has(id)) { this.warnings.push(`unknown area "${id}"`); return 0; }
-        return this.areaById.get(id);
-    }
-
-    // FarCry SetCurAreas / SECTR GetContaining: point query, outdoors when nothing contains it (the first area that does,
-    // by index). The few areas in p's cell of each grid: O(1) in the number of areas
-    // the vehicles whose cells hold p (all of them while the world is being built)
-    vehiclesAt(p) { return this.vehicleGrid ? this.vehicleGrid.at(p[0], p[2]) : this.vehicles || []; }
-
-    areaAt(p) {
-        let best = 0;
-        for (const veh of this.vehiclesAt(p)) {
-            const M = veh.M, r = veh.areaReach;
-            if (!r || (p[0] - M[12]) ** 2 + (p[1] - M[13]) ** 2 + (p[2] - M[14]) ** 2 > r * r) continue;
-            const l = veh.toLocal(p);
-            for (const a of veh.areaGrid.at(l[0], l[2])) if ((!best || a.index < best) && a.containsLocal(l)) best = a.index;
-        }
-        for (const a of this.areaGrid.at(p[0], p[2])) if ((!best || a.index < best) && a.containsLocal(p)) best = a.index;
-        return best;
-    }
+    // (indexAreas, areaIndex, vehiclesAt, areaAt: AreaSet's)
 
     // the interior (kits.interior) p is sheltered in from the weather: its area, or null outdoors
     shelterAt(p) { const a = this.areas[this.areaAt(p)]; return a.shelter ? a : null; }
@@ -151,14 +118,7 @@ class World {
     buildPortals() {
         this.portals = [];
         this.portalById = new Map();
-        for (const d of this.scn.portals || []) {
-            const P = new Portal(d, this.portals.length, this);
-            if (P.front === P.back) { this.warnings.push(`portal "${d.id}" connects "${this.areas[P.front].id}" to itself; skipped`); continue; }
-            this.portals.push(P);
-            this.portalById.set(P.id, P);
-            this.areas[P.front].portals.push(P.index);
-            this.areas[P.back].portals.push(P.index);
-        }
+        for (const d of this.scn.portals || []) this.addPortal(d);
     }
 
     // ---- static geometry ----
@@ -240,9 +200,7 @@ class World {
         this.dynamicByArea = this.areas.map(() => []);
         // the portals out to the outdoors: from outdoors, PortalVis asks this tree for those in its frustum instead of
         // testing every one in the world (a vehicle's move with it: tested while the vehicle is in view)
-        const out = this.portals.filter(P => P.front === 0 || P.back === 0);
-        this.outdoorPortals = new QuadTree(out.filter(P => !P.vehicle));
-        this.movingOutdoorPortals = this.vehicles.map(veh => ({ veh, portals: out.filter(P => P.vehicle === veh).map(P => P.index) })).filter(v => v.portals.length);
+        this.indexOutdoorPortals(QuadTree);
     }
 
     // ---- walking: collision, ground, ladders ----

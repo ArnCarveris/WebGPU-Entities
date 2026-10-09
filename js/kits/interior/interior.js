@@ -7,7 +7,8 @@ const { Origin, GridHash, VisArea } = kit;
 
 // spec: owner (the building or vehicle), kind ('building' | 'vehicle' | ...), origin (an Origin, or what Origin takes:
 // a matrix or a function returning the owner's current pose), lo / hi (its VisArea box in that frame), portals
-// (VisPortal specs), shelter (default true: no rain or snow falls inside, whatever the wind)
+// (VisPortal specs), shelter (default true: no rain or snow falls inside, whatever the wind). The rooms inside are a
+// world's areas and portals (AreaSet), if it has them
 class Interior {
     constructor({ owner = null, kind = 'building', origin, lo, hi, portals = [], shelter = true }) {
         this.owner = owner;
@@ -16,6 +17,14 @@ class Interior {
         this.area = new VisArea(lo, hi, portals);
         this.shelter = shelter;
         this.index = null;               // the InteriorIndex it is in
+    }
+
+    // how far (m) `eye` (world) is from its box (0 inside)
+    distance(eye) {
+        const q = this.origin.toLocal(eye), { lo, hi } = this.area;
+        let d2 = 0;
+        for (let k = 0; k < 3; k++) { const e = Math.max(lo[k] - q[k], 0, q[k] - hi[k]); d2 += e * e; }
+        return Math.sqrt(d2);
     }
 
     // p (world) inside it
@@ -63,7 +72,15 @@ class InteriorIndex {
     // where its origin is in the world (a vehicle's position)
     static at(it) { const m = it.origin.M; return [m[12], m[13], m[14]]; }
 
-    rect(it) { const s = it.sphere(); return [s[0] - s[3], s[2] - s[3], s[0] + s[3], s[2] + s[3]]; }
+    // its footprint in xz (the box's corners as its origin turns them): a tall tower covers its plan, not its height
+    rect(it) {
+        const { lo, hi } = it.area, r = [Infinity, Infinity, -Infinity, -Infinity];
+        for (const x of [lo[0], hi[0]]) for (const z of [lo[2], hi[2]]) {
+            const p = it.origin.toWorld([x, lo[1], z]);
+            r[0] = Math.min(r[0], p[0]); r[1] = Math.min(r[1], p[2]); r[2] = Math.max(r[2], p[0]); r[3] = Math.max(r[3], p[2]);
+        }
+        return r;
+    }
 
     add(it) {
         it.index = this;
@@ -113,13 +130,13 @@ class InteriorIndex {
         return null;
     }
 
-    // the interiors (of `kind`) the camera at `eye` sees into, within `range` m of it, nearest first: [[distance, it]].
-    // Costs the cells within range and the interiors there, not the world's
+    // the interiors (of `kind`) the camera at `eye` sees into, within `range` m of their box, nearest first: [[distance,
+    // it]]. Costs the cells within range and the interiors there, not the world's
     seen(eye, planes, range, kind) {
         const out = [];
         this.grid.each(eye[0] - range, eye[2] - range, eye[0] + range, eye[2] + range, it => {
             if (kind && it.kind !== kind) return;
-            const c = it.origin.toWorld(it.area.centre), d = Math.hypot(c[0] - eye[0], c[1] - eye[1], c[2] - eye[2]);
+            const d = it.distance(eye);
             if (d < range && it.seenFrom(eye, planes)) out.push([d, it]);
         });
         return out.sort((a, b) => a[0] - b[0]);
