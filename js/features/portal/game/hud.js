@@ -32,15 +32,6 @@ class Hud extends kits.world.WorldHud {
         lines.push(`indoor trees  bvh per area: visited ${fs.inNodes}, tested ${fs.inObjs}`);
         lines.push(`draws         ${s.draws} (${s.objs} objs of ${w.objects.length + w.dynamic.length})  tris ${(s.tris / 1000).toFixed(1)}k/${(w.totalTris / 1000).toFixed(1)}k  occluded ${fs.occluded}`);
         lines.push('');
-        lines.push('<span class="t">TRAVERSAL</span>');
-        const shown = vis.entries.slice(0, 16);
-        for (const e of shown) {
-            const a = w.areas[e.area];
-            const via = e.via ? `${e.via.id} → ` : '';
-            lines.push(`${'  '.repeat(e.depth)}${e.depth ? '└ ' : ''}${via}${a.name}${e.skyOnly ? ' <span class="w">[sky only]</span>' : ''}${e.ref !== undefined && g.frameMode === 'stencil' ? ` <span class="off">#${e.ref}</span>` : ''}`);
-        }
-        if (vis.entries.length > shown.length) lines.push(`  … ${vis.entries.length - shown.length} more`);
-        lines.push('');
         lines.push(`<span class="t">PLAYER</span> ${P.stateLabel}${o.walk && P.support ? ` on ${P.support.id}` : ''}`);
         if (o.walk && P.driving) {
             const c = P.driving.control, rud = Math.round(c.rudder * 35);

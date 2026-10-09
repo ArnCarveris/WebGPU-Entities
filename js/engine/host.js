@@ -480,10 +480,22 @@ class Host {
             if (!Host.same(v, l.last)) { l.last = Array.isArray(v) ? [...v] : v; l.inst.world.set?.(l.param, v); }
         }
         this.audio.update(scope);
+        this.sidePanels(now);
         try {
             this.handheld.frame(now, dt);
         } catch (err) {
             if (!this.failed) { this.failed = true; showFallback(err); }
+        }
+    }
+
+    // the worlds' readouts kept on the screen (EngineHud side panels): each world of areas' portal traversal tree while
+    // its inspector's `tree` option is on, a few times a second
+    sidePanels(now) {
+        if (now - (this.sideAt || 0) < 200) return;
+        this.sideAt = now;
+        for (const inst of this.instances) {
+            const I = inst.visible ? inst.world.inspector : null;
+            this.hud?.side(inst.id, I && I.opts.tree ? I.tree() : null);
         }
     }
 

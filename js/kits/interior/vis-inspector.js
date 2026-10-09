@@ -6,7 +6,7 @@
 Features.kit('interior', (engine, kit) => {
 const { VisDebug, AreaMap, portalStateOf } = kit;
 
-const OPTS = { culling: true, freeze: false, portals: false, volumes: false, map: true, wide: false };
+const OPTS = { culling: true, freeze: false, portals: false, volumes: false, map: true, wide: false, tree: true };
 
 // o: { set (the world's areas: an AreaSet), opts (the world's options object to share, OPTS filled in), map (AreaMap's
 // options: spans, level, teleport, under, over), name(area) (what to call an area in the readout), options() (the
@@ -58,7 +58,7 @@ class VisInspector {
         return i === 0 ? 'outdoors' : this.o.name?.(a) ?? a?.name ?? `area ${i}`;
     }
 
-    // the readout: the traversal's numbers and its tree
+    // the readout: the traversal's numbers (its tree is on the screen: tree())
     readout() {
         const vis = this.vis, o = this.opts, out = [];
         if (!vis) return ['no traversal yet'];
@@ -68,12 +68,19 @@ class VisInspector {
         out.push(`camera area   ${this.areaName(vis.root)}${o.freeze ? '  <span class="w">[frozen]</span>' : ''}`);
         out.push(`culling ${flag(o.culling)}  areas reached ${reached}/${this.set.areas.filter(Boolean).length}  entries ${vis.entries.length}${vis.truncated ? ' <span class="w">[truncated]</span>' : ''}  sky ${flag(vis.sky, 'yes', 'no')}`);
         out.push(`portals       tested ${vis.tested}  passed ${vis.passed}  <span class="d">closed ${vis.closed}</span>  occluded ${vis.occludedPortals}`);
-        out.push('');
-        out.push('<span class="t">TREE</span>');
-        const shown = vis.entries.slice(0, 24);
+        return out;
+    }
+
+    // the traversal tree (the engine keeps it on the screen while opts.tree is on: Host.sidePanels)
+    // (null in a world with no areas but the outdoors: nothing to show)
+    tree() {
+        const vis = this.vis, out = [];
+        if (!vis || !this.set.areas.some((a, i) => i && a)) return null;
+        out.push(`<span class="t">PORTAL TREE</span>  ${vis.entries.length} entries  ${vis.passed} passed${vis.truncated ? '  <span class="w">[truncated]</span>' : ''}${this.opts.freeze ? '  <span class="w">[frozen]</span>' : ''}`);
+        const shown = vis.entries.slice(0, 32);
         for (const e of shown) {
-            const via = e.via ? `<span class="off">[${e.via.kind || 'portal'}]</span> ` : '';
-            out.push(`${'.'.repeat(Math.min(e.depth, 8))}${e.depth ? '>' : '*'}  ${via}${this.areaName(e.area)}${e.skyOnly ? ' <span class="w">[sky only]</span>' : ''}`);
+            const via = e.via ? `<span class="m">[${e.via.kind || 'portal'}]</span> ` : '';
+            out.push(`${'  '.repeat(Math.min(e.depth, 10))}${e.depth ? '└ ' : ''}${via}${this.areaName(e.area)}${e.skyOnly ? ' <span class="w">[sky only]</span>' : ''}`);
         }
         if (vis.entries.length > shown.length) out.push(`  … ${vis.entries.length - shown.length} more`);
         return out;
@@ -97,7 +104,8 @@ class VisInspector {
                     ...(this.o.options?.() || [])] },
                 { header: 'FRAMES', cells: [
                     { toggle: `Portal frames${key('portals')}`, on: o.portals, set: v => { o.portals = v; } },
-                    { toggle: `Sector volumes${key('volumes')}`, on: o.volumes, set: v => { o.volumes = v; } }] },
+                    { toggle: `Sector volumes${key('volumes')}`, on: o.volumes, set: v => { o.volumes = v; } },
+                    { toggle: 'Tree on HUD', on: o.tree, set: v => { o.tree = v; } }] },
                 ...Handheld.panel(this.readout()),
             ] },
         ];

@@ -3,6 +3,8 @@
 // (every option, readout and page lives on the handheld, js/engine/handheld.js) and toasts.
 //
 //   hud.toast  { text, ms, delay }: shown once the scenario starts
+//   side panels  a world's live readout it keeps on the screen (side(key, lines)): the portal traversal tree of a world
+//                of areas (kits.interior VisInspector, its "Tree on HUD" option)
 //
 // Only when the page could not start (no WebGPU, a bad scenario) does the bar grow the scenario and GPU pickers, so
 // another one can still be chosen.
@@ -11,6 +13,18 @@ class EngineHud {
     constructor(host) {
         this.host = host;
         this.toastEl = document.getElementById('engine-toast');
+        this.sideEl = document.getElementById('engine-side');
+        this.sides = new Map();
+    }
+
+    // ------------------------------------------------------------------------------------------- side panels
+    // panel `key` showing lines (a little markup, as the readouts have), or gone (lines null)
+    side(key, lines) {
+        let el = this.sides.get(key);
+        if (!lines) { if (el) { el.remove(); this.sides.delete(key); } return; }
+        if (!el && this.sideEl) { el = Object.assign(document.createElement('div'), { className: 'panel' }); this.sideEl.appendChild(el); this.sides.set(key, el); }
+        const html = lines.join('\n');
+        if (el && el.innerHTML !== html) el.innerHTML = html;
     }
 
     // ------------------------------------------------------------------------------------------- the chip
