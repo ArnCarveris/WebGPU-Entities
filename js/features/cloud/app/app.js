@@ -71,6 +71,13 @@ class App {
         this.sounds = new SoundEvents(this);
         this.lights = new LightWriter(this);
         this.frameWriter = new FrameWriter(this);
+        // the portal visibility's inspector (the building kit's RoomVis has one: floor map, traversal, frames): a tap on
+        // the map walks (or flies) the camera there, onto the floor of the area tapped
+        this.inspect = { map: { teleport: (x, z, area) => {
+            const A = this.world.structures.areas.areas[area], y = A ? A.y : this.camera.pos[1] - (this.walker.active ? 1.62 : 0);
+            if (this.walker.active) this.walker.place(this, x, z, y + 0.05);
+            else this.camera.pos = [x, y + 1.62, z];
+        } } };
         this.dynamicScale = new DynamicScale();
     }
 
@@ -89,6 +96,7 @@ class App {
         this.quality = clamp(this.cfg.quality, 0, QUALITY.length - 1);
         this.timeScale = this.cfg.timeScale;
         this.radar = this.cfg.radar ?? false;       // off unless the scenario wants it: the screen stays clean
+        this.renderer.setGui(this.cfg.gui || {});
         this.renderer.setWorld(world);
         this.clouds.reset(world);
         const L = scenario.lighting || {};

@@ -1,0 +1,23 @@
+{
+    "name": "Storey plans",
+    "group": "Plans",
+    "description": "How a storey is laid out round its building's core (storeyPlan). layout `rooms`: a corridor ring round the core (ring m wide), and from each façade in to it strips of room bands, double-loaded on corridors (corridor m wide) as deep as the strip needs, cut into rooms `module` m wide (rooms.depth: [min, max] m); the façade band's rooms are of the `outer` kinds, the rest of the `inner` ones (roomTypes, by weight); a passage through the bands joins each corridor to the ring opposite the core's lift lobby. layout `hall`: one open hall round the core, of roomType `hall`. entrances: the façades a passage runs in from to the ring (the ground floor's way in: its door goes there). lit: share of such storeys with their lamps on (else the archetype's); stairs: false when its stairwell does not go on up.",
+    "entities": [
+        {"type": "storeyPlan", "id": "office", "label": "Offices", "layout": "rooms", "ring": 2.0, "corridor": 1.8, "door": 0.95,
+            "rooms": {"depth": [3.4, 6.4], "module": 3.6, "outer": {"office": 5, "meeting": 1, "open": 1}, "inner": {"meeting": 2, "store": 2, "wc": 2, "kitchen": 1, "server": 1, "office": 2}}},
+        {"type": "storeyPlan", "id": "office-small", "label": "Offices", "layout": "rooms", "ring": 1.6, "corridor": 1.6, "door": 0.9,
+            "rooms": {"depth": [3.0, 5.6], "module": 3.3, "outer": {"office": 5, "meeting": 1}, "inner": {"store": 1, "wc": 1, "kitchen": 1, "meeting": 1}}},
+        {"type": "storeyPlan", "id": "plant", "label": "Plant", "layout": "rooms", "ring": 2.0, "corridor": 2.0, "door": 1.4, "lit": 0.25,
+            "rooms": {"depth": [4.0, 9.0], "module": 9.0, "outer": {"plant": 1}, "inner": {"plant": 2, "store": 1}}},
+        {"type": "storeyPlan", "id": "lobby", "label": "Lobby", "layout": "hall", "hall": "lobby", "lit": 1},
+        {"type": "storeyPlan", "id": "sky", "label": "Sky lobby", "layout": "hall", "hall": "sky", "lit": 1},
+        {"type": "storeyPlan", "id": "deck", "label": "Observation deck", "layout": "hall", "hall": "deck", "lit": 1, "stairs": false},
+        {"type": "storeyPlan", "id": "ground-hall", "label": "Hall", "layout": "hall", "hall": "hall"},
+        {"type": "storeyPlan", "id": "quarters", "label": "Quarters", "layout": "rooms", "ring": 1.4, "corridor": 1.4, "door": 0.9,
+            "rooms": {"depth": [2.6, 4.6], "module": 3.0, "outer": {"dorm": 3, "cabin": 1}, "inner": {"wc": 1, "store": 1}}},
+        {"type": "storeyPlan", "id": "ops", "label": "Operations", "entrances": ["-z"], "layout": "rooms", "ring": 1.4, "corridor": 1.4, "door": 1.0,
+            "rooms": {"depth": [2.6, 5.0], "module": 4.0, "outer": {"ops": 2, "mess": 1, "meeting": 1}, "inner": {"store": 1, "wc": 1}}},
+        {"type": "storeyPlan", "id": "cabins", "label": "Cabins", "entrances": ["-z"], "layout": "rooms", "ring": 1.2, "corridor": 1.2, "door": 0.8,
+            "rooms": {"depth": [2.2, 4.2], "module": 2.6, "outer": {"cabin": 4, "mess": 1}, "inner": {"wc": 1, "store": 1}}}
+    ]
+}

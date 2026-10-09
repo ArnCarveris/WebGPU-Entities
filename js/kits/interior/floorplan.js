@@ -1,8 +1,10 @@
 'use strict';
-// FloorPlan: one storey of a building laid out as rectangles in its frame: a core (stairwell, lift shafts either side of
-// a lift lobby), a corridor round it (and along the long axis of an elongated building), and rooms between the corridor
-// and the façades, every room reachable through doorways. Pure data: a feature builds the walls, floors, doors and its
-// interior's areas and portals (an AreaSet) from it.
+// FloorPlan: one storey of a building laid out as rectangles in its frame, from a storey plan (data: the building kit's
+// storeyPlan): the core in the middle (its stairwell, lift shafts and lift lobby: the building kit's coreLayout), a
+// corridor ring round it, and from each façade in to the ring a strip of room bands, double-loaded on corridors as deep
+// as the strip needs, cut into rooms; a passage joins each strip's corridor to the ring. Or one open hall round the core.
+// Every room is reachable through doorways. Pure data: a world builds the walls, floors, doors and its areas and portals
+// from it.
 
 Features.kit('interior', (engine, kit) => {
 const EPS = 1e-4;
@@ -32,102 +34,137 @@ function sharedEdge(a, b) {
     return null;
 }
 
-// The core, centred on the footprint and laid along local x: [stairwell | left bank | lift lobby | right bank], each the
-// core's full depth (along z). spec: { stairs: { lane (m, each flight's width), landing (m) } | false, banks: [left
-// shafts, right shafts], shaft: [width along z, depth along x] (outside their walls), lobby (m) }; H: the tallest storey
-// (the stairwell must hold two flights of half of it, ~0.18 m risers on 0.28 m treads, and a landing at each end).
-// Returns its size (w along x, d along z) and its parts relative to its centre.
-function coreLayout(spec, H) {
-    const st = spec.stairs === false ? null : { lane: 1.2, landing: 1.25, ...spec.stairs };
-    const [sw, sd] = spec.shaft || [2.3, 2.5], banks = spec.banks || [0, 1], lobby = spec.lobby ?? 3.0;
-    const steps = Math.ceil(H / 2 / 0.18), run = steps * 0.28;
-    const d = Math.max(st ? run + 2 * st.landing : 0, banks[0] * sw, banks[1] * sw, 4.5);
-    const stairW = st ? 2 * st.lane + 0.2 : 0;
-    const w = stairW + (banks[0] ? sd : 0) + lobby + (banks[1] ? sd : 0);
-    let x = -w / 2;
-    const parts = { w, d, shafts: [] };
-    if (st) { parts.stair = { rect: [x, x + stairW, -d / 2, d / 2], ...st }; x += stairW; }
-    const bank = (n, side) => {
-        const x0 = x, x1 = x + sd, z0 = -n * sw / 2;
-        for (let i = 0; i < n; i++)
-            parts.shafts.push({ bank: side, index: i, rect: [x0, x1, z0 + i * sw, z0 + (i + 1) * sw], face: side === 0 ? '+x' : '-x' });
-        x += sd;
-    };
-    if (banks[0]) bank(banks[0], 0);
-    parts.lobby = [x, x + lobby, -d / 2, d / 2];
-    x += lobby;
-    if (banks[1]) bank(banks[1], 1);
-    return parts;
+// a weighted pick from { kind: weight } with r in [0, 1)
+function pick(weights, r) {
+    const e = Object.entries(weights || {}).filter(([, w]) => w > 0), sum = e.reduce((s, [, w]) => s + w, 0);
+    if (!sum) return 'office';
+    let a = r * sum;
+    for (const [k, w] of e) { if ((a -= w) < 0) return k; }
+    return e[e.length - 1][0];
 }
 
-// A storey's plan. o: { hx, hz (half the outer footprint), t (outer wall), core (coreLayout's, or null), corridor (m),
-// module (m: a room's width along the façade), minRoom (m: shallower bands become corridor), kind ('rooms' | 'hall'),
-// seed }. Rooms: { kind (corridor | office | open | meeting | hall | lobby | stair | shaft), rects, name, depth (m from
-// the façade) }; portals: { a, b (room indices), axis, at, c (centre along the edge), w, h (doorway; h: of the storey,
-// 0 = full) , kind (door | opening | lift | stair) }.
+// How a strip D m deep is filled with room bands and corridors from its façade in: m bands of rooms, a corridor after
+// every even one that has another behind it (rooms on both sides of it), the last band backing onto the ring. The
+// fewest bands whose rooms are no deeper than `max` (none shallower than `min` unless one band is all there is room for).
+// Returns [{ kind: 'rooms' | 'corridor', d0, d1 (m in from the façade), band (rooms: 0 the façade's) }]
+function strip(D, [min, max], corridor) {
+    let m = 1;
+    while (m < 12) {
+        const R = (D - Math.floor(m / 2) * corridor) / m;
+        if (R <= max) { if (R < min && m > 1) m--; break; }
+        m++;
+    }
+    const R = (D - Math.floor(m / 2) * corridor) / m, out = [];
+    let d = 0;
+    for (let i = 0; i < m; i++) {
+        out.push({ kind: 'rooms', d0: d, d1: d + R, band: i });
+        d += R;
+        if (i % 2 === 0 && i + 1 < m) { out.push({ kind: 'corridor', d0: d, d1: d + corridor }); d += corridor; }
+    }
+    return out;
+}
+
+// A storey's plan. o: { hx, hz (half the outer footprint), t (outer wall), core (the building kit's coreLayout: { w, d,
+// stair, shafts, lobby }, or null), storey (its storeyPlan: layout 'rooms' | 'hall', ring, corridor, door, rooms { depth,
+// module, outer, inner }, hall, entrances: the façades ('-z', '+z', '-x', '+x') a passage runs in from, to the ring:
+// a way in from the street), partition (m), seed }. this.entrances: [{ face, c (m along the face: local x of a z face,
+// z of an x face), w }]. Rooms: { kind (corridor | hall | stair | shaft | lobby | a
+// roomType's id), rects, depth (m from the façade: rooms on it), facade, ring (the corridor round the core) };
+// portals: { a, b (room indices), axis, at, c (centre along the edge), w, h (doorway; 0: the storey's full height),
+// kind (door | opening | lift | stair) }.
 class FloorPlan {
     constructor(o) {
         this.o = o;
         this.rooms = [];
         this.portals = [];
-        const X = o.hx - o.t, Z = o.hz - o.t;
+        this.entrances = [];
+        const X = o.hx - o.t, Z = o.hz - o.t, core = o.core, sp = o.storey || {};
         this.inner = [-X, X, -Z, Z];
-        const core = o.core;
-        const c = o.corridor ?? 1.8;
         this.coreIdx = {};
-        const add = (kind, rects, extra = {}) => { this.rooms.push({ kind, rects, ...extra }); return this.rooms.length - 1; };
-        // the core's rooms, centred
+        this.rnd = mulberry(o.seed ?? 1);
         if (core) {
-            if (core.stair) this.coreIdx.stair = add('stair', [core.stair.rect], { stair: core.stair });
-            this.coreIdx.shafts = core.shafts.map(s => add('shaft', [s.rect], { shaft: s }));
-            this.coreIdx.lobby = add('lobby', [core.lobby]);
-        }
+            if (core.stair) this.coreIdx.stair = this.add('stair', [core.stair.rect], { stair: core.stair });
+            this.coreIdx.shafts = core.shafts.map(s => this.add('shaft', [s.rect], { shaft: s }));
+            this.coreIdx.lobby = this.add('lobby', [core.lobby]);
+        } else this.coreIdx.shafts = [];
         const cw = core ? core.w / 2 : 0, cd = core ? core.d / 2 : 0;
-        if (o.kind === 'hall' || !core) { this.hall(X, Z, cw, cd); return; }
-        // corridor: a ring round the core; along the long axis it runs on (a spine) to leave end rooms as deep as the
-        // side ones. Laid out with x the long axis (`swap` turns it back)
-        const swap = Z > X, LX = swap ? Z : X, LZ = swap ? X : Z, kx = swap ? cd : cw, kz = swap ? cw : cd;
-        const T = r => swap ? [r[2], r[3], r[0], r[1]] : r;
-        const rx = kx + c, rz = kz + c, minRoom = o.minRoom ?? 2.6, module = o.module ?? 5;
-        const side = LZ - rz;
-        if (side < minRoom || LX - rx < minRoom) { this.hall(X, Z, cw, cd); return; }
-        const spine = (LX - rx) > 1.5 * side, sx = spine ? Math.max(rx, LX - Math.min(8, Math.max(4.5, side))) : rx;
-        const corr = [[-rx, rx, kz, rz], [-rx, rx, -rz, -kz], [-rx, -kx, -kz, kz], [kx, rx, -kz, kz]];
-        if (spine) corr.push([rx, sx, -c / 2, c / 2], [-sx, -rx, -c / 2, c / 2]);
-        this.corridor = add('corridor', corr.map(T));
-        // rooms: two side bands (from the corridor to the façade) and two ends, cut into modules
-        const rnd = mulberry(o.seed ?? 1);
-        const roomKind = depth => depth > 9 ? 'open' : rnd() < 0.18 ? 'meeting' : 'office';
-        // deep bands hold open-plan floors about as wide as they are deep, not strips
-        const width = depth => depth > 9 ? Math.max(module, depth * 0.9) : module;
-        for (const sg of [-1, 1]) {
-            for (const [a0, a1] of splitSpan(-sx, sx, width(side), [-rx, rx])) {
-                const z0 = Math.abs((a0 + a1) / 2) < rx ? rz : c / 2, depth = LZ - z0;
-                const r = sg > 0 ? [a0, a1, z0, LZ] : [a0, a1, -LZ, -z0];
-                add(roomKind(depth), [T(r)], { depth });
+        const R = sp.rooms || {}, depth = R.depth || [3, 6.5], c = sp.ring ?? 2;
+        if (sp.layout !== 'rooms' || !core || X - cw - c < depth[0] || Z - cd - c < depth[0]) this.hall(X, Z, cw, cd, sp.hall || 'hall');
+        else this.bands(X, Z, cw, cd, sp);
+        this.connect();
+    }
+
+    add(kind, rects, extra = {}) {
+        this.rooms.push({ kind, rects: rects.filter(r => r[1] - r[0] > EPS && r[3] - r[2] > EPS), ...extra });
+        return this.rooms.length - 1;
+    }
+
+    // an open storey round the core (a lobby, a sky lobby, a shop floor): one hall of roomType `kind`
+    hall(X, Z, cw, cd, kind) {
+        const rects = cw ? [[-X, X, cd, Z], [-X, X, -Z, -cd], [-X, -cw, -cd, cd], [cw, X, -cd, cd]] : [[-X, X, -Z, Z]];
+        this.corridor = this.add(kind, rects, { hall: true, depth: Infinity });
+        this.halls = [this.corridor];
+    }
+
+    // the ring round the core, then a strip from each façade to it: z strips (±z façades) run the building's whole width,
+    // x strips the ring's length between them. Each strip's bands (strip()); rooms `module` m wide, the façade band's of
+    // the outer kinds, the rest of the inner ones; one passage per strip from its corridors through to the ring, across
+    // from the lift lobby (z strips) or at its middle (x strips)
+    bands(X, Z, cw, cd, sp) {
+        const c = sp.ring ?? 2, cc = sp.corridor ?? 1.8, R = sp.rooms || {}, depth = R.depth || [3, 6.5], module = R.module ?? 3.6;
+        const rx = cw + c, rz = cd + c, lob = this.o.core.lobby, lobC = (lob[0] + lob[1]) / 2;
+        this.corridor = this.add('corridor', [[-rx, rx, cd, rz], [-rx, rx, -rz, -cd], [-rx, -cw, -cd, cd], [cw, rx, -cd, cd]], { ring: true });
+        this.halls = [this.corridor];
+        // a strip: its façade at `outer` along axis `ax` ('z': the façade is a z = const line), `sg` the side, spanning
+        // [s0, s1] along the façade, from the façade in to `inner`
+        const strips = [
+            { ax: 'z', sg: 1, face: '+z', outer: Z, inner: rz, s0: -X, s1: X, pass: Math.max(-rx + cc / 2, Math.min(rx - cc / 2, lobC)) },
+            { ax: 'z', sg: -1, face: '-z', outer: Z, inner: rz, s0: -X, s1: X, pass: Math.max(-rx + cc / 2, Math.min(rx - cc / 2, lobC)) },
+            { ax: 'x', sg: 1, face: '+x', outer: X, inner: rx, s0: -rz, s1: rz, pass: 0 },
+            { ax: 'x', sg: -1, face: '-x', outer: X, inner: rx, s0: -rz, s1: rz, pass: 0 },
+        ];
+        const entr = new Set(sp.entrances || []);
+        for (const st of strips) {
+            const D = st.outer - st.inner, bands = strip(D, depth, cc);
+            // local (a along the façade, d in from it) to a rectangle
+            const rect = (a0, a1, d0, d1) => {
+                const n0 = st.sg * (st.outer - d1), n1 = st.sg * (st.outer - d0), [lo, hi] = n0 < n1 ? [n0, n1] : [n1, n0];
+                return st.ax === 'z' ? [a0, a1, lo, hi] : [lo, hi, a0, a1];
+            };
+            const corridors = bands.filter(b => b.kind === 'corridor');
+            const p0 = st.pass - cc / 2, p1 = st.pass + cc / 2;
+            // the corridors, and the passage from the outermost one in to the ring
+            let pass = null;
+            // an entrance: the passage runs on out through the façade band to the façade
+            const from = entr.has(st.face) ? 0 : corridors.length ? corridors[0].d1 : null;
+            if (from !== null) {
+                const rects = corridors.map(b => rect(st.s0, st.s1, b.d0, b.d1));
+                // (the passage in pieces across the room bands it crosses: its rectangles never overlap)
+                for (const b of bands) if (b.kind === 'rooms' && b.d0 >= from - EPS) rects.push(rect(p0, p1, b.d0, b.d1));
+                pass = [from, D];
+                this.add('corridor', rects, { strip: true });
+                if (from === 0) this.entrances.push({ face: st.face, c: st.pass, w: cc });
             }
-            const f = spine ? c / 2 : rz;
-            for (const [a0, a1] of splitSpan(-LZ, LZ, width(LX - sx), [-f - 0.5, f + 0.5])) {
-                const depth = LX - sx, r = sg > 0 ? [sx, LX, a0, a1] : [-LX, -sx, a0, a1];
-                add(depth > 9 ? 'open' : 'office', [T(r)], { depth, end: true });
+            for (const b of bands) {
+                if (b.kind !== 'rooms') continue;
+                const inPass = pass && b.d0 >= pass[0] - EPS;
+                for (const [a0, a1] of splitSpan(st.s0, st.s1, module, inPass ? [p0, p1] : [])) {
+                    if (inPass && a0 >= p0 - EPS && a1 <= p1 + EPS) continue;
+                    const kind = pick(b.band === 0 ? R.outer : R.inner, this.rnd());
+                    this.add(kind, [rect(a0, a1, b.d0, b.d1)], { depth: b.band === 0 ? b.d1 - b.d0 : 0, facade: b.band === 0, band: b.band });
+                }
             }
         }
-        this.connect();
     }
 
-    // an open storey round the core (a lobby, a sky lobby, a shop floor): one hall
-    hall(X, Z, cw, cd) {
-        const rects = cw ? [[-X, X, cd, Z], [-X, X, -Z, -cd], [-X, -cw, -cd, cd], [cw, X, -cd, cd]] : [[-X, X, -Z, Z]];
-        this.corridor = this.rooms.push({ kind: 'hall', rects: rects.filter(r => r[1] - r[0] > EPS && r[3] - r[2] > EPS), depth: Infinity }) - 1;
-        this.connect();
-    }
-
-    // doorways: every room onto the corridor (or the hall) where it touches it, else into the neighbour in its band
-    // nearer the middle; the core: the lobby open at both ends, the stairwell's door at its -z end, the shafts' doors
-    // on the lobby (kind 'lift': the feature hangs the landing doors in them)
+    // doorways: the lift lobby open onto the ring (or hall) at both ends, the stairwell's door at its -z end, each shaft's
+    // landing door on the lobby (kind 'lift': the world hangs the doors in it); each corridor of a strip open onto the
+    // ring at its passage; every room's door onto the corridor it shares most wall with, else into its neighbour nearer
+    // the middle that does
     connect() {
-        const R = this.rooms, C = this.corridor, I = this.coreIdx, door = this.o.door ?? 0.95;
-        const link = (a, b, e, w, kind, c) => this.portals.push({ a, b, axis: e.axis, at: e.at, c: c ?? (e.a0 + e.a1) / 2, w, h: kind === 'opening' ? 0 : 2.15, kind });
+        const R = this.rooms, I = this.coreIdx, door = this.o.storey?.door ?? 0.95, part = this.o.partition ?? 0.12;
+        const halls = this.halls || [];
+        const link = (a, b, e, w, kind, c, h) => this.portals.push({ a, b, axis: e.axis, at: e.at, c: c ?? (e.a0 + e.a1) / 2, w, h: h ?? (kind === 'opening' ? 0 : 2.15), kind });
         const touching = (a, b) => {
             let best = null;
             for (const ra of R[a].rects) for (const rb of R[b].rects) {
@@ -136,41 +173,61 @@ class FloorPlan {
             }
             return best;
         };
-        if (I.lobby !== undefined) {
-            for (const r of R[C].rects) {
-                const e = sharedEdge(R[I.lobby].rects[0], r);
-                // as wide as the lobby less its walls' faces (half a partition each side), so its jambs meet them
-                if (e && e.axis === 'x') link(I.lobby, C, e, e.a1 - e.a0 - (this.o.partition ?? 0.12), 'opening');
-            }
+        const ring = this.corridor;
+        if (I.lobby !== undefined) for (const r of R[ring].rects) {
+            const e = sharedEdge(R[I.lobby].rects[0], r);
+            // as wide as the lobby less its walls' faces (half a partition each side), so its jambs meet them
+            if (e && e.axis === 'x') link(I.lobby, ring, e, e.a1 - e.a0 - part, 'opening');
         }
-        if (I.stair !== undefined) {
-            const s = R[I.stair].rects[0];
-            for (const r of R[C].rects) {
-                const e = sharedEdge(s, r);
-                if (e && e.axis === 'x' && e.side < 0) link(I.stair, C, e, Math.min(1.1, e.a1 - e.a0 - 0.3), 'door');
-            }
+        if (I.stair !== undefined) for (const r of R[ring].rects) {
+            const e = sharedEdge(R[I.stair].rects[0], r);
+            if (e && e.axis === 'x' && e.side < 0) link(I.stair, ring, e, Math.min(1.1, e.a1 - e.a0 - 0.3), 'door');
         }
-        for (const k of I.shafts || []) link(k, I.lobby, touching(k, I.lobby), 1.1, 'lift');
+        for (const k of I.shafts || []) {
+            const s = R[k].shaft, e = touching(k, I.lobby);
+            if (e) link(k, I.lobby, e, s.door.w, 'lift', s.door.c, s.door.h);
+        }
+        const corridors = R.map((r, k) => r.kind === 'corridor' || r.hall ? k : -1).filter(k => k >= 0);
+        // the strips' corridors onto the ring, where their passages meet it
+        for (const k of corridors) {
+            if (!R[k].strip) continue;
+            const e = touching(k, ring);
+            if (e) link(k, ring, e, e.a1 - e.a0 - part, 'opening');
+        }
+        const isRoom = k => !['corridor', 'stair', 'shaft', 'lobby'].includes(R[k].kind) && !R[k].hall;
+        const served = new Set();
         for (let k = 0; k < R.length; k++) {
-            const r = R[k];
-            if (!['office', 'open', 'meeting'].includes(r.kind)) continue;
-            const e = touching(k, C);
-            if (e && e.a1 - e.a0 > door + 0.5) {
-                // off-centre toward the core end of the shared stretch, as office doors are
-                const mid = (e.a0 + e.a1) / 2, c = e.a1 - e.a0 > 2.6 ? mid + Math.sign(-mid || 1) * Math.min(0.6, (e.a1 - e.a0) / 2 - door / 2 - 0.3) : mid;
-                link(k, C, e, door, 'door', c);
-                continue;
-            }
-            // not on the corridor: through the neighbour nearest the middle that is
+            if (!isRoom(k)) continue;
             let best = null;
-            for (let j = 0; j < R.length; j++) {
-                if (j === k || !['office', 'open', 'meeting'].includes(R[j].kind)) continue;
-                const e2 = touching(k, j);
-                if (!e2 || e2.a1 - e2.a0 < door + 0.5) continue;
-                const rc = R[j].rects[0], d = Math.hypot((rc[0] + rc[1]) / 2, (rc[2] + rc[3]) / 2);
-                if (!best || d < best.d) best = { j, e: e2, d };
+            for (const j of corridors) {
+                const e = touching(k, j);
+                if (e && e.a1 - e.a0 > door + 0.4 && (!best || e.a1 - e.a0 > best.e.a1 - best.e.a0)) best = { j, e };
             }
-            if (best) link(k, best.j, best.e, door, 'door');
+            if (!best) continue;
+            const { j, e } = best, L = e.a1 - e.a0, mid = (e.a0 + e.a1) / 2;
+            // off-centre toward the middle of the building, as office doors are
+            const c = L > 2.6 ? mid + Math.sign(-mid || 1) * Math.min(0.6, L / 2 - door / 2 - 0.3) : mid;
+            link(k, j, e, door, 'door', c);
+            served.add(k);
+        }
+        // the rest: through a neighbour, nearest the middle first, until every room is reached (suites)
+        for (let pass = 0; pass < 8; pass++) {
+            let added = false;
+            for (let k = 0; k < R.length; k++) {
+                if (!isRoom(k) || served.has(k)) continue;
+                let best = null;
+                for (const j of served) {
+                    const e = touching(k, j);
+                    if (!e || e.a1 - e.a0 < door + 0.4) continue;
+                    const rc = R[j].rects[0], d = Math.hypot((rc[0] + rc[1]) / 2, (rc[2] + rc[3]) / 2);
+                    if (!best || d < best.d) best = { j, e, d };
+                }
+                if (!best) continue;
+                link(k, best.j, best.e, door, 'door');
+                served.add(k);
+                added = true;
+            }
+            if (!added) break;
         }
     }
 
@@ -201,8 +258,8 @@ class FloorPlan {
         const [X0, X1, Z0, Z1] = this.inner, own = this.rooms[k].rects, out = [];
         for (const r of own) {
             const edges = [
-                { axis: 'x', at: r[2], a0: r[0], a1: r[1], side: 1, out: -1 }, { axis: 'x', at: r[3], a0: r[0], a1: r[1], side: -1, out: 1 },
-                { axis: 'z', at: r[0], a0: r[2], a1: r[3], side: 1, out: -1 }, { axis: 'z', at: r[1], a0: r[2], a1: r[3], side: -1, out: 1 },
+                { axis: 'x', at: r[2], a0: r[0], a1: r[1], side: 1 }, { axis: 'x', at: r[3], a0: r[0], a1: r[1], side: -1 },
+                { axis: 'z', at: r[0], a0: r[2], a1: r[3], side: 1 }, { axis: 'z', at: r[1], a0: r[2], a1: r[3], side: -1 },
             ];
             for (const e of edges) {
                 if (e.axis === 'x' && (Math.abs(e.at - Z0) < EPS || Math.abs(e.at - Z1) < EPS)) continue;
@@ -220,6 +277,20 @@ class FloorPlan {
         }
         return out;
     }
+
+    // how deep the façade rooms reach off the x façades and off the z ones ([x, z], m from the wall's inner face): the
+    // sun reaches no deeper (rooms off a corridor; a hall's: Infinity)
+    facadeDepth() {
+        const out = [0, 0], [X0, X1, Z0, Z1] = this.inner;
+        for (const room of this.rooms) {
+            if (!room.facade) continue;
+            for (const [x0, x1, z0, z1] of room.rects) {
+                if (Math.abs(x0 - X0) < 1e-3 || Math.abs(x1 - X1) < 1e-3) out[0] = Math.max(out[0], x1 - x0);
+                if (Math.abs(z0 - Z0) < 1e-3 || Math.abs(z1 - Z1) < 1e-3) out[1] = Math.max(out[1], z1 - z0);
+            }
+        }
+        return out;
+    }
 }
 
 // a tiny seeded generator (this kit does not use the noise kit)
@@ -227,5 +298,5 @@ function mulberry(a) {
     return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
 }
 
-return { FloorPlan, coreLayout, splitSpan, sharedEdge };
+return { FloorPlan, splitSpan, sharedEdge, stripBands: strip };
 });

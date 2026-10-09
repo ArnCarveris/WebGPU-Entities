@@ -4,7 +4,7 @@
 Features.part('cloud', (engine, feature) => {
 const {
     LIGHT_CABIN, LIGHT_ROOM, POOL_ALBEDO, FAR_LAMP_PITCH, TOWN_BLOCK, FAR_LAMP_SIDE, FAR_LAMP_H, POLE_DRAW, GRID_N, BUS, BUS_IN,
-    INTERIOR_DRAW, BLD_ID, BLD_LIT, BLD_STACK,
+    INTERIOR_DRAW, BLD_ID, BLD_LIT, BLD_STACK, BLD_DARK,
 } = feature;
 
 // needs F, heightTex, clampSamp: the terrain's height and normal at xz (beyond the heightfield it flattens to the base)
@@ -391,25 +391,6 @@ struct StructOut { @builtin(position) pos: vec4f, @location(0) world: vec3f, @lo
     return o;
 }
 
-// a world-space GUI (the gui kit's EntityGUI, drawn into its own texture: GuiTargets): a screen that glows, the eye
-// adapted to it as to the lamps; dark glass where the GUI leaves it clear
-@group(2) @binding(0) var panelSamp: sampler;
-@group(2) @binding(1) var panelTex: texture_2d<f32>;
-struct PanelOut { @builtin(position) pos: vec4f, @location(0) uv: vec2f };
-
-@vertex fn vsPanel(@location(0) p: vec3f, @location(1) uv: vec2f) -> PanelOut {
-    var o: PanelOut;
-    o.uv = uv;
-    o.pos = F.viewProj * vec4f(p, 1.0);
-    return o;
-}
-
-@fragment fn fsPanel(i: PanelOut) -> @location(0) vec4f {
-    let t = textureSample(panelTex, panelSamp, i.uv);
-    let c = pow(max(t.rgb, vec3f(0.0)), vec3f(2.2)) * 0.9 / max(F.sunCol.w, 0.2) + vec3f(0.004, 0.005, 0.006) * (1.0 - t.a);
-    return vec4f(c, 0.0);
-}
-
 @fragment fn fsStruct(i: StructOut) -> @location(0) vec4f {
     let mat = i32(i.col.a + 0.5);
     if (mat == 7) { return vec4f(lampGlow(i.world, i.n, i.col.rgb), 0.0); }
@@ -496,7 +477,7 @@ fn shadeCabin(p: vec3f, nIn: vec3f, colIn: vec3f, mat: i32) -> vec3f {
 // than deep in the room), the sun where its ray leaves through a window of the same storey and nothing outside shades
 // it (in a planned building, only into the rooms on the façade it comes in by), the ceiling lamps of the storey if
 // they are on (the eye adapts to them, as in the bus), a little of a flash. m: the vertex's material code (its material,
-// flags, building id). A lift car (BLD_LIT) is lit by its own lamp only
+// flags, building id). A lift car (BLD_LIT) is lit by its own lamp only, a lift shaft (BLD_DARK) by its own lamps only
 fn shadeInterior(p: vec3f, nIn: vec3f, colIn: vec3f, m: u32) -> vec3f {
     let mat = m & 7u;
     let id = m / ${BLD_ID}u;
@@ -510,6 +491,17 @@ fn shadeInterior(p: vec3f, nIn: vec3f, colIn: vec3f, m: u32) -> vec3f {
         if (mat == 7u) { return colIn * lampC * 1.8; }
         var c = colIn * (0.96 + 0.08 * vnoise2(vec2f(q.x + q.z, q.y) * 3.0)) * lampC * 0.3 * (0.4 + 0.6 * sat(n.y * 0.5 + 0.5));
         if (mat == 4u) { c += lampC * 0.08 * (0.04 + 0.96 * pow(1.0 - max(dot(n, v), 0.0), 5.0)); }
+        return c;
+    }
+    // an enclosed space (a lift shaft, BLD_DARK): no daylight and no storey lamps reach it; black but for its own lamps
+    // (always on: they glow wherever they are seen, from end to end of the shaft), what they light, and a flashlight
+    // (or anything else in one: the landing doors' shaft side, the counterweights)
+    if ((m & ${BLD_DARK}u) != 0u || inShaft(b, q)) {
+        if (mat == 7u) { return colIn * lampC * 2.2; }
+        let alb = colIn * (0.96 + 0.08 * vnoise2(vec2f(q.x + q.z, q.y) * 3.0));
+        let lp = lampsAt(p + n * 0.02, n, v, 40.0, ${LIGHT_ROOM}u);
+        var c = alb * (shaftLight(b, q, bldDir(b, n)) * lampC + lp.d + lampC * 0.0015);
+        if (mat == 4u) { c += (shaftLight(b, q, bldDir(b, reflect(-v, n))) * lampC * 0.15 + lp.s) * (0.04 + 0.96 * pow(1.0 - max(dot(n, v), 0.0), 5.0)); }
         return c;
     }
     let storey = bldStorey(b, q.y);

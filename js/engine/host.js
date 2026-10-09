@@ -157,7 +157,7 @@ class Host {
         const adapter = await GpuChoice.requestAdapter();
         if (!adapter) throw new Error('No WebGPU adapter available');
         this.adapter = adapter;
-        const features = ['timestamp-query', 'float32-filterable'].filter(f => adapter.features.has(f));
+        const features = ['timestamp-query', 'float32-filterable', 'depth32float-stencil8'].filter(f => adapter.features.has(f));
         this.device = await adapter.requestDevice({ requiredFeatures: features });
         this.device.lost.then(info => { if (info.reason !== 'destroyed') showFallback(new Error(`GPU device lost: ${info.message}`)); });
         this.device.addEventListener('uncapturederror', e => { console.error(e.error.message); this.lastError = e.error.message; });

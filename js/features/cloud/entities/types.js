@@ -11,7 +11,7 @@ class Entity extends kits.terrain.TerrainEntity {
 }
 
 const { Tilt, Hills, Mountain, Range, River, Lake, Clearing, Town, Forest } = kits.terrain.terrainTypes(Entity, { peakLabel: 100, lake: { radius: 1000 } });
-const { Village, BusStation, Skyscraper } = kits.settlement.settlementTypes(Entity);
+const { Village, BusStation, Skyscraper, Structure } = kits.settlement.settlementTypes(Entity);
 const { Bus, BusLine } = kits.transit.busTypes(Entity);
 const { StormCell, Supercell, SquallLine, Spawner } = kits.weather.weatherTypes(Entity);
 const { HURRICANE, TORNADO } = kits.weather;
@@ -29,6 +29,7 @@ const ENTITY_TYPES = {
     village: Village,
     busStation: BusStation,
     skyscraper: Skyscraper,
+    structure: Structure,
     bus: BusLine,
     storm: StormCell,
     supercell: Supercell,

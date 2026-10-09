@@ -1,0 +1,24 @@
+{
+    "name": "Cores",
+    "group": "Plans",
+    "description": "A building's core (corePlan), laid along its local x: [stairwell | left lift bank | lift lobby | right lift bank]. stairs { lane (m, each flight's width), landing } or false; lobby (m wide); banks: each { shafts, shaft { width (m along z), depth (m along x, the door's side to the back wall), tech (m beside the car's run: the technical space with the counterweight at its back and the emergency ladder by the landing doors) }, car { width, depth, height }, door { width, height } }; pit (m below the lowest landing), overrun (m over a car at its top landing), machine (m: the machine room over the overrun); ladder: an emergency ladder up each shaft's technical space; shaftLight { perStorey, y (m over the floor), color, intensity, range (m) } or false: the shaft's own lamps up its technical side wall (a shaft is dark but for them, its lamps seen from end to end).",
+    "entities": [
+        {"type": "corePlan", "id": "highrise", "stairs": {"lane": 1.3, "landing": 1.25}, "lobby": 4.0, "pit": 1.6, "overrun": 1.1, "machine": 2.2, "ladder": true,
+            "shaftLight": {"perStorey": 1, "y": 2.4, "color": [1.0, 0.84, 0.62], "intensity": 0.08, "range": 7},
+            "banks": [
+                {"shafts": 2, "shaft": {"width": 3.4, "depth": 2.6, "tech": 0.8}, "car": {"width": 2.2, "depth": 2.2, "height": 2.8}, "door": {"width": 1.2, "height": 2.3}},
+                {"shafts": 2, "shaft": {"width": 3.1, "depth": 2.4, "tech": 0.75}, "car": {"width": 2.0, "depth": 2.0, "height": 2.7}, "door": {"width": 1.1, "height": 2.2}}
+            ]},
+        {"type": "corePlan", "id": "midrise", "shaftLight": {"perStorey": 1, "y": 2.2, "color": [1.0, 0.86, 0.66], "intensity": 0.08, "range": 7}, "stairs": {"lane": 1.2, "landing": 1.2}, "lobby": 2.8, "pit": 1.4, "overrun": 1.0, "machine": 2.0, "ladder": true,
+            "banks": [
+                {"shafts": 0},
+                {"shafts": 1, "shaft": {"width": 2.7, "depth": 2.1, "tech": 0.6}, "car": {"width": 1.7, "depth": 1.7, "height": 2.4}, "door": {"width": 1.0, "height": 2.1}}
+            ]},
+        {"type": "corePlan", "id": "compact", "shaftLight": {"perStorey": 1, "y": 2.2, "color": [1.0, 0.86, 0.66], "intensity": 0.08, "range": 7}, "stairs": {"lane": 1.1, "landing": 1.1}, "lobby": 2.4, "pit": 1.2, "overrun": 0.9, "machine": 1.8, "ladder": true,
+            "banks": [
+                {"shafts": 0},
+                {"shafts": 1, "shaft": {"width": 2.45, "depth": 1.9, "tech": 0.55}, "car": {"width": 1.5, "depth": 1.5, "height": 2.3}, "door": {"width": 0.95, "height": 2.05}}
+            ]},
+        {"$comment": "a walk-up: stairs only (and a small landing lobby)", "type": "corePlan", "id": "walkup", "stairs": {"lane": 1.0, "landing": 1.0}, "lobby": 1.6, "banks": []}
+    ]
+}

@@ -3,7 +3,7 @@
 // camera by PortalVis: the portal feature's World, and any other world built of areas.
 
 Features.kit('interior', (engine, kit) => {
-const { GridHash, QuadTree, Portal, PortalVis } = kit;
+const { GridHash, QuadTree, Portal, PortalVis, aabbVisible } = kit;
 
 // A world of areas: `areas` (Area; [0] the outdoors, Area.outdoors), `portals` (Portal, each listed by both its areas),
 // `occluders` (Occluder, by the area holding them), `vehicles` (optional: areas aboard one are in its frame, its Origin:
@@ -16,13 +16,26 @@ const { GridHash, QuadTree, Portal, PortalVis } = kit;
 //                          stand storey over storey), so a traversal from outdoors tests those in its frustum only
 //   visGraph(o)            the graph a PortalVis traverses ({ root, maxRange (m: from outdoors, only portals within it
 //                          of the eye: what a city's windows are seen through), nearPass })
+//   addStack(st)           storeys that repeat (a tower's thousand, each a hundred rooms): their areas and portals made
+//                          only for the storeys near the eye, the traversal or a query (and dropped again past `cap`
+//                          storeys), so a building costs what the storeys round the camera do (see addStack)
+// With `vehiclesFirst`, an area aboard a vehicle (a lift car) holds a point before any area it moves through.
 class AreaSet {
-    constructor({ bandH = 0 } = {}) {
+    constructor({ bandH = 0, cap = 320, vehiclesFirst = false } = {}) {
         this.areas = [];
         this.portals = [];
         this.occluders = [];
         this.areaById = new Map();
         this.bandH = bandH;
+        this.vehiclesFirst = vehiclesFirst;
+        this.stacks = [];
+        this.stackGrid = new GridHash(64);
+        this.live = new Map();           // `${stack}:${storey}` -> its materialized areas and portals (least recently used first)
+        this.cap = cap;
+        this.freeAreas = [];
+        this.freePortals = [];
+        this.landings = new Set();       // the live portals with a `landing` (lift landing doors: the world opens and closes them)
+        this.frame = 0;
     }
 
     addArea(def, AreaType = kit.Area) {
@@ -49,7 +62,7 @@ class AreaSet {
         this.bands = this.bandH ? new Map() : null;
         for (const veh of this.vehicles || []) { veh.areaGrid = new GridHash(16); veh.areaReach = 0; }
         for (const a of this.areas) {
-            if (a.index === 0) continue;
+            if (!a || a.index === 0 || a.live) continue;
             const veh = a.vehicle;
             if (veh) veh.areaGrid.insert(a, ...a.bbox);
             else if (this.bands) {
@@ -84,6 +97,9 @@ class AreaSet {
             const l = veh.toLocal(p);
             for (const a of veh.areaGrid.at(l[0], l[2])) if ((!best || a.index < best) && a.containsLocal(l)) best = a.index;
         }
+        // aboard: the vehicle's area, not the shaft it moves through
+        if (best && this.vehiclesFirst) return best;
+        if (this.stacks.length) this.ensureAt(p);
         const grid = this.bands ? this.bands.get(Math.floor(p[1] / this.bandH)) : this.areaGrid;
         if (grid) for (const a of grid.at(p[0], p[2])) if ((!best || a.index < best) && a.containsLocal(p)) best = a.index;
         return best;
@@ -92,6 +108,7 @@ class AreaSet {
     // the area nearest p within r (m) whose height holds p, by its footprint's bounds: for a point that is in none (a
     // wall's thickness, a sealed void), the space it is seen from. 0 if none
     nearestArea(p, r = 2) {
+        if (this.stacks.length) this.ensureAt(p);
         const grid = this.bands ? this.bands.get(Math.floor(p[1] / this.bandH)) : this.areaGrid;
         let best = 0, bd = r;
         grid?.each(p[0] - r, p[2] - r, p[0] + r, p[2] + r, a => {
@@ -100,6 +117,24 @@ class AreaSet {
             if (d < bd) { bd = d; best = a.index; }
         });
         return best;
+    }
+
+    // the areas (not the outdoors) whose footprint bounds meet [x0, x1] x [z0, z1] and whose height meets [y0, y1]: the
+    // grids' cells there (the bands that height spans), and the areas aboard vehicles. For a map of what is round the eye
+    areasIn(x0, z0, x1, z1, y0 = -Infinity, y1 = Infinity) {
+        const out = new Set(), take = a => { if (a && a.index && a.top > y0 && a.y < y1) out.add(a); };
+        if (this.bands) {
+            const keys = Number.isFinite(y0) && Number.isFinite(y1) ? null : [...this.bands.keys()];
+            const k0 = Math.floor(y0 / this.bandH), k1 = Math.floor(y1 / this.bandH);
+            for (const k of keys || Array.from({ length: k1 - k0 + 1 }, (_, i) => k0 + i)) this.bands.get(k)?.each(x0, z0, x1, z1, take);
+        } else this.areaGrid?.each(x0, z0, x1, z1, take);
+        if (!this.areaGrid && !this.bands) for (const a of this.areas) take(a);
+        for (const a of this.areas) {
+            if (!a?.vehicle) continue;
+            const sh = a.shape2D(), xs = sh.map(p => p[0]), zs = sh.map(p => p[1]);
+            if (Math.max(...xs) >= x0 && Math.min(...xs) <= x1 && Math.max(...zs) >= z0 && Math.min(...zs) <= z1) take(a);
+        }
+        return [...out];
     }
 
     // the portals out to the outdoors in a tree (a vehicle's apart: they move with it, tested while it is in view)
@@ -118,6 +153,7 @@ class AreaSet {
     // within that of the eye
     candidates(e, nearPass, maxRange = 0, eye = null, st = { nodes: 0, objs: 0 }) {
         const A = this.areas[e.area];
+        if (A.stacks && eye) for (const S of A.stacks) this.ensureRange(S, eye[1] - (A.reach || S.H), eye[1] + (A.reach || S.H), true);
         if (A.reach && eye) return A.portals.filter(i => {
             const P = this.portals[i];
             return Math.hypot(Math.max(P.min[0] - eye[0], 0, eye[0] - P.max[0]), Math.max(P.min[1] - eye[1], 0, eye[1] - P.max[1]), Math.max(P.min[2] - eye[2], 0, eye[2] - P.max[2])) <= A.reach;
@@ -133,8 +169,152 @@ class AreaSet {
             m[k] = -1;
             return [[...n, -(eye[k] - maxRange)], [...m, eye[k] + maxRange]];
         })] : planes;
-        this.outdoorPortals.query(query, P => out.push(P.index), st);
+        this.outdoorPortals?.query(query, P => out.push(P.index), st);
+        // the façades of the stacks near: their storeys within range made, the portals out of them in the frustum
+        if (this.stacks.length && eye) {
+            const R = maxRange || 200;
+            this.stackGrid.each(eye[0] - R, eye[2] - R, eye[0] + R, eye[2] + R, S => {
+                if (!this.ensureRange(S, eye[1] - R, eye[1] + R, true)) return;
+                for (const L of this.liveOf(S, eye[1] - R, eye[1] + R)) {
+                    if (!L.outdoor.length || !aabbVisible(L.min, L.max, query)) continue;
+                    for (const i of L.outdoor) { const P = this.portals[i]; if (aabbVisible(P.min, P.max, query)) out.push(i); }
+                }
+            });
+        }
         return out.sort((a, b) => a - b);
+    }
+
+    // ------------------------------------------------------------------------------------------- stacks
+    // st: { origin (Origin: the building's frame), base (m: storey 0's floor, world), H (m), n (storeys), rect ([x0, z0,
+    // x1, z1]: the footprint's world bounds), key(s) (the template storey s is built from, or null), template(key) -> {
+    // areas: [{ rect [x0, x1, z0, z1] (local), y (over the storey's floor), height, room (what the world draws of it;
+    // the storey is added as s), shelter }], portals: [{ center (local x, z; y over the storey's floor), size, normal
+    // (local), a, b (a template area's index, { tall: an area's index }, or 0: the outdoors), kind, passThrough, closed,
+    // landing (the world's: a lift's landing door) }] }, tall ([area indices]: areas that run up through the storeys,
+    // the stairwell and the shafts: they list the live storeys' portals into them), maxPerQuery (new storeys a query may
+    // make at once: the rest come in the frames after) }. Returns st
+    addStack(st) {
+        st.id = this.stacks.length;
+        st.maxPerQuery ??= 12;
+        this.stacks.push(st);
+        this.stackGrid.insert(st, ...st.rect);
+        for (const i of st.tall || []) (this.areas[i].stacks ||= []).push(st);
+        return st;
+    }
+
+    // the stacks over p: the storey of each that holds p's height made (and touched)
+    ensureAt(p) {
+        for (const S of this.stackGrid.at(p[0], p[2])) {
+            const s = Math.floor((p[1] - S.base) / S.H);
+            if (s >= 0 && s < S.n) this.materialize(S, s);
+        }
+    }
+
+    // the storeys of stack S between heights y0 and y1 made, nearest the middle first (with `limit`, at most
+    // S.maxPerQuery new ones). Returns whether S has storeys there
+    ensureRange(S, y0, y1, limit = false) {
+        const s0 = Math.max(0, Math.floor((y0 - S.base) / S.H)), s1 = Math.min(S.n - 1, Math.floor((y1 - S.base) / S.H));
+        if (s1 < s0) return false;
+        const mid = (s0 + s1) / 2, order = [];
+        for (let s = s0; s <= s1; s++) order.push(s);
+        order.sort((a, b) => Math.abs(a - mid) - Math.abs(b - mid));
+        let made = 0;
+        for (const s of order) {
+            const L = this.live.get(`${S.id}:${s}`);
+            if (L) { L.touched = this.frame; continue; }
+            if (limit && made >= S.maxPerQuery) continue;
+            if (this.materialize(S, s)) made++;
+        }
+        return true;
+    }
+
+    // the live storeys of S between heights y0 and y1
+    liveOf(S, y0, y1) {
+        const out = [], s0 = Math.max(0, Math.floor((y0 - S.base) / S.H)), s1 = Math.min(S.n - 1, Math.floor((y1 - S.base) / S.H));
+        for (let s = s0; s <= s1; s++) { const L = this.live.get(`${S.id}:${s}`); if (L) out.push(L); }
+        return out;
+    }
+
+    // storey s of stack S as areas and portals (kept while used; the least recently touched dropped past `cap`).
+    // Returns the new storey, or null if it was live already (or has none)
+    materialize(S, s) {
+        const id = `${S.id}:${s}`;
+        let L = this.live.get(id);
+        if (L) {
+            L.touched = this.frame;
+            this.live.delete(id);
+            this.live.set(id, L);
+            return null;
+        }
+        const key = S.key(s);
+        if (key === null || key === undefined) return null;
+        const T = S.template(key), y = S.base + s * S.H, O = S.origin, oy = O.M[13];
+        L = { S, s, areas: [], portals: [], outdoor: [], touched: this.frame, min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity] };
+        for (const d of T.areas) {
+            const [x0, x1, z0, z1] = d.rect, shape = [[x0, z0], [x1, z0], [x1, z1], [x0, z1]].map(([x, z]) => { const w = O.toWorld([x, 0, z]); return [w[0], w[2]]; });
+            const index = this.freeAreas.length ? this.freeAreas.pop() : this.areas.length;
+            const a = new kit.Area({ shape, y: y + d.y, height: d.height, shelter: d.shelter }, index);
+            a.room = d.room ? { ...d.room, s } : null;
+            a.live = L;
+            this.areas[index] = a;
+            this.bandInsert(a);
+            L.areas.push(index);
+        }
+        const ref = r => typeof r === 'object' && r !== null ? r.tall ?? 0 : L.areas[r];
+        for (const d of T.portals) {
+            const c = O.toWorld([d.center[0], d.center[1] + y - oy, d.center[2]]), n = O.toWorld(d.normal, 0);
+            const index = this.freePortals.length ? this.freePortals.pop() : this.portals.length;
+            const P = new Portal({ center: c, size: d.size, normal: n, front: ref(d.a), back: ref(d.b), kind: d.kind, passThrough: d.passThrough, frame: false, closed: d.closed }, index, this);
+            P.landing = d.landing ? { ...d.landing, s, y } : null;
+            this.portals[index] = P;
+            this.areas[P.front].portals.push(index);
+            this.areas[P.back].portals.push(index);
+            if (P.front === 0 || P.back === 0) L.outdoor.push(index);
+            if (P.landing) this.landings.add(P);
+            for (let k = 0; k < 3; k++) { L.min[k] = Math.min(L.min[k], P.min[k]); L.max[k] = Math.max(L.max[k], P.max[k]); }
+            L.portals.push(index);
+        }
+        this.live.set(id, L);
+        if (this.live.size > this.cap) this.evict();
+        return L;
+    }
+
+    // drops the least recently touched storeys (none touched this frame) down to 7/8 of `cap`
+    evict() {
+        for (const [id, L] of this.live) {
+            if (this.live.size <= this.cap * 7 / 8) break;
+            if (L.touched >= this.frame) continue;
+            this.live.delete(id);
+            const gone = new Set(L.portals);
+            for (const i of L.portals) {
+                const P = this.portals[i];
+                for (const a of [P.front, P.back]) {
+                    const A = this.areas[a];
+                    if (A && A.live !== L) A.portals = A.portals.filter(k => !gone.has(k));
+                }
+                this.landings.delete(P);
+                this.portals[i] = null;
+                this.freePortals.push(i);
+            }
+            for (const i of L.areas) {
+                this.bandRemove(this.areas[i]);
+                this.areas[i] = null;
+                this.freeAreas.push(i);
+            }
+        }
+    }
+
+    bandInsert(a) {
+        if (!this.bands) { this.areaGrid.insert(a, ...a.bbox); return; }
+        for (let k = Math.floor(a.y / this.bandH); k <= Math.floor((a.top - 1e-6) / this.bandH); k++) {
+            if (!this.bands.has(k)) this.bands.set(k, new GridHash(16));
+            this.bands.get(k).insert(a, ...a.bbox);
+        }
+    }
+
+    bandRemove(a) {
+        if (!this.bands) { this.areaGrid.remove(a); return; }
+        for (let k = Math.floor(a.y / this.bandH); k <= Math.floor((a.top - 1e-6) / this.bandH); k++) this.bands.get(k)?.remove(a);
     }
 
     // the graph PortalVis traverses (kits.interior): areas and portals by index. o: root(eye) (default areaAt), maxRange
@@ -147,7 +327,7 @@ class AreaSet {
             occluders: a => set.areas[a].occluders.map(i => set.occluders[i]),
             get count() { return set.areas.length; },
             get portalCount() { return set.portals.length; },
-            all: () => set.areas.map((a, i) => i),
+            all: () => set.areas.map((a, i) => a ? i : -1).filter(i => i >= 0),
             st,
         };
     }

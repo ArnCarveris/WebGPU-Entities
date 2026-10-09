@@ -1,0 +1,34 @@
+{
+    "name": "Spire",
+    "group": "Plans",
+    "description": "A skyscraper as a composition of floor plans: a lobby storey in a podium, then sections stepping in (each a building of the `tower` archetype standing on the one below, its terrace round the next), every one round the same `highrise` core. Each zone of 40 storeys starts at a sky lobby, its offices above, a plant storey at its top (the local lifts' machine rooms and the next zone's pits); express shuttles in the left bank stop at the lobby, the sky lobbies and the observation deck, each zone's pair of locals in the right bank, one zone above the other.",
+    "entities": [
+        {"type": "include", "scenario": "plans/archetypes"},
+        {"type": "include", "scenario": "plans/furniture"},
+        {"type": "include", "scenario": "plans/storeys"},
+        {"type": "include", "scenario": "plans/cores"},
+        {"type": "buildingPlan", "id": "spire", "name": "Spire", "archetype": "tower", "core": "highrise", "ground": "L",
+            "sections": [
+                {"id": "podium", "width": 62, "storeyHeight": 6, "window": {"height": 5.0, "sill": 0.3}, "doors": [{"face": "-z", "at": -6}, {"face": "-z", "at": 6}],
+                    "storeys": [{"plan": "lobby", "label": "L", "tags": ["stop", "lobby"]}]},
+                {"width": 52, "storeys": [
+                    {"plan": "office", "repeat": 38, "tags": ["stop"]}, {"plan": "plant", "tags": ["plant"]},
+                    {"repeat": 5, "of": [{"plan": "sky", "zone": true, "label": "S{sky}", "tags": ["stop", "sky"]}, {"plan": "office", "repeat": 38, "tags": ["stop"]}, {"plan": "plant", "tags": ["plant"]}]}]},
+                {"width": 46, "storeys": [
+                    {"repeat": 6, "of": [{"plan": "sky", "zone": true, "label": "S{sky}", "tags": ["stop", "sky"]}, {"plan": "office", "repeat": 38, "tags": ["stop"]}, {"plan": "plant", "tags": ["plant"]}]}]},
+                {"width": 40, "storeys": [
+                    {"repeat": 6, "of": [{"plan": "sky", "zone": true, "label": "S{sky}", "tags": ["stop", "sky"]}, {"plan": "office", "repeat": 38, "tags": ["stop"]}, {"plan": "plant", "tags": ["plant"]}]}]},
+                {"width": 34, "storeys": [
+                    {"repeat": 6, "of": [{"plan": "sky", "zone": true, "label": "S{sky}", "tags": ["stop", "sky"]}, {"plan": "office", "repeat": 38, "tags": ["stop"]}, {"plan": "plant", "tags": ["plant"]}]}]},
+                {"width": 28, "roof": {"kind": "flat", "overhang": 0.4, "thick": 1.2}, "storeys": [
+                    {"repeat": 5, "of": [{"plan": "sky", "zone": true, "label": "S{sky}", "tags": ["stop", "sky"]}, {"plan": "office", "repeat": 38, "tags": ["stop"]}, {"plan": "plant", "tags": ["plant"]}]},
+                    {"plan": "sky", "zone": true, "label": "S{sky}", "tags": ["stop", "sky"]}, {"plan": "office", "repeat": 38, "tags": ["stop"]},
+                    {"plan": "deck", "label": "TOP", "tags": ["stop", "deck"]}]}
+            ],
+            "lifts": [
+                {"bank": 0, "kind": "express", "group": "{building} express", "name": "Express {n}", "stops": ["lobby", "sky", "deck"], "speed": 60, "accel": 2.5, "door": 2.0, "dwell": 6},
+                {"bank": 1, "kind": "local", "zoned": true, "group": "{building} zone {zone}", "name": "Zone {zone} {letter}", "stops": ["stop"], "speed": 7, "accel": 1.4, "door": 1.6, "dwell": 4}
+            ],
+            "crown": {"kind": "spire", "width": 14, "height": 6, "spire": 120}}
+    ]
+}

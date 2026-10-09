@@ -50,6 +50,9 @@ class Walker {
         this.vy = 0;
         this.lag = 0;                  // eye height still to catch up after a step (smooths stairs and kerbs)
         this.prompt = '';
+        this.car = null;               // the lift car stood in (or on): the feet ride in its frame (carLocal)
+        this.carLocal = null;
+        this.ladder = null;            // on a ladder: { l (the building kit's Ladders entry), y (feet height) }
     }
 
     // on foot at x, z, on whatever is there within a step of height y (default: the ground)
@@ -57,6 +60,8 @@ class Walker {
         this.active = true;
         this.bus = null;
         this.seat = null;
+        this.car = null;
+        this.ladder = null;
         this.vy = this.lag = 0;
         const g = app.world.field.surface(x, z);
         this.feet = [x, Math.max(y ?? g, g), z];
@@ -130,10 +135,22 @@ class Walker {
                 this.feet = this.bus.toWorld(p);
                 this.bus = null;
             }
+        } else if (this.ladder) {
+            // on a ladder: W climbs, S goes down (Shift faster); off it at its foot, or out at a landing (LiftControl)
+            const L = this.ladder, l = L.l, sp = (k.has('ShiftLeft') || k.has('ShiftRight') ? WALK.climbFast : WALK.climb) * dt;
+            L.y += ((k.has('KeyW') ? 1 : 0) - (k.has('KeyS') ? 1 : 0)) * sp;
+            const lift = app.world.structures.ladders;
+            this.feet = lift.hang(l, L.y);
+            L.y = this.feet[1];
+            this.vy = 0;
+            if (k.has('KeyS') && L.y <= l.y0 + 1e-3) { this.ladder = null; this.feet[1] = this.floorAt(app, this.feet, -Infinity); }
+            this.prompt = this.ladder ? 'on the emergency ladder · W up · S down' : '';
+            this.eye(app);
+            return;
         } else {
-            // standing in a lift car: up or down with it
-            const car = app.world.structures.lifts.carAt(this.feet);
-            if (car) this.feet[1] += car.el.dy;
+            // standing in a lift car (or on its roof): carried in its frame, so it moves with the car this frame
+            const L = app.world.structures.lifts;
+            if (this.car) this.feet = this.car.toWorld(this.carLocal);
             const p = this.feet, y0 = p[1], was = [p[0], p[2]], f0 = app.world.field;
             p[0] += mx; p[2] += mz;
             let g = this.floorAt(app, p, -Infinity);
@@ -143,6 +160,8 @@ class Walker {
                 g = this.floorAt(app, p, -Infinity);
             }
             this.settle(g, y0, dt);
+            this.car = L.carAt(p, 0.3) || L.roofAt(p);
+            this.carLocal = this.car ? this.car.toLocal(p) : null;
             // stepped into a bus (through a door): ride along in its frame
             for (const bus of app.world.buses) {
                 const q = bus.toLocal(p);

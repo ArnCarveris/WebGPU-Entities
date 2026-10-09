@@ -1,0 +1,14 @@
+{
+    "name": "Bus terminal",
+    "group": "Plans",
+    "description": "A bus station's terminal: a waiting hall round the `compact` core, offices above.",
+    "entities": [
+        {"type": "include", "scenario": "plans/archetypes"},
+        {"type": "include", "scenario": "plans/furniture"},
+        {"type": "include", "scenario": "plans/storeys"},
+        {"type": "include", "scenario": "plans/cores"},
+        {"type": "buildingPlan", "id": "terminal", "name": "Terminal", "archetype": "terminal", "core": "compact", "ground": "G",
+            "sections": [{"storeys": [{"plan": "ground-hall", "tags": ["stop", "ground"]}, {"plan": "office-small", "repeat": "*", "tags": ["stop"]}]}],
+            "lifts": [{"bank": 1, "kind": "local", "group": "{building}", "name": "{building} lift", "stops": ["stop"], "speed": 2, "accel": 1.0, "door": 1.6, "dwell": 4}]}
+    ]
+}

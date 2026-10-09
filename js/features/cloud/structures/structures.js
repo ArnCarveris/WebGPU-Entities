@@ -9,40 +9,43 @@ const { lerp, v3 } = Common;
 const { STRUCT_COLORS, Solids, ShelterBoxes, Doors, Buildings, Fixtures, BLD_LIT, BLD_ID } = feature;
 
 class Structures {
-    // types: the scenario's `buildings` (see Buildings)
-    constructor(field, types = {}) {
+    // types: the scenario's `buildings` (archetypes), plans: its floor plans (native `plans`: the building kit's
+    // PlanLibrary, from scenarios/plans/)
+    constructor(field, types = {}, plans = {}) {
         this.field = field;
         this.v = []; this.iv = []; this.glass = []; this.panes = [];
         this.cur = this.v;           // where tri() puts its triangles: the outside (v), or a building's interior (iv)
         this.solids = new Solids();
         this.boxes = new ShelterBoxes();
         this.interiors = new kits.interior.InteriorIndex(32);   // every building's and bus's interior (kits.interior)
+        this.lib = new kits.building.PlanLibrary(plans, types);
         // the planned buildings' rooms as areas and portals (the interior kit's AreaSet: the portal feature's), bucketed
-        // by 8 m height bands (a tower's storeys over the same footprint); area 0 the outdoors. Portals wait for finish()
-        this.areas = new kits.interior.AreaSet({ bandH: 8 });
+        // by 8 m height bands (a tower's storeys over the same footprint), their storeys made near the eye (stacks); the
+        // lift cars areas aboard them (found before the shafts they run in); area 0 the outdoors
+        this.areas = new kits.interior.AreaSet({ bandH: 8, vehiclesFirst: true });
         this.areas.areas.push(kits.interior.Area.outdoors());
-        this.portalDefs = [];
-        this.landings = [];              // the landing doors' portals: { P, y, cars (its shaft's) } (closed unless a car is there, open)
         this.doors = new Doors(this);
-        // the cars in the buildings' cores (the transit kit's Lifts), their parts as interiors' materials (a car's lit by its lamp)
+        // the cars in the buildings' cores (the transit kit's Lifts), their parts as interiors' materials (a car's lit by
+        // its lamp); the emergency ladders up their shafts (the building kit's)
         this.lifts = new kits.transit.Lifts({ material: (b, mat, lit) => mat + (lit ? BLD_LIT : 0) + b.id * BLD_ID });
-        this.buildings = new Buildings(this, types);
+        this.ladders = new kits.building.Ladders();
+        this.buildings = new Buildings(this);
         this.fixtures = new Fixtures(this);
     }
 
     ground(x, z) { return this.field.surface(x, z); }
 
-    // every entity built: the areas indexed (areaAt), the portals made (each finds its areas either side, as the portal
-    // feature's do), the towers' sections joined, the portals out to the outdoors in a BVH (they stand storey over storey)
+    // every entity built: the areas indexed (areaAt: the stairwells and shafts; the storeys' are made near the eye),
+    // the lift cars in a grid by their shafts (they move only up and down), the static portals out to the outdoors in
+    // a BVH
     finish() {
         const A = this.areas;
-        for (const b of this.buildings.list) if (b.plan && b.above?.plan) this.buildings.joins(b);
         A.indexAreas();
-        for (const { def, landing } of this.portalDefs) {
-            const P = A.addPortal(def);
-            if (P && landing) this.landings.push({ P, y: landing.y, cars: this.lifts.shaftCars(landing.f, landing.rect) });
+        A.vehicleGrid = new kits.interior.GridHash(16);
+        for (const c of A.vehicles || []) {
+            const [x0, x1, z0, z1] = c.out, cs = [[x0, z0], [x1, z0], [x1, z1], [x0, z1]].map(([x, z]) => c.f.xz(x, z));
+            A.vehicleGrid.insert(c, Math.min(...cs.map(q => q[0])), Math.min(...cs.map(q => q[1])), Math.max(...cs.map(q => q[0])), Math.max(...cs.map(q => q[1])));
         }
-        this.portalDefs = [];
         A.indexOutdoorPortals(kits.interior.BVHTree);
     }
 

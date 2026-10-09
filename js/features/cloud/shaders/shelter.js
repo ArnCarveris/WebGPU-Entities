@@ -325,7 +325,7 @@ fn lampScatter(ro: vec3f, dir: vec3f, tEnd: f32, jit: f32) -> vec3f {
 }
 `;
 
-// needs F, buildings. Building `id` (Buildings.add) in buildings[id * 6 ..]:
+// needs F, buildings. Building `id` (Buildings.add) in buildings[id * 8 ..]:
 //   [centre x, z, cos yaw, sin yaw] [half size x, z, floor (m), storey height] [storeys, sill, window height, pitch]
 //   [window width, wall thickness, share of storeys lit, faces with windows (bits: 1 -z, 2 +z, 4 -x, 8 +x)]
 //   two doors as they stand (Buildings.record): [face 1..4 (-z +z -x +x; 0 none) + its leaf's swing 0..1, centre along
@@ -356,17 +356,65 @@ fn bldStoreyDist(b: Bld, y: f32) -> f32 {
     return distance(q, clamp(q, lo, hi));
 }
 
-// a planned building's storey s is an open hall (a lobby: the sun reaches anywhere in it) rather than rooms off a
-// corridor (it reaches only the rooms on the façade it comes in by, b.g.xy deep): its ground floor (h.z), its top (h.w),
-// or every h.x-th storey from b.g.z on, offset by h.y (a tower's sky lobbies)
-fn bldHall(b: Bld, s: f32) -> bool {
-    if (s == 0.0 && b.h.z > 0.5) { return true; }
-    if (s == b.c.x - 1.0 && b.h.w > 0.5) { return true; }
-    return b.h.x > 0.5 && s >= b.g.z && (u32(s + b.h.y) % u32(b.h.x)) == 0u;
+// a planned building's storey code (its floor plan's: 2 for an open hall, plus the share of such storeys lit), from the
+// codes after the records (Buildings.buffer: b.g.z where its own start, b.g.w set if it has them); -1 for none
+fn bldCode(b: Bld, s: f32) -> f32 {
+    if (b.g.w < 0.5) { return -1.0; }
+    let i = u32(b.g.z) + u32(s);
+    return buildings[i / 4u][i % 4u];
 }
 
-// the lamps of storey s are on: a share of the storeys (b.d.z), picked by a hash (LightWriter.roomLights picks the same)
-fn storeyLit(id: u32, b: Bld, s: f32) -> f32 { return select(0.0, 1.0, rnd(id * 131u + u32(s) * 7u + 3u) < b.d.z); }
+// a planned building's storey s is an open hall (a lobby: the sun reaches anywhere in it) rather than rooms off a
+// corridor (it reaches only the rooms on the façade it comes in by, b.g.xy deep)
+fn bldHall(b: Bld, s: f32) -> bool { return bldCode(b, s) >= 2.0; }
+
+// q (building frame) is inside one of the building's lift shafts (its lamp columns' rectangles)
+fn inShaft(b: Bld, q: vec3f) -> bool {
+    let cnt = u32(b.h.y + 0.5);
+    for (var i = 0u; i < cnt; i++) {
+        let k = u32(b.h.x + 0.5) / 4u + i * 4u;
+        let r = buildings[k];
+        let c = buildings[k + 2u];
+        if (q.x > r.x && q.x < r.y && q.z > r.z && q.z < r.w && q.y > c.x - 3.0 && q.y < c.y + 3.0) { return true; }
+    }
+    return false;
+}
+
+// the light of a lift shaft's own lamps at q (building frame; n its normal there): the lamp column of the shaft holding q
+// (a planned building's columns after its codes: b.h.x where they start, b.h.y how many; Buildings.buffer), a lamp every
+// step m up its side wall between its lowest pit and its highest overrun; the few nearest above and below, an inverse
+// square falling to nothing at its range, a little of it bounced round the narrow shaft. O(1) in the shaft's height
+fn shaftLight(b: Bld, q: vec3f, n: vec3f) -> vec3f {
+    var o = vec3f(0.0);
+    let cnt = u32(b.h.y + 0.5);
+    for (var i = 0u; i < cnt; i++) {
+        let k = u32(b.h.x + 0.5) / 4u + i * 4u;
+        let r = buildings[k];
+        if (q.x < r.x - 0.1 || q.x > r.y + 0.1 || q.z < r.z - 0.1 || q.z > r.w + 0.1) { continue; }
+        let a = buildings[k + 1u];
+        let c = buildings[k + 2u];
+        let col = buildings[k + 3u].rgb * c.w;
+        let j0 = round((q.y - a.z) / a.w);
+        for (var dj = -3; dj <= 3; dj++) {
+            let ly = a.z + (j0 + f32(dj)) * a.w;
+            if (ly < c.x || ly > c.y) { continue; }
+            let L = vec3f(a.x, ly, a.y) - q;
+            let d2 = dot(L, L);
+            let fade = sat(1.0 - d2 / (c.z * c.z));
+            o += col * (max(dot(n, L * inverseSqrt(d2)), 0.0) * 0.9 + 0.1) * fade * fade / (d2 + 0.25);
+        }
+        break;
+    }
+    return o;
+}
+
+// the lamps of storey s are on: a share of the storeys (its code's, else the building's b.d.z), picked by a hash
+// (LightWriter.roomLights picks the same)
+fn storeyLit(id: u32, b: Bld, s: f32) -> f32 {
+    let c = bldCode(b, s);
+    let share = select(b.d.z, c - select(0.0, 2.0, c >= 2.0), c >= 0.0);
+    return select(0.0, 1.0, rnd(id * 131u + u32(s) * 7u + 3u) < share);
+}
 
 // how far (m) x along face f (1 -z, 2 +z, 3 -x, 4 +x; x is local x on the z faces, local z on the x ones), yr above the
 // floor of storey s, is inside an opening of it, negative outside them all: its windows, spread evenly over it clear of

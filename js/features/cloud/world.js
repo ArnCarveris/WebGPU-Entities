@@ -29,7 +29,7 @@ class World {
         for (const def of scenario.entities || []) this.add(def, false);
         for (const e of this.entities) { e.stamp(this.field); this.field.updateRange(); }
         this.field.freeze();
-        this.structures = new Structures(this.field, scenario.buildings);
+        this.structures = new Structures(this.field, scenario.buildings, scenario.plans);
         this.hurricanePos = scenario.hurricane?.pos || [0, 0];
         this.hurricaneCat = 0;
         for (const e of this.entities) e.build(this.structures);

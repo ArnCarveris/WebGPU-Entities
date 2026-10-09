@@ -22,7 +22,9 @@ const {
 class World extends AreaSet {
     constructor(scn) {
         super();
-        this.scn = scn;
+        // the planned buildings (`structures`: placements of the floor plans in its `plans`) built into its own areas,
+        // portals, models and entities first (the building kit)
+        this.scn = scn = kits.building.withStructures(scn);
         this.warnings = [];
         this.pool = new GeometryPool();
         this.objects = [];              // static members (chunks with owners), in the per-area trees

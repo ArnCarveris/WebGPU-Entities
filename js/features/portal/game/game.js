@@ -5,8 +5,9 @@ Features.part('portal', (engine, feature) => {
 const { Common } = engine;
 const { v3 } = Common;
 const {
-    m4, Renderer, FrameBuilder, DebugLines, PortalVis, World, PlayerController, InputSystem, Hud, Minimap, PortalMedia,
+    m4, Renderer, FrameBuilder, PortalVis, World, PlayerController, InputSystem, Hud, PortalMedia,
 } = feature;
+const { VisInspector } = engine.kits.interior;
 
 // Game: builds the world from a scenario and runs the frame.
 //
@@ -14,7 +15,7 @@ const {
 //   world update (vehicles first, so riders use this frame's pose) -> player -> portal traversal
 //   (or the frozen one) -> FrameBuilder command list -> GUI screens (cursor, the drawn ones rebuilt) -> the media
 //   systems' views (CCTV, the phone's camera: renderView, each its own traversal and frame) -> debug lines -> render
-//   -> minimap, HUD
+//   -> HUD. The floor map, the traversal readout and the frames are the interior kit's VisInspector (this.inspector)
 
 const NO_LINES = new Float32Array(0);
 
@@ -22,21 +23,18 @@ const MASK_MODES = ['stencil', 'scissor', 'none'];
 
 class Game {
     constructor(fx) {
-        const mapCanvas = document.createElement('canvas');
         this.fx = fx;
         this.ui = fx.ui;
         this.canvas = fx.canvas;
         this.renderer = new Renderer(fx);
         this.input = new InputSystem(this, fx.io);
         this.hud = new Hud(this);
-        this.minimap = new Minimap(this, mapCanvas);
-        this.mapCanvas = mapCanvas;
         this.onError = (e) => console.error(e);
         this.world = null;
         this.player = null;
         this.vis = null;
-        this.frozen = null;
-        this.opts = { culling: true, freeze: false, mode: 'stencil', portals: true, volumes: false, map: true, help: true, occluders: true, walk: true, island: false };
+        this.inspector = null;
+        this.opts = { culling: true, freeze: false, mode: 'stencil', portals: true, volumes: false, map: true, help: true, occluders: true, walk: true, wide: false };
         this.stats = { fps: 0, visMs: 0, draws: 0, tris: 0, objs: 0 };
         this.frameStats = null;
         this.frameMode = 'stencil';
@@ -64,10 +62,9 @@ class Game {
         this.frameBuilder = new FrameBuilder(world, this.renderer);
         this.viewVis = new PortalVis(world);        // views of the world (renderView): their own traversal and frame
         this.viewBuilder = new FrameBuilder(world, this.renderer);
-        this.debugLines = new DebugLines(world);
         this.renderer.upload(world);
-        this.frozen = null;
         this.opts.freeze = false;
+        this.inspector = this.createInspector(world);
         this.player = new PlayerController(this, scn.camera, scn.player);
         this.interaction.reset();
         world.screenGuis = world.screens.map(s => s.gui);
@@ -81,16 +78,58 @@ class Game {
         const o = this.opts, P = this.player, hud = this.hud;
         switch (code) {
             case 'Digit1': o.culling = !o.culling; hud.toast(`Portal culling ${o.culling ? 'ON' : 'OFF'}`); break;
-            case 'Digit2': o.freeze = !o.freeze; this.frozen = null; hud.toast(o.freeze ? 'Visibility frozen: fly around to inspect' : 'Visibility live'); break;
+            case 'Digit2': o.freeze = !o.freeze; hud.toast(o.freeze ? 'Visibility frozen: fly around to inspect' : 'Visibility live'); break;
             case 'Digit3': o.mode = MASK_MODES[(MASK_MODES.indexOf(o.mode) + 1) % MASK_MODES.length]; hud.toast(`Portal masking: ${o.mode}`); break;
             case 'Digit4': o.portals = !o.portals; break;
             case 'Digit5': o.volumes = !o.volumes; break;
             case 'Digit6': o.occluders = !o.occluders; hud.toast(`Occluders ${o.occluders ? 'ON' : 'OFF'}`); break;
             case 'KeyM': o.map = !o.map; break;
             case 'KeyR': if (P.driving) hud.toast(P.toggleHelm()); P.cam.reset(); P.reset(P.cam.pos); break;
-            case 'KeyN': o.island = !o.island; break;
+            case 'KeyN': o.wide = !o.wide; break;
             case 'KeyF': { const msg = P.toggleHelm(); if (msg) hud.toast(msg); else this.useDoor(); break; }
         }
+    }
+
+    // the visibility inspector (the interior kit's: floor map, traversal, frames on the handheld) over the world, with the
+    // island's own layers on its map (the sea, the ship's route and hull, the drones) and the masking options
+    createInspector(w) {
+        const g = this;
+        return new VisInspector({
+            set: w, opts: this.opts, keys: { culling: '1', freeze: '2', portals: '4', volumes: '5', map: 'M', wide: 'N' },
+            map: {
+                spans: w.scn.minimap,
+                teleport: (x, z) => {
+                    const a = w.areas[w.areaAt([x, 1.0, z])];
+                    const y = !a.outdoor && !a.vehicle ? a.y : w.groundAt([x, 60, z], 0).y;
+                    g.player.teleport([x, y + g.player.cfg.eyeHeight, z]);
+                },
+                under: (c, { X, Y, path }) => {
+                    const coast = ((w.scn.outdoor || {}).terrain || {}).coast;
+                    if (w.water && coast) {
+                        const n = coast.normal, p = coast.point, d = [-n[1], n[0]], F = 2000;
+                        path([[p[0] + d[0] * F, p[1] + d[1] * F], [p[0] + d[0] * F + n[0] * F, p[1] + d[1] * F + n[1] * F], [p[0] - d[0] * F + n[0] * F, p[1] - d[1] * F + n[1] * F], [p[0] - d[0] * F, p[1] - d[1] * F]]);
+                        c.fillStyle = 'rgba(40,110,150,0.35)'; c.fill();
+                    }
+                    for (const veh of w.vehicles) {
+                        c.setLineDash([3, 4]); c.strokeStyle = 'rgba(160,200,230,0.35)'; c.lineWidth = 1;
+                        path(veh.route.samples.map(sm => sm.p)); c.stroke();
+                        c.setLineDash([]);
+                    }
+                    for (const h of w.hulls) {
+                        const veh = h.vehicle;
+                        path(veh ? h.outline.map(q => { const r = veh.toWorld([q[0], h.deck, q[1]]); return [r[0], r[2]]; }) : h.outline);
+                        c.fillStyle = 'rgba(150,50,35,0.45)'; c.fill();
+                    }
+                },
+                over: (c, { X, Y }) => {
+                    c.fillStyle = '#ff5a40';
+                    for (const d of w.drones) { c.beginPath(); c.arc(X(d.pos[0]), Y(d.pos[2]), 3.5, 0, Math.PI * 2); c.fill(); }
+                },
+            },
+            options: () => [
+                { choice: 'Masking (3)', options: MASK_MODES, index: MASK_MODES.indexOf(g.opts.mode), pick: i => { g.opts.mode = MASK_MODES[i]; } },
+                { toggle: 'Occluders (6)', on: g.opts.occluders, set: () => g.onKey('Digit6') }],
+        });
     }
 
     // report the nearest door (all doors in the scenario are automatic, manual ones toggle)
@@ -149,13 +188,13 @@ class Game {
         const viewProj = m4.mul(proj, m4.lookAt(eye, v3.add(eye, fwd), up));
 
         const t0 = performance.now();
-        let vis;
-        if (o.freeze && this.frozen) vis = this.frozen.vis;
-        else {
+        const I = this.inspector;
+        let vis = I.frozen;
+        if (!vis) {
             vis = this.vis.compute(eye, viewProj, W, H, o.culling);
             if (!o.occluders) vis.occluders = [];
-            if (o.freeze) this.frozen = { vis, eye: eye.slice(), basis: player.basis(), aspect: W / H };
         }
+        I.update(vis, { eye, basis: player.basis(), aspect: W / H, fov: player.cam.fov }, performance.now() - t0);
         // stencil masks and scissor rects only make sense for the view the traversal was computed for
         const mode = (!o.culling || o.freeze) ? 'none' : o.mode;
         const fr = this.frameBuilder.build(vis, mode, W, H);
@@ -168,10 +207,9 @@ class Game {
         this.updateScreens(now, eye, fwd, viewProj);
         this.media.frame(now);
 
-        const lines = this.debugLines.build(vis, o, o.freeze ? this.frozen : null, player.cam.fov);
+        const lines = I.lines();
         R.render({ globals: this.globals(viewProj, eye, t, W, H, mode === 'stencil'), areas: w.lightingTable(t, eye), draws: fr.draws, cmds: fr.cmds, polys: fr.polys, stencil: mode === 'stencil', lines: lines.data, lineDepthCount: lines.depthCount });
 
-        if (o.map) this.minimap.draw(vis);
         this.hud.tick(now, vis);
     }
 

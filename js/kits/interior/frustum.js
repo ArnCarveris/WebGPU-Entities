@@ -80,8 +80,24 @@ function screenRect(poly, vp, W, H) {
 const rectIntersect = (a, b) => { const r = [Math.max(a[0], b[0]), Math.max(a[1], b[1]), Math.min(a[2], b[2]), Math.min(a[3], b[3])]; return r[2] > r[0] && r[3] > r[1] ? r : null; };
 const rectUnion = (a, b) => !a ? b.slice() : [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])];
 
+// The heights [lo, hi] within [y0, y1] at which a vertical prism over footprint `shape` ([[x, z]...], convex or not: its
+// corners bound it) meets every one of `planes` (inside: n . p + d >= 0), or null: a tall shaft's stretch in a frustum,
+// as a slab test per plane, O(planes x corners)
+function prismRange(shape, y0, y1, planes) {
+    let lo = y0, hi = y1;
+    for (const [a, b, c, d] of planes) {
+        let m = -Infinity;
+        for (const [x, z] of shape) m = Math.max(m, a * x + c * z);
+        const k = d + m;
+        if (Math.abs(b) < 1e-9) { if (k < 0) return null; continue; }
+        if (b > 0) lo = Math.max(lo, -k / b); else hi = Math.min(hi, -k / b);
+        if (hi < lo) return null;
+    }
+    return [lo, hi];
+}
+
 return {
     planeDist, aabbVisible, aabbContained, classify, clipPoly3, planesFromHull, screenRect,
-    rectIntersect, rectUnion,
+    rectIntersect, rectUnion, prismRange,
 };
 });

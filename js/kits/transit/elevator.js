@@ -8,7 +8,8 @@ Features.kit('transit', (engine, kit) => {
 // ahead (speed limited to sqrt(2 a d), so it eases in), opens, waits `dwell` s (longer while held) and closes.
 // spec: { stops, names, speed (m/s), accel (m/s^2), door (s to open or shut), dwell (s), start (stop index) }
 // State: y (its floor's height), v (signed m/s), dir (+1 up, -1 down, 0 idle), at (the stop it stands level at, or -1),
-// door (0 shut .. 1 open), calls (stop indices it will serve)
+// door (0 shut .. 1 open), calls (stop indices it will serve), halted (its safety circuit is open: a landing door of its
+// shaft forced; it brakes to a stand where it is and waits, doors shut, until the circuit closes)
 class Elevator {
     constructor({ stops, names = null, speed = 4, accel = 1.2, door = 2.2, dwell = 4, start = 0 }) {
         this.stops = stops;
@@ -24,6 +25,8 @@ class Elevator {
         this.calls = new Set();
         this.dy = 0;                    // how far it moved in the last update (what rides it moves as much)
         this.boost = 1;                 // its time runs this many times as fast
+        this.halted = false;
+        this.blocked = 0;               // s: something stands in its doorway (they reopen)
     }
 
     // the stop nearest height y
@@ -33,6 +36,9 @@ class Elevator {
         return best;
     }
 
+    // the stop at height y (within tol m), or -1
+    stopAt(y, tol = 0.6) { const i = this.nearest(y); return Math.abs(this.stops[i] - y) <= tol ? i : -1; }
+
     // a call for stop i (a landing's button, or one in the car): opens at once if it stands there
     call(i) {
         if (i < 0 || i >= this.stops.length) return false;
@@ -41,8 +47,9 @@ class Elevator {
         return true;
     }
 
-    open() { if (this.at >= 0 && this.v === 0) { this.doorTarget = 1; this.wait = this.dwell; } }
-    close() { this.wait = 0; }
+    open() { if (this.at >= 0 && this.v === 0 && !this.halted) { this.doorTarget = 1; this.wait = Math.max(this.wait, this.dwell); } }
+    close() { this.wait = 0; if (this.door >= 1) this.doorTarget = 0; }
+    hold(s = 2) { if (this.doorTarget > 0) this.wait = Math.max(this.wait, s); }
 
     get moving() { return this.v !== 0; }
     get name() { return this.at >= 0 ? this.names[this.at] : this.names[this.nearest(this.y)]; }
@@ -57,19 +64,33 @@ class Elevator {
 
     update(dt0) {
         const dt = dt0 * this.boost, y0 = this.y;
+        this.dy = 0;
+        // halted: brake to a stand, shut the doors, wait
+        if (this.halted) {
+            this.doorTarget = 0;
+            this.door = Math.max(0, this.door - dt / this.doorTime);
+            if (this.v) {
+                const a = this.accel * 2 * dt;
+                this.v = Math.abs(this.v) <= a ? 0 : this.v - Math.sign(this.v) * a;
+                this.y += this.v * dt;
+                this.dy = this.y - y0;
+                if (!this.v) this.at = this.stopAt(this.y, 0.01);
+            }
+            return;
+        }
         // doors first: nothing moves until they are shut
         if (this.doorTarget > 0 || this.door > 0) {
+            if (this.blocked > 0) { this.blocked -= dt; if (this.doorTarget === 0) { this.doorTarget = 1; this.wait = 1.5; } }
             if (this.doorTarget > 0 && this.door >= 1) {
                 this.wait -= dt;
                 if (this.wait <= 0) this.doorTarget = 0;
             }
             const step = dt / this.doorTime;
             this.door = this.doorTarget > this.door ? Math.min(1, this.door + step) : Math.max(0, this.door - step);
-            this.dy = 0;
             return;
         }
         const t = this.next();
-        if (t < 0) { this.dir = 0; this.dy = 0; return; }
+        if (t < 0) { this.dir = 0; return; }
         const goal = this.stops[t], d = goal - this.y;
         if (Math.abs(d) < 1e-3 && Math.abs(this.v) < 0.05) {
             // level: arrived

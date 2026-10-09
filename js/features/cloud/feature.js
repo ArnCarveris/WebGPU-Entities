@@ -48,7 +48,7 @@ class CloudWorld extends FeatureWorld {
     // reversed-Z, infinite far plane, metres (the near plane comes in to 5 cm on foot)
     depth() {
         const r = this.app.renderer;
-        return r.depthView && { view: r.depthView, kind: 'reversed', near: this.app.walker.active ? 0.05 : NEAR };
+        return r.depthSampleView && { view: r.depthSampleView, kind: 'reversed', near: this.app.walker.active ? 0.05 : NEAR };
     }
 
     // walking is its Walker's (on the terrain as drawn, structures, into the buses); the engine switches it
@@ -90,6 +90,9 @@ class CloudWorld extends FeatureWorld {
 
     // the readout and every option (its menus), on the engine's handheld (js/engine/handheld.js)
     handheld() { return phonePages(this.app); }
+
+    // its planned buildings' portal visibility (the building kit's RoomVis): floor map, traversal, frames on the handheld
+    get inspector() { return this.app?.frameWriter?.roomVis?.inspector || null; }
 
     set(key, v) {
         const a = this.app;

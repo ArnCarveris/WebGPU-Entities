@@ -18,12 +18,14 @@ const { aabbVisible, aabbContained, clipPoly3, planesFromHull, screenRect, rectI
 //   occluders(area)    (optional) occluders accumulated in it: { min, max, center, verts(eye) -> { n, verts } }
 //   count, portalCount (optional) the areas and portals there are: results indexed by them (else Maps)
 //   all()              (optional) every area, for traversal disabled
-// options: maxDepth (portals deep), maxEntries, nearPass (m: the camera this near a portal's plane, inside its
+// options: maxDepth (portals deep), outdoorDepth (from outdoors, portals deep: a city's windows lead into rooms
+// that lead on into more; 0 = maxDepth), outdoorNear (m: from outdoors, only a room entered through a portal this
+// near the eye is looked on through; 0 = any), maxEntries, nearPass (m: the camera this near a portal's plane, inside its
 // aperture, sees through it with the frustum it has), reversed (reversed-Z view-projection)
 class PortalVis {
-    constructor(graph, { maxDepth = 12, maxEntries = 127, nearPass = 0.35, reversed = false } = {}) {
+    constructor(graph, { maxDepth = 12, outdoorDepth = 0, outdoorNear = 0, maxEntries = 127, nearPass = 0.35, reversed = false } = {}) {
         this.graph = graph;
-        Object.assign(this, { maxDepth, maxEntries, nearPass, reversed });
+        Object.assign(this, { maxDepth, outdoorDepth, outdoorNear, maxEntries, nearPass, reversed });
     }
 
     compute(eye, viewProj, W, H, enabled = true) {
@@ -51,7 +53,7 @@ class PortalVis {
             for (const i of g.all ? g.all() : []) push({ area: i, planes: rootPlanes, rect: full, depth: 0, via: null, parent: null, skyOnly: false });
             return res;
         }
-        const activeOcc = new Set();
+        const activeOcc = new Set(), maxDepth = res.root === 0 && this.outdoorDepth ? this.outdoorDepth : this.maxDepth;
         const stack = [{ area: res.root, planes: rootPlanes, rect: full, path: [], depth: 0, via: null, parent: null, skyOnly: false, clipped: null }];
         while (stack.length) {
             if (res.entries.length >= this.maxEntries) { res.truncated = true; break; }
@@ -70,7 +72,8 @@ class PortalVis {
                 activeOcc.add(O);
                 res.occluders.push({ occ: O, verts, planes });
             }
-            if (e.depth >= this.maxDepth) continue;
+            if (e.depth >= maxDepth) continue;
+            if (res.root === 0 && this.outdoorNear && e.via && Math.hypot(...[0, 1, 2].map(k => Math.max(e.via.min[k] - eye[k], 0, eye[k] - e.via.max[k]))) > this.outdoorNear) continue;
             for (const P of g.portals(e)) {
                 const pi = P.index;
                 if (e.path.includes(pi)) continue;

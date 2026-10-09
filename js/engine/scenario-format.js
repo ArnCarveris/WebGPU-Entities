@@ -35,9 +35,10 @@ const ScenarioFormat = (() => {
         cloud: {
             title: 'Entity Cloud',
             config: ['terrain', 'render', 'weather', 'lighting', 'hurricane', 'streetLights'],
-            maps: { 'weather.states': { type: 'weatherState' }, 'lighting.presets': { type: 'light' }, buildings: { type: 'building' } },
+            maps: { 'weather.states': { type: 'weatherState' }, 'lighting.presets': { type: 'light' }, buildings: { type: 'building' },
+                'plans.buildings': { type: 'buildingPlan' }, 'plans.storeys': { type: 'storeyPlan' }, 'plans.cores': { type: 'corePlan' }, 'plans.rooms': { type: 'roomType' }, 'plans.furniture': { type: 'furniture' }, 'plans.furnishings': { type: 'furnishing' } },
             lists: { clouds: 'cloudLayer', views: 'view' },
-            kinds: ['clearing', 'tilt', 'hills', 'mountain', 'range', 'river', 'lake', 'town', 'forest', 'village', 'busStation', 'skyscraper', 'bus',
+            kinds: ['clearing', 'tilt', 'hills', 'mountain', 'range', 'river', 'lake', 'town', 'forest', 'village', 'busStation', 'skyscraper', 'structure', 'bus',
                 'storm', 'supercell', 'squall', 'spawner'],
         },
         water: {
@@ -67,8 +68,9 @@ const ScenarioFormat = (() => {
         portal: {
             title: 'Entity Portal',
             config: ['camera', 'player', 'minimap', 'outdoor', 'cctv', 'media', 'iptv'],
-            maps: { materials: { type: 'material' }, models: { type: 'model' } },
-            lists: { areas: 'area', portals: 'visPortal', occluders: 'occluder', vehicles: 'vehicle', views: 'view' },
+            maps: { materials: { type: 'material' }, models: { type: 'model' }, buildings: { type: 'building' },
+                'plans.buildings': { type: 'buildingPlan' }, 'plans.storeys': { type: 'storeyPlan' }, 'plans.cores': { type: 'corePlan' }, 'plans.rooms': { type: 'roomType' }, 'plans.furniture': { type: 'furniture' }, 'plans.furnishings': { type: 'furnishing' } },
+            lists: { areas: 'area', portals: 'visPortal', occluders: 'occluder', vehicles: 'vehicle', views: 'view', structures: 'structure' },
             kinds: ['securityCamera', 'prop', 'light', 'stairs', 'hull', 'helm', 'door', 'drone'],
         },
         gui: {
@@ -90,6 +92,11 @@ const ScenarioFormat = (() => {
         let cur = o;
         for (const k of ks) cur = isObj(cur[k]) ? cur[k] : (cur[k] = {});
         cur[last] = v;
+    };
+    const deepMerge = (a, b) => {
+        const o = { ...a };
+        for (const [k, v] of Object.entries(b)) o[k] = isObj(o[k]) && isObj(v) ? deepMerge(o[k], v) : v;
+        return o;
     };
     const strip = (e, more = []) => {
         const o = {};
@@ -188,7 +195,9 @@ const ScenarioFormat = (() => {
                 const value = vk in body && Object.keys(body).length === 1 ? body[vk] : body;
                 let map = getPath(native, slot.path);
                 if (!isObj(map)) { map = {}; setPath(native, slot.path, map); }
-                map[key] = value;
+                // a later entity with the same id overrides the earlier one key by key (a scenario's archetype over the
+                // plan library's it includes)
+                map[key] = isObj(map[key]) && isObj(value) ? deepMerge(map[key], value) : value;
             } else {
                 let list = getPath(native, slot.path);
                 if (!Array.isArray(list)) { list = []; setPath(native, slot.path, list); }

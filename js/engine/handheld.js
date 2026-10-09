@@ -20,6 +20,8 @@
 // a few times a second while the handheld is out. Their cells are plain data with closures:
 //   { label, value } { text } { toggle, on, set(v) } { choice, options: [label | { label, sub }], index, pick(i) }
 //   { action, run() } { slider, value, min, max, fmt(v), set(v) } { image: <canvas>, aspect, click(u, v) }
+// A world built of areas and portals also has world.inspector (kits.interior VisInspector): its floor map and portal
+// traversal pages come from it, so every such world shows the same ones.
 //
 // A world can lend it more (the gui feature's facility does): provide({ id, pages, bindings, apps(phone), renderer,
 // fullscreen(), hidden(), motion(), lighting(t) }): its pages (their root sections go first), named bindings for their
@@ -206,6 +208,9 @@ class Handheld {
         for (const inst of host.instances) {
             let offered = [];
             try { offered = inst.world.handheld?.() || []; } catch (err) { console.warn(`${inst.id}: handheld()`, err); }
+            // a world built of areas and portals: its visibility (the interior kit's VisInspector), the same pages in every
+            // world and scenario: the floor map, the portal traversal and its options
+            try { offered = [...offered, ...(inst.world.inspector?.pages() || [])]; } catch (err) { console.warn(`${inst.id}: inspector`, err); }
             for (const sp of offered) {
                 const id = `${inst.id}:${sp.id}`;
                 pages[id] = this.toPage(id, sp);

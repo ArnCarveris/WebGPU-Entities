@@ -1,0 +1,13 @@
+{
+    "name": "Barracks",
+    "group": "Plans",
+    "description": "A compound's walk-up block: operations rooms round a stair core on the ground floor, bunk rooms off a corridor ring above, as many storeys as it is given.",
+    "entities": [
+        {"type": "include", "scenario": "plans/archetypes"},
+        {"type": "include", "scenario": "plans/furniture"},
+        {"type": "include", "scenario": "plans/storeys"},
+        {"type": "include", "scenario": "plans/cores"},
+        {"type": "buildingPlan", "id": "barracks", "name": "Barracks", "archetype": "barracks", "core": "walkup", "ground": "G",
+            "sections": [{"storeys": [{"plan": "ops", "tags": ["ground"]}, {"plan": "quarters", "repeat": "*"}]}]}
+    ]
+}

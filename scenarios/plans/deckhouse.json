@@ -1,0 +1,13 @@
+{
+    "name": "Deckhouse",
+    "group": "Plans",
+    "description": "A ship's accommodation block on its deck: cabins and a mess off a narrow corridor ring round a stair core, storey on storey.",
+    "entities": [
+        {"type": "include", "scenario": "plans/archetypes"},
+        {"type": "include", "scenario": "plans/furniture"},
+        {"type": "include", "scenario": "plans/storeys"},
+        {"type": "include", "scenario": "plans/cores"},
+        {"type": "buildingPlan", "id": "deckhouse", "name": "Deckhouse", "archetype": "barracks", "core": "walkup", "ground": "D",
+            "sections": [{"storeyHeight": 2.9, "storeys": [{"plan": "cabins", "repeat": "*"}]}]}
+    ]
+}

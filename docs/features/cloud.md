@@ -325,11 +325,14 @@ boxes, which keeps the structures at about 0.2 ms of scene time at street level.
 
 ### Buildings
 
-Every building is a shell with an interior: the village's houses, the bus station's terminal and kiosk, and the town
-blocks round its forecourt. `Structures.building(frame, spec)` builds one from data: an archetype from
-`BUILDING_TYPES` (`house`, `terminal`, `block`, `kiosk`), merged key by key with the scenario's `buildings`, then the
-building's own spec (size, storeys, colours, roof, doors). A village's houses take `houseType`, a station
-`terminalType`, `blockType` and `kioskType`, so a scenario can give them other archetypes.
+Every building is a shell with an interior: the village's houses, the bus station's terminal and kiosk, the town
+blocks round its forecourt and the skyscraper. `Buildings.add(frame, spec)` builds one from data: an archetype (the
+scenario's `building` entities: `house`, `terminal`, `block`, `kiosk`, `tower`, from `scenarios/plans/archetypes.json`
+and overridden key by key by the scenario's own), then the building's own spec (size, storeys, colours, roof, doors).
+A village's houses take `houseType`, a station `terminalType`, `blockType` and `kioskType`, so a scenario can give
+them other archetypes. An archetype (or spec) with a `plan` is a **planned building** instead: see
+[docs/building-plans.md](../building-plans.md) — its floor plans, core, lifts, shafts and ladders are data, built by
+the building kit (`kits.building.PlannedBuilding`); the cloud only builds each section's shell and GPU record.
 
 - **Shell**: walls `wall` m thick with real openings. Their outer faces, the reveals through the wall, the plinth and
   the roof (a gable with eaves and maybe a chimney, or a flat slab that overhangs) are outside. Windows sit on every
@@ -544,11 +547,12 @@ the same way. Their tops get more sky light than their undersides, which is what
 | Key | Contents |
 |---|---|
 | `terrain` | `size` (m), `resolution`, `base` height, `fieldSize` (m, farm sections), `pivots` (chance of a centre-pivot circle per section) |
-| `render` | `quality` (0–3), `shapeScale` / `detailScale` (m per noise tile), `detailStrength`, `maxTop` (top of the cloud slab), `maxDistance`, `weatherSize` (m), `rainExtinction` / `snowExtinction` (1/m at full intensity), `slant` (s/m), `fallSpeed` (streak scroll, m/s), `timeScale`, `particles`, `bloom` (strength, 0 off; default 1.5), `bloomThreshold` / `bloomKnee` (exposed radiance where the glow starts and how softly; 1, 0.5), `bloomBolt` (how much the lightning bolts add to the bloom; 0.1) |
+| `render` | `quality` (0–3), `shapeScale` / `detailScale` (m per noise tile), `detailStrength`, `maxTop` (top of the cloud slab), `maxDistance`, `weatherSize` (m), `rainExtinction` / `snowExtinction` (1/m at full intensity), `slant` (s/m), `fallSpeed` (streak scroll, m/s), `timeScale`, `particles`, `bloom` (strength, 0 off; default 1.5), `bloomThreshold` / `bloomKnee` (exposed radiance where the glow starts and how softly; 1, 0.5), `bloomBolt` (how much the lightning bolts add to the bloom; 0.1), `gui` (world-space GUIs, the lift panels: `mode` `auto` (world-space, stencil-masked on the glass, while the scene depth's stencil layout has a value free for them, else each drawn into a render target), `world` or `target`; `max` a frame, `rtMax` (texels), `glass` (rgb under the GUI), `stencil` (bits to share out; 0 forces the fallback)) |
 | `clouds` | up to 4 cloud genus layers (below) |
 | `weather` | `start`, `transition` (s), `cycle` { `enabled`, `hold` }, `states` { name: state } |
 | `entities` | `{ type, id, label, ... }`, where `type` maps to a class in `ENTITY_TYPES` (below), applied in order |
-| `buildings` | building archetypes, merged key by key over `BUILDING_TYPES` (see **Buildings**) |
+| `buildings` | building archetypes (`building` entities, see **Buildings**) |
+| `plans` | floor plans (`buildingPlan`, `storeyPlan`, `corePlan`, `roomType`, `furniture`, `furnishing` entities: [docs/building-plans.md](../building-plans.md)) |
 | `lighting` | `start`, `presets` { name: { `azimuth`, `elevation`, `intensity`, `exposure`, `moon` } }. With `moon` (the moon's lit fraction, 0-1) the preset is night: azimuth and elevation place the moon, which lights the scene (sunlight off it, bluer and paler as night vision sees it); the sky is dark with stars, the moon a disc in its phase with maria, and colours wash out towards a cold grey. The street lamps and the buses' lights come on (see **Lights by night**). Night needs a low `intensity` and its own `exposure` (the scenario's *full moon*, *moonrise*, *half moon* and *crescent*) |
 | `views` | `{ name, pos [x, y, z], look [x, y, z] }`, or `{ name, follow (entity id), offset [x, height above ground, z], lookOffset }` to frame a moving entity, or `{ name, follow (entity id), spot }` for a viewpoint the entity laid out (a village's; a bus's `seat` puts you in one); optional `lighting` (preset), `weather` (state) and `walk` (true: on foot from there) |
 

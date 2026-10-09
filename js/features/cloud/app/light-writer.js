@@ -10,7 +10,7 @@ const { pcgRandom } = kits.noise;
 const {
     MAX_LIGHTS, LIGHT_GRID, MAX_POLES, MAX_FAR_DYN, FAR_FLOATS, LIGHT_RANGE, LIGHT_CABIN, LIGHT_SPOT, LIGHT_ROOM, ROOM_LIGHTS,
     ROOM_RANGE, POLE_DRAW,
-    GLOW_GAIN, LAMPS, ShelterBoxes, Structures,
+    GLOW_GAIN, LAMPS, ShelterBoxes, Structures, Buildings,
 } = feature;
 
 class LightWriter {
@@ -109,7 +109,7 @@ class LightWriter {
         for (const [, b] of near) {
             const s0 = clamp(Math.floor((cam[1] - b.floor) / b.H), 0, b.n - 1);
             for (let d = 0; d < b.n && n < ROOM_LIGHTS && d * b.H <= ROOM_RANGE; d++) for (const s of d ? [s0 - d, s0 + d] : [s0]) {
-                if (s < 0 || s >= b.n || n >= ROOM_LIGHTS || pcgRandom(b.id * 131 + s * 7 + 3) >= b.record[14]) continue;
+                if (s < 0 || s >= b.n || n >= ROOM_LIGHTS || pcgRandom(b.id * 131 + s * 7 + 3) >= Buildings.litShare(b, s)) continue;
                 out.push({ pos: b.f.at(0, b.floor + (s + 1) * b.H - 0.5, 0), dir: [0, -1, 0], color: L.color, intensity: L.intensity,
                     range: Math.max(b.hx, b.hz) + L.range, size: L.size * Math.min(b.hx, b.hz), room: true });
                 n++;

@@ -1,0 +1,14 @@
+{
+    "name": "Office block",
+    "group": "Plans",
+    "description": "A town block: a hall round the `midrise` core on the ground floor, offices off a corridor ring above, as many storeys as the block is given; one lift serving them all.",
+    "entities": [
+        {"type": "include", "scenario": "plans/archetypes"},
+        {"type": "include", "scenario": "plans/furniture"},
+        {"type": "include", "scenario": "plans/storeys"},
+        {"type": "include", "scenario": "plans/cores"},
+        {"type": "buildingPlan", "id": "office-block", "name": "Office block", "archetype": "block", "core": "midrise", "ground": "G",
+            "sections": [{"storeys": [{"plan": "ground-hall", "tags": ["stop", "ground"]}, {"plan": "office-small", "repeat": "*", "tags": ["stop"]}]}],
+            "lifts": [{"bank": 1, "kind": "local", "group": "{building}", "name": "{building} lift {n}", "stops": ["stop"], "speed": 2.5, "accel": 1.0, "door": 1.6, "dwell": 4}]}
+    ]
+}

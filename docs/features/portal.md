@@ -181,6 +181,18 @@ Walls, floors, ceilings, the exterior shell and roofs are generated from the are
   half keeps the area its face looks into, so a sliding hatch cover still looks closed from below.
 - `stairs` entities build step blocks.
 
+### Planned buildings (`structure`)
+
+A `structure` entity places a floor plan (a `buildingPlan` of the plan scenarios it includes, the same data a cloud
+world builds its town blocks and skyscraper from: [docs/building-plans.md](../building-plans.md)): `{ plan, pos [x, z],
+y, yaw, storeys, w, d, materials { floor, wall, ceiling, exterior, roof, stair }, doors, vehicle }`. Before the world is
+built, `kits.building.withStructures` expands it into this world's own native data: an area per room rectangle per
+storey, the doorways, the openings between a corridor's pieces and the windows as portals, an automatic door at each
+entrance, the stairwell as one tall area with its switchback flights (`stairs`) and landings, a ceiling light per
+room and the furniture as one prop per kind of storey. With `vehicle` it rides that vehicle (the freighter's crew
+deckhouse); otherwise the terrain is flattened under it (the compound's barracks). A sector world has no lift cars, so
+a plan's shafts stay closed.
+
 ### Sea, docks and the freighter
 
 - **Coast:** `outdoor.terrain.coast` sinks the land below a shore line into a seabed. `flatten`

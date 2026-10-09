@@ -337,13 +337,15 @@ function sectorTypes(Base) {
 
     // SECTR_Door (kits.entities door: open / target / speed, auto, toggle): drives the Closed flag of its portal; `auto` doors
     // open for nearby actors; `locked` lives on the portal. slide: right | left | up | down (in the portal frame), lift: pops
-    // the panel out first (hatches)
+    // the panel out first (hatches); thickness (m, default 0.05); pocket (default: not a hatch): the panel slides into the
+    // wall, nothing of it showing past the jamb it goes into (the wall is a plane: what has gone into it is not drawn)
     class Door extends door(Base) {
         spawn() {
             const w = this.world, e = this.def, P = w.portalById.get(e.portal);
             if (!P) { w.warnings.push(`door: unknown portal "${e.portal}"`); return; }
             const b = w.meshes.builder();
-            b.box([0, 0, 0], AXES, [P.w / 2, P.h / 2, 0.04], e.mat || (e.auto ? 'autodoor' : 'door'));
+            const th = (e.thickness ?? 0.05) / 2;
+            b.box([0, 0, 0], AXES, [P.w / 2, P.h / 2, th], e.mat || (e.auto ? 'autodoor' : 'door'));
             if (e.style === 'ship') {
                 // watertight ship door: raised frame ring, dogs and a hand wheel on both faces
                 const mf = e.frameMat || 'metal', hw = P.w / 2, hh = P.h / 2;
@@ -354,8 +356,8 @@ function sectorTypes(Base) {
                     for (const yy of [-hh * 0.6, hh * 0.6]) b.box([hw - 0.12, yy, z * 1.3], AXES, [0.08, 0.03, 0.02], 'hazard');
                 }
             } else {
-                b.box([0, -P.h / 2 + 0.12, 0], AXES, [P.w / 2 - 0.02, 0.1, 0.05], 'hazard');
-                if (e.auto) b.box([0, P.h / 2 - 0.2, 0], AXES, [0.25, 0.04, 0.06], 'coldlamp');
+                b.box([0, -P.h / 2 + 0.12, 0], AXES, [P.w / 2 - 0.02, 0.1, th + 0.008], 'hazard');
+                if (e.auto) b.box([0, P.h / 2 - 0.2, 0], AXES, [0.25, 0.04, th + 0.015], 'coldlamp');
             }
             const halves = w.meshes.split(b, [0, 0, 1, 0]);
             P.locked = !!e.locked;
@@ -364,6 +366,7 @@ function sectorTypes(Base) {
             P.door = this;                  // its opening lets light through (world/light-transport.js)
             this.lift = e.lift || 0;
             this.slide = e.slide || 'right';
+            this.pocket = e.pocket ?? !this.lift;
             this.lightArea = P.front || P.back;
             this.model = IDENTITY;
             this.update(0, 0, []);
@@ -396,7 +399,13 @@ function sectorTypes(Base) {
             const F = veh ? P.local : P, ease = this.openAmount;
             const lift = this.lift * Math.min(1, this.open * 4);
             const sd = { right: [F.right, P.w], left: [v3.mul(F.right, -1), P.w], up: [F.up, P.h], down: [v3.mul(F.up, -1), P.h] }[this.slide];
-            const M = m4.basis(F.right, F.up, F.normal, v3.madd(v3.madd(F.center, sd[0], sd[1] * 0.97 * ease), F.normal, lift));
+            let M;
+            if (this.pocket) {
+                // into the wall: what is left of the panel in the opening, against the jamb it slides into
+                const k = Math.max(1e-3, 1 - ease), axis = this.slide === 'up' || this.slide === 'down' ? 1 : 0;
+                const cols = [F.right, F.up].map((c, i) => i === axis ? v3.mul(c, k) : c);
+                M = m4.basis(cols[0], cols[1], F.normal, v3.madd(F.center, sd[0], sd[1] * ease / 2));
+            } else M = m4.basis(F.right, F.up, F.normal, v3.madd(v3.madd(F.center, sd[0], sd[1] * 0.97 * ease), F.normal, lift));
             if (veh) this.local = M; else this.model = M;
         }
     }

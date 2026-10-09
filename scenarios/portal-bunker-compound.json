@@ -26,7 +26,7 @@
             "skyTop": [0.3,0.55,1.3], "skyHorizon": [1.05,1.2,1.4], "fog": [0.7,0.78,0.88,0.009], "hub": [10,1.8,-6],
             "terrain": {"extent":[-80,-70,140,110],"chunk":20,"step":1,"amp":2.8,"freq":0.035,"flat":5,"blend":22,"mat":"grass","beachMat":"sand","beachHeight":0.7,"flatten":[[30,-34,48,74]],"coast":{"point":[46,0],"normal":[1,0],"width":8,"depth":12,"wobble":4},"island":{"falloff":30,"depth":12}},
             "water": {"level":-1.2,"extent":[-420,-420,520,520],"color":[0.05,0.22,0.24,0.8],"seabed":{"y":-11.5,"mat":"sand"}},
-            "scatter": [{"model":"tree","count":120,"seed":7,"extent":[-75,-65,75,85],"clearance":7,"scale":[0.8,1.5],"avoid":[[-5,-40,5,0],[-21,-21,-19,11]]},{"model":"rock","count":45,"seed":21,"extent":[-75,-65,75,85],"clearance":4,"scale":[0.5,1.6],"avoid":[[-3,-40,3,0]]}]
+            "scatter": [{"model":"tree","count":120,"seed":7,"extent":[-75,-65,75,85],"clearance":7,"scale":[0.8,1.5],"avoid":[[-5,-40,5,0],[-21,-21,-19,11],[-55,27,-29,49]]},{"model":"rock","count":45,"seed":21,"extent":[-75,-65,75,85],"clearance":4,"scale":[0.5,1.6],"avoid":[[-3,-40,3,0],[-55,27,-29,49]]}]
         },
         {"type":"material","id":"tiles","albedo":[0.52,0.54,0.56],"pattern":"tiles","scale":1,"spec":0.35},
         {"type":"material","id":"plaster","albedo":[0.62,0.6,0.55],"pattern":"noise","scale":0.5,"spec":0.05},
@@ -506,6 +506,14 @@
         {"type":"sound.cue","on":"step","parts":[
             {"shot":{"source":"brown","filter":"lowpass","freq":"swim ? 500 : 280","q":1,"env":[[0.01,"(run ? 0.28 : 0.18) * rand(0.8, 1.2)"],[0.12,0]]}},
             {"noise":{"filter":"swim ? 'bandpass' : 'highpass'","freq":"swim ? 1400 : 2600","q":0.7,"vol":"swim ? 0.05 : 0.02","dur":"swim ? 0.25 : 0.06"}}]},
+        {"$comment":"planned buildings: placements of the floor plans in scenarios/plans/ (the building kit builds their areas, portals, stairs, furniture and lights)","type":"include","scenario":"plans/barracks"},
+        {"type":"include","scenario":"plans/deckhouse"},
+        {"type":"structure","id":"barracks","plan":"barracks","name":"Barracks","pos":[-42,38],"y":0,"storeys":3,"w":18,"d":14,"seed":3,
+            "materials":{"floor":"tiles","wall":"plaster","ceiling":"panel","exterior":"concrete","roof":"roof","stair":"concrete"}},
+        {"type":"structure","id":"deckhouse","plan":"deckhouse","name":"Crew deckhouse","pos":[55,38],"yaw":0,"y":5,"storeys":2,"w":11,"d":12,"vehicle":"freighter","seed":5,
+            "doors":[{"face":"-z","at":0}],"materials":{"floor":"shipdeck","wall":"shipwall","ceiling":"shipwhite","exterior":"shipwhite","roof":"shipdeck","stair":"steel"}},
+        {"type":"view","of":"portal","name":"Barracks","pos":[-42,1.7,22],"look":[-42,3,38]},
+        {"type":"view","of":"portal","name":"Barracks quarters","pos":[-42,5.0,32.5],"look":[-36,4.6,32.5]},
         {"$comment":"its GUIs: the screens' apps' settings and the handheld's pages (scenarios/gui/portal-bunker-compound.json)","type":"include","scenario":"gui/portal-bunker-compound"}
     ]
 }

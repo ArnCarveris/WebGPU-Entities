@@ -38,7 +38,16 @@ const EntityTypes = (() => {
     });
     def('hydrology', { sea: 'sea level', spring: 'a water source', drain: 'a water sink', rain: 'rain over an area', debris: 'floating debris' });
     def('weather', { storm: 'a storm cell', supercell: 'a supercell', squall: 'a squall line', spawner: 'spawns storm cells' });
-    def('settlement', { village: 'a village on a road', busStation: "a town's bus station", skyscraper: 'a skyscraper: sky lobbies, lifts, an observation deck' });
+    def('settlement', { village: 'a village on a road', busStation: "a town's bus station", skyscraper: 'a skyscraper built from a buildingPlan, its plaza round it' });
+    // floor plans (the building kit): data, kept in scenarios/plans/ and included where a world builds from them
+    def('building', {
+        buildingPlan: 'a building as a floor-plan composition: sections of storeys (storeyPlans), its core (corePlan), its lift groups',
+        storeyPlan: 'a storey layout: bands of rooms and corridors round the core, or a hall',
+        corePlan: 'a core: stairwell, lift banks (shafts with their technical space, pit, overrun, ladder), lift lobby',
+        roomType: 'a kind of room: its furniture, lamps, colours',
+        furniture: 'a furniture item: footprint and parts', furnishing: "an unplanned archetype's furniture per storey",
+        structure: 'a building placed from a buildingPlan (any world that builds from plans)',
+    });
     def('transit', { bus: 'a bus line with its fleet', vehicle: 'a vehicle on a route (portal: the freighter)' });
     def('interior', {
         building: 'a building archetype (storeys, windows, doors, furniture)',

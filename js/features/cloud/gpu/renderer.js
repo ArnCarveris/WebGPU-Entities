@@ -4,7 +4,8 @@
 Features.part('cloud', (engine, feature) => {
 const { Common, kits } = engine;
 const { makeBuffer, gridIndices, bindLayout, bindGroup } = Common;
-const { GuiAtlas, GuiTargets, DeviceContext } = kits.gui;
+const { GuiAtlas, DeviceContext, WorldGuiPass } = kits.gui;
+const { StencilLayout } = kits.gpu;
 const {
     MAX_CELLS, CELL_FLOATS, MAX_BOLT_SEGS, FAR_FLOATS, MAX_FAR_DYN, FAR_LAMP_H, FAR_LAMP_REACH, MAX_POLES,
     STRUCT_FLOATS, GRID_N, BLOOM_LEVELS, BUILDING_FLOATS, FrameBlock, WORLD_BINDINGS, BindingSet, WGSL_SKY,
@@ -15,7 +16,7 @@ const {
 const { BOX_FLOATS } = kits.transit;
 const MAX_BOXES = 4096;          // lift parts drawn a frame (vsBox)
 const MAX_ORIGINS = 96;          // buildings whose interiors (and lifts) are drawn a frame, each in its Origin's frame (busData slots)
-const MAX_PANELS = 16;           // world-space GUIs drawn a frame (vsPanel)
+const MAX_PANELS = 16;           // world-space GUIs drawn a frame (the GUI pass's default; render.gui.max)
 
 // Renderer
 class Renderer {
@@ -27,6 +28,10 @@ class Renderer {
         this.device = this.fx.device;
         this.profiler = new GpuProfiler(this.device, ['weather', 'ground', 'scene', 'froxel', 'tiles', 'march', 'resolve', 'bloom', 'final']);
         this.format = this.fx.format;
+        // the scene's depth: with a stencil when the device has one to share out (StencilLayout: the world-space GUIs'
+        // masks), else depth only (the GUIs fall back to render targets)
+        this.depthFormat = this.device.features.has('depth32float-stencil8') ? 'depth32float-stencil8' : 'depth32float';
+        this.stencilBits = this.depthFormat === 'depth32float' ? 0 : 8;
         const d = this.device, B = GPUBufferUsage;
         this.frame = new FrameBlock();
         this.frameBuf = makeBuffer(d, this.frame.data.byteLength, B.UNIFORM | B.COPY_DST);
@@ -49,29 +54,16 @@ class Renderer {
         this.scale = 0.5;
     }
 
-    // the world-space GUIs (the lifts' panels): each drawn into a texture of its own (the gui kit's GuiTargets) with the
-    // gui kit's atlas, then shown on a quad in the scene (vsPanel); the box instances of the lifts (vsBox)
+    // the world-space GUIs (the lifts' panels: the gui kit's WorldGuiPass, set up for the scenario's `render.gui` by
+    // setGui); the box instances of the lifts (vsBox)
     async initGui() {
         const d = this.device;
         await GuiAtlas.loadFonts();
-        this.guiTargets = new GuiTargets(d, 'rgba8unorm', { max: 512 });
         this.atlas = new GuiAtlas();
-        this.guiTargets.registerMaterial('atlas', this.atlas.upload(this));
+        this.atlasView = this.atlas.upload(this);
         this.dc = new DeviceContext(this.atlas);
-        this.panelGroups = new WeakMap();           // GUI target -> its bind group (group 2 of pPanel)
-        this.panelData = new Float32Array(MAX_PANELS * 6 * 5);
-        this.panelBuf = makeBuffer(d, this.panelData.byteLength, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST);
         this.panelDraws = [];
-        const scene = this.sceneModule, empty = d.createBindGroupLayout({ entries: [] });
-        this.emptyGroup = d.createBindGroup({ layout: empty, entries: [] });
-        this.pPanel = d.createRenderPipeline({
-            label: 'vsPanel', layout: d.createPipelineLayout({ bindGroupLayouts: [this.worldSet.layout, empty, this.guiTargets.layout] }),
-            vertex: { module: scene, entryPoint: 'vsPanel', buffers: [{ arrayStride: 20, attributes: [
-                { shaderLocation: 0, offset: 0, format: 'float32x3' }, { shaderLocation: 1, offset: 12, format: 'float32x2' }] }] },
-            fragment: { module: scene, entryPoint: 'fsPanel', targets: [{ format: 'rgba16float' }] },
-            primitive: { topology: 'triangle-list', cullMode: 'none' },
-            depthStencil: { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'greater' },
-        });
+        this.setGui({});
         this.boxData = new Float32Array(MAX_BOXES * BOX_FLOATS);
         this.boxBuf = makeBuffer(d, this.boxData.byteLength, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST);
         this.boxCount = 0;
@@ -79,12 +71,25 @@ class Renderer {
         this.originCount = 0;
     }
 
-    // the panels to draw this frame: [{ gui, corners: [top left, top right, bottom right, bottom left] }]
-    setPanels(list) {
-        const D = this.panelData, uv = [[0, 0], [1, 0], [1, 1], [0, 1]];
-        this.panelDraws = list.slice(0, MAX_PANELS);
-        this.panelDraws.forEach((p, i) => [0, 1, 2, 0, 2, 3].forEach((k, j) => D.set([...p.corners[k], ...uv[k]], (i * 6 + j) * 5)));
+    // How world-space GUIs are drawn (data: the scenario's `render.gui`: { mode: 'auto' (world-space while the stencil
+    // has a value free for them, else render targets) | 'world' | 'target', max (GUIs a frame), rtMax (a target's
+    // longest side, texels), glass ([r, g, b]: under the GUI, linear), stencil (bits the layout shares out; default the
+    // depth target's) }): a stencil layout for the scene's depth, the GUI pass reserving its slot in it
+    setGui(cfg = {}) {
+        const key = JSON.stringify(cfg);
+        if (this.guiKey === key) return;
+        this.guiKey = key;
+        this.stencil = new StencilLayout(Math.min(this.stencilBits, cfg.stencil ?? this.stencilBits));
+        this.gui = new WorldGuiPass(this.device, { color: 'rgba16float', depth: { format: this.depthFormat, compare: 'greater' }, stencil: this.stencil,
+            mode: cfg.mode ?? 'auto', max: cfg.max ?? MAX_PANELS, rtMax: cfg.rtMax ?? 512, ...(cfg.glass ? { glass: cfg.glass } : {}) });
+        this.gui.reserve();
+        this.stencil.resolve();
+        this.gui.init();
+        this.gui.registerMaterial('atlas', this.atlasView);
     }
+
+    // the GUIs to draw this frame (EntityGUIs, placed)
+    setPanels(list) { this.panelDraws = list.slice(0, this.gui.o.max); }
 
     createPipelines() {
         const d = this.device;
@@ -105,7 +110,7 @@ class Renderer {
             vertex: { module, entryPoint: vs, buffers },
             fragment: { module, entryPoint: fs, targets: [{ format, blend }] },
             primitive: { topology: 'triangle-list', cullMode: 'none' },
-            depthStencil: { format: 'depth32float', depthWriteEnabled: depth.write, depthCompare: depth.compare },
+            depthStencil: { format: this.depthFormat, depthWriteEnabled: depth.write, depthCompare: depth.compare },
         });
         this.pSky = pipe(layoutA, scene, 'vsSky', 'fsSky', 'rgba16float', { write: false, compare: 'always' });
         this.pTerrain = pipe(layoutA, scene, 'vsTerrain', 'fsTerrain', 'rgba16float', { write: true, compare: 'greater' });
@@ -151,6 +156,8 @@ class Renderer {
         this.pGlass = pipe(layoutGlass, final, 'vsGlass', 'fsGlass', this.format, { write: false, compare: 'greater' }, blendAlpha, structVerts);
         this.pPrecip = pipe(layoutB, final, 'vsPrecip', 'fsPrecip', this.format, { write: false, compare: 'greater' }, blendAlpha);
         this.pBolt = pipe(layoutB, final, 'vsBolt', 'fsBolt', this.format, { write: false, compare: 'greater' }, blendAdd);
+        // the sector and portal frames (the interior kit's VisInspector lines, about the eye), over the finished frame
+        this.lineLayer = new engine.kits.gpu.LineLayer(d, { format: this.format, depth: { format: this.depthFormat, compare: 'greater' } });
         // bloom (WGSL_BLOOM): fullscreen passes into the levels of this.bloom, no depth
         this.bloomLayout = bindLayout(d, GPUShaderStage.FRAGMENT, ['tex', 'tex']);
         const bloom = d.createShaderModule({ label: 'bloom', code: shaderSource(this.worldSet, WGSL_BLOOM) });
@@ -199,8 +206,7 @@ class Renderer {
         this.paneV = vb(S.panes);
         const dm = S.doors.mesh();
         this.doorV = { n: dm.length / STRUCT_FLOATS, buf: dm.length ? makeBuffer(d, dm.length * 4, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST, new Float32Array(dm)) : null };
-        const rec = new Float32Array(Math.max(1, S.buildings.list.length) * BUILDING_FLOATS);
-        S.buildings.list.forEach((b, i) => rec.set(S.buildings.record(b), i * BUILDING_FLOATS));
+        const rec = S.buildings.buffer(BUILDING_FLOATS);          // (the records, then the planned storeys' codes)
         this.buildingBuf = makeBuffer(d, rec.byteLength, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST, rec);
         this.buildingRec = rec;
         this.interiorDraws = [];
@@ -235,13 +241,16 @@ class Renderer {
         }, 'world');
     }
 
+    // a depth-stencil attachment's stencil ops (none on a depth-only target)
+    stencilOps(load) { return this.stencilBits ? { stencilLoadOp: load, stencilStoreOp: 'store', stencilClearValue: 0 } : {}; }
+
     // the door leaves as they stand now (Doors.mesh, same size every time)
     writeDoors(mesh) { if (this.doorV.buf) this.device.queue.writeBuffer(this.doorV.buf, 0, new Float32Array(mesh)); }
 
     // the buildings' records again (their doors moved: the light through them, WGSL_BUILDING)
     writeBuildings(B) {
         B.list.forEach((b, i) => this.buildingRec.set(B.record(b), i * BUILDING_FLOATS));
-        this.device.queue.writeBuffer(this.buildingBuf, 0, this.buildingRec);
+        this.device.queue.writeBuffer(this.buildingBuf, 0, this.buildingRec, 0, B.list.length * BUILDING_FLOATS);
     }
 
     resize(scale) {
@@ -254,10 +263,11 @@ class Renderer {
         this.hdr?.destroy();
         this.depth?.destroy();
         this.hdr = this.device.createTexture({ size: [w, h], format: 'rgba16float', usage: U.RENDER_ATTACHMENT | U.TEXTURE_BINDING });
-        this.depth = this.device.createTexture({ size: [w, h], format: 'depth32float', usage: U.RENDER_ATTACHMENT | U.TEXTURE_BINDING });
+        this.depth = this.device.createTexture({ size: [w, h], format: this.depthFormat, usage: U.RENDER_ATTACHMENT | U.TEXTURE_BINDING });
         this.hdrView = this.hdr.createView();
-        this.depthView = this.depth.createView();
-        this.cloudPass.resize(Math.max(1, Math.ceil(w * scale)), Math.max(1, Math.ceil(h * scale)), this.depthView);
+        this.depthView = this.depth.createView();                                     // (the attachment)
+        this.depthSampleView = this.depth.createView({ aspect: 'depth-only' });      // (what the passes after it sample)
+        this.cloudPass.resize(Math.max(1, Math.ceil(w * scale)), Math.max(1, Math.ceil(h * scale)), this.depthSampleView);
         // the bloom chain: half resolution down to no less than 4 texels a side
         const bw = Math.max(1, w >> 1), bh = Math.max(1, h >> 1);
         const levels = Math.max(1, Math.min(BLOOM_LEVELS, Math.floor(Math.log2(Math.min(bw, bh) / 4)) + 1));
@@ -266,11 +276,11 @@ class Renderer {
         this.bloomViews = Array.from({ length: levels }, (_, k) => this.bloom.createView({ baseMipLevel: k, mipLevelCount: 1 }));
         this.bloomGroups = this.bloomViews.map((v, k) => bindGroup(this.device, this.bloomLayout, [v, this.hdrView], `bloom-${k}`));
         this.bloomPreGroups = this.cloudPass.histViews.map((hv, k) => bindGroup(this.device, this.bloomLayout, [hv, this.hdrView], `bloom-pre-${k}`));
-        this.screenGroups = this.cloudPass.histViews.map((hv, k) => bindGroup(this.device, this.screenLayout, [hv, this.hdrView, this.depthView, this.bloomViews[0]], `screen-${k}`));
+        this.screenGroups = this.cloudPass.histViews.map((hv, k) => bindGroup(this.device, this.screenLayout, [hv, this.hdrView, this.depthSampleView, this.bloomViews[0]], `screen-${k}`));
         // for the bolts drawn into level 0: any other view in the bloom slot (unread there)
         this.bloomSpare ??= this.device.createTexture({ size: [1, 1], format: 'rgba16float', usage: U.TEXTURE_BINDING });
         const spare = levels > 1 ? this.bloomViews[1] : this.bloomSpare.createView();
-        this.boltGlowGroups = this.cloudPass.histViews.map((hv, k) => bindGroup(this.device, this.screenLayout, [hv, this.hdrView, this.depthView, spare], `bolt-glow-${k}`));
+        this.boltGlowGroups = this.cloudPass.histViews.map((hv, k) => bindGroup(this.device, this.screenLayout, [hv, this.hdrView, this.depthSampleView, spare], `bolt-glow-${k}`));
         return true;
     }
 
@@ -314,7 +324,7 @@ class Renderer {
                 label: 'inject', layout: d.createPipelineLayout({ bindGroupLayouts: [this.injectLayout] }),
                 vertex: { module, entryPoint: 'vs' },
                 fragment: { module, entryPoint: 'fs', targets: [{ format: 'rgba16float' }] },
-                depthStencil: { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'greater' },
+                depthStencil: { format: this.depthFormat, depthWriteEnabled: true, depthCompare: 'greater' },
             });
             this.injectBuf = d.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         }
@@ -328,7 +338,7 @@ class Renderer {
         const pass = enc.beginRenderPass({
             label: 'inject',
             colorAttachments: [{ view: this.hdrView, loadOp: 'load', storeOp: 'store' }],
-            depthStencilAttachment: { view: this.depthView, depthLoadOp: 'load', depthStoreOp: 'store' },
+            depthStencilAttachment: { view: this.depthView, depthLoadOp: 'load', depthStoreOp: 'store', ...this.stencilOps('load') },
         });
         pass.setPipeline(this.pInject);
         pass.setBindGroup(0, this.injectGroup);
@@ -366,23 +376,17 @@ class Renderer {
         q.writeBuffer(this.cellBuf, 0, this.cellData);
         if (this.busDraws.length || this.originCount) q.writeBuffer(this.busUBuf, 0, this.busData, 0, (this.originSlot0 + this.originCount) * BUS_UNIFORM / 4);
         if (this.boxCount) q.writeBuffer(this.boxBuf, 0, this.boxData, 0, this.boxCount * BOX_FLOATS);
-        if (this.panelDraws.length) {
-            q.writeBuffer(this.panelBuf, 0, this.panelData, 0, this.panelDraws.length * 30);
-            // each GUI into its texture (when its model changed), before the scene pass shows it
-            for (const p of this.panelDraws) {
-                const rt = this.guiTargets.update(enc, p.gui);
-                let g = this.panelGroups.get(rt);
-                if (!g) this.panelGroups.set(rt, g = this.guiTargets.group(rt.view));
-                p.group = g;
-            }
-        }
+        // the world-space GUIs' uniforms (the fallback: their targets, when their models changed), lit as the lamps
+        // are, the eye adapted
+        const Fd = this.frame.data, fo = this.frame.offsets;
+        this.gui.prepare(enc, this.panelDraws, Fd.subarray(fo.viewProj, fo.viewProj + 16), 0.9 / Math.max(Fd[fo.sunCol + 3], 0.2));
         this.weatherPass.encode(enc, probeTexel, prof, shadowSlices);
         this.groundPass.encode(enc, prof);
 
         const a = enc.beginRenderPass({
             label: 'scene', timestampWrites: prof.writes('scene'),
             colorAttachments: [{ view: this.hdrView, loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 1] }],
-            depthStencilAttachment: { view: this.depthView, depthLoadOp: 'clear', depthStoreOp: 'store', depthClearValue: 0 },
+            depthStencilAttachment: { view: this.depthView, depthLoadOp: 'clear', depthStoreOp: 'store', depthClearValue: 0, ...this.stencilOps('clear') },
         });
         a.setBindGroup(0, this.worldGroup);
         a.setPipeline(this.pSky);
@@ -424,12 +428,7 @@ class Renderer {
             a.setVertexBuffer(1, this.boxBuf);
             for (const g of this.boxGroups) { a.setBindGroup(1, this.busGroup, [g.slot * BUS_UNIFORM]); a.draw(this.cube.n, g.count, 0, g.first); }
         }
-        if (this.panelDraws.length) {
-            a.setPipeline(this.pPanel);
-            a.setBindGroup(1, this.emptyGroup);
-            a.setVertexBuffer(0, this.panelBuf);
-            this.panelDraws.forEach((p, i) => { a.setBindGroup(2, p.group); a.draw(6, 1, i * 6); });
-        }
+        if (this.panelDraws.length) { this.gui.draw(a); a.setBindGroup(0, this.worldGroup); }
         if (this.doorV.n) { a.setPipeline(this.pDoor); a.setVertexBuffer(0, this.doorV.buf); a.draw(this.doorV.n); }
         if (this.paneV.n) { a.setPipeline(this.pPane); a.setVertexBuffer(0, this.paneV.buf); a.draw(this.paneV.n); }
         if (this.poleCount) {
@@ -455,7 +454,7 @@ class Renderer {
         const b = enc.beginRenderPass({
             label: 'final', timestampWrites: prof.writes('final'),
             colorAttachments: [{ view: this.fx.target(), loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 1] }],
-            depthStencilAttachment: { view: this.depthView, depthReadOnly: true },
+            depthStencilAttachment: { view: this.depthView, depthReadOnly: true, ...(this.stencilBits ? { stencilReadOnly: true } : {}) },
         });
         b.setBindGroup(0, this.worldGroup);
         b.setBindGroup(1, this.screenGroups[hist]);
@@ -477,6 +476,7 @@ class Renderer {
             }
         }
         if (bolts) { b.setPipeline(this.pBolt); b.draw(6, bolts); }
+        this.lineLayer.draw(b);
         b.end();
         prof.resolve(enc);
     }

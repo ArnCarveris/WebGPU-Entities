@@ -372,12 +372,10 @@ function settlementTypes(Base) {
         }
     }
 
-    // A skyscraper (the world's buildings.tower: a lobby in a podium, sections stepping in, a curtain wall, rooms off a
-    // corridor round a core of stairs and lifts, sky lobbies, an observation deck, a spire) on a paved plaza. The ground
-    // is levelled under it (`level` m round `pos`; 0: as it is, when it stands in another's levelled ground, a bus
-    // station's). Parameters: pos, yaw (degrees), label, and the tower's own (zone, sections, lobby, podium, spire,
-    // zonesPerSection, color, seed). Viewpoints (`spot`): "lobby", "sky lobby", "deck" (the observation deck), "plaza",
-    // "above the clouds"
+    // A skyscraper: a buildingPlan (`plan`, data: scenarios/plans/; the world's buildings.plan builds it: its sections,
+    // core, lifts, crown) on a plaza that levels the ground round it (`level` m: 0 none). Parameters: pos, yaw (degrees),
+    // label, plan, color, seed, plaza (m of paving round the first section). Viewpoints (`spot`): lobby, sky lobby (the
+    // first storey tagged `sky`), deck (the one tagged `deck`, else the top), plaza, above the clouds
     class Skyscraper extends Base {
         stamp(f) {
             const d = this.def, [cx, cz] = d.pos, r0 = d.level ?? 120, r1 = r0 + 250;
@@ -396,31 +394,52 @@ function settlementTypes(Base) {
 
         build(S) {
             const d = this.def, f = new GroundFrame(d.pos, (d.yaw ?? 0) * DEG);
-            const T = this.tower = S.buildings.tower(f, { name: d.label || 'Tower', ...d });
+            if (!d.plan) throw new Error(`skyscraper ${d.id || ''}: no plan (a buildingPlan id, scenarios/plans/)`);
+            const T = this.tower = S.buildings.plan(f, d.plan, { name: d.label || d.name, color: d.color, seed: d.seed });
             this.top = T.top;
-            const lobby = T.lobby, hp = lobby.hx, y0 = lobby.floor;
-            // the plaza: paving round the podium, lamps at its corners
-            const P = hp + 24, strip = (x0, z0, x1, z1) => S.strip(f.xz(x0, (z0 + z1) / 2), f.xz(x1, (z0 + z1) / 2), (z1 - z0) / 2, [0.58, 0.57, 0.54], 0, 0.1);
-            strip(-P, -P, P, -hp);
-            strip(-P, hp, P, P);
-            strip(-P, -hp, -hp, hp);
-            strip(hp, -hp, P, hp);
-            for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) S.fixtures.lamp(...f.xz(sx * (P - 2), sz * (P - 2)), [-sx * f.cs + sz * f.sn, -sx * f.sn - sz * f.cs], 'led', { height: 8, reach: 1.8 });
+            const lobby = T.lobby, hx = lobby.hx, hz = lobby.hz, y0 = lobby.floor;
+            // the plaza: paving round the first section, lamps at its corners
+            const P = d.plaza ?? 24, px = hx + P, pz = hz + P;
+            const strip = (x0, z0, x1, z1) => S.strip(f.xz(x0, (z0 + z1) / 2), f.xz(x1, (z0 + z1) / 2), (z1 - z0) / 2, [0.58, 0.57, 0.54], 0, 0.1);
+            strip(-px, -pz, px, -hz);
+            strip(-px, hz, px, pz);
+            strip(-px, -hz, -hx, hz);
+            strip(hx, -hz, px, hz);
+            for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) S.fixtures.lamp(...f.xz(sx * (px - 2), sz * (pz - 2)), [-sx * f.cs + sz * f.sn, -sx * f.sn - sz * f.cs], 'led', { height: 8, reach: 1.8 });
             // viewpoints: on foot in the lobby (facing the lifts), at the first sky lobby, on the observation deck looking
-            // out over the clouds; in an express car; out on the plaza looking up; flying beside the crown
-            const sky = T.stop(1 + T.zone), top = T.stop(T.storeys);
+            // out over the clouds; out on the plaza looking up; flying beside the crown
+            const g = T.find('sky'), sky = T.stop(g >= 0 ? g : Math.min(1, T.storeys - 1)), gd = T.find('deck'), top = T.stop(gd >= 0 ? gd : T.storeys - 1);
             const deckB = top.building, dz = deckB.hz - deckB.t - 2.5;
             this.spots = {
-                lobby: { pos: f.at(0, y0 + 1.62, -hp + 8), look: f.at(0, y0 + 2.4, 0) },
+                lobby: { pos: f.at(0, y0 + 1.62, -hz + 8), look: f.at(0, y0 + 2.4, 0) },
                 'sky lobby': { pos: f.at(0, sky.y + 1.62, -sky.building.hz + 3), look: f.at(0, sky.y + 1.62, -sky.building.hz - 40) },
                 deck: { pos: f.at(0, top.y + 1.62, -dz), look: f.at(0, top.y - 60, -dz - 400) },
-                plaza: { pos: f.at(-hp - 18, y0 + 1.7, -hp - 20), look: f.at(0, y0 + 220, 0) },
+                plaza: { pos: f.at(-hx - 18, y0 + 1.7, -hz - 20), look: f.at(0, y0 + 220, 0) },
                 'above the clouds': { pos: f.at(-220, top.y + 40, -300), look: f.at(0, top.y - 200, 0) },
             };
         }
     }
 
-    return { Village, BusStation, Skyscraper };
+    // Any planned building (a buildingPlan: `plan`) at pos, turned yaw degrees, `storeys` (what its plan's "*" fills to),
+    // w, d (m: a plan's sections that leave their size out), label, color, seed; the ground levelled under it (`level`
+    // m round it: 0 none). Viewpoints (`spot`): entrance, inside (its first storey), roof
+    class Structure extends Skyscraper {
+        stamp(f) { if (this.def.level) super.stamp(f); }
+
+        build(S) {
+            const d = this.def, f = new GroundFrame(d.pos, (d.yaw ?? 0) * DEG);
+            const T = this.tower = S.buildings.plan(f, d.plan, { name: d.label || d.name, color: d.color, seed: d.seed, storeys: d.storeys, w: d.w, d: d.d, type: d.type });
+            this.top = T.top;
+            const b = T.lobby, y0 = b.floor;
+            this.spots = {
+                entrance: { pos: f.at(0, y0 + 1.7, -b.hz - 12), look: f.at(0, y0 + 3, 0) },
+                inside: { pos: f.at(0, y0 + 1.62, -b.hz + 2.5), look: f.at(0, y0 + 1.6, 0) },
+                roof: { pos: f.at(-b.hx - 20, T.top + 25, -b.hz - 25), look: f.at(0, y0, 0) },
+            };
+        }
+    }
+
+    return { Village, BusStation, Skyscraper, Structure };
 }
 
 return { settlementTypes };

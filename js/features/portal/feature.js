@@ -75,6 +75,9 @@ class PortalWorld extends FeatureWorld {
     // the readout, the minimap and every option, on the engine's handheld (js/engine/handheld.js)
     handheld() { return phonePages(this.app); }
 
+    // its portal visibility (the interior kit's VisInspector): floor map, traversal, frames on the handheld
+    get inspector() { return this.app?.inspector || null; }
+
     set(key, v) {
         const o = this.app.opts;
         if (key in o && typeof o[key] === typeof v) o[key] = v;

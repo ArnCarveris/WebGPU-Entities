@@ -45,6 +45,10 @@ class FeatureWorld {
     // here). The engine walks its camera on the highest ground of every shown world (Host.floorAt).
     ground(p) { return null; }
 
+    // a world built of areas and portals: its visibility inspector (kits.interior VisInspector: the floor map, the portal
+    // traversal, culling and freeze, the sector and portal frames), whose pages the engine's handheld shows; null: none
+    get inspector() { return null; }
+
     // the interior (kits.interior) that shelters p (this world's frame) from the weather, or null. The engine keeps an
     // atmosphere world's rain and snow off the camera while any other shown world's interior holds it (Host.shelter)
     sheltered(p) { return null; }
