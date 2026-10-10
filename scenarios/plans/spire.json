@@ -13,16 +13,16 @@
                     "storeys": [{"plan": "lobby", "label": "L", "tags": ["stop", "lobby"]}]},
                 {"width": 52, "storeys": [
                     {"plan": "office", "repeat": 38, "tags": ["stop"]}, {"plan": "plant", "tags": ["plant"]},
-                    {"repeat": 5, "of": [{"plan": "sky", "zone": true, "label": "S{sky}", "tags": ["stop", "sky"]}, {"plan": "office", "repeat": 38, "tags": ["stop"]}, {"plan": "plant", "tags": ["plant"]}]}]},
+                    {"repeat": 5, "of": [{"plan": "sky", "zone": true, "label": "S{sky}", "tags": ["stop", "sky"]}, {"plan": "office", "repeat": 138, "tags": ["stop"]}, {"plan": "plant", "tags": ["plant"]}]}]},
                 {"width": 46, "storeys": [
-                    {"repeat": 6, "of": [{"plan": "sky", "zone": true, "label": "S{sky}", "tags": ["stop", "sky"]}, {"plan": "office", "repeat": 38, "tags": ["stop"]}, {"plan": "plant", "tags": ["plant"]}]}]},
+                    {"repeat": 6, "of": [{"plan": "sky", "zone": true, "label": "S{sky}", "tags": ["stop", "sky"]}, {"plan": "office", "repeat": 138, "tags": ["stop"]}, {"plan": "plant", "tags": ["plant"]}]}]},
                 {"width": 40, "storeys": [
-                    {"repeat": 6, "of": [{"plan": "sky", "zone": true, "label": "S{sky}", "tags": ["stop", "sky"]}, {"plan": "office", "repeat": 38, "tags": ["stop"]}, {"plan": "plant", "tags": ["plant"]}]}]},
+                    {"repeat": 6, "of": [{"plan": "sky", "zone": true, "label": "S{sky}", "tags": ["stop", "sky"]}, {"plan": "office", "repeat": 138, "tags": ["stop"]}, {"plan": "plant", "tags": ["plant"]}]}]},
                 {"width": 34, "storeys": [
-                    {"repeat": 6, "of": [{"plan": "sky", "zone": true, "label": "S{sky}", "tags": ["stop", "sky"]}, {"plan": "office", "repeat": 38, "tags": ["stop"]}, {"plan": "plant", "tags": ["plant"]}]}]},
+                    {"repeat": 6, "of": [{"plan": "sky", "zone": true, "label": "S{sky}", "tags": ["stop", "sky"]}, {"plan": "office", "repeat": 138, "tags": ["stop"]}, {"plan": "plant", "tags": ["plant"]}]}]},
                 {"width": 28, "roof": {"kind": "flat", "overhang": 0.4, "thick": 1.2}, "storeys": [
-                    {"repeat": 5, "of": [{"plan": "sky", "zone": true, "label": "S{sky}", "tags": ["stop", "sky"]}, {"plan": "office", "repeat": 38, "tags": ["stop"]}, {"plan": "plant", "tags": ["plant"]}]},
-                    {"plan": "sky", "zone": true, "label": "S{sky}", "tags": ["stop", "sky"]}, {"plan": "office", "repeat": 38, "tags": ["stop"]},
+                    {"repeat": 5, "of": [{"plan": "sky", "zone": true, "label": "S{sky}", "tags": ["stop", "sky"]}, {"plan": "office", "repeat": 138, "tags": ["stop"]}, {"plan": "plant", "tags": ["plant"]}]},
+                    {"plan": "sky", "zone": true, "label": "S{sky}", "tags": ["stop", "sky"]}, {"plan": "office", "repeat": 138, "tags": ["stop"]},
                     {"plan": "deck", "label": "TOP", "tags": ["stop", "deck"]}]}
             ],
             "lifts": [
