@@ -145,7 +145,9 @@ class App {
         const enc = r.device.createCommandEncoder();
         const total = this.near.rain + this.near.snow;
         const particles = total > 0.001 ?fw.splashStart + (this.near.rain > 0.02 ? SPLASH_PARTICLES : 0) : 0;
-        r.render(enc, fw.probeTexel, particles, w.lightning.count, QUALITY[this.quality].interleave, fw.shadowSlices, this.froxels, this.mode !== 1, this.tiles, this.bloom && this.cfg.bloom > 0);
+        // (from inside, with the outdoors out of sight through the portals: no volumetrics, no rain)
+        const out = fw.outdoors?.seen !== false;
+        r.render(enc, fw.probeTexel, out ? particles : 0, w.lightning.count, QUALITY[this.quality].interleave, fw.shadowSlices, this.froxels && out, this.mode !== 1 && out, this.tiles, this.bloom && this.cfg.bloom > 0);
         r.device.queue.submit([enc.finish()]);
         r.weatherPass.afterSubmit();
         r.profiler.afterSubmit();

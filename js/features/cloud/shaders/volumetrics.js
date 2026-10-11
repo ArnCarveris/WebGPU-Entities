@@ -470,15 +470,21 @@ fn march(@builtin(global_invocation_id) gid: vec3u) {
         let d = e.y - meshHeight(e.xz);
         lift = d * (1.0 - smoothstep(0.8, 2.0, abs(d)));
     }
-    let t0 = sp.x;
+    var t0 = sp.x;
     let t1 = sp.y;
+    // the shelter the camera is in (the building, the lift car, the bus: cabinSpan): its own air. A ray from inside it
+    // takes nothing until it leaves it, so a room, a car or a cabin seen from inside has no cloud, haze, rain or snow
+    // in front of it, and the lamps' halos outside are not in it; through a window or an open door, the medium beyond
+    let cab = cabinSpan(ro, dir);
+    let inCab = cab.y > cab.x && cab.x <= t0 + 0.01 && cab.y > t0;
+    if (inCab) { t0 = min(cab.y, t1); }
 
     var col = vec3f(0.0);
     var T = 1.0;
     var depthAcc = 0.0;
     var wsum = 0.0;
     // the lights' halos and beams in the air, up to the surface (they lie near the camera, in front of the rest)
-    if (F.lightInfo.x > 0.5 && mode == 0) { col = lampScatter(ro, dir, sceneT, rnd(px.x * 4099u + px.y * 6151u + u32(frame) * 997u)); }
+    if (F.lightInfo.x > 0.5 && mode == 0 && !(inCab && sceneT <= cab.y)) { col = lampScatter(ro, dir, sceneT, rnd(px.x * 4099u + px.y * 6151u + u32(frame) * 997u)); }
     // the tornado, marched on its own; laid in where the ray passes it (tornT)
     var torn = vec4f(0.0, 0.0, 0.0, 1.0);
     var tornT = 1e9;
@@ -509,15 +515,14 @@ fn march(@builtin(global_invocation_id) gid: vec3u) {
         let rainPhase = mix(hg(mu, 0.75), hg(mu, 0.0), 0.45);
         // rays through the structures' bounds: no rain under their roofs and decks
         let sheltered = F.blocks.x > 0.5 && rayBox(ro, dir, vec3f(F.blockBox.x, F.blocks.y, F.blockBox.y), vec3f(F.blockBox.z, F.blocks.z, F.blockBox.w), t0, t1);
-        // the stretch of the ray inside the bus's cabin (one box test per ray): no rain, snow or haze in there
-        let cab = cabinSpan(ro, dir);
+        // (cab: the stretch of the ray inside the cabin, when it is seen from outside: no rain, snow or haze in there)
         let snowPhase = mix(hg(mu, 0.45), hg(mu, 0.0), 0.6);
         let hazeG = hazePhase(mu);
         // haze: from the integrated froxel columns where the froxel volume is on, else evaluated at every step
         let hazeFroxel = froxels && doHaze;
         var hz = vec4f(0.0, 0.0, 0.0, 1.0);
         var hzT = t0;
-        if (hazeFroxel && t0 > F.froxel.x) { hz = textureSampleLevel(hazeTex, clampSamp, froxelUVW(ro + dir * t0), 0.0); }
+        if (hazeFroxel && (t0 > F.froxel.x || inCab)) { hz = textureSampleLevel(hazeTex, clampSamp, froxelUVW(ro + dir * t0), 0.0); }
         for (var i = 0; i < N; i++) {
             let fa = f32(i) / f32(N);
             let fb = f32(i + 1) / f32(N);

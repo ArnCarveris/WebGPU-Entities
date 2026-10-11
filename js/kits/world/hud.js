@@ -40,11 +40,14 @@ class LabelLayer {
         this.g.textBaseline = 'middle';
     }
 
-    // canvas pixel [x, y] of world point p under viewProj, or null behind the eye or well off the screen
+    // canvas pixel [x, y] of world point p under viewProj, or null behind the eye or well off the screen, or where the
+    // `region` (what of the outdoors the eye sees from inside: { seen, rect [x0, y0, x1, y1] in a W x H frame }, the
+    // portal traversal's; null: all of it) hides it
     place(viewProj, p) {
         const clip = m4.project(viewProj, p);
         if (clip[3] <= 0) return null;
-        const x = (clip[0] / clip[3] * 0.5 + 0.5) * this.W, y = (0.5 - clip[1] / clip[3] * 0.5) * this.H;
+        const x = (clip[0] / clip[3] * 0.5 + 0.5) * this.W, y = (0.5 - clip[1] / clip[3] * 0.5) * this.H, r = this.region;
+        if (r && (!r.seen || (r.rect && !(x * r.W / this.W >= r.rect[0] && x * r.W / this.W <= r.rect[2] && y * r.H / this.H >= r.rect[1] && y * r.H / this.H <= r.rect[3])))) return null;
         return x < -50 || x > this.W + 50 || y < -20 || y > this.H + 20 ? null : [x, y];
     }
 

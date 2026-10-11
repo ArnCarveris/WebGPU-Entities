@@ -100,6 +100,8 @@ class Buildings {
         const B = {
             S, f, id, T, hx, hz, t, H, n, floor, faces: FACES, fbox, M, lib,
             code: (mat, stacked, dark) => M(mat) + (stacked ? BLD_STACK : 0) + (dark ? BLD_DARK : 0), count: () => S.iv.length / STRUCT_FLOATS,
+            // interior vertices first .. first + count down by dy (m): a storey's into its own floor's frame
+            rebase: (first, count, dy) => { for (let i = first; i < first + count; i++) S.iv[i * STRUCT_FLOATS + 1] -= dy; },
             windows: (name, y) => {
                 const fc = FACES[name], usable = fc.len - 2 * (t + 0.2), nw = Math.max(1, Math.floor(usable / W.pitch)), cell = usable / nw, out = [];
                 if ((T.windows && !T.windows.includes(name)) || usable < W.width) return out;
@@ -134,7 +136,9 @@ class Buildings {
                 rv([u0, y0], [u1, y0]);
                 for (const to of [S.glass, S.panes]) {
                     S.cur = to;
-                    S.quadN(P(u0, y0, t / 2), P(u1, y0, t / 2), P(u1, y1, t / 2), P(u0, y1, t / 2), nOut, C.window, M(5));
+                    // (the pane runs on 1.5 cm behind the reveals all round: no crack of pixels where they meet)
+                    const g = 0.015;
+                    S.quadN(P(u0 - g, y0 - g, t / 2), P(u1 + g, y0 - g, t / 2), P(u1 + g, y1 + g, t / 2), P(u0 - g, y1 + g, t / 2), nOut, C.window, M(5));
                 }
                 S.cur = S.v;
             }
@@ -301,7 +305,9 @@ class Buildings {
         const b = { id, f, hx, hz, t, floor, top, n, H, stairs, doors, centre: [f.c[0], floor + n * H / 2, f.c[1]], range: [iv0, S.iv.length / STRUCT_FLOATS],
             plan, name: spec.name, T, shelter: T.shelter !== false, roofThick: R.kind === 'flat' ? R.thick ?? 0.5 : 0, codes: plan?.codes || null,
             record: [f.c[0], f.c[1], f.cs, f.sn, hx, hz, floor, H, n, W.sill, W.height, W.pitch, W.width, t, T.lamps ?? 0.5, faceMask],
-            extra: [...(plan ? plan.depth : [0, 0]), 0, 0, 0, 0, 0, 0] };
+            // (then: storey codes and lamp columns (buffer()), its lamps' strength and how much its walls bounce: the
+            // archetype's light { intensity, bounce })
+            extra: [...(plan ? plan.depth : [0, 0]), 0, 0, 0, 0, T.light?.intensity ?? 1, T.light?.bounce ?? 0] };
         // its interior (kits.interior): the rooms inside the walls in its own frame (origin on the floor at its centre), seen
         // from outside through its windows and its doors while they are open; a weather shelter unless the archetype says not
         const portals = [];
@@ -315,7 +321,8 @@ class Buildings {
             const [x, z] = fc.o(0, t / 2);
             portals.push({ c: [x, (top - floor) / 2, z], n: [-fc.D[0], 0, -fc.D[1]], w: fc.len - 2 * t, h: top - floor, kind: 'window' });
         }
-        b.interior = S.interiors.add(new Interior({ owner: b, kind: 'building', origin: Origin.yaw(f.c[0], floor, f.c[1], f.cs, f.sn),
+        // (its origin on its floor, a level per storey: each storey drawn in a frame of its own, FrameWriter)
+        b.interior = S.interiors.add(new Interior({ owner: b, kind: 'building', origin: Origin.yaw(f.c[0], floor, f.c[1], f.cs, f.sn).withLevels(H, n),
             lo: [-hx + t, -0.2, -hz + t], hi: [hx - t, top - floor, hz - t], portals, shelter: T.shelter !== false }));
         Buildings.localize(S.iv, b);
         this.list.push(b);
@@ -349,7 +356,8 @@ class Buildings {
             if (yn > g1) quad(-U, U, g1, yn, 0, span, 4);
             for (const to of [S.glass, S.panes]) {
                 S.cur = to;
-                for (const [u0, u1, y0, y1] of glass) S.quadN(P(u0, y0, 0.05), P(u1, y0, 0.05), P(u1, y1, 0.05), P(u0, y1, 0.05), nOut, STRUCT_COLORS.window, B.M(5));
+                // (each band runs on 1.5 cm behind the head and the sill: no crack of pixels where they meet)
+                for (const [u0, u1, y0, y1] of glass) S.quadN(P(u0, y0 - 0.015, 0.05), P(u1, y0 - 0.015, 0.05), P(u1, y1 + 0.015, 0.05), P(u0, y1 + 0.015, 0.05), nOut, STRUCT_COLORS.window, B.M(5));
             }
             S.cur = S.v;
         }

@@ -9,8 +9,8 @@ const overlaps = (a, b) => a[0] < b[1] && a[1] > b[0] && a[2] < b[3] && a[3] > b
 // Furnishes room rectangle r = [x0, x1, z0, z1] (local) with program { wall: [[item, n]], free: [[item, n]], grid
 // (an item in rows facing the façade), row (an item side by side along the longest wall, and more rows across a deep
 // room) }, items from lib (PlanLibrary.item: { w, d, parts [u0, u1, v0, v1, y0, y1, colour, finish] }), keeping clear
-// of `keep` (rectangles: doorways' swing, the stairs) and each other. put(x0, x1, z0, z1, y0, y1, colour, finish): a
-// box (local; y from the floor). rnd: a seeded generator
+// of `keep` (rectangles: doorways' swing, the stairs) and each other. put(x0, x1, z0, z1, y0, y1, colour, finish, i, item): a
+// box (local; y from the floor), part i of item. rnd: a seeded generator
 function furnishRoom(r, program, lib, rnd, put, keep = []) {
     if (!program) return;
     const [x0, x1, z0, z1] = r, W = x1 - x0, D = z1 - z0;
@@ -21,11 +21,11 @@ function furnishRoom(r, program, lib, rnd, put, keep = []) {
     // (a unit local direction)
     const place = (it, cx, cz, back) => {
         const ux = -back[1], uz = back[0], vx = -back[0], vz = -back[1];
-        for (const [u0, u1, v0, v1, ya, yb, col, fin] of it.parts) {
+        it.parts.forEach(([u0, u1, v0, v1, ya, yb, col, fin], i) => {
             const pc = [cx + ux * (u0 + u1) / 2 + vx * ((v0 + v1) / 2 - it.d / 2), cz + uz * (u0 + u1) / 2 + vz * ((v0 + v1) / 2 - it.d / 2)];
             const hu = (u1 - u0) / 2, hv = (v1 - v0) / 2, hx = Math.abs(ux) * hu + Math.abs(vx) * hv, hz = Math.abs(uz) * hu + Math.abs(vz) * hv;
-            put(pc[0] - hx, pc[0] + hx, pc[1] - hz, pc[1] + hz, ya, yb, col, fin);
-        }
+            put(pc[0] - hx, pc[0] + hx, pc[1] - hz, pc[1] + hz, ya, yb, col, fin, i, it);
+        });
     };
     const foot = (it, cx, cz, back, pad = 0.1) => {
         const hw = it.w / 2 + pad, hd = it.d / 2 + pad;

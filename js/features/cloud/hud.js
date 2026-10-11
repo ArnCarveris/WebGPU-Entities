@@ -43,7 +43,9 @@ class Hud extends kits.world.WorldHud {
     }
 
     drawLabels(app) {
-        const L = this.labels, g = L.begin(), { W, H, dpr } = L;
+        const L = this.labels, g = L.begin(), { W, H, dpr } = L, od = app.frameWriter.outdoors;
+        // (the labels are of the outdoors: only where the portal traversal sees it from inside)
+        L.region = od ? { ...od, W: app.renderer.width, H: app.renderer.height } : null;
         // on foot: a dot in the middle, and what E would do
         const wk = app.walker;
         if (wk.active) {

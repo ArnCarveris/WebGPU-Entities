@@ -6,19 +6,20 @@
 Features.kit('building', (engine, kit) => {
 const { PortalVis, VisInspector, prismRange } = engine.kits.interior;
 
-// draws are [first vertex, count, instances, first instance, building]: a storey (or a shaft piece) many storeys share
-// is built once at its first storey s0 and drawn one storey higher per instance, so storey s is instance s - s0
+// draws are [first vertex, count, instances, first instance, building]: a storey (or a shaft piece) is built in its own
+// floor's frame (PlannedBuilding: 0..H), and instance s stands it on storey s (the world's vertex shader: s storeys up,
+// about the storey nearest the eye), so a run of storeys is one instanced draw
 
 // the runs of consecutive storeys in each item's set (item: { first, count, stacked, s0, owner }) as draws into out
 function runDraws(items, out) {
     for (const [it, set] of items) {
         if (!it.count) continue;
-        if (!it.stacked) { out.push([it.first, it.count, 1, 0, it.owner]); continue; }
+        if (!it.stacked) { out.push([it.first, it.count, 1, it.s0, it.owner]); continue; }
         const list = [...set].sort((p, q) => p - q);
         for (let i = 0; i < list.length;) {
             let j = i;
             while (j + 1 < list.length && list[j + 1] === list[j] + 1) j++;
-            out.push([it.first, it.count, j - i + 1, list[i] - it.s0, it.owner]);
+            out.push([it.first, it.count, j - i + 1, list[i], it.owner]);
             i = j + 1;
         }
     }
@@ -95,6 +96,12 @@ class RoomVis {
         const res = I.frozen || this.vis.compute(eye, viewProj, W, H, enabled);
         if (view) I.update(res, { eye, ...view }, performance.now() - t0);
         const D = new DrawSet();
+        // what of the outdoors (area 0) the camera sees: all of it from outdoors, with culling off or past the traversal's
+        // entries; from inside, only through the portals the traversal passed out to it (their screen rectangle), or
+        // nothing (a room without windows in view, a shaft, a stairwell): the world leaves out its sky, terrain,
+        // structures, weather and volumetrics there
+        this.outdoors = res.root === 0 || !enabled || res.truncated ? { seen: true, rect: null }
+            : res.sky ? { seen: true, rect: RoomVis.clampRect(res.skyRect, W, H) } : { seen: false, rect: null };
         this.cars = new Set();
         this.ranges = new Map();         // car -> the stretch [y0, y1] of its shaft in view (Lifts.instances: its landing doors there)
         if (!I.frozen && (!enabled || res.truncated)) {
@@ -142,6 +149,14 @@ class RoomVis {
         return res;
     }
 }
+
+// a screen rectangle [x0, y0, x1, y1] (px) within W x H, whole pixels, or the whole screen when it covers most of it
+RoomVis.clampRect = (r, W, H) => {
+    if (!r) return null;
+    const x0 = Math.max(0, Math.floor(r[0])), y0 = Math.max(0, Math.floor(r[1])), x1 = Math.min(W, Math.ceil(r[2])), y1 = Math.min(H, Math.ceil(r[3]));
+    if (x1 <= x0 || y1 <= y0) return [0, 0, 0, 0];
+    return (x1 - x0) * (y1 - y0) > 0.9 * W * H ? null : [x0, y0, x1, y1];
+};
 
 // what the readout calls an area of a planned building
 RoomVis.areaName = a => {

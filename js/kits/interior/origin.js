@@ -26,6 +26,30 @@ class Origin {
         const m = this.M, x = p[0] - m[12] * w, y = p[1] - m[13] * w, z = p[2] - m[14] * w;
         return [m[0] * x + m[1] * y + m[2] * z, m[4] * x + m[5] * y + m[6] * z, m[8] * x + m[9] * y + m[10] * z];
     }
+
+    // Levels: the frame repeats every `step` m up its local y, `count` times (a building's storeys, each a frame of its
+    // own: what is authored in one is a few metres from its origin, however high it stands). Returns this
+    withLevels(step, count) { this.levels = { step, count }; return this; }
+
+    // the level nearest p (world); 0 without levels
+    levelNear(p) {
+        const L = this.levels;
+        return L ? Math.max(0, Math.min(L.count - 1, Math.round(this.toLocal(p)[1] / L.step))) || 0 : 0;
+    }
+
+    // the frame of level k: this one moved k steps up its own y (made once per level asked for, kept a while)
+    level(k) {
+        if (!k || !this.levels) return this;
+        const c = (this.levelCache ??= new Map());
+        let O = c.get(k);
+        if (!O) {
+            if (c.size > 64) c.clear();
+            const m = this.M, d = k * this.levels.step;
+            O = new Origin([...m.slice(0, 12), m[12] + m[4] * d, m[13] + m[5] * d, m[14] + m[6] * d, 1]);
+            c.set(k, O);
+        }
+        return O;
+    }
 }
 Origin.IDENTITY = Object.freeze([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
 

@@ -389,6 +389,12 @@ class Renderer {
             depthStencilAttachment: { view: this.depthView, depthLoadOp: 'clear', depthStoreOp: 'store', depthClearValue: 0, ...this.stencilOps('clear') },
         });
         a.setBindGroup(0, this.worldGroup);
+        // the outdoors (FrameWriter: the building kit's RoomVis.outdoors): from inside, only within the screen rectangle of
+        // the portals the traversal passed out to it, or not at all; the interiors after it over the whole screen
+        const od = this.outdoors || { seen: true, rect: null }, W = this.width, H = this.height;
+        const outdoor = on => { if (od.rect) on ? a.setScissorRect(od.rect[0], od.rect[1], od.rect[2] - od.rect[0], od.rect[3] - od.rect[1]) : a.setScissorRect(0, 0, W, H); };
+        if (od.seen) {
+        outdoor(true);
         a.setPipeline(this.pSky);
         a.draw(3);
         a.setPipeline(this.pTerrain);
@@ -408,6 +414,8 @@ class Renderer {
                 a.setVertexBuffer(0, m.buf);
                 a.draw(m.count);
             }
+        }
+        outdoor(false);
         }
         // buildings: interiors within INTERIOR_DRAW (vertex ranges, nearest first), door leaves, and the panes of the
         // windows further off (fsPane drops those of the near ones)
@@ -429,6 +437,8 @@ class Renderer {
             for (const g of this.boxGroups) { a.setBindGroup(1, this.busGroup, [g.slot * BUS_UNIFORM]); a.draw(this.cube.n, g.count, 0, g.first); }
         }
         if (this.panelDraws.length) { this.gui.draw(a); a.setBindGroup(0, this.worldGroup); }
+        if (od.seen) {
+        outdoor(true);
         if (this.doorV.n) { a.setPipeline(this.pDoor); a.setVertexBuffer(0, this.doorV.buf); a.draw(this.doorV.n); }
         if (this.paneV.n) { a.setPipeline(this.pPane); a.setVertexBuffer(0, this.paneV.buf); a.draw(this.paneV.n); }
         if (this.poleCount) {
@@ -442,6 +452,8 @@ class Renderer {
             if (this.realFar[1]) { a.setPipeline(this.pFarPool); a.draw(6, this.realFar[1], 0, this.realFar[0]); }
             a.setPipeline(this.pFar);
             a.draw(6, this.farCount);
+        }
+        outdoor(false);
         }
         a.end();
 

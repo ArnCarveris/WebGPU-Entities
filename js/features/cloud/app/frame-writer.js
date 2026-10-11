@@ -61,13 +61,19 @@ class FrameWriter {
         // that the camera is in or sees into through a portal in the view frustum: only the InteriorIndex cells within
         // INTERIOR_DRAW are visited, whatever the number of buildings
         const planes = frustumPlanes(this.viewProj, { reversed: true }), S = w.structures, inside = [];
-        for (const [, it] of S.interiors.seen(cam.pos, planes, INTERIOR_DRAW, 'building')) S.buildings.draws(it.owner, inside);
         if (this.roomVis?.world !== S) this.roomVis = new engine.kits.building.RoomVis(S, { range: INTERIOR_DRAW, inspect: a.inspect });
         this.rooms = this.roomVis.compute(cam.pos, this.viewProj, r.width, r.height, inside, near, { basis: { fwd, right, up }, aspect, fov: cam.fov });
+        // the outdoors as the traversal sees it (the renderer leaves it out, or draws it within the portals' rectangle);
+        // the unplanned buildings are seen from it
+        r.outdoors = this.outdoors = this.roomVis.outdoors;
+        if (this.outdoors.seen) for (const [, it] of S.interiors.seen(cam.pos, planes, INTERIOR_DRAW, 'building')) S.buildings.draws(it.owner, inside);
         // its sector and portal frames, about the eye
         r.lineLayer.write(this.roomVis.inspector.lines(cam.pos), m4.mul(proj, m4.view([0, 0, 0], right, up, fwd)));
         // the lift cars the traversal reached (their areas), the landing doors and counterweights near
-        r.boxGroups = S.lifts.instances(cam.pos, r.boxData, this.roomVis.cars, this.roomVis.ranges);
+        // each building drawn in the frame of its storey nearest the eye (its Origin's level, kits.interior), so what is
+        // near the camera is a few metres from its origin in f32 at any height
+        const frameOf = b => b.interior.origin.level(b.interior.origin.levelNear(cam.pos));
+        r.boxGroups = S.lifts.instances(cam.pos, r.boxData, this.roomVis.cars, this.roomVis.ranges, b => frameOf(b).M[13]);
         r.boxCount = r.boxGroups.reduce((n, g) => n + g.count, 0);
         // each building drawn, in its Origin's frame: its model-view built in doubles about the camera, in a slot of
         // busData after the buses' (the interiors' and the lifts' draws name it)
@@ -78,10 +84,12 @@ class FrameWriter {
             if (slots.size >= r.busData.length / (BUS_UNIFORM / 4) - r.originSlot0) return -1;
             k = r.originSlot0 + slots.size;
             slots.set(b, k);
-            const M = b.interior.origin.M, o = k * BUS_UNIFORM / 4;
+            // its storey's frame (its Origin's level nearest the eye): vsInterior stands each storey (s - that level)
+            // storeys up in it
+            const O = b.interior.origin, s = O.levelNear(cam.pos), M = O.level(s).M, o = k * BUS_UNIFORM / 4;
             r.busData.set(m4.mul(proj, m4.aboutEye(M, cam.pos, right, up, fwd)), o);
             r.busData.set(M, o + 16);
-            r.busData.set([0, 0, 0, 0], o + 48);
+            r.busData.set([0, 0, s, 0], o + 48);
             return k;
         };
         r.interiorDraws = inside.map(d => [d[0], d[1], d[2], d[3], d[4], slotOf(d[4])]).filter(d => d[5] >= 0).sort((p, q) => p[5] - q[5]);
@@ -121,7 +129,9 @@ class FrameWriter {
         F.set('sunCol', [...sky.sun, sun.exposure]);
         F.set('zenith', [...sky.zenith, 0.00007 * c.haze]);
         F.set('horizon', [...sky.horizon, 1400]);
-        F.set('ambient', [...sky.ambient, a.flashVeil]);
+        // a flash floods the eye only as much as it sees of the outdoors (from a sealed room, none: RoomVis.outdoors)
+        const od = this.outdoors, seenOut = !od || !od.seen ? (od ? 0 : 1) : od.rect ? Math.sqrt((od.rect[2] - od.rect[0]) * (od.rect[3] - od.rect[1]) / Math.max(1, r.width * r.height)) : 1;
+        F.set('ambient', [...sky.ambient, a.flashVeil * seenOut]);
         F.set('screen', [r.width, r.height, r.cloudPass.w, r.cloudPass.h]);
         F.set('cloud', [c.base, Math.max(c.top, c.base + 400), c.density, c.coverage]);
         F.set('noise', [cfg.shapeScale, cfg.detailScale, cfg.detailStrength, cfg.maxTop]);
@@ -129,7 +139,7 @@ class FrameWriter {
         F.set('precip', [w.weather.freezingLevel, cfg.slant, cfg.rainExtinction, cfg.snowExtinction]);
         F.set('wdomain', [wo[0], wo[1], ws, WEATHER_RES]);
         F.set('tdomain', [f.origin, f.origin, f.size, f.n]);
-        F.set('ground', [w.terrain.fieldSize, w.terrain.pivots, GROUND_RES, a.mode]);
+        F.set('ground', [w.terrain.fieldSize, w.terrain.pivots, GROUND_RES, this.outdoors?.seen === false ? 1 : a.mode]);     // (mode 1: the scene alone, no volumetrics: also indoors with the outdoors out of sight)
         F.set('cirrus', [cfg.maxTop + 800, c.cirrus, 9000, c.drizzle]);
         F.set('march', [q.steps, q.light, cfg.maxDistance, a.radar ? 1 : 0]);
         // the weather and shadow maps refresh a slice of rows per frame, unless the map moved or the sun / weather jumped (a new target

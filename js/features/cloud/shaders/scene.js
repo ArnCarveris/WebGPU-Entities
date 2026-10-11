@@ -361,12 +361,14 @@ struct StructOut { @builtin(position) pos: vec4f, @location(0) world: vec3f, @lo
 
 // a building's interior vertex, in its Origin's frame (Buildings.localize): to clip space with busU.mvp, built in
 // doubles about the camera for the building drawn (its slot in busData, FrameWriter), and to the world with busU.model
-// for its lighting. One of a storey many share (BLD_STACK) stands one storey higher per instance (the draw's first
-// instance is how many storeys above the one it was built at)
+// for its lighting. Each storey has its own frame: its vertices are over its own floor (0..H: PlannedBuilding), and the
+// draw's instance is the storey it stands on (an unplanned building's one room: storey 0). That Origin is rebased on
+// the storey nearest the eye (busU.info.z storeys up: FrameWriter), so (instance - that storey) is a small exact integer
+// and a storey near the camera is a few metres from it in f32, at any height of a thousand-storey tower
 @vertex fn vsInterior(@location(0) p: vec3f, @location(1) n: vec3f, @location(2) c: vec4f, @builtin(instance_index) ii: u32) -> StructOut {
     let m = u32(c.a + 0.5);
     var q = p;
-    if ((m & ${BLD_STACK}u) != 0u) { q.y += f32(ii) * bld(m / ${BLD_ID}u).b.w; }
+    q.y += (f32(ii) - busU.info.z) * bld(m / ${BLD_ID}u).b.w;
     var o: StructOut;
     o.world = (busU.model * vec4f(q, 1.0)).xyz;
     o.n = (busU.model * vec4f(n, 0.0)).xyz;
@@ -377,16 +379,26 @@ struct StructOut { @builtin(position) pos: vec4f, @location(0) world: vec3f, @lo
 
 // a box instance (Lifts: the cars, their doors, the landing doors), in its building's Origin frame as an interior's
 // vertex is (busU): a unit cube scaled by its half sizes (b.xyz), turned by its yaw (a.w) about its centre (a.xyz); its
-// colour (c.rgb) and material (b.w, as an interior's)
+// colour (c.rgb) and material (b.w, as an interior's). A car's shell (c.w: the face that looks into the car, 1 +x 2 -x
+// 3 +y 4 -y 5 +z 6 -z) is lit by the car's lamp on that face only: its other faces are the car's outside, dark in the
+// shaft (BLD_DARK) but for the shaft's lamps
 @vertex fn vsBox(@location(0) p: vec3f, @location(1) n: vec3f, @location(2) c: vec4f, @location(3) ia: vec4f, @location(4) ib: vec4f, @location(5) ic: vec4f) -> StructOut {
     let cs = cos(ia.w);
     let sn = sin(ia.w);
     let l = p * ib.xyz;
+    // (its centre over its building's floor rebased on the eye's storey, as vsInterior's: Lifts.instances' base)
     let q = ia.xyz + vec3f(l.x * cs - l.z * sn, l.y, l.x * sn + l.z * cs);
     var o: StructOut;
     o.world = (busU.model * vec4f(q, 1.0)).xyz;
     o.n = (busU.model * vec4f(n.x * cs - n.z * sn, n.y, n.x * sn + n.z * cs, 0.0)).xyz;
-    o.col = vec4f(ic.rgb, ib.w);
+    var m = u32(ib.w + 0.5);
+    let side = u32(ic.w + 0.5);
+    if (side != 0u && (m & ${BLD_LIT}u) != 0u) {
+        let k = side - 1u;
+        let out = n * sign(dot(n, p));                  // (the cube's face normal, outward whatever its winding)
+        if (out[k / 2u] * select(1.0, -1.0, (k & 1u) == 1u) < 0.5) { m = m - ${BLD_LIT}u + ${BLD_DARK}u; }
+    }
+    o.col = vec4f(ic.rgb, f32(m));
     o.pos = busU.mvp * vec4f(q, 1.0);
     return o;
 }
@@ -489,7 +501,7 @@ fn shadeInterior(p: vec3f, nIn: vec3f, colIn: vec3f, m: u32) -> vec3f {
     let lampC = vec3f(1.0, 0.9, 0.74) / max(F.sunCol.w, 0.2);
     if ((m & ${BLD_LIT}u) != 0u) {
         if (mat == 7u) { return colIn * lampC * 1.8; }
-        var c = colIn * (0.96 + 0.08 * vnoise2(vec2f(q.x + q.z, q.y) * 3.0)) * lampC * 0.3 * (0.4 + 0.6 * sat(n.y * 0.5 + 0.5));
+        var c = colIn * lampC * 0.3 * (0.4 + 0.6 * sat(n.y * 0.5 + 0.5));
         if (mat == 4u) { c += lampC * 0.08 * (0.04 + 0.96 * pow(1.0 - max(dot(n, v), 0.0), 5.0)); }
         return c;
     }
@@ -498,7 +510,7 @@ fn shadeInterior(p: vec3f, nIn: vec3f, colIn: vec3f, m: u32) -> vec3f {
     // (or anything else in one: the landing doors' shaft side, the counterweights)
     if ((m & ${BLD_DARK}u) != 0u || inShaft(b, q)) {
         if (mat == 7u) { return colIn * lampC * 2.2; }
-        let alb = colIn * (0.96 + 0.08 * vnoise2(vec2f(q.x + q.z, q.y) * 3.0));
+        let alb = colIn;
         let lp = lampsAt(p + n * 0.02, n, v, 40.0, ${LIGHT_ROOM}u);
         var c = alb * (shaftLight(b, q, bldDir(b, n)) * lampC + lp.d + lampC * 0.0015);
         if (mat == 4u) { c += (shaftLight(b, q, bldDir(b, reflect(-v, n))) * lampC * 0.15 + lp.s) * (0.04 + 0.96 * pow(1.0 - max(dot(n, v), 0.0), 5.0)); }
@@ -506,7 +518,12 @@ fn shadeInterior(p: vec3f, nIn: vec3f, colIn: vec3f, m: u32) -> vec3f {
     }
     let storey = bldStorey(b, q.y);
     let lit = storeyLit(id, b, storey);
-    let sh = shadowAt(p);
+    // the sky's and sun's share (the clouds' shadow and the sky they leave), where the light comes in: on the façade
+    // nearest q, just outside it. At p itself, inside a tower that stands in the clouds, it would be their density
+    // drifting through the rooms as blotches
+    var qf = q;
+    if (b.b.x - abs(q.x) < b.b.y - abs(q.z)) { qf.x = sign(q.x) * (b.b.x + 0.5); } else { qf.z = sign(q.z) * (b.b.y + 0.5); }
+    let sh = shadowAt(bldWorld(b, qf));
     if (mat == 7u) { return colIn * mix(F.ambient.rgb * sh.y * 0.08, lampC * 1.6, lit); }        // the lamps themselves
     let s = F.sunDir.xyz;
     var sun = 0.0;
@@ -530,8 +547,10 @@ fn shadeInterior(p: vec3f, nIn: vec3f, colIn: vec3f, m: u32) -> vec3f {
     let near = 1.0 - smoothstep(0.3, select(5.0, 11.0, b.g.x + b.g.y > 0.0), dw);       // (a curtain wall's deep floors: further)
     // and what the sunlit floors and walls bounce around the room (where the sun comes in at all)
     let sky = F.ambient.rgb * sh.y * (0.12 + 0.3 * near) * (0.75 + 0.25 * abs(n.y)) + F.sunCol.rgb * max(s.y, 0.0) * sh.x * (0.015 + 0.03 * near);
-    let lamp = lampC * 0.13 * lit * (0.35 + 0.65 * sat(n.y * 0.5 + 0.5));
-    let alb = colIn * (0.96 + 0.08 * vnoise2(vec2f(q.x + q.z, q.y) * 3.0));
+    // (b.h.z: its archetype's lamp strength; b.h.w: how much its walls bounce, lighting the ceilings: a white, high-key
+    // interior is bright all round)
+    let lamp = lampC * 0.13 * lit * b.h.z * (0.35 + 0.5 * b.h.w + (0.65 - 0.5 * b.h.w) * sat(n.y * 0.5 + 0.5));
+    let alb = colIn;
     // the lights: the street's come in through the windows and open doors (lightSeen), a flashlight carried in lights the
     // room; the lit storeys' are their own lamps (lamp)
     let lp = lampsAt(p + n * 0.02, n, v, 40.0, ${LIGHT_CABIN | LIGHT_ROOM}u);

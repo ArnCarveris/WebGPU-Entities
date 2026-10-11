@@ -1,6 +1,6 @@
 'use strict';
 // Storeys of a planned building (kits.interior FloorPlan): each room's floor, ceiling, walls (partitions with their
-// doorways, the fa�ade's inner face with its windows), stairs, furniture and lamps. Built room by room so that every
+// doorways, the façade's inner face with its windows), stairs, furniture and lamps. Built room by room so that every
 // room is one vertex range of the interior mesh (drawn when the camera sees it: PortalVis over its areas), with the
 // solids to walk on. The lift shafts are pieces of their own (shaftPiece): each kind of slice of a shaft (its pit, a
 // plain stretch, a stretch with a landing door, the overrun and machine room...) built once and drawn instanced up the
@@ -14,6 +14,10 @@ const { rectMinusHoles, PALETTE } = kits.mesh;
 const { furnishRoom, PARTITION } = kit;
 
 const EPS = 1e-4;
+// how far a layer laid on a surface stands off it (m): a skirting, the shadow gap's strip and an architrave off a wall's
+// face, an inlay off the floor (and a border off the inlay), a strip off the ceiling or a soffit; well clear of it, so
+// the two never fight for the depth at any distance
+const LAYER = { skirting: 0.02, gap: 0.012, architrave: 0.03, floor: 0.015, ceiling: 0.025 };
 const LAMP = [1.0, 0.95, 0.86];
 const SHAFT = { wall: [0.46, 0.46, 0.45], rail: [0.32, 0.33, 0.35], ladder: [0.85, 0.66, 0.12], weight: [0.22, 0.23, 0.25], machine: [0.18, 0.36, 0.30],
     frame: [0.30, 0.31, 0.32], sill: [0.55, 0.56, 0.57], cabinet: [0.62, 0.63, 0.60] };
@@ -23,6 +27,14 @@ const SHAFT = { wall: [0.46, 0.46, 0.45], rail: [0.32, 0.33, 0.35], ladder: [0.8
 // archetype merged with its spec: storeyHeight, slab, wall, inner / floorColor / ceiling / lobbyFloor colours,
 // curtain), hx, hz, t, H, faces (each face's o(u, d) -> local [x, z], len), windows(name, y): the window holes [u0, u1,
 // y0, y1] of a storey whose floor is at y on that face, doors(name): the outer doors' holes on the ground floor,
+// curtain, style (an interior style, its colours picked so that no two surfaces that meet look alike (contrast()):
+// { accents { roomKind: colour | { wall, floor, ceiling } } (an accent wall, the room's longest, its floor, its ceiling), floor { color,
+// gloss }, frame [colours] (a doorway's jambs, head and architrave), doors [colours] (an open leaf in each doorway that
+// has a door), trim [colours] (the skirting and the shadow gap under the ceiling), floor.inlay / floor.stripe and
+// ceiling { soffit, guide, entrance } (guiding shapes: floorShapes, ceilingShapes), lift (the cars' colours:
+// PlannedBuilding.liftColors), furniture { neutral [colours] (every
+// item's body), trims [colours], keep [item ids left as they are] } (the other parts of an item take the room's accent,
+// or a trim colour that stands out from the body), rail (the stairs' handrail) })),
 // code(mat, stacked, dark): a vertex's material code (dark: in an enclosed space lit by its own lamps only, a shaft),
 // count(): the interior's vertices so far, lib (PlanLibrary) }
 class FloorBuilder {
@@ -54,19 +66,38 @@ class FloorBuilder {
         return ghost ? S.prism(...args) : S.box(...args);
     }
 
-    flat(rects, y, col) {
+    flat(rects, y, col, mat = 0) {
         const S = this.B.S, f = this.B.f;
-        for (const [x0, x1, z0, z1] of rects) S.quad(f.at(x0, y, z0), f.at(x1, y, z0), f.at(x1, y, z1), f.at(x0, y, z1), col, this.M(0));
+        for (const [x0, x1, z0, z1] of rects) S.quad(f.at(x0, y, z0), f.at(x1, y, z0), f.at(x1, y, z1), f.at(x0, y, z1), col, this.M(mat));
+    }
+
+    // of the colours `choices` (a list, or one), the one that stands out most from every colour in `against` (the
+    // surfaces it meets): by the smallest of its differences in lightness and hue; null without choices
+    static contrast(choices, against) {
+        if (!choices) return null;
+        const list = Array.isArray(choices[0]) ? choices : [choices], lum = c => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+        const refs = against.filter(Boolean);
+        const score = c => Math.min(...refs.map(a => 2 * Math.abs(lum(c) - lum(a)) + Math.hypot(c[0] - a[0], c[1] - a[1], c[2] - a[2])));
+        return list.reduce((b, c) => (score(c) > score(b) ? c : b), list[0]);
+    }
+
+    // the floor of a kind of room: { col, mat } (its accent's, the style's, its room type's, the archetype's)
+    floorOf(kind, room) {
+        const T = this.B.T, rt = this.B.lib?.room(kind), ac = this.accent(kind), sf = T.style?.floor;
+        const col = ac?.floor || sf?.color || rt?.floor || (kind === 'lobby' || room.hall ? T.lobbyFloor || T.floorColor : T.floorColor);
+        return { col, mat: sf?.gloss ? 4 : 0 };
     }
 
     room(k, room) {
         const B = this.B, T = B.T, y = this.y, H = B.H, kind = room.kind;
         if (kind === 'shaft') return;
         if (kind === 'stair') { this.stairs(k, room); return; }
-        const top = y + H - T.slab, rt = B.lib?.room(kind);
-        const floor = rt?.floor || (kind === 'lobby' || room.hall ? T.lobbyFloor || T.floorColor : T.floorColor);
-        this.flat(room.rects, y + 0.005, floor);
-        this.flat(room.rects, top, T.ceiling);
+        const top = y + H - T.slab, rt = B.lib?.room(kind), fl = this.floorOf(kind, room);
+        const ceil = this.accent(kind)?.ceiling || T.ceiling;
+        this.flat(room.rects, y + 0.005, fl.col, fl.mat);
+        this.flat(room.rects, top, ceil);
+        this.floorShapes(room, y, fl);
+        this.ceilingShapes(k, room, top, ceil);
         for (const [x0, x1, z0, z1] of room.rects) B.S.solids.add(B.f, (x0 + x1) / 2, (z0 + z1) / 2, (x1 - x0) / 2, (z1 - z0) / 2, y - T.slab, y);
         this.walls(k, room, true);
         this.facade(room);
@@ -82,12 +113,19 @@ class FloorBuilder {
         // a stairwell's and a shaft's walls run the storey's whole height (they are open from storey to storey)
         const full = room.kind === 'stair' || room.kind === 'shaft', top = full ? y + H : y + H - T.slab, half = PARTITION / 2;
         const ports = P.portalsOf(k), [X0, X1, Z0, Z1] = P.inner;
-        const wallCol = room.kind === 'shaft' ? SHAFT.wall : T.inner;
-        for (const w0 of P.walls(k)) {
-            // each face runs on through the joint at its ends (half the wall's thickness) so that two meeting round a
-            // corner close it; not into the façade
-            const lim = w0.axis === 'x' ? [X0, X1] : [Z0, Z1];
-            const w = { ...w0, a0: Math.abs(w0.a0 - lim[0]) < EPS ? w0.a0 : w0.a0 - half, a1: Math.abs(w0.a1 - lim[1]) < EPS ? w0.a1 : w0.a1 + half };
+        const wallCol = room.kind === 'shaft' ? SHAFT.wall : T.inner, ac = this.accent(room.kind)?.wall, St = room.kind === 'shaft' ? null : T.style;
+        const floorCol = St && this.floorOf(room.kind, room).col;
+        // (the style's accent wall: the room's longest stretch)
+        const ws = P.walls(k), longest = ac ? ws.reduce((b, w, i) => (w.a1 - w.a0 > ws[b].a1 - ws[b].a0 ? i : b), 0) : -1;
+        ws.forEach((w0, wi) => {
+            const faceCol = wi === longest ? ac : wallCol;
+            // each face runs on through the joint at an inside corner (half the wall's thickness) so that the two meeting
+            // there close it, and stops short of an outside corner by as much (where the room goes on round it: the face
+            // round the corner closes it); not into the façade
+            const lim = w0.axis === 'x' ? [X0, X1] : [Z0, Z1], rects = room.rects;
+            const inRoom = (u, o) => rects.some(r => w0.axis === 'x' ? u > r[0] && u < r[1] && o > r[2] && o < r[3] : o > r[0] && o < r[1] && u > r[2] && u < r[3]);
+            const end = (a, dir, l) => Math.abs(a - l) < EPS ? a : a + dir * (inRoom(a + dir * 0.02, w0.at + w0.side * 0.02) ? -half : half);
+            const w = { ...w0, a0: end(w0.a0, -1, lim[0]), a1: end(w0.a1, 1, lim[1]) };
             const off = w.at + w.side * half, holes = [];
             for (const p of ports) {
                 if (p.axis !== w.axis || Math.abs(p.at - w.at) > EPS || p.c < w.a0 - EPS || p.c > w.a1 + EPS) continue;
@@ -101,8 +139,19 @@ class FloorBuilder {
             }
             const pt = (u, yy, o = off) => w.axis === 'x' ? f.at(u, yy, o) : f.at(o, yy, u);
             if (draw) {
-                for (const [u0, u1, y0, y1] of rectMinusHoles(w.a0, w.a1, y, top, holes))
-                    S.quad(pt(u0, y0), pt(u1, y0), pt(u1, y1), pt(u0, y1), wallCol, this.M(0));
+                const trim = FloorBuilder.contrast(St?.trim, [faceCol, floorCol, this.accent(room.kind)?.ceiling || T.ceiling]);
+                for (const [u0, u1, y0, y1] of rectMinusHoles(w.a0, w.a1, y, top, holes)) {
+                    S.quad(pt(u0, y0), pt(u1, y0), pt(u1, y1), pt(u0, y1), faceCol, this.M(0));
+                    if (!trim || u1 - u0 < 0.05) continue;
+                    // the style's skirting (proud of the face, its top closed) and the shadow gap under the ceiling: the
+                    // wall's edges read against the floor and the ceiling
+                    const o1 = off + w.side * LAYER.skirting, o0 = off + w.side * LAYER.gap;
+                    if (y0 <= y + 0.01) {
+                        S.quad(pt(u0, y, o1), pt(u1, y, o1), pt(u1, y + 0.09, o1), pt(u0, y + 0.09, o1), trim, this.M(0));
+                        S.quad(pt(u0, y + 0.09, off), pt(u1, y + 0.09, off), pt(u1, y + 0.09, o1), pt(u0, y + 0.09, o1), trim, this.M(0));
+                    }
+                    if (y1 >= top - 0.01) S.quad(pt(u0, top - 0.035, o0), pt(u1, top - 0.035, o0), pt(u1, top, o0), pt(u0, top, o0), trim, this.M(0));
+                }
                 for (const [u0, u1, , y1, p] of holes) {
                     const yh = Math.min(y1, top);
                     if (p.kind === 'lift') {
@@ -116,9 +165,29 @@ class FloorBuilder {
                         }
                         continue;
                     }
-                    // a doorway's jambs and head, across this half of the wall
-                    for (const u of [u0, u1]) S.quad(pt(u, y), pt(u, y, w.at), pt(u, yh, w.at), pt(u, yh), T.inner, this.M(0));
-                    if (y1 < top) S.quad(pt(u0, y1), pt(u1, y1), pt(u1, y1, w.at), pt(u0, y1, w.at), T.inner, this.M(0));
+                    // a doorway's jambs and head, across this half of the wall; with a style, in a colour that stands out
+                    // from the wall round it and the floor, an architrave on its face, and the door leaf standing open in it
+                    const fr = FloorBuilder.contrast(St?.frame, [faceCol, floorCol]) || T.inner;
+                    // (no jamb at an end of the wall: the opening runs up to a corner, and the wall round it closes it; a
+                    // jamb there would lie in that wall's face)
+                    const atEnd = u => u <= w0.a0 + half + EPS || u >= w0.a1 - half - EPS;
+                    for (const u of [u0, u1]) if (!atEnd(u)) S.quad(pt(u, y), pt(u, y, w.at), pt(u, yh, w.at), pt(u, yh), fr, this.M(0));
+                    if (y1 < top) S.quad(pt(u0, y1), pt(u1, y1), pt(u1, y1, w.at), pt(u0, y1, w.at), fr, this.M(0));
+                    if (!St?.frame || y1 >= top || atEnd(u0) || atEnd(u1)) continue;
+                    const o2 = off + w.side * LAYER.architrave, band = (a, b, c, d) => S.quad(pt(a, c, o2), pt(b, c, o2), pt(b, d, o2), pt(a, d, o2), fr, this.M(0));
+                    band(u0 - 0.07, u0, y, y1 + 0.07);
+                    band(u1, u1 + 0.07, y, y1 + 0.07);
+                    band(u0, u1, y1, y1 + 0.07);
+                    // its edges, from the wall's face out to it (seen from the side, no sliver of wall behind it)
+                    for (const u of [u0 - 0.07, u0, u1, u1 + 0.07]) S.quad(pt(u, y, off), pt(u, y, o2), pt(u, y1 + (u === u0 || u === u1 ? 0 : 0.07), o2), pt(u, y1 + (u === u0 || u === u1 ? 0 : 0.07), off), fr, this.M(0));
+                    for (const [a, b, yy] of [[u0 - 0.07, u1 + 0.07, y1 + 0.07], [u0, u1, y1]]) S.quad(pt(a, yy, off), pt(b, yy, off), pt(b, yy, o2), pt(a, yy, o2), fr, this.M(0));
+                    // the leaf: hinged at the doorway's low end, swung open square to the wall into room a (drawn once)
+                    if (St.doors && p.kind === 'door' && p.a === k) {
+                        const leaf = FloorBuilder.contrast(St.doors, [faceCol, fr, floorCol]), d0 = off + w.side * 0.02, d1 = off + w.side * (u1 - u0 - 0.02);
+                        const la = u0 + 0.02, lb = u0 + 0.06, o0 = Math.min(d0, d1), o3 = Math.max(d0, d1);
+                        if (w.axis === 'x') this.box(la, lb, o0, o3, y + 0.01, y1 - 0.01, leaf, 0, true);
+                        else this.box(o0, o3, la, lb, y + 0.01, y1 - 0.01, leaf, 0, true);
+                    }
                 }
             }
             // solids: the stretches between the doorways (a doorway's head is over any walker's head)
@@ -131,7 +200,13 @@ class FloorBuilder {
             };
             for (const [u0, u1] of holes.map(h => [h[0], h[1]]).sort((p, q) => p[0] - q[0])) { solid(a, u0); a = u1; }
             solid(a, w0.a1);
-        }
+        });
+    }
+
+    // the style's accent for a kind of room: { wall, floor } (a colour alone is the wall's), or null
+    accent(kind) {
+        const a = this.B.T.style?.accents?.[kind];
+        return !a ? null : Array.isArray(a) ? { wall: a } : a;
     }
 
     // a landing door's frame seen from the lobby (w: the wall, its face at `off`): jambs and a head lining the opening
@@ -147,6 +222,10 @@ class FloorBuilder {
         face(u0 - 0.08, u0, y, yh + 0.08);
         face(u1, u1 + 0.08, y, yh + 0.08);
         face(u0, u1, yh, yh + 0.08);
+        // its edges back to the wall's face (seen from the side, no sliver of wall behind it)
+        const wf = w.at + w.side * half, edge = (u, y0, y1) => S.quad(pt(u, y0, wf), pt(u, y0, o), pt(u, y1, o), pt(u, y1, wf), C, M4);
+        edge(u0 - 0.08, y, yh + 0.08); edge(u1 + 0.08, y, yh + 0.08); edge(u0, y, yh); edge(u1, y, yh);
+        for (const [a, b, yy] of [[u0 - 0.08, u1 + 0.08, yh + 0.08], [u0, u1, yh]]) S.quad(pt(a, yy, wf), pt(b, yy, wf), pt(b, yy, o), pt(a, yy, o), C, M4);
     }
 
     // a shaft's landing on this storey (o.shafts: by the shaft's index in the core): { h } for a landing door, a service
@@ -247,20 +326,118 @@ class FloorBuilder {
             for (const [name, u0, u1] of edges) {
                 const fc = B.faces[name], P = (u, yy, d) => { const [x, z] = fc.o(u, d); return B.f.at(x, yy, z); };
                 const hs = [...B.windows(name, y), ...(this.o.ground ? B.doors(name) : [])].map(([a, b, c, d]) => [Math.max(a, u0), Math.min(b, u1), c, d]).filter(h => h[1] - h[0] > EPS);
-                for (const [a, b, c, d] of rectMinusHoles(u0, u1, y, top, hs)) S.quad(P(a, c, t), P(b, c, t), P(b, d, t), P(a, d, t), T.inner, this.M(0));
+                // (its holes cut 4 mm small: the face laps over the reveals' edges, no crack where they meet)
+                const lap = hs.map(([a, b, c, d]) => [a + 0.004, b - 0.004, c + 0.004, d - 0.004]);
+                for (const [a, b, c, d] of rectMinusHoles(u0, u1, y, top, lap)) S.quad(P(a, c, t), P(b, c, t), P(b, d, t), P(a, d, t), T.inner, this.M(0));
                 // a curtain wall's glass stands near its outer face: the reveals inside it (punched windows have theirs
                 // through the whole wall with the outside)
                 if (!T.curtain) continue;
                 const d0 = 0.05;
                 for (const [a, b, c, d] of hs) {
-                    const rv = (p, q) => S.quad(P(p[0], p[1], d0), P(q[0], q[1], d0), P(q[0], q[1], t), P(p[0], p[1], t), T.inner, this.M(0));
+                    const rv = (p, q, from = d0) => S.quad(P(p[0], p[1], from), P(q[0], q[1], from), P(q[0], q[1], t), P(p[0], p[1], t), T.inner, this.M(0));
                     if (a > u0 + EPS) rv([a, c], [a, Math.min(d, top)]);
                     if (b < u1 - EPS) rv([b, c], [b, Math.min(d, top)]);
-                    if (d < top) rv([a, d], [b, d]);
-                    if (c > y + 0.01) rv([a, c], [b, c]);
+                    // the head and the sill from the façade's outer face: looking up (or down) through the glass, no
+                    // sight of the spandrel's back between the glass's edge and the reveal
+                    if (d < top) rv([a, d], [b, d], 0);
+                    if (c > y + 0.01) rv([a, c], [b, c], 0);
                 }
             }
         }
+    }
+
+    // the style's shapes on a room's floor (style.floor): an inlay (`inlay` { margin (m in from the walls), min (m: the
+    // smallest rectangle that has one), colors }) in each rectangle big enough, a stripe down the middle of a long narrow
+    // one (`stripe` { width, colors }: a corridor's); each in a colour that stands out from the floor, varying from room
+    // to room
+    floorShapes(room, y, fl) {
+        const St = this.B.T.style?.floor;
+        if (!St) return;
+        const pick = (list, k) => this.vary(list, [fl.col], k), y1 = y + 0.005 + LAYER.floor;
+        room.rects.forEach((r, i) => {
+            const [x0, x1, z0, z1] = r, wx = x1 - x0, wz = z1 - z0, k = this.rnd() * 997 | 0;
+            const In = St.inlay, Sp = St.stripe;
+            if (Sp && Math.max(wx, wz) > 3 * Math.min(wx, wz) && Math.min(wx, wz) < 3.2) {
+                const hw = (Sp.width ?? 0.3) / 2, c = pick(Sp.colors, k);
+                this.flat([wx > wz ? [x0 + 0.3, x1 - 0.3, (z0 + z1) / 2 - hw, (z0 + z1) / 2 + hw] : [(x0 + x1) / 2 - hw, (x0 + x1) / 2 + hw, z0 + 0.3, z1 - 0.3]], y1, c, fl.mat);
+            } else if (In && Math.min(wx, wz) >= (In.max ?? 9)) {
+                // a big room: rug-sized inlays in a grid (In.tile m, In.gap m apart), all of the room's one colour
+                const t = In.tile ?? 3, gp = In.gap ?? 1.2, nx = Math.max(1, Math.floor((wx - gp) / (t + gp))), nz = Math.max(1, Math.floor((wz - gp) / (t + gp)));
+                const sx = (wx - nx * t) / (nx + 1), sz = (wz - nz * t) / (nz + 1);
+                for (let a = 0; a < nx; a++) for (let b = 0; b < nz; b++) {
+                    const qx = x0 + sx + a * (t + sx), qz = z0 + sz + b * (t + sz);
+                    this.flat([[qx, qx + t, qz, qz + t]], y1, pick(In.colors, k), fl.mat);
+                }
+            } else if (In && Math.min(wx, wz) >= (In.min ?? 3)) {
+                const m = In.margin ?? 0.6, c = pick(In.colors, k);
+                this.flat([[x0 + m, x1 - m, z0 + m, z1 - m]], y1, c, fl.mat);
+                // a border inside it in the floor's colour: a frame of two tones
+                if (In.border) this.flat([[x0 + m + In.border, x1 - m - In.border, z0 + m + In.border, z1 - m - In.border]], y1 + LAYER.floor, pick(In.colors, k + 1), fl.mat);
+            }
+        });
+    }
+
+    // the style's shapes on a room's ceiling (style.ceiling), there to guide, not to decorate: a dropped band round each
+    // rectangle big enough (`soffit` { width, drop, colors }); down the middle of a corridor (a long narrow rectangle), a
+    // band in the guide colour (`guide` { width, color }: the way to the lifts, over the floor's stripe); in from each
+    // doorway of a room with an accent, a strip of that colour as wide as the doorway (`entrance` { length }): where the
+    // room is entered. Every colour stands out from the ceiling (and a soffit's from the walls)
+    ceilingShapes(k, room, top, ceil) {
+        const St = this.B.T.style?.ceiling, T = this.B.T, S = this.B.S, f = this.B.f;
+        if (!St) return;
+        const So = St.soffit, G = St.guide, En = St.entrance, y1 = top - LAYER.ceiling;
+        for (const [x0, x1, z0, z1] of room.rects) {
+            const wx = x1 - x0, wz = z1 - z0;
+            if (G && Math.max(wx, wz) > 3 * Math.min(wx, wz) && Math.min(wx, wz) < 3.2) {
+                const hw = (G.width ?? 0.4) / 2, c = FloorBuilder.contrast(G.color, [ceil]);
+                this.flat([wx > wz ? [x0, x1, (z0 + z1) / 2 - hw, (z0 + z1) / 2 + hw] : [(x0 + x1) / 2 - hw, (x0 + x1) / 2 + hw, z0, z1]], y1, c);
+                continue;
+            }
+            if (So && Math.min(wx, wz) > 2 * (So.width ?? 0.45) + 1.2) {
+                const sw = So.width ?? 0.45, d = So.drop ?? 0.14, c = FloorBuilder.contrast(So.colors, [ceil, T.inner]), yb = top - d;
+                const ix0 = x0 + sw, ix1 = x1 - sw, iz0 = z0 + sw, iz1 = z1 - sw;
+                // its underside round the rectangle, and its inner edge down from the ceiling
+                for (const q of [[x0, x1, z0, iz0], [x0, x1, iz1, z1], [x0, ix0, iz0, iz1], [ix1, x1, iz0, iz1]]) this.flat([q], yb, c);
+                const e = (a, b) => S.quad(f.at(a[0], yb, a[1]), f.at(b[0], yb, b[1]), f.at(b[0], top, b[1]), f.at(a[0], top, a[1]), c, this.M(0));
+                e([ix0, iz0], [ix1, iz0]); e([ix1, iz0], [ix1, iz1]); e([ix1, iz1], [ix0, iz1]); e([ix0, iz1], [ix0, iz0]);
+            }
+        }
+        const ac = this.accent(room.kind)?.wall;
+        if (!En || !ac) return;
+        const c = FloorBuilder.contrast(ac, [ceil]), L = En.length ?? 1.6, inRoom = (x, z) => room.rects.some(r => x > r[0] && x < r[1] && z > r[2] && z < r[3]);
+        const sw = So?.width ?? 0.45, drop = So?.drop ?? 0.14;
+        for (const p of this.P.portalsOf(k)) {
+            if (p.kind === 'lift') continue;
+            const hw = p.w / 2, X = p.axis === 'x';
+            const sg = (X ? inRoom(p.c, p.at + 0.1) : inRoom(p.at + 0.1, p.c)) ? 1 : -1;
+            // the rectangle it enters: with a soffit, the strip runs across its underside, then on along the ceiling
+            const r = room.rects.find(q => X ? p.c > q[0] && p.c < q[1] && p.at + sg * 0.1 > q[2] && p.at + sg * 0.1 < q[3] : p.at + sg * 0.1 > q[0] && p.at + sg * 0.1 < q[1] && p.c > q[2] && p.c < q[3]);
+            const soffit = So && r && Math.min(r[1] - r[0], r[3] - r[2]) > 2 * sw + 1.2;
+            const span = (d0, d1, yy) => {
+                const a0 = p.at + sg * d0, a1 = p.at + sg * d1, lo = Math.min(a0, a1), hi = Math.max(a0, a1);
+                this.flat([X ? [p.c - hw, p.c + hw, lo, hi] : [lo, hi, p.c - hw, p.c + hw]], yy, c);
+            };
+            if (soffit) { span(0, sw, top - drop - LAYER.ceiling); span(sw, L, top - LAYER.ceiling); }
+            else span(0, L, top - LAYER.ceiling);
+        }
+    }
+
+    // a colour of `choices` for something on surfaces `against`: of those that stand out from them (by at least half as
+    // much as the best one), the k-th: so that rooms vary while every colour stays readable
+    vary(choices, against, k) {
+        if (!choices) return null;
+        const ok = this.readable(choices, against);
+        return ok[k % ok.length];
+    }
+
+    // of the colours `choices`, those that stand out from `against` by at least half as much as the best of them does
+    readable(choices, against) {
+        const list = Array.isArray(choices[0]) ? choices : [choices];
+        if (list.length === 1) return list;
+        const lum = c => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+        const score = c => Math.min(...against.filter(Boolean).map(a => 2 * Math.abs(lum(c) - lum(a)) + Math.hypot(c[0] - a[0], c[1] - a[1], c[2] - a[2])));
+        const best = Math.max(...list.map(score));
+        return list.filter(c => score(c) >= best * 0.5);
     }
 
     // a ceiling panel about every 4 m over the room (lit or not with its storey, storeyLit in WGSL)
@@ -282,7 +459,7 @@ class FloorBuilder {
     // storey) the well is floored over
     stairs(k, room) {
         const B = this.B, T = B.T, y = this.y, H = B.H, st = room.stair, [x0, x1, z0, z1] = room.rects[0];
-        const lane = st.lane, land = st.landing, col = T.floorColor, rail = PALETTE.wood;
+        const lane = st.lane, land = st.landing, col = this.floorOf(room.kind, room).col, rail = T.style?.rail || PALETTE.wood;
         this.walls(k, room, true);
         if (!this.o.stairsUp) {
             this.flat([[x0, x1, z0, z1]], y + 0.005, col);
@@ -319,8 +496,13 @@ class FloorBuilder {
             if (p.axis === 'x') keep.push([c - w, c + w, p.at - 1.3, p.at + 1.3]);
             else keep.push([p.at - 1.3, p.at + 1.3, c - w, c + w]);
         }
+        // the style: every item's body neutral, its other parts the room's accent (some items as they are)
+        const F = this.B.T.style?.furniture, ac = this.accent(room.kind)?.wall, T = this.B.T;
+        const body = F && FloorBuilder.contrast(F.neutral, [T.inner, this.floorOf(room.kind, room).col]);
+        const trim = F && FloorBuilder.contrast([...(ac ? [ac] : []), ...(F.trims || [])], [body]);
+        const colour = (col, i, it) => !F || F.keep?.includes(it.id) ? col : i === 0 ? body || col : trim || col;
         for (const r of room.rects) furnishRoom(r, rt.furniture, this.B.lib, this.rnd,
-            (x0, x1, z0, z1, ya, yb, col, fin) => this.box(x0, x1, z0, z1, y + ya, y + yb, col, fin === 'metal' ? 4 : 0), keep);
+            (x0, x1, z0, z1, ya, yb, col, fin, i, it) => this.box(x0, x1, z0, z1, y + ya, y + yb, colour(col, i, it), fin === 'metal' ? 4 : 0), keep);
     }
 }
 

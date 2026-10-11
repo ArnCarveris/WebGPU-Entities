@@ -113,7 +113,7 @@ class PlannedBuilding {
     // stacked up the shaft the same way.
     // Returns b.plan: { core, keys (per storey), tpl (key -> { s0, storeys, rooms (vertex ranges), first, count, stacked,
     // plan, info }), shafts (per shaft: { pieces (key -> { s0, storeys, first, count, stacked }), of (per storey: its
-    // piece) }), planOf(s), info (per storey), depth ([x, z]: how deep the façade rooms reach), codes (per storey: 2 for
+    // piece) }), planOf(s), info (per storey), depth ([x, z]: how deep the faÃ§ade rooms reach), codes (per storey: 2 for
     // a hall, plus the share of such storeys lit), lights (the shafts' lamp columns, lightColumns) }
     interior(B, sec) {
         const { S, R, core } = this, { n, H, floor, hx, hz, t } = B, plans = {};
@@ -134,6 +134,9 @@ class PlannedBuilding {
             if (stacked) S.solids.stack(y, H, si => info[tp.s0 + si]?.key === key, build);
             else build();
             Object.assign(tp, { first, count: B.count() - first, stacked, plan: P });
+            // (its vertices in its own floor's frame, 0..H: a draw stands it on the storeys it is drawn for, about the
+            // storey nearest the eye: no precision lost however high it is)
+            B.rebase?.(tp.first, tp.count, tp.s0 * H);
         }
         // the shafts' pieces (a shaft lies where it does on every storey's plan: the core is the building's)
         const P0 = info[0].plan;
@@ -151,10 +154,11 @@ class PlannedBuilding {
                 if (stacked) S.solids.stack(y, H, si => of[pc.s0 + si] === pc, build);
                 else build();
                 pc.stacked = stacked;
+                B.rebase?.(pc.first, pc.count, pc.s0 * H);
             }
             return { pieces, of };
         });
-        // how deep the façade rooms reach (the sun's limit in WGSL), each storey's kind and lit share
+        // how deep the faÃ§ade rooms reach (the sun's limit in WGSL), each storey's kind and lit share
         const depth = [0, 0];
         for (const P of Object.values(plans)) { const d = P.facadeDepth(); depth[0] = Math.max(depth[0], d[0]); depth[1] = Math.max(depth[1], d[1]); }
         const lamps = B.T.lamps ?? 0.5;
@@ -287,12 +291,21 @@ class PlannedBuilding {
         this.cars = [];
         for (const l of R.lifts) {
             const sh = core.shafts.find(s => s.bank === l.bank && s.index === l.shaft);
-            const car = S.lifts.add({ f, shaft: sh, kind: l.kind, group: l.group, name: l.name, motion: l.motion, stops: l.stops.map(g => this.stop(g)), owner: this });
+            const car = S.lifts.add({ f, shaft: sh, kind: l.kind, group: l.group, name: l.name, motion: l.motion, stops: l.stops.map(g => this.stop(g)), owner: this, colors: this.liftColors() });
             const j = core.shafts.indexOf(sh);
             car.shaftArea = this.shaftAreas[j];
             if (S.areas && car.shaftArea >= 0) S.lifts.carArea(car, S.areas);
             this.cars.push(car);
         }
+    }
+
+    // the cars' colours from the archetype's style (its lift: { car, floor, trim, rail, seam, roof, lamp, door, landing
+    // [colours] }): the landing doors in the one that stands out most from the lobby's walls (FloorBuilder.contrast)
+    liftColors() {
+        const T = this.sections[0].b.T, Ls = T.style?.lift;
+        if (!Ls) return null;
+        const lobby = T.style.accents?.lobby, wall = Array.isArray(lobby) ? lobby : lobby?.wall;
+        return { ...Ls, landing: FloorBuilder.contrast(Ls.landing, [T.inner, wall]) || undefined };
     }
 
     // an emergency ladder up the technical space of each shaft, from each car's pit to its overrun's ceiling

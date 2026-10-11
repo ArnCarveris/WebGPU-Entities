@@ -18,7 +18,7 @@ const LIFT = {
     colors: { car: [0.62, 0.60, 0.56], trim: [0.78, 0.74, 0.62], floor: [0.22, 0.20, 0.19], door: [0.66, 0.67, 0.68], frame: [0.30, 0.31, 0.32],
         weight: [0.20, 0.21, 0.23], roof: [0.34, 0.35, 0.36], lamp: [1.0, 0.96, 0.88] },
 };
-const BOX_FLOATS = 12;               // a box instance (Lifts.instances): [centre, yaw] [half sizes, material] [colour, -]
+const BOX_FLOATS = 12;               // a box instance (Lifts.instances): [centre, yaw] [half sizes, material] [colour, inward]
 const UI = { ink: [4, 14, 20], cyan: [110, 220, 255], amber: [255, 196, 90], white: [236, 244, 250], dim: [96, 128, 140], green: [96, 240, 150], red: [255, 96, 80] };
 
 // a surface matrix (the gui kit's: columns right, up, normal toward the viewer, position) for a panel at world p facing
@@ -176,11 +176,11 @@ class Lifts {
         this.occupied = new Map();       // shaft key -> s left: someone is in it (its ladder, a car's roof, its pit)
     }
 
-    add({ f, shaft, kind = 'local', group, name, motion = {}, stops, owner = null }) {
+    add({ f, shaft, kind = 'local', group, name, motion = {}, stops, owner = null, colors = null }) {
         const L = this.L, sh = shaft;
         const el = new Elevator({ stops: stops.map(s => s.y), names: stops.map(s => s.name), ...motion });
         const car = {
-            slot: this.cars.length, f, shaft: sh, kind, name, stops, el, L, owner, sx: sh.sx,
+            slot: this.cars.length, f, shaft: sh, kind, name, stops, el, L, owner, sx: sh.sx, colors: colors ? { ...L.colors, ...colors } : L.colors,
             out: sh.car.rect.slice(), front: sh.car.front, wall: sh.wall, zc: sh.door.c, dw: sh.door.w, dh: sh.door.h, h: sh.car.h,
             key: Lifts.shaftKey(f, sh.rect), poseStamp: 0, lastY: el.y,
         };
@@ -336,29 +336,41 @@ class Lifts {
     // The boxes of car c (its floor, walls, roof, doors, handrail, lamp, panel plate, its sill to the landing), its
     // counterweight, and its landing doors near height y (within L.landingDraw; `all` false: within 3 m; and those
     // within `range` [y0, y1]: the stretch of its shaft in view, seen from end to end): [local x0, x1, z0, z1, y0, y1,
-    // colour, material, solid, building]
+    // colour, material, solid, building, inward]. inward: which face of a car's shell looks into the car (1 +x, 2 -x, 3
+    // +y, 4 -y, 5 +z, 6 -z; 0: all of it is inside, or not the car's): its other faces are the car's outside, in the
+    // shaft, lit as the shaft is
     parts(c, y, all = true, car = true, range = null) {
-        const L = this.L, K = L.colors, el = c.el, cy = el.y, h = c.h, w = L.wall, sx = c.sx, dw = c.dw, dh = c.dh;
+        const L = this.L, K = c.colors || L.colors, el = c.el, cy = el.y, h = c.h, w = L.wall, sx = c.sx, dw = c.dw, dh = c.dh;
         const [ox0, ox1, oz0, oz1] = c.out, zc = c.zc, F = c.front, out = [];
         const xs = (a, b) => [Math.min(a, b), Math.max(a, b)];
         const lb = Lifts.building(c), lit = mat => this.material(lb, mat, true), m4 = this.material(lb, 4, false);
         if (car && (Math.abs(y - cy) < 14 || all)) {
-            out.push([ox0, ox1, oz0, oz1, cy - 0.15, cy, K.floor, lit(0), true, lb]);
+            const IN_X = sx > 0 ? 1 : 2, OUT_X = sx > 0 ? 2 : 1;          // toward the front (from the back wall), toward the back
+            out.push([ox0, ox1, oz0, oz1, cy - 0.15, cy, K.floor, lit(0), true, lb, 3]);
             out.push([...xs(F, c.wall - sx * 0.06), zc - dw / 2, zc + dw / 2, cy - 0.06, cy, K.frame, lit(4), true, lb]);     // its sill, to the landing's
-            out.push([ox0, ox1, oz0, oz1, cy + h, cy + h + 0.12, K.roof, lit(0), true, lb]);
+            out.push([ox0, ox1, oz0, oz1, cy + h, cy + h + 0.12, K.roof, lit(0), true, lb, 4]);
             const back = sx > 0 ? ox0 : ox1;
-            out.push([...xs(back, back + sx * w), oz0, oz1, cy, cy + h, K.car, lit(0), true, lb]);
-            out.push([ox0, ox1, oz0, oz0 + w, cy, cy + h, K.car, lit(0), true, lb]);
-            out.push([ox0, ox1, oz1 - w, oz1, cy, cy + h, K.car, lit(0), true, lb]);
-            out.push([...xs(F, F - sx * w), oz0, zc - dw / 2, cy, cy + h, K.trim, lit(4), true, lb]);
-            out.push([...xs(F, F - sx * w), zc + dw / 2, oz1, cy, cy + h, K.trim, lit(4), true, lb]);
-            out.push([...xs(F, F - sx * w), zc - dw / 2, zc + dw / 2, cy + dh, cy + h, K.trim, lit(4), false, lb]);
+            out.push([...xs(back, back + sx * w), oz0, oz1, cy, cy + h, K.car, lit(0), true, lb, IN_X]);
+            out.push([ox0, ox1, oz0, oz0 + w, cy, cy + h, K.car, lit(0), true, lb, 5]);
+            out.push([ox0, ox1, oz1 - w, oz1, cy, cy + h, K.car, lit(0), true, lb, 6]);
+            out.push([...xs(F, F - sx * w), oz0, zc - dw / 2, cy, cy + h, K.trim, lit(4), true, lb, OUT_X]);
+            out.push([...xs(F, F - sx * w), zc + dw / 2, oz1, cy, cy + h, K.trim, lit(4), true, lb, OUT_X]);
+            out.push([...xs(F, F - sx * w), zc - dw / 2, zc + dw / 2, cy + dh, cy + h, K.trim, lit(4), false, lb, OUT_X]);
             // its doors, sliding apart behind the front; the handrail, the lamp, the panel's plate
             const o = el.door * dw / 2, dx = xs(F - sx * w, F - sx * (w + 0.035));
-            out.push([...dx, zc - dw / 2 - o, zc - o, cy, cy + dh, K.door, lit(4), el.door < 0.8, lb]);
-            out.push([...dx, zc + o, zc + dw / 2 + o, cy, cy + dh, K.door, lit(4), el.door < 0.8, lb]);
+            out.push([...dx, zc - dw / 2 - o, zc - o, cy, cy + dh, K.door, lit(4), el.door < 0.8, lb, OUT_X]);
+            out.push([...dx, zc + o, zc + dw / 2 + o, cy, cy + dh, K.door, lit(4), el.door < 0.8, lb, OUT_X]);
             const bx = sx > 0 ? ox0 + w : ox1 - w;
-            out.push([...xs(bx, bx + sx * 0.06), oz0 + w + 0.1, oz1 - w - 0.1, cy + 0.88, cy + 0.94, K.trim, lit(4), false, lb]);
+            out.push([...xs(bx, bx + sx * 0.06), oz0 + w + 0.1, oz1 - w - 0.1, cy + 0.88, cy + 0.94, K.rail || K.trim, lit(4), false, lb]);
+            // with colours that say so (K.seam): the walls in panels (a seam every L.panel m), a handrail along each side too
+            if (K.seam) {
+                const iz0 = oz0 + w, iz1 = oz1 - w, ix0 = Math.min(back + sx * w, F - sx * w), ix1 = Math.max(back + sx * w, F - sx * w), pw = L.panel || 0.62;
+                for (let z = iz0 + pw; z < iz1 - 0.2; z += pw) out.push([...xs(back + sx * w, back + sx * (w + 0.012)), z - 0.012, z + 0.012, cy, cy + h, K.seam, lit(0), false, lb]);
+                for (const [zf, zs] of [[iz0, 1], [iz1, -1]]) {
+                    for (let x = ix0 + pw; x < ix1 - 0.2; x += pw) out.push([x - 0.012, x + 0.012, ...xs(zf, zf + zs * 0.012), cy, cy + h, K.seam, lit(0), false, lb]);
+                    out.push([ix0 + 0.15, ix1 - 0.15, ...xs(zf, zf + zs * 0.06), cy + 0.88, cy + 0.94, K.rail || K.trim, lit(4), false, lb]);
+                }
+            }
             out.push([ox0 + 0.35, ox1 - 0.35, oz0 + 0.35, oz1 - 0.35, cy + h - 0.03, cy + h, K.lamp, lit(7), false, lb]);
             const px = F - sx * (w + 0.36);
             out.push([px - 0.19, px + 0.19, oz1 - w - 0.03, oz1 - w, cy + 0.95, cy + 1.62, K.frame, lit(4), false, lb]);
@@ -374,8 +386,8 @@ class Lifts {
             if (Math.abs(sy - y) > (all ? L.landingDraw : 3) && !(range && sy >= range[0] - 3 && sy <= range[1])) continue;
             const sb = c.stops[i].building, open = this.landingDoor(c, i), o = open * (dw / 2 + 0.04), m = this.material(sb, 4, false), shut = open < 0.8;
             // (from just under the sill, and overlapping where they meet: no crack to see the lobby by from the shaft)
-            out.push([...lx, zc - dw / 2 - 0.05 - o, zc - o + 0.01, sy - 0.03, sy + dh + 0.04, K.door, m, shut, sb]);
-            out.push([...lx, zc + o - 0.01, zc + dw / 2 + 0.05 + o, sy - 0.03, sy + dh + 0.04, K.door, m, shut, sb]);
+            out.push([...lx, zc - dw / 2 - 0.05 - o, zc - o + 0.01, sy - 0.03, sy + dh + 0.04, K.landing || K.door, m, shut, sb]);
+            out.push([...lx, zc + o - 0.01, zc + dw / 2 + 0.05 + o, sy - 0.03, sy + dh + 0.04, K.landing || K.door, m, shut, sb]);
         }
         return out;
     }
@@ -397,7 +409,9 @@ class Lifts {
     // whose storey it is at (x, z in its ground frame, y over its floor), BOX_FLOATS each: [centre, yaw] [half sizes,
     // material] [colour, -], grouped by building: into data, returns [{ b, first, count }]. ranges: car -> [y0, y1], the
     // stretch of its shaft in view (its landing doors there too)
-    instances(cam, data, cars = null, ranges = null) {
+    // base(b): the height their centres are given over (default b.floor; a world that rebases its buildings' origins
+    // on the storey nearest the eye passes that)
+    instances(cam, data, cars = null, ranges = null, base = b => b.floor) {
         const by = new Map(), max = data.length / BOX_FLOATS;
         for (const c of this.near(cam, this.L.draw)) for (const part of this.parts(c, cam[1], true, !cars || cars.has(c), ranges?.get(c))) {
             const b = part[9];
@@ -407,10 +421,10 @@ class Lifts {
         const out = [];
         let n = 0;
         for (const [b, parts] of by) {
-            const g = { b, first: n, count: 0 };
-            for (const [x0, x1, z0, z1, y0, y1, k, m] of parts) {
+            const g = { b, first: n, count: 0 }, y0b = base(b);
+            for (const [x0, x1, z0, z1, y0, y1, k, m, , , inward = 0] of parts) {
                 if (n >= max) break;
-                data.set([(x0 + x1) / 2, (y0 + y1) / 2 - b.floor, (z0 + z1) / 2, 0, (x1 - x0) / 2, (y1 - y0) / 2, (z1 - z0) / 2, m, k[0], k[1], k[2], 0], n * BOX_FLOATS);
+                data.set([(x0 + x1) / 2, (y0 + y1) / 2 - y0b, (z0 + z1) / 2, 0, (x1 - x0) / 2, (y1 - y0) / 2, (z1 - z0) / 2, m, k[0], k[1], k[2], inward], n * BOX_FLOATS);
                 n++;
                 g.count++;
             }
