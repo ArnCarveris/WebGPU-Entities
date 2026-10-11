@@ -1,6 +1,7 @@
 > **In WebGPU Entities** this is the README of the original [WebGPU-EntityCloud](https://github.com/ArnCarveris/WebGPU-EntityCloud) demo, kept as the
-> feature's technical reference. Its engine now lives in [`js/features/cloud/`](../../js/features/cloud/) (one part per responsibility, run by the
-> host in [`js/engine/host.js`](../../js/engine/host.js)), and its scenario is [`scenarios/cloud-high-plains.json`](../../scenarios/cloud-high-plains.json) as a list of
+> world's technical reference. Its engine now lives in kits, one part per responsibility: the world in [`js/kits/cloud/`](../../js/kits/cloud/), its
+> renderer in [`js/kits/atmosphere/`](../../js/kits/atmosphere/), the weather state in [`js/kits/weather/`](../../js/kits/weather/), the structures in
+> [`js/kits/settlement/structures/`](../../js/kits/settlement/structures/) (run by the host in [`js/engine/host.js`](../../js/engine/host.js)), and its scenario is [`scenarios/cloud-high-plains.json`](../../scenarios/cloud-high-plains.json) as a list of
 > entities: every native key below is an entity of type `cloud.<key>` (see the main [README](../../README.md#everything-is-an-entity)).
 > Paths and run instructions below refer to the original repository.
 
@@ -685,7 +686,7 @@ The cell moves through its life like this:
      storm cell into the weather map, or `null`.
 2. Register it in `ENTITY_TYPES` and add it to the scenario's `entities`.
 
-In WebGPU Entities the class goes into a kit: add it to the terrain, settlement, transit or weather kit's `terrainTypes / settlementTypes / busTypes / weatherTypes(Base, ...)` factory (`js/kits/`), list its type in `js/kits/types.js`, and map it in `ENTITY_TYPES` (`js/features/cloud/entities/types.js`).
+In WebGPU Entities the class goes into a kit: add it to the terrain, settlement, transit or weather kit's `terrainTypes / settlementTypes / busTypes / weatherTypes(Base, ...)` factory (`js/kits/`), list its type in `js/kits/types.js`, and map it in `ENTITY_TYPES` (`js/kits/cloud/entities.js`).
 
 ## Layout (sections of the script in `index.html`)
 

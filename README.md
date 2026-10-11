@@ -168,7 +168,7 @@ an infinite far plane, classic 0..1 with a far plane, multisampled, depth-stenci
 the nearest world per pixel. Where a world draws only sky, the others show through.
 
 A world with `layer.role: "atmosphere"` (cloud) does not take part in the merge: the merged picture and its depth go into
-its scene before its volumetrics (`Renderer.encodeInject` in `js/features/cloud/gpu/renderer.js`: depth as reversed-Z, colour back to
+its scene before its volumetrics (`Renderer.encodeInject` in `js/kits/atmosphere/renderer.js`: depth as reversed-Z, colour back to
 scene radiance through the inverse of its display transform), so its clouds, rain, haze, lightning, bloom and
 tonemapping cover the other worlds too.
 
@@ -192,7 +192,8 @@ js/engine/
     common.js               small helpers everything shares (scalars, v3 / quat / m4, frustum planes, polylines,
                             buffers and bind groups, number formats, pointer input)
     scenario-format.js      schemas, entities <-> each feature's native scenario, includes
-    features.js             feature and kit registry (Features.PARTS, KITS, USES), on-demand script loading
+    features.js             feature and kit registry (Features.PARTS, KITS, USES), on-demand script loading; a world
+                            type a kit offers (KITS[kit].worlds: cloud) needs no feature folder
     compositor.js           depth linearize + nearest-wins merge, the atmosphere's inject target
     camera.js               composition transforms, the engine's fly camera
     input.js                input routing between worlds
@@ -205,8 +206,10 @@ js/engine/
 js/kits/types.js            EntityTypes: every entity type a scenario may use (types are the kits', not the
                             features'), with the kit implementing it; a plain script the scenario format reads first
 js/kits/<kit>/              generic building blocks, not any one feature's (Features.kit), loaded with the first
-                            feature that lists them in Features.USES (the engine's: Features.ENGINE_KITS, at boot);
-                            their exports are engine.kits.<kit> (Features.kits)
+                            feature that lists them in Features.USES or kit that lists them in its `uses` (the
+                            engine's: Features.ENGINE_KITS, at boot); their exports are engine.kits.<kit>
+                            (Features.kits). A kit may offer world types (`worlds`): a scenario root entity of that
+                            type is built from kits alone (the cloud world)
     noise/                  seeded random (mulberry32, seededRandom, hashes, pcg / pcgRandom as WGSL's), value noise 2D / 3D, fbm with options,
                             ridged multifractal; NoiseWGSL: the shaders' hashes, value noise (± gradient), fbm and
                             tileable Perlin / Worley, each under the name its shader calls it (the gui kit's included)
@@ -218,7 +221,8 @@ js/kits/<kit>/              generic building blocks, not any one feature's (Feat
                             (portal's stencil / plain, gui's stencil / depth). RenderExtensions: register(kind,
                             factory) adds to every renderer of that kind what it draws besides its own (stencil
                             slots, resources, pipelines, commands) without touching it: portal's renderer takes
-                            them (its GUI screens pass is one: render/gui-pass.js)
+                            them (its GUI screens pass is one: render/gui-pass.js). Half floats (toHalf / fromHalf)
+                            and GpuProfiler (GPU time per pass from timestamp queries)
     gui/                    the Doom 3-style GUI toolkit (an engine kit: the handheld uses it): math, world
                             materials, meshes and GUI surfaces, WGSL, the Renderer (views, render targets, scene
                             passes; GUI surfaces reserve its "gui.surface" stencil slot), the font atlas, GuiModel +
@@ -260,11 +264,16 @@ js/kits/<kit>/              generic building blocks, not any one feature's (Feat
     terrain/                Heightfield (grid, sampling, normals, raycast, wet() land use), floodFill, TerrainEntity
                             (every terrain world's entity base, with all their hooks), terrainTypes: the stamps
                             (tilt, hills, mountain, range, lake, clearing), channels (river, valley, basin, coast,
-                            dam) and land use (town, forest) of cloud and water; meshTerrain (imposter's ground)
+                            dam) and land use (town, forest) of cloud and water; meshTerrain (imposter's ground);
+                            LandField (a Heightfield with a land-use map and the surface as its mesh draws it; cloud)
     hydrology/              what adds water to a water simulation: sea, springs and drains, rain, debris (water)
-    weather/                storm cells, supercells (+ tornadoes), squall lines, spawners, HURRICANE / TORNADO (cloud)
+    weather/                storm cells, supercells (+ tornadoes), squall lines, spawners, HURRICANE / TORNADO; the
+                            weather state (WeatherSystem: named states blending, RainZones, CloudLayers, Sky: sun,
+                            moon and sky colours), Lightning (flashes and bolts), the defaults and limits (cloud)
     settlement/             villages and bus stations laid out on the terrain into a world's structures, and the
-                            colours structures are built in (cloud)
+                            structures themselves (structures/: Structures and its parts: Solids a walker collides
+                            with, ShelterBoxes keeping rain off, Doors, Buildings (plain and planned, with interiors,
+                            lifts and ladders), Fixtures (lamps, LAMPS), their GPU record sizes and flags; cloud)
     interior/               what every building and vehicle has by default: an Interior = Origin (its rigid local
                             frame; a vehicle's is its live pose) + VisArea (a box with door / window portals, folded
                             into at most six wall apertures for culling) + weather shelter; GridHash and InteriorIndex
@@ -276,11 +285,17 @@ js/kits/<kit>/              generic building blocks, not any one feature's (Feat
                             braking, speed limits and headways: cloud's buses, and portal's ship when on autopilot;
                             a LineVehicle's `cabin` spec is its Interior. busTypes (Bus + BusLine, BUS dimensions,
                             liveries; cloud) and shipType (the steerable freighter carrying its areas; portal)
-js/features/<feature>/      each original engine, split into parts with one responsibility each (config, shaders,
+    atmosphere/             the volumetric atmosphere renderer over a terrain and its structures: limits, quality
+                            presets, bindings, the WGSL (weather map, cloud shadow, ground state, froxels, the ray
+                            march, scene, final composite), the passes and the Renderer (cloud)
+    cloud/                  the cloud world, all kits: its entity types (the terrain, settlement, transit and weather
+                            kits' over its TerrainEntity base), World, Walker, the app (controls, keys, doors, lifts,
+                            lights, frame uniform), HUD, handheld pages, and CloudWorld, the world type `cloud`
+                            (KITS.cloud.worlds): a scenario's `{ "type": "cloud" }` root builds one
+js/features/<feature>/      each original engine but cloud (a kit world, above), split into parts with one responsibility each (config, shaders,
                             entities, world, renderer, HUD, app...), loaded in the order of Features.PARTS
                             (Features.part, over js/engine/common.js and its kits); only what is that feature's own
-                            lives here (the bus's body and lights on a LineVehicle, the cloud's land use on the
-                            Heightfield...). phone-pages.js builds the world's handheld pages, and feature.js extends
+                            lives here (water's dirty rect and brush on the Heightfield, portal's frame builder...). phone-pages.js builds the world's handheld pages, and feature.js extends
                             FeatureWorld (createApp, depth, stats, set, anchor, handheld)
 scenarios/*.json            the scenarios (index.json and embedded.js are generated)
 scenarios/gui/*.json        each scenario's GUIs (screens, their apps' settings, the handheld's pages), included by it ({ "type": "include", "scenario": "gui/<id>" })

@@ -1,5 +1,5 @@
 'use strict';
-// Features: the six engines this repo merges, each a folder of parts under js/features/<name>/, one responsibility per
+// Features: the engines this repo merges, each a folder of parts under js/features/<name>/, one responsibility per
 // part (config, a shader set, the entities of one kind, the renderer, the HUD...). A part registers itself with
 // Features.part(name, fn); fn(engine, feature) runs once, in load order, and returns what it offers the parts after it,
 // which pick it from `feature` (a part that needs something from a later one reads `feature.X` when it runs). The
@@ -13,23 +13,34 @@
 // their exports are engine.kits.<kit> (a kit may use the kits listed before it in its `uses`). The engine's own scripts
 // use ENGINE_KITS, which the host loads at boot, through Features.kits. Smaller shared helpers (math, GPU, text) are
 // js/engine/common.js's.
+//
+// A world type can also be all kits: a kit lists the world types it offers in `worlds` and exports
+// `worlds: { <type>: { create(ctx) } }`; a scenario root entity of that type loads the kit (with the kits it uses) and
+// creates its world, no feature folder involved (the cloud world: the cloud kit, over atmosphere, weather, terrain,
+// settlement, building and transit).
 
 const Features = {
-    // kit: { uses (kits it builds on), parts }
+    // kit: { uses (kits it builds on), parts, worlds (the world types it offers) }
     KITS: {
         noise: { parts: ['random', 'value', 'wgsl'] },
         mesh: { parts: ['geometry', 'builder', 'interface'] },
         view: { parts: ['first-person'] },
         world: { parts: ['entity', 'hud', 'pages', 'feature-world'] },
         entities: { uses: ['noise', 'world', 'mesh', 'gui'], parts: ['spin', 'camera', 'door', 'light', 'drone', 'space', 'ground-props', 'sectors', 'fixtures'] },
-        terrain: { uses: ['world', 'noise'], parts: ['heightfield', 'stamps', 'channels', 'landuse', 'mesh-terrain'] },
+        terrain: { uses: ['world', 'noise', 'gpu'], parts: ['heightfield', 'stamps', 'channels', 'landuse', 'mesh-terrain', 'land-field'] },
         hydrology: { uses: ['terrain'], parts: ['sources'] },
-        weather: { uses: ['noise'], parts: ['storms'] },
+        weather: { uses: ['noise'], parts: ['storms', 'climate', 'sky', 'lightning'] },
         interior: { uses: ['mesh'], parts: ['origin', 'vis-area', 'frustum', 'trees', 'areas', 'area-set', 'portal-vis', 'vis-debug', 'area-map', 'vis-inspector', 'floorplan', 'interior'] },
         transit: { uses: ['interior', 'mesh', 'gui'], parts: ['paths', 'line', 'bus', 'ship', 'elevator', 'lifts', 'lift-interaction'] },
         building: { uses: ['noise', 'mesh', 'interior', 'transit', 'gui'], parts: ['library', 'core', 'furnish', 'floors', 'ladders', 'planned', 'sectors', 'room-vis'] },
-        settlement: { uses: ['noise', 'mesh', 'interior', 'transit', 'building'], parts: ['settlements'] },
-        gpu: { parts: ['stencil', 'pipelines', 'extensions', 'lines'] },
+        settlement: {
+            uses: ['noise', 'mesh', 'interior', 'transit', 'building'],
+            parts: [
+                'settlements', 'structures/limits', 'structures/palette', 'structures/solids', 'structures/shelter-boxes', 'structures/doors',
+                'structures/buildings', 'structures/fixtures', 'structures/structures', 'structures/meshes',
+            ],
+        },
+        gpu: { parts: ['stencil', 'pipelines', 'extensions', 'lines', 'half', 'profiler'] },
         gui: {
             uses: ['noise', 'gpu'],
             parts: [
@@ -38,10 +49,27 @@ const Features = {
                 'iptv', 'apps/camera', 'apps/gallery', 'apps/viewer', 'apps/tv', 'media-phone',
             ],
         },
+        // the volumetric atmosphere (clouds, precipitation, haze, lightning) over a terrain and its structures: a renderer
+        atmosphere: {
+            uses: ['noise', 'gpu', 'gui', 'mesh', 'interior', 'transit', 'building', 'settlement', 'terrain', 'weather'],
+            parts: [
+                'limits', 'quality', 'bindings', 'shaders/common', 'shaders/shelter', 'shaders/occupancy', 'shaders/noise', 'shaders/weather',
+                'shaders/volumetrics', 'shaders/scene', 'shaders/final', 'passes', 'renderer',
+            ],
+        },
+        // the cloud world (Entity Cloud): terrain, settlements, buses and lifts, weather, under the atmosphere kit's sky
+        cloud: {
+            uses: ['noise', 'view', 'world', 'mesh', 'terrain', 'interior', 'transit', 'building', 'settlement', 'weather', 'gpu', 'gui', 'atmosphere'],
+            parts: [
+                'config', 'entities', 'world', 'walker', 'hud', 'app/menus', 'app/cloud-picker', 'app/controls', 'app/key-commands',
+                'app/lift-control', 'app/doors', 'app/surroundings', 'app/sound-events', 'app/light-writer', 'app/frame-writer', 'app/app',
+                'phone-pages', 'world-type',
+            ],
+            worlds: ['cloud'],
+        },
     },
     ENGINE_KITS: ['noise', 'view', 'gpu', 'gui'],
     USES: {
-        cloud: ['noise', 'view', 'world', 'mesh', 'terrain', 'interior', 'transit', 'building', 'settlement', 'weather', 'gpu', 'gui'],
         water: ['noise', 'view', 'world', 'terrain', 'hydrology'],
         origin: ['noise', 'world', 'entities'],
         imposter: ['noise', 'view', 'world', 'terrain', 'entities'],
@@ -49,16 +77,6 @@ const Features = {
         gui: ['noise', 'view', 'world', 'entities', 'interior', 'gpu', 'gui'],
     },
     PARTS: {
-        cloud: [
-            'config/limits', 'config/quality', 'config/weather', 'config/bus', 'config/buildings', 'util/half', 'terrain/heightfield', 'gpu/bindings', 'shaders/common', 'shaders/shelter',
-            'shaders/occupancy', 'shaders/noise', 'shaders/weather', 'shaders/volumetrics', 'shaders/scene',
-            'shaders/final', 'structures/frame', 'structures/palette', 'structures/solids',
-            'structures/shelter-boxes', 'structures/doors', 'structures/buildings', 'structures/fixtures',
-            'structures/structures', 'structures/meshes', 'entities/types', 'weather/weather', 'weather/lightning', 'world', 'gpu/passes', 'gpu/profiler',
-            'gpu/renderer', 'walker', 'hud', 'app/menus', 'app/cloud-picker', 'app/controls', 'app/key-commands',
-            'app/lift-control', 'app/doors', 'app/surroundings', 'app/sound-events', 'app/light-writer', 'app/frame-writer', 'app/app',
-            'phone-pages', 'feature',
-        ],
         water: [
             'config', 'terrain/heightfield', 'shaders/flow', 'shaders/waves', 'shaders/debris', 'shaders/render',
             'gpu/helpers', 'entities/types', 'world', 'sim/flow', 'sim/waves',
@@ -115,11 +133,20 @@ const Features = {
 
     async build(name, engine) {
         const parts = this.PARTS[name];
-        if (!parts) throw new Error(`unknown feature "${name}"`);
+        if (!parts) return this.kitWorld(name, engine);
         for (const k of this.USES[name] ?? []) await this.loadKit(k, engine);
         const feature = await this.assemble(`feature "${name}"`, parts.map(p => `js/features/${name}/${p}.js`), () => this.parts[name], engine);
         if (typeof feature.create !== 'function') throw new Error(`feature "${name}" has no create()`);
         return feature;
+    },
+
+    // a world type a kit offers (KITS[kit].worlds): that kit, loaded with the kits it uses, and its worlds[name]
+    async kitWorld(name, engine) {
+        const kit = Object.keys(this.KITS).find(k => this.KITS[k].worlds?.includes(name));
+        if (!kit) throw new Error(`unknown world type "${name}": no feature, and no kit offers it`);
+        const world = (await this.loadKit(kit, engine)).worlds?.[name];
+        if (typeof world?.create !== 'function') throw new Error(`kit "${kit}" has no create() for world "${name}"`);
+        return world;
     },
 
     // a kit, once per page: its exports land in Features.kits[name] (engine.kits)

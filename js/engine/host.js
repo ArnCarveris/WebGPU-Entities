@@ -281,6 +281,7 @@ class Host {
 
     setMove(mode, say = true) {
         if (!this.moves.includes(mode)) { if (say) this.hud.toast(`${this.cameraOwner?.label || 'This camera'} cannot ${mode}`, 1500); return; }
+        if (mode === this.move) return;     // already (a fly-only world's camera has no setMode)
         if (this.fly) this.fly.eye.setMode(mode);
         else this.cameraOwner.world.setMove(mode);
         if (say) this.hud.toast(mode === 'walk' ? 'Walking' : 'Flying', 1200);

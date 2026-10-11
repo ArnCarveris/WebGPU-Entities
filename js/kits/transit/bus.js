@@ -366,5 +366,12 @@ function busTypes(Base) {
     return { Bus, BusLine };
 }
 
-return { BUS, BUS_LIVERIES, BUS_SPEC, ROAD_LAMP_STEP, busTypes };
+// how a renderer draws them: buses further from the camera than BUS_DRAW m are not drawn (a 12 m bus is a few pixels
+// there); material flags: inside the cabin (lit through its windows and by its lamps), door leaves that slide toward -x / +x
+// as the doors open
+const BUS_DRAW = 5000;
+const BUS_IN = 64;
+const BUS_LEAF = [8, 16];
+
+return { BUS, BUS_LIVERIES, BUS_SPEC, ROAD_LAMP_STEP, BUS_DRAW, BUS_IN, BUS_LEAF, busTypes };
 });

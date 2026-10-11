@@ -17,6 +17,7 @@ const EPS = 1e-4;
 // how far a layer laid on a surface stands off it (m): a skirting, the shadow gap's strip and an architrave off a wall's
 // face, an inlay off the floor (and a border off the inlay), a strip off the ceiling or a soffit; well clear of it, so
 // the two never fight for the depth at any distance
+const SEAM = 0.002;               // m: how far a wall's face runs on past the face round a corner (no crack where they meet)
 const LAYER = { skirting: 0.02, gap: 0.012, architrave: 0.03, floor: 0.015, ceiling: 0.025 };
 const LAMP = [1.0, 0.95, 0.86];
 const SHAFT = { wall: [0.46, 0.46, 0.45], rail: [0.32, 0.33, 0.35], ladder: [0.85, 0.66, 0.12], weight: [0.22, 0.23, 0.25], machine: [0.18, 0.36, 0.30],
@@ -119,13 +120,33 @@ class FloorBuilder {
         const ws = P.walls(k), longest = ac ? ws.reduce((b, w, i) => (w.a1 - w.a0 > ws[b].a1 - ws[b].a0 ? i : b), 0) : -1;
         ws.forEach((w0, wi) => {
             const faceCol = wi === longest ? ac : wallCol;
-            // each face runs on through the joint at an inside corner (half the wall's thickness) so that the two meeting
-            // there close it, and stops short of an outside corner by as much (where the room goes on round it: the face
-            // round the corner closes it); not into the façade
-            const lim = w0.axis === 'x' ? [X0, X1] : [Z0, Z1], rects = room.rects;
+            // Where each face ends (both faces stand half the wall's thickness off its line), by what is past the line's end:
+            //   out    the room goes on round the end (an outside corner, a core's corner seen from the lobby): on by half
+            //          the thickness, meeting the face round the corner (short, it leaves a slot through the whole wall)
+            //   lines  a doorway in the wall across, its edge in this face's plane: on by half, lining that side of it
+            //   on     another room's face goes on in the same plane: on the line, where the two meet (overlapping,
+            //          coplanar, they would z-fight)
+            //   in     an inside corner: on the line, in the wall across (on through it, it would show in the next room)
+            // and at the façade, on the line. Running on, SEAM more (ending exactly on the face round the corner leaves a
+            // hairline crack).
+            const lim = w0.axis === 'x' ? [X0, X1] : [Z0, Z1], rects = room.rects, fp = w0.at + w0.side * half;
             const inRoom = (u, o) => rects.some(r => w0.axis === 'x' ? u > r[0] && u < r[1] && o > r[2] && o < r[3] : o > r[0] && o < r[1] && u > r[2] && u < r[3]);
-            const end = (a, dir, l) => Math.abs(a - l) < EPS ? a : a + dir * (inRoom(a + dir * 0.02, w0.at + w0.side * 0.02) ? -half : half);
-            const w = { ...w0, a0: end(w0.a0, -1, lim[0]), a1: end(w0.a1, 1, lim[1]) };
+            const goesOn = u => this.faces(P).some(([j, v]) => j !== k && v.axis === w0.axis && v.side === w0.side && Math.abs(v.at - w0.at) < EPS && u > v.a0 && u < v.a1);
+            const lines = a => P.portals.some(p => p.axis !== w0.axis && Math.abs(p.at - a) < EPS && (Math.abs(p.c - p.w / 2 - fp) < EPS || Math.abs(p.c + p.w / 2 - fp) < EPS));
+            const kind = (a, dir, l) => Math.abs(a - l) < EPS ? 'facade' : inRoom(a + dir * 0.02, w0.at + w0.side * 0.02) ? 'out'
+                : goesOn(a + dir * 0.02) ? 'on' : lines(a) ? 'lines' : 'in';
+            const k0 = kind(w0.a0, -1, lim[0]), k1 = kind(w0.a1, 1, lim[1]);
+            const end = (a, dir, kd) => a + dir * (kd === 'out' || kd === 'lines' ? half + SEAM : 0);
+            const w = { ...w0, a0: end(w0.a0, -1, k0), a1: end(w0.a1, 1, k1) };
+            // a layer proud of the face (skirting, shadow gap), d deep: where two walls' layers meet at a corner, the square
+            // where they cross is the x wall's. Round an outside corner the x wall's layer runs on by d (over the square),
+            // the z wall's front too (meeting it) but not its top (cap); at an inside corner (in, or on where the wall goes
+            // on past it) the z wall's stops at the x wall's layer's front (the x wall's runs on into the wall across)
+            const round = (u0, u1, d, cap = false) => {
+                const zw = w.axis === 'z';
+                const e = (at, kd) => !at ? 0 : kd === 'out' ? (zw && cap ? -SEAM : d) : (kd === 'in' || kd === 'on') && zw ? -(half + d) : 0;
+                return [u0 - e(u0 <= w.a0 + EPS, k0), u1 + e(u1 >= w.a1 - EPS, k1)];
+            };
             const off = w.at + w.side * half, holes = [];
             for (const p of ports) {
                 if (p.axis !== w.axis || Math.abs(p.at - w.at) > EPS || p.c < w.a0 - EPS || p.c > w.a1 + EPS) continue;
@@ -147,10 +168,14 @@ class FloorBuilder {
                     // wall's edges read against the floor and the ceiling
                     const o1 = off + w.side * LAYER.skirting, o0 = off + w.side * LAYER.gap;
                     if (y0 <= y + 0.01) {
-                        S.quad(pt(u0, y, o1), pt(u1, y, o1), pt(u1, y + 0.09, o1), pt(u0, y + 0.09, o1), trim, this.M(0));
-                        S.quad(pt(u0, y + 0.09, off), pt(u1, y + 0.09, off), pt(u1, y + 0.09, o1), pt(u0, y + 0.09, o1), trim, this.M(0));
+                        const [s0, s1] = round(u0, u1, LAYER.skirting), [c0, c1] = round(u0, u1, LAYER.skirting, true);
+                        S.quad(pt(s0, y, o1), pt(s1, y, o1), pt(s1, y + 0.09, o1), pt(s0, y + 0.09, o1), trim, this.M(0));
+                        S.quad(pt(c0, y + 0.09, off), pt(c1, y + 0.09, off), pt(c1, y + 0.09, o1), pt(c0, y + 0.09, o1), trim, this.M(0));
                     }
-                    if (y1 >= top - 0.01) S.quad(pt(u0, top - 0.035, o0), pt(u1, top - 0.035, o0), pt(u1, top, o0), pt(u0, top, o0), trim, this.M(0));
+                    if (y1 >= top - 0.01) {
+                        const [g0, g1] = round(u0, u1, LAYER.gap);
+                        S.quad(pt(g0, top - 0.035, o0), pt(g1, top - 0.035, o0), pt(g1, top, o0), pt(g0, top, o0), trim, this.M(0));
+                    }
                 }
                 for (const [u0, u1, , y1, p] of holes) {
                     const yh = Math.min(y1, top);
@@ -171,7 +196,11 @@ class FloorBuilder {
                     // (no jamb at an end of the wall: the opening runs up to a corner, and the wall round it closes it; a
                     // jamb there would lie in that wall's face)
                     const atEnd = u => u <= w0.a0 + half + EPS || u >= w0.a1 - half - EPS;
-                    for (const u of [u0, u1]) if (!atEnd(u)) S.quad(pt(u, y), pt(u, y, w.at), pt(u, yh, w.at), pt(u, yh), fr, this.M(0));
+                    // (nor where a wall's face across this one stands in the jamb's plane, running on through this wall: it
+                    // lines that side of the opening, and a jamb there would z-fight with it)
+                    const lined = u => this.faces(P).some(([, v]) => v.axis !== w.axis && Math.abs(v.at + v.side * half - u) < EPS &&
+                        w.at > v.a0 - half - EPS && w.at < v.a1 + half + EPS);
+                    for (const u of [u0, u1]) if (!atEnd(u) && !lined(u)) S.quad(pt(u, y), pt(u, y, w.at), pt(u, yh, w.at), pt(u, yh), fr, this.M(0));
                     if (y1 < top) S.quad(pt(u0, y1), pt(u1, y1), pt(u1, y1, w.at), pt(u0, y1, w.at), fr, this.M(0));
                     if (!St?.frame || y1 >= top || atEnd(u0) || atEnd(u1)) continue;
                     const o2 = off + w.side * LAYER.architrave, band = (a, b, c, d) => S.quad(pt(a, c, o2), pt(b, c, o2), pt(b, d, o2), pt(a, d, o2), fr, this.M(0));
@@ -203,6 +232,13 @@ class FloorBuilder {
         });
     }
 
+    // every room's stretches of wall (FloorPlan.walls), [room, wall], once per plan
+    faces(P) {
+        const c = (this.faceCache ??= new WeakMap());
+        if (!c.has(P)) c.set(P, P.rooms.flatMap((_, j) => P.walls(j).map(v => [j, v])));
+        return c.get(P);
+    }
+
     // the style's accent for a kind of room: { wall, floor } (a colour alone is the wall's), or null
     accent(kind) {
         const a = this.B.T.style?.accents?.[kind];
@@ -217,8 +253,8 @@ class FloorBuilder {
         for (const u of [u0, u1]) S.quad(pt(u, y), pt(u, y, back), pt(u, yh, back), pt(u, yh), C, M4);
         S.quad(pt(u0, yh), pt(u1, yh), pt(u1, yh, back), pt(u0, yh, back), C, M4);
         S.quad(pt(u0, y + 0.012), pt(u1, y + 0.012), pt(u1, y + 0.012, back), pt(u0, y + 0.012, back), SHAFT.sill, M4);
-        // the architrave: a band 8 cm wide, 2 cm proud
-        const o = w.at + w.side * (half + 0.02), face = (a, b, c, d) => S.quad(pt(a, c, o), pt(b, c, o), pt(b, d, o), pt(a, d, o), C, M4);
+        // the architrave: a band 8 cm wide, as proud as a doorway's (the skirting, less proud, butts into it)
+        const o = w.at + w.side * (half + LAYER.architrave), face = (a, b, c, d) => S.quad(pt(a, c, o), pt(b, c, o), pt(b, d, o), pt(a, d, o), C, M4);
         face(u0 - 0.08, u0, y, yh + 0.08);
         face(u1, u1 + 0.08, y, yh + 0.08);
         face(u0, u1, yh, yh + 0.08);
@@ -264,7 +300,7 @@ class FloorBuilder {
         const [x0, x1, z0, z1] = sh.rect, half = PARTITION / 2, ix0 = x0 + half, ix1 = x1 - half, iz0 = z0 + half, iz1 = z1 - half;
         const clip = r => r ? [Math.max(r[0], 0), Math.min(r[1], H)] : null;
         const run = clip(sl.run), lad = clip(sl.ladder);
-        const M0 = 0, M4 = 4;
+        const M0 = 0, M4 = 4, IN = 0.025;    // IN: how far what stands against a wall runs into it
         // the car's guide rails on its sides (T sections: a web and a blade), the counterweight's two at the back
         if (run && run[1] > run[0]) {
             const cx = (sh.car.rect[0] + sh.car.rect[1]) / 2;
@@ -285,20 +321,20 @@ class FloorBuilder {
         if (SL && run && sh.lamp) for (let i = 0; i < SL.perStorey; i++) {
             const ly = SL.y + i * H / SL.perStorey;
             if (ly < run[0] || ly > run[1]) continue;
-            const L = sh.lamp, z0 = L.z - L.n[1] * 0.03, z1 = L.z + L.n[1] * 0.03;
+            const L = sh.lamp, z0 = L.z - L.n[1] * 0.04, z1 = L.z + L.n[1] * 0.03;     // (1 cm into its wall)
             this.box(L.x - 0.16, L.x + 0.16, Math.min(z0, z1), Math.max(z0, z1), y + ly - 0.05, y + ly + 0.05, LAMP, 7, true);
         }
         // the pit's floor (a lamp and a buffer on it), the overrun's ceiling, the machine room
         if (sl.pit !== undefined && sl.pit !== null) {
             const yp = y + sl.pit;
-            this.box(ix0, ix1, iz0, iz1, yp - 0.3, yp, SHAFT.wall, M0);
+            this.box(ix0 - IN, ix1 + IN, iz0 - IN, iz1 + IN, yp - 0.3, yp, SHAFT.wall, M0);
             const c = sh.car.rect;
             this.box((c[0] + c[1]) / 2 - 0.15, (c[0] + c[1]) / 2 + 0.15, sh.car.zc - 0.15, sh.car.zc + 0.15, yp, yp + 0.5, SHAFT.weight, M4, true);
             this.box(ix0 + 0.05, ix0 + 0.1, iz0 + 0.3, iz0 + 0.5, yp + 0.6, yp + 0.75, LAMP, 7, true);
         }
         if (sl.top !== undefined && sl.top !== null) {
             const yt = y + sl.top;
-            this.box(ix0, ix1, iz0, iz1, yt, yt + 0.25, SHAFT.wall, M0);
+            this.box(ix0 - IN, ix1 + IN, iz0 - IN, iz1 + IN, yt, yt + 0.25, SHAFT.wall, M0);
             this.box(ix0 + 0.4, ix0 + 0.8, iz0 + 0.4, iz0 + 0.6, yt - 0.06, yt - 0.01, LAMP, 7, true);
         }
         if (sl.machine) {
@@ -306,8 +342,8 @@ class FloorBuilder {
             // the traction machine over the car's run, its sheave; the controller cabinet against the back wall
             this.box(cx - 0.45, cx + 0.45, sh.car.zc - 0.5, sh.car.zc + 0.2, ym, ym + 0.8, SHAFT.machine, M4);
             this.box(cx - 0.12, cx + 0.12, sh.car.zc + 0.2, sh.car.zc + 0.55, ym + 0.2, ym + 0.85, SHAFT.rail, M4);
-            const bx = sh.sx > 0 ? ix0 : ix1 - 0.4;
-            this.box(bx, bx + 0.4, iz0 + 0.3, iz0 + 1.1, ym, ym + 1.9, SHAFT.cabinet, M4);
+            const bx = sh.sx > 0 ? ix0 - IN : ix1 - 0.4;
+            this.box(bx, bx + 0.4 + IN, iz0 + 0.3, iz0 + 1.1, ym, ym + 1.9, SHAFT.cabinet, M4);
             this.box(ix0 + 0.3, ix1 - 0.3, (iz0 + iz1) / 2 - 0.15, (iz0 + iz1) / 2 + 0.15, y + m1 - 0.06, y + m1 - 0.01, LAMP, 7, true);
         }
     }
@@ -484,7 +520,12 @@ class FloorBuilder {
         // a lamp on the half landing's wall
         const fl = B.f;
         B.S.prism(fl, (x0 + x1) / 2, z1 - 0.05, 0.25, 0.04, y + H / 2 + 2.0, y + H / 2 + 2.15, LAMP, this.M(7));
-        B.S.prism(fl, x0 + lane + 0.05, (z0 + z1) / 2, 0.03, (z1 - z0) / 2 - land, y + 0.95, y + 1.0, rail, this.M(0));
+        // the handrail: on the wall's face beside the first flight, 0.9 m over its nosings, rising with it
+        const rx0 = x0 + lane - 0.08, rx1 = x0 + lane - 0.02, ra = z0 + land, rb = z1 - land, ya = y + rise + 0.9, yb = y + H / 2 + 0.9;
+        const P = (x, z, yy) => fl.at(x, yy, z), Mr = this.M(0), bar = [[rx0, ya, ra], [rx1, ya, ra], [rx1, yb, rb], [rx0, yb, rb]];
+        for (const dy of [0, 0.05]) B.S.quad(...bar.map(([x, yy, z]) => P(x, z, yy + dy)), rail, Mr);
+        for (const x of [rx0, rx1]) B.S.quad(P(x, ra, ya), P(x, rb, yb), P(x, rb, yb + 0.05), P(x, ra, ya + 0.05), rail, Mr);
+        for (const [z, yy] of [[ra, ya], [rb, yb]]) B.S.quad(P(rx0, z, yy), P(rx1, z, yy), P(rx1, z, yy + 0.05), P(rx0, z, yy + 0.05), rail, Mr);
     }
 
     // what stands in the room (its roomType's furniture, the library's items): seeded per room, its doorways kept clear

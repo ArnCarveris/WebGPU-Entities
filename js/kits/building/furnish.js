@@ -11,6 +11,27 @@ const overlaps = (a, b) => a[0] < b[1] && a[1] > b[0] && a[2] < b[3] && a[3] > b
 // room) }, items from lib (PlanLibrary.item: { w, d, parts [u0, u1, v0, v1, y0, y1, colour, finish] }), keeping clear
 // of `keep` (rectangles: doorways' swing, the stairs) and each other. put(x0, x1, z0, z1, y0, y1, colour, finish, i, item): a
 // box (local; y from the floor), part i of item. rnd: a seeded generator
+// an item's parts with each face a part shares with an earlier part (the same plane, facing the same way, overlapping)
+// moved out by PROUD: the later part (a cushion on its base, a headboard at the bed's end) stands that much proud of the
+// earlier one, so the two never z-fight (the parts take different colours: the style's body and trims)
+const PROUD = 0.003;
+const proudCache = new WeakMap();
+function proud(parts) {
+    if (proudCache.has(parts)) return proudCache.get(parts);
+    const out = parts.map(p => p.slice());
+    const span = (a0, a1, b0, b1) => Math.min(a1, b1) - Math.max(a0, b0) > EPS;
+    // axis k (0 u, 1 v, 2 y): its low and high bounds at 2k, 2k + 1; the other two axes
+    const other = [[1, 2], [0, 2], [0, 1]];
+    for (let i = 1; i < out.length; i++) for (let k = 0; k < 3; k++) for (const s of [0, 1]) {
+        const p = out[i], at = p[2 * k + s];
+        const shared = parts.slice(0, i).some(q => Math.abs(q[2 * k + s] - at) < EPS &&
+            other[k].every(m => span(p[2 * m], p[2 * m + 1], q[2 * m], q[2 * m + 1])));
+        if (shared) p[2 * k + s] = at + (s ? PROUD : -PROUD);
+    }
+    proudCache.set(parts, out);
+    return out;
+}
+
 function furnishRoom(r, program, lib, rnd, put, keep = []) {
     if (!program) return;
     const [x0, x1, z0, z1] = r, W = x1 - x0, D = z1 - z0;
@@ -21,7 +42,7 @@ function furnishRoom(r, program, lib, rnd, put, keep = []) {
     // (a unit local direction)
     const place = (it, cx, cz, back) => {
         const ux = -back[1], uz = back[0], vx = -back[0], vz = -back[1];
-        it.parts.forEach(([u0, u1, v0, v1, ya, yb, col, fin], i) => {
+        proud(it.parts).forEach(([u0, u1, v0, v1, ya, yb, col, fin], i) => {
             const pc = [cx + ux * (u0 + u1) / 2 + vx * ((v0 + v1) / 2 - it.d / 2), cz + uz * (u0 + u1) / 2 + vz * ((v0 + v1) / 2 - it.d / 2)];
             const hu = (u1 - u0) / 2, hv = (v1 - v0) / 2, hx = Math.abs(ux) * hu + Math.abs(vx) * hv, hz = Math.abs(uz) * hu + Math.abs(vz) * hv;
             put(pc[0] - hx, pc[0] + hx, pc[1] - hz, pc[1] + hz, ya, yb, col, fin, i, it);
