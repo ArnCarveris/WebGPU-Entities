@@ -133,7 +133,7 @@ class PlannedBuilding {
             const build = () => { tp.rooms = fb.storey(P, y, opts); };
             if (stacked) S.solids.stack(y, H, si => info[tp.s0 + si]?.key === key, build);
             else build();
-            Object.assign(tp, { first, count: B.count() - first, stacked, plan: P });
+            Object.assign(tp, { first, count: B.count() - first, stacked, plan: P, doors: fb.doorways });
             // (its vertices in its own floor's frame, 0..H: a draw stands it on the storeys it is drawn for, about the
             // storey nearest the eye: no precision lost however high it is)
             B.rebase?.(tp.first, tp.count, tp.s0 * H);
@@ -223,6 +223,7 @@ class PlannedBuilding {
     // the areas and portals of a kind of storey of section building b (tp: its template)
     template(b, tp) {
         const P = tp.plan, o = tp.info, H = b.H, T = b.T, W = T.window, out = { areas: [], portals: [] };
+        const leaves = new Set((tp.doors || []).map(d => d.i));      // the doorways with a leaf (InteriorDoors: shut, closed)
         const [X0, X1, Z0, Z1] = P.inner, slab = T.slab;
         const byRoom = P.rooms.map(() => []);
         P.rooms.forEach((room, k) => {
@@ -258,7 +259,7 @@ class PlannedBuilding {
             });
         });
         // the doorways, the stair door, the landing doors and service openings (into the tall areas)
-        for (const p of P.portals) {
+        P.portals.forEach((p, pi) => {
             const ka = P.rooms[p.a].kind, kb = P.rooms[p.b].kind;
             const h = p.h || H - slab, [x, z] = p.axis === 'x' ? [p.c, p.at] : [p.at, p.c];
             // the normal from a to b: a's rectangle lies on the - side of the edge
@@ -273,13 +274,14 @@ class PlannedBuilding {
             const a = side(p.a, ka, 1), bb = side(p.b, kb, -1);
             if (kb === 'shaft' || ka === 'shaft') {
                 const sk = kb === 'shaft' ? p.b : p.a, j = P.coreIdx.shafts.indexOf(sk), sl = o.slices[j] || {}, sh = P.rooms[sk].shaft;
-                if (this.shaftAreas[j] < 0) continue;
+                if (this.shaftAreas[j] < 0) return;
                 if (sl.door) portal(x, z, h / 2, p.w, h, nl, a, bb, { landing: { key: Lifts.shaftKey(this.f, sh.rect), shaft: sh.key, pb: this }, closed: true, kind: 'door' });
                 else if (sl.service) portal(x, z, sl.service / 2, p.w, sl.service, nl, a, bb, { kind: 'opening' });
-                continue;
+                return;
             }
-            portal(x, z, h / 2, p.w, h, nl, a, bb, { kind: p.kind === 'opening' ? 'opening' : 'door', passThrough: p.kind === 'opening' && p.w > 2.5 });
-        }
+            portal(x, z, h / 2, p.w, h, nl, a, bb, { kind: p.kind === 'opening' ? 'opening' : 'door', passThrough: p.kind === 'opening' && p.w > 2.5,
+                ...(leaves.has(pi) ? { leaf: { b, i: pi } } : {}) });
+        });
         return out;
     }
 

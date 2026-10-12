@@ -13,7 +13,7 @@ class LandField extends kit.Heightfield {
         super(size, n, base);
         this.grid = grid;
         this.land = new Float32Array(n * n * 3);
-        this.lamp = new Float32Array(n * n);   // share of the fake street lamps kept (World.buildFarLights), landTex's alpha
+        this.lamp = new Float32Array(n * n);   // share of the fake street lamps kept (FarLights), landTex's alpha
     }
 
     sample(x, z) {

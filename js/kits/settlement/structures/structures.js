@@ -29,6 +29,8 @@ class Structures {
         // its lamp); the emergency ladders up their shafts (the building kit's)
         this.lifts = new kits.transit.Lifts({ material: (b, mat, lit) => mat + (lit ? BLD_LIT : 0) + b.id * BLD_ID });
         this.ladders = new kits.building.Ladders();
+        // the planned buildings' doorways' doors, each storey's opening and shutting on its own (the building kit's)
+        this.innerDoors = new kits.building.InteriorDoors(this, { material: (b, mat) => mat + b.id * BLD_ID });
         this.buildings = new Buildings(this);
         this.fixtures = new Fixtures(this);
     }

@@ -1,17 +1,18 @@
 'use strict';
 // The lights of a frame: which point and spot lights the shaders take (and the boxes that can shade each), the grid
-// that lists them per cell, the fake street lamps' poles near the camera, and the distant lights and glows by night.
+// that lists them per cell, the fake street lamps' poles near the camera, and the distant lights and glows by night
+// (host: the app, as FrameWriter's).
 
-Features.kit('cloud', (engine, kit) => {
+Features.kit('atmosphere', (engine, kit) => {
 const { Common, kits } = engine;
 const { DEG, clamp, smoothstep, v3 } = Common;
 const { GridHash } = kits.interior;
 const { pcgRandom } = kits.noise;
-const { MAX_LIGHTS } = kits.atmosphere;
+const { MAX_LIGHTS } = kit;
 const {
     LIGHT_GRID, MAX_POLES, MAX_FAR_DYN, FAR_FLOATS, LIGHT_RANGE, LIGHT_CABIN, LIGHT_SPOT, LIGHT_ROOM, ROOM_LIGHTS,
     ROOM_RANGE, POLE_DRAW, GLOW_GAIN,
-} = kits.atmosphere;
+} = kit;
 const { LAMPS, ShelterBoxes, Structures, Buildings } = kits.settlement;
 
 class LightWriter {
@@ -42,7 +43,7 @@ class LightWriter {
         if (night) {
             all.push(...this.nearLamps(w.structures.fixtures.lights, cam));
             this.roomLights(w.structures.buildings, cam, all);
-            w.nearFakeLamps(cam, LIGHT_RANGE + LAMPS.sodium.range, all);    // the fake street lamps near: real lights now
+            w.far.near(cam, LIGHT_RANGE + LAMPS.sodium.range, all);    // the fake street lamps near: real lights now
             // the buses within reach (the InteriorIndex, not every bus), in their order
             const buses = w.structures.interiors.near(cam, LIGHT_RANGE + 80, 'vehicle').map(it => it.owner).sort((p, q) => p.slot - q.slot);
             for (const b of buses) if (Math.hypot(b.pose.x - cam[0], b.pose.z - cam[2]) < LIGHT_RANGE + 80) b.lights(all);
@@ -138,7 +139,7 @@ class LightWriter {
         if (last && Math.hypot(cam[0] - last[0], cam[2] - last[2]) < 20 && r.poleWorld === a.world) return;
         this.poleAt = [...cam];
         r.poleWorld = a.world;
-        const near = a.world.nearFakeLamps(cam, POLE_DRAW + 20, []).slice(0, MAX_POLES);
+        const near = a.world.far.near(cam, POLE_DRAW + 20, []).slice(0, MAX_POLES);
         const data = this.poleData;
         near.forEach((l, i) => data.set(l.pole, i * 8));
         if (near.length) r.device.queue.writeBuffer(r.poleBuf, 0, data, 0, near.length * 8);
@@ -159,8 +160,8 @@ class LightWriter {
             l.cone ? l.cone[1] : 1, l.range, l.pos[1], 0], i * FAR_FLOATS));
         if (n) r.device.queue.writeBuffer(r.farBuf, r.farStatic * FAR_FLOATS * 4, dyn, 0, n * FAR_FLOATS);
         r.farCount = r.farStatic + n;
-        F.set('glows', w.glows.flat());
-        F.set('glowInfo', [w.glows.length, GLOW_GAIN / Math.PI * adapt, 0, 0]);
+        F.set('glows', w.far.glows.flat());
+        F.set('glowInfo', [w.far.glows.length, GLOW_GAIN / Math.PI * adapt, 0, 0]);
     }
 }
 

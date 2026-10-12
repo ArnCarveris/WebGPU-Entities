@@ -14,7 +14,7 @@ const LIGHT_GRID = 32;               // cells per side over the lights' reach, e
 const LIGHT_CABIN = 1, LIGHT_SPOT = 2;  // light flags: a bus's cabin glow (not on the cabin's own surfaces), a spot (cone),
 const LIGHT_ROOM = 4;                // a building's lit storey (out through its windows and doors only; the room has its own lamps)
 const ROOM_LIGHTS = 16, ROOM_RANGE = 160;  // at most this many lit storeys of the buildings within this many m become lights
-// distant lights by night (World.buildFarLights, WGSL_FAR): every lamp as a glowing point sprite, lighting nothing
+// distant lights by night (FarLights, WGSL_FAR): every lamp as a glowing point sprite, lighting nothing
 // per far light: [x, y, z, size (m)] [rgb intensity, fake] [axis, cos of the cone's edge (-2 none)] [cos of its core, range (m), ground height, -]
 const FAR_FLOATS = 16;
 const POOL_ALBEDO = [0.15, 0.165, 0.14];  // the ground under a real lamp far off (asphalt and verge), as its pool decal (vsFarPool) takes it

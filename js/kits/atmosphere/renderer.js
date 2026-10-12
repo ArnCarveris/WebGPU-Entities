@@ -213,13 +213,13 @@ class Renderer {
         this.buildingBuf = makeBuffer(d, rec.byteLength, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST, rec);
         this.buildingRec = rec;
         this.interiorDraws = [];
-        // the distant lights: the static ones (World.buildFarLights), then MAX_FAR_DYN slots for the buses' (LightWriter.writeFar)
+        // the distant lights: the static ones (FarLights), then MAX_FAR_DYN slots for the buses' (LightWriter.writeFar)
         this.farBuf?.destroy();
-        this.farStatic = world.farLights.length / FAR_FLOATS;
+        this.farStatic = world.far.lights.length / FAR_FLOATS;
         this.farBuf = makeBuffer(d, (this.farStatic + MAX_FAR_DYN) * FAR_FLOATS * 4, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST);
-        if (this.farStatic) d.queue.writeBuffer(this.farBuf, 0, world.farLights);
+        if (this.farStatic) d.queue.writeBuffer(this.farBuf, 0, world.far.lights);
         this.farCount = 0;
-        this.realFar = world.realFar;
+        this.realFar = world.far.real;
         // the buses, each in its own frame: opaque mesh and glass, and its uniforms (busData, BUS_UNIFORM bytes each); the
         // app lists the ones to draw this frame in busDraws, nearest first
         for (const m of this.busMeshes || []) { m.buf?.destroy(); m.glass?.destroy(); }

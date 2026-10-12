@@ -1,19 +1,21 @@
 'use strict';
-// The app's keys and clicks: what each key does (through Controls), right clicks growing storm cells, and the arrow
-// keys moving the sun.
+// The app's keys and clicks: what each key does (through Controls), right clicks on the ground, and the arrow keys
+// moving the sun. An app extension gets each key first (key(code): true if it took it) and each right click on the
+// ground (click(hit): true if it took it).
 
-Features.kit('cloud', (engine, kit) => {
+Features.kit('atmosphere', (engine, kit) => {
 const { Common } = engine;
-const { DEG, clamp, v3, fmtKm } = Common;
-const { RENDER_MODES, QUALITY } = engine.kits.atmosphere;
+const { DEG, clamp } = Common;
+const { RENDER_MODES, QUALITY } = kit;
 const { TIME_SCALES, RAIN_VARIANTS } = engine.kits.weather;
 
 class KeyCommands {
     constructor(app) { this.app = app; }
 
     handle(pressed) {
-        const a = this.app, c = a.controls, w = a.world, wx = w.weather, cam = a.camera;
+        const a = this.app, c = a.controls, w = a.world, wx = w.weather;
         for (const code of pressed) {
+            if (a.extensions.some(x => x.key?.(code))) continue;
             const digit = code.match(/^(?:Digit|Numpad)(\d)$/);
             if (digit) {
                 const k = +digit[1];
@@ -22,13 +24,6 @@ class KeyCommands {
                 continue;
             }
             switch (code) {
-                case 'KeyK': {
-                    const cells = w.storms.filter(s => s.state.precip > 0.1);
-                    if (!cells.length) { a.hud.toast('No mature storm cell'); break; }
-                    const near = cells.reduce((p, q) => Math.hypot(p.pos[0] - cam.pos[0], p.pos[1] - cam.pos[2]) < Math.hypot(q.pos[0] - cam.pos[0], q.pos[1] - cam.pos[2]) ? p : q);
-                    w.lightning.strike(near, true);
-                    break;
-                }
                 case 'Comma': case 'Period': {
                     const i = TIME_SCALES.indexOf(a.timeScale);
                     c.setTimeScale(TIME_SCALES[clamp((i < 0 ? 3 : i) + (code === 'Period' ? 1 : -1), 0, TIME_SCALES.length - 1)]);
@@ -55,7 +50,6 @@ class KeyCommands {
                 case 'KeyM': c.setMode((a.mode + 1) % RENDER_MODES.length); break;
                 case 'KeyQ': c.setQuality((a.quality + 1) % QUALITY.length); break;
                 case 'KeyV': if (a.views.length) c.setView((a.viewIndex + 1) % a.views.length); break;
-                case 'KeyJ': a.clouds.toggle(); break;
                 case 'KeyL': a.flashlight = !a.flashlight; a.hud.toast(`Flashlight ${a.flashlight ? 'on' : 'off'}`); break;
                 case 'KeyI': a.hud.showLabels = !a.hud.showLabels; break;
                 case 'KeyP': a.paused = !a.paused; break;
@@ -63,17 +57,14 @@ class KeyCommands {
         }
     }
 
-    // right click: grow a storm cell where the cursor ray meets the ground
+    // right click: where the cursor ray meets the ground, for the extensions
     clicks(clicks) {
         const a = this.app;
         for (const [cx, cy] of clicks) {
             const rect = a.canvas.getBoundingClientRect();
             const hit = a.world.field.raycast(a.camera.pos, a.camera.ray(cx - rect.left, cy - rect.top, rect.width, rect.height));
-            const sp = a.world.spawner;
             if (!hit) { a.hud.toast('Click on the ground'); continue; }
-            if (!sp) { a.hud.toast('No spawner in this scenario'); continue; }
-            const e = sp.spawnAt(hit[0], hit[2]);
-            a.hud.toast(`${e.label} growing ${fmtKm(v3.len(v3.sub(hit, a.camera.pos)))} away`);
+            a.extensions.some(x => x.click?.(hit));
         }
     }
 

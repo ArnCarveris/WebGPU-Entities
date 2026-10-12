@@ -1,43 +1,34 @@
 'use strict';
 // The app: owns the world, the camera and the settings, and runs the frame (update, then render) through its parts:
-// menus, the cloud picker, the commands, keys, doors, the camera's surroundings, sound events, lights and the frame
-// uniform.
+// its own (menus, commands, keys, HUD), the kits' (the settlement kit's walker, doors and sound events, the building
+// kit's lifts, this kit's surroundings, lights, frame uniform and renderer, the gpu kit's dynamic resolution), for which
+// it is the host (world, camera, walker, renderer, settings, fx), and what a world type composes in: its extensions.
+//
+// AppExtension: a class built with the app (new E(app)), kept as app.ext[E.key]; each hook optional: load(world) (a
+// new world), update(dt, io) (each frame, after the world's update), key(code) / click(hit) (KeyCommands), beforeJump /
+// afterJump(v, e) (Controls.jump), syncMenus() (AppMenus), page(id) (phonePages), air() / label(e, d) (Hud), stats(out)
+// and set(key, v) (the host's, through AtmosphereWorld).
 
-Features.kit('cloud', (engine, kit) => {
+Features.kit('atmosphere', (engine, kit) => {
 const { GpuChoice, Common, kits } = engine;
 const { clamp, v3, PointerInput } = Common;
 const { FirstPersonView } = kits.view;
 const SLOW_ALT = { keys: ['AltLeft'], factor: 0.2 };       // Alt held: a fifth of the speed
-const { SPLASH_PARTICLES, RENDER_DEFAULTS, QUALITY, FRAME_BUDGET } = kits.atmosphere;
-const {
-    World, Walker, Hud, AppMenus, CloudPicker, Controls, KeyCommands, DoorControl, LiftControl, Surroundings,
-    SoundEvents, LightWriter, FrameWriter,
-} = kit;
-const { Renderer } = kits.atmosphere;
-
-// Dynamic resolution: the volumetric scale between the preset's (q.scale) and its floor (q.dynamic), stepped by 0.05 to
-// keep the GPU time per frame (the profiler's, smoothed) under FRAME_BUDGET. Down at once by as much as the overshoot
-// needs (the volumetrics cost about the scale squared); up a step only when that estimate of the next step's cost (an
-// overestimate: part of the frame does not scale) still leaves a margin, and at most every half second, so it settles
-// instead of hunting. Dense weather (snow squalls, downpours) is soft: a lower scale hardly shows.
-class DynamicScale {
-    constructor() { this.scale = 0; this.at = -1e9; }
-    update(q, gpuMs, now) {
-        if (!this.scale || this.scale > q.scale || this.scale < q.dynamic) this.scale = q.scale;
-        if (gpuMs > 0 && now - this.at > 0.5) {
-            let s = this.scale;
-            if (gpuMs > FRAME_BUDGET) s = Math.floor(s * Math.sqrt(FRAME_BUDGET / gpuMs) * 20) / 20;
-            else if (gpuMs * ((s + 0.05) / s) ** 2 < FRAME_BUDGET * 0.95) s = s + 0.05;
-            s = Math.min(q.scale, Math.max(q.dynamic, Math.round(s * 20) / 20));
-            if (s !== this.scale) { this.scale = s; this.at = now; }
-        }
-        return this.scale;
-    }
-}
+const { Hud, AppMenus, Controls, KeyCommands, SPLASH_PARTICLES, RENDER_DEFAULTS, QUALITY, FRAME_BUDGET, Renderer, Surroundings, LightWriter, FrameWriter } = kit;
+const { Walker, DoorControl, SoundEvents, DOOR_REACH } = kits.settlement;
+const { LiftControl } = kits.building;
+const { DynamicScale } = kits.gpu;
 
 class App {
-    constructor(fx) {
+    // the world-space GUIs drawn this frame (FrameWriter): the lifts' panels
+    get panels() { return this.liftControl.shown; }
+
+    // world(scenario): the world (World, with the world type's extensions); extensions: AppExtension classes; title: the
+    // readout's
+    constructor(fx, { world, extensions = [], title = 'ENTITIES' }) {
         this.fx = fx;
+        this.createWorld = world;
+        this.title = title;
         this.canvas = fx.canvas;
         this.renderer = new Renderer(fx);
         this.input = new PointerInput(fx.io);
@@ -64,11 +55,12 @@ class App {
         this.probe = { coverage: 0, top: 0, precip: 0, virga: 0, cover: 0 };
         // its parts
         this.menus = new AppMenus(this);
-        this.clouds = new CloudPicker(this);
+        this.ext = {};
+        this.extensions = extensions.map(E => (this.ext[E.key] = new E(this)));
         this.controls = new Controls(this);
         this.keys = new KeyCommands(this);
-        this.doors = new DoorControl(this);
-        this.liftControl = new LiftControl(this);
+        this.doors = new DoorControl(this, { moved: () => { this.renderer.writeDoors(this.world.structures.doors.mesh()); this.renderer.writeBuildings(this.world.structures.buildings); } });
+        this.liftControl = new LiftControl(this, { reach: DOOR_REACH, cars: () => this.frameWriter.roomVis?.cars });
         this.surroundings = new Surroundings(this);
         this.sounds = new SoundEvents(this);
         this.lights = new LightWriter(this);
@@ -80,7 +72,7 @@ class App {
             if (this.walker.active) this.walker.place(this, x, z, y + 0.05);
             else this.camera.pos = [x, y + 1.62, z];
         } } };
-        this.dynamicScale = new DynamicScale();
+        this.dynamicScale = new DynamicScale(FRAME_BUDGET);
     }
 
     async start() {
@@ -89,7 +81,7 @@ class App {
     }
 
     load(scenario) {
-        const world = new World(scenario);
+        const world = this.createWorld(scenario);
         this.world = world;
         // thunder from each flash, timed by its distance from the camera then
         world.lightning.onStrike = f => { const [lo, hi] = world.lightning.reach(f, this.camera.pos); this.fx.emit('thunder', { near: lo, far: hi, bolt: !!f.bolt }); };
@@ -100,7 +92,7 @@ class App {
         this.radar = this.cfg.radar ?? false;       // off unless the scenario wants it: the screen stays clean
         this.renderer.setGui(this.cfg.gui || {});
         this.renderer.setWorld(world);
-        this.clouds.reset(world);
+        for (const x of this.extensions) x.load?.(world);
         const L = scenario.lighting || {};
         this.lightPresets = L.presets || { default: {} };
         this.lightNames = Object.keys(this.lightPresets);
@@ -129,7 +121,7 @@ class App {
             if (!this.paused) { this.time += dt; this.weatherTime += wdt; }
             w.busBoost = this.busFast || this.input.keys.has('KeyZ') ? 10 : 1;     // hold Z (or the bus menu): the buses run ten times as fast
             w.update(this.paused ? 0 : dt, wdt, this.time);
-            if (!this.paused) w.lightning.around(w, this.camera.pos, dt);
+            for (const x of this.extensions) x.update?.(dt, io);
             // on foot after the bus has moved, so a rider's eye is where the bus is this frame
             if (this.walker.active && !locked) this.walker.update(dt, io, this.input, this);
             this.liftControl.update(dt, io, now);

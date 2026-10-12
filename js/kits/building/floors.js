@@ -44,10 +44,12 @@ class FloorBuilder {
     // Storey s of plan P with its floor at y. o: { stacked (its vertices are drawn instanced for many storeys),
     // stairsUp (its flights climb to the storey above; else the stairwell is floored over), ground (the outer doors are
     // in its façade), shafts (per shaft of the core: its slice here, see shaft()), seed }. Returns per room its vertex
-    // range: [[first, count], ...] (a shaft's is empty: its pieces are shaftPiece's)
+    // range: [[first, count], ...] (a shaft's is empty: its pieces are shaftPiece's). Its door leaves' doorways go into
+    // this.doorways (see InteriorDoors)
     storey(P, y, o) {
         const B = this.B, S = B.S, out = [];
         this.P = P; this.y = y; this.o = o;
+        this.doorways = [];
         this.dark = false;
         this.M = mat => B.code(mat, o.stacked, this.dark);
         this.rnd = mulberry32(o.seed ?? 7);
@@ -210,12 +212,12 @@ class FloorBuilder {
                     // its edges, from the wall's face out to it (seen from the side, no sliver of wall behind it)
                     for (const u of [u0 - 0.07, u0, u1, u1 + 0.07]) S.quad(pt(u, y, off), pt(u, y, o2), pt(u, y1 + (u === u0 || u === u1 ? 0 : 0.07), o2), pt(u, y1 + (u === u0 || u === u1 ? 0 : 0.07), off), fr, this.M(0));
                     for (const [a, b, yy] of [[u0 - 0.07, u1 + 0.07, y1 + 0.07], [u0, u1, y1]]) S.quad(pt(a, yy, off), pt(b, yy, off), pt(b, yy, o2), pt(a, yy, o2), fr, this.M(0));
-                    // the leaf: hinged at the doorway's low end, swung open square to the wall into room a (drawn once)
+                    // the leaf (once, from room a): hinged at the doorway's low end on room a's side, opening into room a. Not
+                    // in the storey's mesh: each storey's door opens and shuts on its own (InteriorDoors draws it)
                     if (St.doors && p.kind === 'door' && p.a === k) {
-                        const leaf = FloorBuilder.contrast(St.doors, [faceCol, fr, floorCol]), d0 = off + w.side * 0.02, d1 = off + w.side * (u1 - u0 - 0.02);
-                        const la = u0 + 0.02, lb = u0 + 0.06, o0 = Math.min(d0, d1), o3 = Math.max(d0, d1);
-                        if (w.axis === 'x') this.box(la, lb, o0, o3, y + 0.01, y1 - 0.01, leaf, 0, true);
-                        else this.box(o0, o3, la, lb, y + 0.01, y1 - 0.01, leaf, 0, true);
+                        const xz = (u, o) => w.axis === 'x' ? [u, o] : [o, u];
+                        this.doorways.push({ i: p.pi, a: p.a, b: p.b, hinge: xz(u0 + 0.03, off - w.side * 0.02), u: xz(1, 0), n: xz(0, w.side),
+                            back: 0.027, len: u1 - u0 - 0.033, y0: 0.003, y1: y1 - y - 0.003, col: FloorBuilder.contrast(St.doors, [faceCol, fr, floorCol]) });
                     }
                 }
             }

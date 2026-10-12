@@ -326,7 +326,7 @@ function busTypes(Base) {
             for (const p of road) { roadPts.push(p); if (dist(p, E1) < 3) break; }
             S.ribbon(roadPts, 3.6, C2.asphalt);
             // street lamps along the open road, a pair facing each other across it every `lampStep` m, their arms over it
-            // (lights near the camera, distant sprites further: LightWriter.write, World.buildFarLights)
+            // (lights near the camera, distant sprites further: LightWriter.write, FarLights)
             for (let k = 0, step = d.lampStep ?? ROAD_LAMP_STEP, run = step / 2; k + 1 < roadPts.length; k++) {
                 const a = roadPts[k], b = roadPts[k + 1], len = dist(a, b), t = [(b[0] - a[0]) / len, (b[1] - a[1]) / len];
                 for (; run < len; run += step) {

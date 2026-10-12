@@ -1,13 +1,13 @@
 'use strict';
-// The app's commands: every setting the keys, the menus and the host change, each with its toast.
+// The app's commands: every setting the keys, the menus and the host change, each with its toast. An app extension
+// adds its own commands itself, and takes part in a jump to a view (beforeJump / afterJump).
 
-Features.kit('cloud', (engine, kit) => {
+Features.kit('atmosphere', (engine, kit) => {
 const { Common } = engine;
 const { DEG, clamp } = Common;
-const { QUALITY, RENDER_MODES } = engine.kits.atmosphere;
+const { QUALITY, RENDER_MODES } = kit;
 const { RAIN_VARIANTS } = engine.kits.weather;
-const { BUS } = engine.kits.transit;
-const { WALK, HURRICANE, Supercell, TORNADO } = kit;
+const { WALK } = engine.kits.settlement;
 
 class Controls {
     constructor(app) { this.app = app; }
@@ -119,36 +119,12 @@ class Controls {
         a.menus.sync();
     }
 
-    setHurricane(cat) {
-        const a = this.app;
-        a.world.hurricaneCat = cat;
-        a.reset = true;
-        a.menus.sync();
-        a.hud.toast(cat ? `${HURRICANE[cat].name} hurricane, eye at ${a.world.hurricanePos.map(v => (v / 1000).toFixed(0)).join(', ')} km` : 'Hurricane: off');
-    }
-
-    setTornado(cat) {
-        const a = this.app, w = a.world, P = a.clouds.persistent;
-        w.tornadoCat = cat;
-        a.menus.sync();
-        if (!cat) { a.hud.toast('Tornado: off'); return; }
-        // no supercell showing: show the first one the scenario places
-        if (!w.tornadoHost) {
-            const e = P.find(e => e instanceof Supercell);
-            if (e) a.clouds.set(P.indexOf(e), true, false);
-        }
-        const host = w.tornadoHost;
-        a.hud.toast(host ? `${TORNADO[cat].name} tornado under ${host.def.label || host.id}` : `${TORNADO[cat].name} tornado: waiting for a supercell`);
-    }
-
     // to view v (a `view` entity): its pos / look, or on what it follows (the entity `follow`, or `member` of it): boarding it
     // (board(app, spot): a bus's seat or door), at a spot it laid out (a village's bus stop), or offset from its focus
     jump(v, member = null) {
         const a = this.app, cam = a.camera, e = member || (v.follow && a.world.get(v.follow));
         a.walker.active = false;
-        // a view on a hidden persistent cloud shows it, and J then toggles it
-        const pick = a.clouds.persistent.indexOf(e);
-        if (pick >= 0) a.clouds.set(pick, true, false);
+        for (const x of a.extensions) x.beforeJump?.(v, e);
         if (e?.board) e.board(a, v.spot);
         else if (v.spot && e?.spots?.[v.spot]) {
             cam.pos = [...e.spots[v.spot].pos];
@@ -167,7 +143,7 @@ class Controls {
         if (v.walk && !a.walker.active) { a.walker.place(a, cam.pos[0], cam.pos[2], cam.pos[1] - WALK.eye); a.walker.eye(a); }
         if (v.lighting && a.lightPresets[v.lighting]) this.setLight(v.lighting);
         if (v.weather) a.world.weather.set(v.weather);
-        if (v.hurricane !== undefined && v.hurricane !== a.world.hurricaneCat) this.setHurricane(v.hurricane);
+        for (const x of a.extensions) x.afterJump?.(v, e);
         a.reset = true;
         a.hud.toast(member ? `${member.label}: ${member.describe?.() ?? ''}` : v.name);
     }

@@ -1,8 +1,9 @@
 'use strict';
 // Events for the scenario's sound cues (sound.cue): a bus door starting to open or shut, a footstep every 0.75 m walked
-// (1.1 m running).
+// (1.1 m running). host: { world (its buses), walker, camera, input (keys held), near (what falls on the camera: rain),
+// indoors, inBus, fx.emit }.
 
-Features.kit('cloud', (engine, kit) => {
+Features.kit('settlement', (engine, kit) => {
 
 class SoundEvents {
     constructor(app) {

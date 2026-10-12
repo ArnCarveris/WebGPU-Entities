@@ -1,11 +1,16 @@
 'use strict';
-// Walking: collision against the terrain and the structures, and the walker's motion.
+// Walking: collision against the terrain and the structures, and the walker's motion. A walker walks in a host's
+// world (host: { world, camera (a FirstPersonView: yaw, pitch, basis(), pos) }; world: { field (surface(x, z): the
+// ground as drawn), structures (Structures: solids, lifts, ladders, innerDoors), buses (to board and ride), water(x, z)
+// (open water there: no wading in; optional) }).
 
-Features.kit('cloud', (engine, kit) => {
+Features.kit('settlement', (engine, kit) => {
 const { Common } = engine;
 const { clamp } = Common;
 const { BUS } = engine.kits.transit;
-const { WALK, River } = kit;
+
+// body radius, highest step, eye height (m), speeds (m/s), climbing a ladder (m/s)
+const WALK = { radius: 0.2, step: 0.5, head: 1.75, eye: 1.62, speed: 1.5, run: 4.5, climb: 0.9, climbFast: 1.8 };
 
 // Pushes a walker at feet p ([x, y, z], changed in place) out of the walls among `boxes` (Solids.add's shape) and
 // returns the highest floor under it: a box whose top is within a step of the feet is a floor, one that reaches higher
@@ -87,6 +92,7 @@ class Walker {
     floorAt(app, p, below) {
         const w = app.world, boxes = w.structures.solids.near(p[0], p[2], 2, p[1]);
         for (const b of w.structures.lifts.colliders(p)) boxes.push(b);
+        for (const b of w.structures.innerDoors.colliders(p)) boxes.push(b);
         for (const bus of w.buses) {
             if (Math.hypot(p[0] - bus.pose.x, p[2] - bus.pose.z) > 10) continue;
             for (const b of bus.colliders()) {
@@ -97,11 +103,8 @@ class Walker {
         return collideWalker(p, boxes, Math.max(below, w.field.surface(p[0], p[2])));
     }
 
-    // open water at x, z (the land-use map's, or a river's own channel, which villages draw at its true width)
-    water(app, x, z) {
-        const w = app.world;
-        return w.field.landAt(x, z, 2) > 0.4 || w.entities.some(e => e instanceof River && e.distance(x, z) < (e.def.width || 60) / 2 - 2);
-    }
+    // open water at x, z (the world's say)
+    water(app, x, z) { return !!app.world.water?.(x, z); }
 
     update(dt, io, input, app) {
         const cam = app.camera, k = input.keys;
@@ -218,5 +221,5 @@ class Walker {
     }
 }
 
-return { Walker };
+return { WALK, Walker, collideWalker };
 });

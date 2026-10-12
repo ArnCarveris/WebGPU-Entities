@@ -1,32 +1,31 @@
 'use strict';
 // The app's menus (shown on the engine's handheld): each option of the world as a Menu, kept in step with the app.
+// An app extension keeps its own menus (made with menu(name, title)) and fills them in syncMenus().
 
-Features.kit('cloud', (engine, kit) => {
+Features.kit('atmosphere', (engine, kit) => {
 const { GpuChoice, kits } = engine;
 const { Menu } = kits.world;
-const { QUALITY, RENDER_MODES, FROXEL } = kits.atmosphere;
+const { QUALITY, RENDER_MODES, FROXEL } = kit;
 const { RAIN_VARIANTS, TIME_SCALES } = kits.weather;
-const { TORNADO, Supercell, HURRICANE } = kit;
 
-// weather and rain (pick one), the persistent clouds (show any of them), tornado and hurricane; the lighting; the graphics
+// weather and rain (pick one), how fast the weather runs; the lighting; the graphics
 class AppMenus {
     constructor(app) {
         this.app = app;
-        const menu = (name, title) => new Menu(name, title);
+        const menu = this.menu;
         this.weather = menu('weather', 'weather state');
         this.rain = menu('rain', 'rain variants');
         this.time = menu('time', 'how fast the weather runs');
-        this.clouds = menu('clouds', 'persistent clouds to show');
-        this.tornado = menu('tornado', "tornado under the supercell's wall cloud");
-        this.hurricane = menu('hurricane', 'hurricane with an eye (Saffir-Simpson category)');
         this.lighting = menu('lighting', 'lighting preset');
         this.quality = menu('quality', 'graphics quality');
         this.render = menu('render', 'render mode');
         this.gpu = menu('gpu', 'GPU features and timings');
     }
 
+    menu(name, title) { return new Menu(name, title); }
+
     sync() {
-        const a = this.app, w = a.world, c = a.controls, cl = a.clouds;
+        const a = this.app, w = a.world, c = a.controls;
         if (!w) return;
         const wx = w.weather, radio = (label, on, pick) => ({ label, kind: 'radio', on, pick });
         const rain = RAIN_VARIANTS.filter(n => wx.states[n]), isRain = rain.includes(wx.target);
@@ -37,12 +36,7 @@ class AppMenus {
         ]);
         this.rain.set(isRain ? wx.target : 'none', rain.map(n => radio(n, n === wx.target, () => c.setWeather(n))), rain.length > 0);
         this.time.set(`×${a.timeScale}${a.paused ? ' (paused)' : ''}`, TIME_SCALES.map(t => radio(`×${t}`, t === a.timeScale, () => c.setTimeScale(t))));
-        const P = cl.persistent, shown = P.filter(e => !e.off);
-        this.clouds.set(shown.length === P.length ? 'all' : !shown.length ? 'none' : shown.length === 1 ? cl.name(shown[0]) : `${shown.length} of ${P.length}`,
-            P.map((e, i) => ({ label: cl.label(e), kind: 'check', on: !e.off, pick: () => cl.set(i, !!e.off) })), P.length > 0);
-        const cats = (list, cur, set) => list.map((k, i) => radio(k ? `${k.name} · ${k.kmh} km/h` : 'off', i === cur, () => set(i)));
-        this.tornado.set(TORNADO[w.tornadoCat]?.name || 'off', cats(TORNADO, w.tornadoCat, k => c.setTornado(k)), w.entities.some(e => e instanceof Supercell));
-        this.hurricane.set(HURRICANE[w.hurricaneCat]?.name || 'off', cats(HURRICANE, w.hurricaneCat, k => c.setHurricane(k)));
+        for (const x of a.extensions) x.syncMenus?.();
 
         const lights = a.lightNames || [];
         this.lighting.set(a.lightName, lights.map(n => radio(n, n === a.lightName, () => c.pickLight(n))), lights.length > 1);

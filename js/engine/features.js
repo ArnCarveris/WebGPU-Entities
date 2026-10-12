@@ -32,15 +32,16 @@ const Features = {
         weather: { uses: ['noise'], parts: ['storms', 'climate', 'sky', 'lightning'] },
         interior: { uses: ['mesh'], parts: ['origin', 'vis-area', 'frustum', 'trees', 'areas', 'area-set', 'portal-vis', 'vis-debug', 'area-map', 'vis-inspector', 'floorplan', 'interior'] },
         transit: { uses: ['interior', 'mesh', 'gui'], parts: ['paths', 'line', 'bus', 'ship', 'elevator', 'lifts', 'lift-interaction'] },
-        building: { uses: ['noise', 'mesh', 'interior', 'transit', 'gui'], parts: ['library', 'core', 'furnish', 'floors', 'ladders', 'planned', 'sectors', 'room-vis'] },
+        building: { uses: ['noise', 'mesh', 'interior', 'transit', 'gui'], parts: ['library', 'core', 'furnish', 'floors', 'ladders', 'planned', 'sectors', 'doors', 'room-vis', 'lift-control'] },
         settlement: {
             uses: ['noise', 'mesh', 'interior', 'transit', 'building'],
             parts: [
                 'settlements', 'structures/limits', 'structures/palette', 'structures/solids', 'structures/shelter-boxes', 'structures/doors',
-                'structures/buildings', 'structures/fixtures', 'structures/structures', 'structures/meshes',
+                'structures/buildings', 'structures/fixtures', 'structures/structures', 'structures/meshes', 'structures/walker',
+                'structures/door-control', 'structures/sound-events',
             ],
         },
-        gpu: { parts: ['stencil', 'pipelines', 'extensions', 'lines', 'half', 'profiler'] },
+        gpu: { parts: ['stencil', 'pipelines', 'extensions', 'lines', 'half', 'profiler', 'dynamic-scale'] },
         gui: {
             uses: ['noise', 'gpu'],
             parts: [
@@ -49,22 +50,22 @@ const Features = {
                 'iptv', 'apps/camera', 'apps/gallery', 'apps/viewer', 'apps/tv', 'media-phone',
             ],
         },
-        // the volumetric atmosphere (clouds, precipitation, haze, lightning) over a terrain and its structures: a renderer
+        // the volumetric atmosphere (clouds, precipitation, haze, lightning) over a terrain and its structures: its renderer
+        // and what it writes each frame, the World under it (WorldExtensions compose a world type in), its App (with
+        // AppExtensions) and the engine adapter (AtmosphereWorld)
         atmosphere: {
-            uses: ['noise', 'gpu', 'gui', 'mesh', 'interior', 'transit', 'building', 'settlement', 'terrain', 'weather'],
+            uses: ['noise', 'view', 'world', 'gpu', 'gui', 'mesh', 'interior', 'transit', 'building', 'settlement', 'terrain', 'weather'],
             parts: [
                 'limits', 'quality', 'bindings', 'shaders/common', 'shaders/shelter', 'shaders/occupancy', 'shaders/noise', 'shaders/weather',
-                'shaders/volumetrics', 'shaders/scene', 'shaders/final', 'passes', 'renderer',
+                'shaders/volumetrics', 'shaders/scene', 'shaders/final', 'passes', 'renderer', 'far-lights', 'surroundings', 'light-writer',
+                'frame-writer', 'world', 'app/hud', 'app/menus', 'app/controls', 'app/key-commands', 'app/app', 'app/phone-pages', 'app/feature',
             ],
         },
-        // the cloud world (Entity Cloud): terrain, settlements, buses and lifts, weather, under the atmosphere kit's sky
+        // the cloud world (Entity Cloud): its entity types, its World extension (Storms: cells, hurricane, tornado) and App
+        // extension (Clouds: the cloud picker, storm keys, menus, readout), composed onto the atmosphere kit's
         cloud: {
             uses: ['noise', 'view', 'world', 'mesh', 'terrain', 'interior', 'transit', 'building', 'settlement', 'weather', 'gpu', 'gui', 'atmosphere'],
-            parts: [
-                'config', 'entities', 'world', 'walker', 'hud', 'app/menus', 'app/cloud-picker', 'app/controls', 'app/key-commands',
-                'app/lift-control', 'app/doors', 'app/surroundings', 'app/sound-events', 'app/light-writer', 'app/frame-writer', 'app/app',
-                'phone-pages', 'world-type',
-            ],
+            parts: ['entities', 'storms', 'clouds', 'world-type'],
             worlds: ['cloud'],
         },
     },

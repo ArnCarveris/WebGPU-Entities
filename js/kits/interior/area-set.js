@@ -35,6 +35,7 @@ class AreaSet {
         this.freeAreas = [];
         this.freePortals = [];
         this.landings = new Set();       // the live portals with a `landing` (lift landing doors: the world opens and closes them)
+        this.leaves = new Set();         // the live portals with a `leaf` (a door that opens and shuts: the world closes them)
         this.frame = 0;
     }
 
@@ -190,7 +191,7 @@ class AreaSet {
     // areas: [{ rect [x0, x1, z0, z1] (local), y (over the storey's floor), height, room (what the world draws of it;
     // the storey is added as s), shelter }], portals: [{ center (local x, z; y over the storey's floor), size, normal
     // (local), a, b (a template area's index, { tall: an area's index }, or 0: the outdoors), kind, passThrough, closed,
-    // landing (the world's: a lift's landing door) }] }, tall ([area indices]: areas that run up through the storeys,
+    // landing (the world's: a lift's landing door), leaf (the world's: a door that opens and shuts) }] }, tall ([area indices]: areas that run up through the storeys,
     // the stairwell and the shafts: they list the live storeys' portals into them), maxPerQuery (new storeys a query may
     // make at once: the rest come in the frames after) }. Returns st
     addStack(st) {
@@ -266,11 +267,13 @@ class AreaSet {
             const index = this.freePortals.length ? this.freePortals.pop() : this.portals.length;
             const P = new Portal({ center: c, size: d.size, normal: n, front: ref(d.a), back: ref(d.b), kind: d.kind, passThrough: d.passThrough, frame: false, closed: d.closed }, index, this);
             P.landing = d.landing ? { ...d.landing, s, y } : null;
+            P.leaf = d.leaf ? { ...d.leaf, s } : null;
             this.portals[index] = P;
             this.areas[P.front].portals.push(index);
             this.areas[P.back].portals.push(index);
             if (P.front === 0 || P.back === 0) L.outdoor.push(index);
             if (P.landing) this.landings.add(P);
+            if (P.leaf) this.leaves.add(P);
             for (let k = 0; k < 3; k++) { L.min[k] = Math.min(L.min[k], P.min[k]); L.max[k] = Math.max(L.max[k], P.max[k]); }
             L.portals.push(index);
         }
@@ -293,6 +296,7 @@ class AreaSet {
                     if (A && A.live !== L) A.portals = A.portals.filter(k => !gone.has(k));
                 }
                 this.landings.delete(P);
+                this.leaves.delete(P);
                 this.portals[i] = null;
                 this.freePortals.push(i);
             }

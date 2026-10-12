@@ -30,12 +30,12 @@ class Lightning {
     }
 
     // more strikes around the camera when it is under or beside a mature storm: the nearer, the more often, and
-    // mostly cloud-to-ground; each lands within 5 km of the camera, pulled in under the storm
-    around(world, cam, dt) {
-        const wl = world.weather.cur.lightning;
+    // mostly cloud-to-ground; each lands within 5 km of the camera, pulled in under the storm. cells: the storm cells;
+    // wl: the weather's lightning level
+    around(cells, wl, cam, dt) {
         if (!(wl > 0)) return;
         let rate = 0, best = null, bestP = 0;
-        for (const c of world.storms) {
+        for (const c of cells) {
             const L = c.def.lightning || 0;
             if (!L || !c.mature || c.state.precip < 0.15) continue;
             const reach = c.state.radius * 1.3 + 3000, d = Math.hypot(c.pos[0] - cam[0], c.pos[1] - cam[2]);

@@ -18,6 +18,8 @@ function terrainChannels(Base, { riverLabel = 200, valleyLabel = 16 } = {}) {
             const wig = 350 * fbm(x / 2500, z / 2500, { octaves: 3, seed: 17 });
             return polylineNearest(this.def.path, this.lens ??= polylineLengths(this.def.path), x, z + wig).dist;
         }
+        // open water at x, z: in its channel (a world's water(x, z): no wading in)
+        waterAt(x, z) { return this.distance(x, z) < (this.def.width || 60) / 2 - 2; }
         stamp(f) {
             const d = this.def, pts = d.path, halfW = (d.width || 60) / 2, bank = d.bank || 600, depth = d.depth || 5;
             const [x0, z0, x1, z1] = polylineBox(pts, halfW + bank + 400);

@@ -1,10 +1,10 @@
 'use strict';
-// The HUD: in-world labels and the readout.
+// The HUD: in-world labels and the readout. An app extension adds to the readout's air line (air(): text) and styles
+// the labels of the entities that are its own (label(e, d): null if not, { skip } or { color, text }).
 
-Features.kit('cloud', (engine, kit) => {
+Features.kit('atmosphere', (engine, kit) => {
 const { Common, kits } = engine;
 const { DEG, v3, fmtKm } = Common;
-const { StormCell } = kit;
 
 // what falling rain is called: by its rate (near-field intensity) and how fine its drops are
 const rainName = (rate, drops) => drops < 0.2 && rate < 0.3 ? 'drizzle' : rate < 0.3 ? 'light rain' : rate < 0.7 ? 'moderate rain'
@@ -18,7 +18,6 @@ class Hud extends kits.world.WorldHud {
     update(app, now) {
         if (!this.due(now)) return;
         const w = app.world, wx = w.weather, c = wx.cur, p = app.near;
-        const storms = w.storms, raining = storms.filter(s => s.state.precip > 0.05 && s.state.virga < 0.7).length;
         const wind = Math.hypot(...c.wind), dirDeg = (Math.atan2(c.wind[0], -c.wind[1]) / DEG + 360) % 360;
         const from = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'][Math.round(((dirDeg + 180) % 360) / 45) % 8];
         const here = p.rain + p.snow < 0.01 ? (app.camera.pos[1] > c.base && app.probe.coverage > 0.5 ? '<span class="m">in cloud</span>' : '<span class="m">dry</span>')
@@ -27,10 +26,10 @@ class Hud extends kits.world.WorldHud {
         const cw = app.renderer.cloudPass, prof = app.renderer.profiler;
         const fx = (v, d = 1) => (v / 1000).toFixed(d), pc = v => `${(v * 100).toFixed(0)}%`;
         const lines = [
-            `<span class="t">ENTITY CLOUD // ${w.scenario.name || 'scenario'}</span> <span class="m">· ${app.fps.toFixed(0)} fps${prof.enabled ? ` · gpu ${prof.total.toFixed(1)} ms` : ''} · ${cw.w}×${cw.h} · ${app.lightName}</span>`,
+            `<span class="t">${app.title} // ${w.scenario.name || 'scenario'}</span> <span class="m">· ${app.fps.toFixed(0)} fps${prof.enabled ? ` · gpu ${prof.total.toFixed(1)} ms` : ''} · ${cw.w}×${cw.h} · ${app.lightName}</span>`,
             `weather ${wx.blend < 1 ? `<span class="w">${wx.target} ${pc(wx.blend)}</span>` : wx.target}${w.rainZones.fade > 0 && wx.cur.zones ? ` <span class="m">(${zone ? `${zone} here` : 'off the route'} · reshuffle ${Math.max(0, w.rainZones.clock).toFixed(0)} s)</span>` : ''}${wx.cycle.enabled ? ' <span class="m">(auto)</span>' : ''} · ×${app.timeScale}${app.paused ? ' <span class="w">paused</span>' : ''}`,
             `sky     ${fx(c.base)}-${fx(c.top)} km · ${w.clouds.active(c).map(([n, v]) => `${n} ${pc(v)}`).join(' · ') || 'clear'}`,
-            `air     ${c.temperature.toFixed(0)} °C · freezing ${fx(wx.freezingLevel)} km · wind ${wind.toFixed(0)} m/s ${from} · ${storms.length} cells, ${raining} raining, ${w.flashCount} flashes`,
+            `air     ${c.temperature.toFixed(0)} °C · freezing ${fx(wx.freezingLevel)} km · wind ${wind.toFixed(0)} m/s ${from} · ${[...app.extensions.map(x => x.air?.()).filter(Boolean), `${w.flashCount} flashes`].join(', ')}`,
             `here    ${here}${app.sheltered || app.indoors ? ` <span class="w">${app.inBus ? 'in the bus' : app.indoors ? `indoors, storey ${Math.min(app.indoors.n, 1 + Math.floor((app.camera.pos[1] - app.indoors.floor) / app.indoors.H))} of ${app.indoors.n}` : 'sheltered'}</span>` : ''} · alt ${fx(app.camera.pos[1], 2)} km · snow ${app.frameWriter.groundSnowHint}`,
             ...(app.rideBus ? [`bus     ${app.rideBus.label} ${app.rideBus.describe()}${app.walker.active ? ` · <span class="w">${app.walker.seat ? 'seated' : app.walker.bus ? 'aboard' : 'on foot'}</span>` : ''}${w.busBoost > 1 ? ' <span class="w">×10</span>' : ''}`] : []),
         ];
@@ -67,13 +66,13 @@ class Hud extends kits.world.WorldHud {
         L.font();
         for (const e of [...app.world.entities, ...app.world.buses]) {
             if (!e.label || e.off || (e === app.rideBus && app.inBus)) continue;
-            const storm = e instanceof StormCell;
-            if (storm && e.state.coverage < 0.1) continue;
             const p = e.anchor, at = p && L.place(app.frameWriter.viewProj, p);
             if (!at) continue;
             const d = v3.len(v3.sub(p, app.camera.pos));
-            if (storm && d > 70000) continue;
-            L.mark(at, storm ? 'rgba(110,220,255,0.9)' : 'rgba(255,201,74,0.9)', `${e.label}${storm ? ` · ${e.describe()}` : ''}  ${fmtKm(d)}`);
+            let s = null;
+            for (const x of app.extensions) if ((s = x.label?.(e, d))) break;
+            if (s?.skip) continue;
+            L.mark(at, s?.color || 'rgba(255,201,74,0.9)', `${s?.text || e.label}  ${fmtKm(d)}`);
         }
     }
 }

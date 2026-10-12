@@ -227,7 +227,7 @@ fn townColor(xz: vec2f, px: f32) -> vec3f {
     return mix(c, vec3f(0.36, 0.36, 0.35), s);
 }
 
-// The fake street lamps (World.buildFarLights): on townColor's street grid, one every ${FAR_LAMP_PITCH} m, 7 m up, kept by
+// The fake street lamps (FarLights): on townColor's street grid, one every ${FAR_LAMP_PITCH} m, 7 m up, kept by
 // the same hash as there against the lamp share (landTex's alpha); a quarter of the districts have white LEDs
 fn farLampKey(c: vec2i) -> u32 { return pcg(u32(c.x + 65536) * 196613u + u32(c.y + 65536)); }
 fn farLampColor(xz: vec2f) -> vec3f {
@@ -636,7 +636,7 @@ fn shadeStruct(p: vec3f, nIn: vec3f, colIn: vec3f, mat: i32) -> vec4f {
     return vec4f(col, select(0.0, kind + 0.45 * puddle, rainNow > 0.0 && n.y > 0.7 && !glass));
 }
 
-// Distant lights by night (World.buildFarLights, FAR_FLOATS per instance): each lamp a point sprite added into the scene
+// Distant lights by night (FarLights, FAR_FLOATS per instance): each lamp a point sprite added into the scene
 // before the volumetrics, so the haze, rain and cloud in front dim it and the bloom spreads it. It carries the lamp's
 // light reaching the eye (intensity over distance squared) spread over at least a pixel or so, so it fades with
 // distance instead of flickering; near, the real lamp (its diffuser, its light) takes over as the sprite outgrows that.

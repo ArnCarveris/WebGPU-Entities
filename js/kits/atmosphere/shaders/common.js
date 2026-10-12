@@ -70,7 +70,7 @@ fn skyColor(dir: vec3f) -> vec3f {
 
 const FLASH_COLOR = vec3f(0.75, 0.82, 1.0);
 
-// Light pollution by night (World.buildFarLights): the light a town's lamps send up, off the ground and out of the
+// Light pollution by night (FarLights): the light a town's lamps send up, off the ground and out of the
 // fixtures, reaching p (the cloud base, the haze, the rain over it). Each dome is a disc of lamps of its radius on
 // the ground, seen from p as one source at its centre softened by that radius. No shadows, no cloud in between.
 const GLOW_COLOR = vec3f(1.0, 0.66, 0.36);

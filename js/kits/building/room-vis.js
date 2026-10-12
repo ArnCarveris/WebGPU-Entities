@@ -27,7 +27,7 @@ function runDraws(items, out) {
 
 // collects (item, storey) pairs for runDraws
 class DrawSet {
-    constructor() { this.items = new Map(); }
+    constructor() { this.items = new Map(); this.seen = new Map(); }      // seen: building -> storey -> Set of rooms
     add(it, owner, s) {
         it.owner = owner;
         let set = this.items.get(it);
@@ -36,6 +36,9 @@ class DrawSet {
     }
     // room k of section b's storey s
     room(b, s, k) {
+        let bs = this.seen.get(b);
+        if (!bs) this.seen.set(b, bs = new Map());
+        (bs.get(s) ?? bs.set(s, new Set()).get(s)).add(k);
         const tp = b.plan.tpl.get(b.plan.keys[s]), r = tp.rooms[k];
         if (!r || !r[1]) return;
         const it = (tp.roomItems ||= tp.rooms.map(([first, count]) => ({ first, count, stacked: tp.stacked, s0: tp.s0 })))[k];
@@ -93,6 +96,8 @@ class RoomVis {
         // as far as it is open
         for (const P of A.landings) P.closed = !L.landingOpen(P.landing.key, P.landing.y);
         for (const c of L.cars) if (c.doorPortal) c.doorPortal.closed = c.el.door < 0.03;
+        // a doorway's door: closed while it is shut (the world's InteriorDoors)
+        if (world.innerDoors) for (const P of A.leaves) P.closed = !world.innerDoors.isOpen(P.leaf);
         const res = I.frozen || this.vis.compute(eye, viewProj, W, H, enabled);
         if (view) I.update(res, { eye, ...view }, performance.now() - t0);
         const D = new DrawSet();
@@ -115,6 +120,7 @@ class RoomVis {
             });
             for (const c of L.near(eye, 40)) this.cars.add(c);
             D.into(out);
+            this.seen = D.seen;
             return res;
         }
         const areas = A.areas;
@@ -146,6 +152,7 @@ class RoomVis {
             }
         });
         D.into(out);
+        this.seen = D.seen;              // the rooms drawn: building -> storey -> Set of rooms (their doors' leaves)
         return res;
     }
 }

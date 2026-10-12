@@ -1,14 +1,17 @@
 'use strict';
 // The frame uniform and the per-frame GPU data: camera and projection, sky, weather map domain, quality, the buses
 // and building interiors to draw, rain, storm cells, cloud features and the weather probe. It keeps what the frame's
-// render and the HUD read back (viewProj, the particle counts, the probe texel, the shadow slices).
+// render and the HUD read back (viewProj, the particle counts, the probe texel, the shadow slices). Written for the app
+// that runs a world under this kit's Renderer (host: world (field, weather, structures, buses, lightning...), camera,
+// renderer, settings (quality, cfg, sun, time...), its surroundings (near, indoors...), panels: the world-space GUIs to
+// draw this frame).
 
-Features.kit('cloud', (engine, kit) => {
+Features.kit('atmosphere', (engine, kit) => {
 const { Common } = engine;
 const { clamp, sat01, v3, m4, frustumPlanes } = Common;
 const {
     NEAR, WEATHER_RES, GROUND_RES, CELL_FLOATS, QUALITY, SHADOW_SLICES, FROXEL_NEAR, BUS_UNIFORM,
-} = engine.kits.atmosphere;
+} = kit;
 const { DRIP_PARTICLES, INTERIOR_DRAW } = engine.kits.settlement;
 const { rainFall, Sky } = engine.kits.weather;
 const { BUS_DRAW, BUS } = engine.kits.transit;
@@ -76,6 +79,9 @@ class FrameWriter {
         // near the camera is a few metres from its origin in f32 at any height
         const frameOf = b => b.interior.origin.level(b.interior.origin.levelNear(cam.pos));
         r.boxGroups = S.lifts.instances(cam.pos, r.boxData, this.roomVis.cars, this.roomVis.ranges, b => frameOf(b).M[13]);
+        // the doors' leaves in the rooms drawn, after them (the same boxes)
+        const lifted = r.boxGroups.reduce((n, g) => n + g.count, 0);
+        r.boxGroups.push(...S.innerDoors.instances(cam.pos, r.boxData, lifted, this.roomVis.seen, b => frameOf(b).M[13]));
         r.boxCount = r.boxGroups.reduce((n, g) => n + g.count, 0);
         // each building drawn, in its Origin's frame: its model-view built in doubles about the camera, in a slot of
         // busData after the buses' (the interiors' and the lifts' draws name it)
@@ -98,7 +104,7 @@ class FrameWriter {
         for (const g of r.boxGroups) g.slot = slotOf(g.b);
         r.boxGroups = r.boxGroups.filter(g => g.slot >= 0);
         r.originCount = slots.size;
-        r.setPanels(a.liftControl.shown);
+        r.setPanels(a.panels || []);
         // the cabin the rain and the march leave out: the bus ridden, or the nearest; the lift car the camera is in (its
         // own air: nothing of the shaft's or the weather's in it); else the building the camera is in
         const car = a.rideCar;

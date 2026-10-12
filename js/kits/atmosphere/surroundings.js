@@ -1,9 +1,9 @@
 'use strict';
 // Where the camera is, each frame: what falls on it, whether it is indoors, aboard or near a bus, or sheltered, and how
 // much a lightning flash lights it. The app keeps the results (near, indoors, rideBus, inBus, sheltered, flashVeil),
-// which the frame, the sounds, the HUD and the host read.
+// which the frame, the sounds, the HUD and the host read (host: the app, as FrameWriter's).
 
-Features.kit('cloud', (engine, kit) => {
+Features.kit('atmosphere', (engine, kit) => {
 const { Common } = engine;
 const { sat01, lerp, smoothstep, v3 } = Common;
 const { rainFall } = engine.kits.weather;
