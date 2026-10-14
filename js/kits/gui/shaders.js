@@ -157,6 +157,13 @@ const sceneShader = () => /* wgsl */`
         return m;
     }
 
+    // target mode: the surface shows its GUI's target (premultiplied) over the glass
+    @fragment
+    fn fs_surface(i : VSOut) -> @location(0) vec4f {
+        let t = textureSample(guiTex, guiSampler, i.uv);
+        return vec4f(t.rgb + vec3f(0.004, 0.005, 0.006) * (1.0 - t.a), 1.0);
+    }
+
     @fragment
     fn fs_scene(i : VSOut) -> @location(0) vec4f {
         let mt = material(u32(i.mat + 0.5), i.uv, i.wpos, i.sel);
@@ -200,6 +207,7 @@ const sceneShader = () => /* wgsl */`
         @location(1) color : vec4f,
         @location(2) gpos  : vec2f,
         @location(3) @interpolate(flat) fx : f32,
+        @location(4) @interpolate(flat) vsize : vec2f,
     };
 
     @vertex
@@ -215,6 +223,7 @@ const sceneShader = () => /* wgsl */`
         o.color = i.color;
         o.gpos = i.pos;
         o.fx = fx;
+        o.vsize = inst[i.instanceIdx].tint.yz;
         return o;
     }
 
@@ -229,8 +238,14 @@ const sceneShader = () => /* wgsl */`
         return rgb * scan * flick * vig + vec3f(0.35, 0.8, 1.0) * roll * 0.05 * a;
     }
 
+    // past its GUI's virtual screen (a page overflowing its surface): not drawn, as the surface stencil used to cut it
+    fn clipped(i : GuiOut) -> bool {
+        return i.gpos.x < 0.0 || i.gpos.y < 0.0 || i.gpos.x > i.vsize.x || i.gpos.y > i.vsize.y;
+    }
+
     @fragment
     fn fs_gui(i : GuiOut) -> @location(0) vec4f {
+        if (clipped(i)) { discard; }
         let c = textureSample(guiTex, guiSampler, i.uv) * i.color;
         return vec4f(mix(c.rgb, crt(c.rgb, i.gpos, c.a), i.fx), c.a);
     }
@@ -238,6 +253,7 @@ const sceneShader = () => /* wgsl */`
     // Security-camera look. color.r = signal strength (0 = static).
     @fragment
     fn fs_cctv(i : GuiOut) -> @location(0) vec4f {
+        if (clipped(i)) { discard; }
         let t = U.params.x;
         let uv = i.uv;
         let tear = (hash(vec2f(floor(uv.y * 120.0), floor(t * 24.0))) - 0.5) * 0.004;

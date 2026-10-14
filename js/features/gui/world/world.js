@@ -144,7 +144,7 @@ class World {
         for (const g of this.guis) g.writeInstances(renderer);
     }
 
-    // Draw the world into a scene pass: entity meshes (but an owner's in its own view), then every GUI surface (anchor + GUI)
+    // Draw the world into a scene pass: entity meshes (but an owner's in its own view), then every GUI surface
     render(pass, ctx) {
         for (const h of this.instances) {
             if ((h.owner && h.owner === ctx.skip) || (h.visible && !h.visible(ctx))) continue;

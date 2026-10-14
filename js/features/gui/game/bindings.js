@@ -42,7 +42,6 @@ class Bindings {
             // settings
             lights: { get: () => g.world.lightsOn, set: (v) => g.world.setLights(v) },
             alarm: { get: () => g.world.alarm, set: (v) => g.world.setAlarm(v) },
-            stencil: { get: () => g.renderer.useStencil, set: (v) => { g.renderer.useStencil = v; } },
             sound: { get: () => g.audio.enabled, set: (v) => { g.audio.enabled = v; } },
             fov: { get: () => g.player.fovDeg, set: (v) => { g.player.fovDeg = v; }, min: 45, max: 95, fmt: (v) => `${Math.round(v)}°` },
             lamp: { get: () => g.world.lampScale * 100, set: (v) => { g.world.lampScale = v / 100; }, min: 0, max: 200, fmt: pct },
@@ -63,14 +62,8 @@ class Bindings {
             'hatch.action': { text: () => (door().isOpen ? 'Seal hatch' : 'Open hatch (override)') },
             'media.summary': { text: () => g.camera.library.summary() },
             'iptv.summary': { text: () => `${g.iptv.channels.length} channels · ${g.iptv.current.name}` },
-            'stencil.description': {
-                text: () => (g.renderer.useStencil
-                    ? 'Each GUI surface writes its own stencil value where it wins the depth test. GUI quads draw with depth ALWAYS + stencil EQUAL in painter\'s order: no z-fighting, and the swinging lamp still occludes them.'
-                    : 'Depth test only: GUI quads test LEQUAL against the co-planar screen. They reach the wall through a different matrix path than the screen, so their depth rounds differently and the terminal z-fights.')
-            },
             'stats.fps': { text: () => `${g.stats.fps} fps` },
             'stats.resolution': { text: () => `${g.renderer.width} × ${g.renderer.height}` },
-            'stats.guiMask': { text: () => (g.renderer.useStencil ? 'Stencil' : 'Depth only') },
             'stats.guiSurfaces': { text: () => String(g.interaction.guis.length) },
             'stats.terminal': { text: () => g.stats.gui(g.world.get(links.terminal).gui) },
             'stats.easel': { text: () => g.stats.gui(g.world.get(links.easel).gui) },

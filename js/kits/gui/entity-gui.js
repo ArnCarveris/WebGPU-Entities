@@ -12,16 +12,16 @@ const { V3, M4, hitIn, GuiSurface, GuiModel } = kit;
 // tracing the view ray against the surface (GuiTrace).
 //
 // Rendering is the host renderer's: an EntityGUI is only its surface, its model and its input. The kit's Renderer
-// (renderer.js) gives it an anchor (the surface geometry, which writes the GUI's own value of the stencil layout's
-// "gui.surface" slot where it is visible) and draws its quads with depth ALWAYS + stencil EQUAL: no z-fighting, correct
-// occlusion, and GUIs never draw through each other. Another feature's renderer draws the same model its own way (the
-// portal feature: in its portal entry's stencil region, depth-tested just in front of its screen).
+// (renderer.js) draws its quads depth-tested against the surface, with a depth bias toward the viewer, as Doom 3 draws
+// its GUI surfaces: no stencil buffer, so the surface's own depth decides occlusion. Another feature's renderer draws
+// the same model its own way (the portal feature: in its portal entry's stencil region, depth-tested just in front of
+// its screen).
 //
 // Picking is the InteractionSystem's (interaction.js): trace() the view ray, inRange() to use it, hintRange to say
 // "move closer". Subclasses implement draw(dc, now) and react to input via onPress / pointerDrag / pointerUp / wheel.
 
 class EntityGUI {
-    // def: { id, size: [w, h] metres, virtual: [vw, vh], zOffset, crt, range, hintRange, anchorMaterial, maxVerts }
+    // def: { id, size: [w, h] metres, virtual: [vw, vh], zOffset, crt, range, hintRange, maxVerts }
     constructor(def) {
         this.def = def;
         this.id = def.id;

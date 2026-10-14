@@ -8,7 +8,7 @@
 //   layout, module, fsModule (default: module), vs, fs, buffers,     names in ctx (buffers: a list or a ctx name)
 //   topology ('triangle-list'), cull ('none'), frontFace ('ccw'),
 //   blend (a ctx.blends name or a GPUBlendState), colorWrite (false: no colour, stencil-only marks),
-//   depth: { write, compare } | false (no depth-stencil), stencil: { test, op, write } (stencilState),
+//   depth: { write, compare, bias: { constant, slopeScale, clamp } } | false (no depth-stencil), stencil: { test, op, write } (stencilState),
 //   variants: { name: overrides }         one pipeline per variant (out[def][variant]), overrides merged shallowly
 // }
 
@@ -39,6 +39,7 @@ function buildPipeline(ctx, name, d) {
         desc.depthStencil = {
             format: ctx.depthFormat, depthWriteEnabled: !!z.write, depthCompare: z.compare || 'less',
             ...stencilState(ctx.stencil, d.stencil),
+            ...(z.bias && { depthBias: z.bias.constant ?? 0, depthBiasSlopeScale: z.bias.slopeScale ?? 0, depthBiasClamp: z.bias.clamp ?? 0 }),
         };
     }
     if (ctx.samples > 1) desc.multisample = { count: ctx.samples };

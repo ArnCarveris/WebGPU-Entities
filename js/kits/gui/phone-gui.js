@@ -21,7 +21,7 @@ const TEXT_CELL = { size: 13, lead: 18, width: 214 };
 
 class PhoneGUI extends EntityGUI {
     constructor(cfg, pages) {
-        super({ id: 'phone', size: cfg.screen, virtual: cfg.virtual, zOffset: cfg.zOffset, anchorMaterial: 'glass', maxVerts: 24000 });
+        super({ id: 'phone', size: cfg.screen, virtual: cfg.virtual, zOffset: cfg.zOffset, maxVerts: 24000 });
         this.cfg = cfg;
         this.pages = pages;
         this.templates = new Map();

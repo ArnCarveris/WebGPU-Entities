@@ -6,7 +6,7 @@
 // when its model changed) and its glass shows that texture.
 
 Features.kit('gui', (engine, kit) => {
-const { GuiTargets, GUI_VERTEX_LAYOUT } = kit;
+const { GuiTargets, GuiMode, GUI_VERTEX_LAYOUT } = kit;
 const UNIFORM = 256;                // bytes per GUI (a dynamic offset)
 
 // glass and quads: the GUI's surface matrix (columns right, up, normal in metres, its centre) and its size place
@@ -74,7 +74,7 @@ class WorldGuiPass {
         if (stencil && mode !== 'target' && stencil.bits > 0) this.slot = stencil.reserve(slot, { values: 1, min: 0 });
     }
 
-    // the mode it ended up in, and its pipelines
+    // the scene's default mode, and the pipelines of every mode (the GuiMode choice picks one per frame: resolved())
     init() {
         const d = this.device, o = this.o, S = GPUShaderStage;
         this.mode = this.slot?.capacity > 0 ? 'world' : 'target';
@@ -103,18 +103,34 @@ class WorldGuiPass {
             primitive: { topology: 'triangle-list', cullMode: 'none' },
             depthStencil: { format: o.depth.format, ...depth, ...stencil },
         });
-        const D = { depthWriteEnabled: true, depthCompare: o.depth.compare === 'greater' ? 'greater-equal' : 'less-equal' };
+        // reversed Z ('greater'): nearer is larger, so a pull toward the eye is a positive bias
+        const reversed = o.depth.compare === 'greater';
+        const D = { depthWriteEnabled: true, depthCompare: reversed ? 'greater-equal' : 'less-equal' };
+        const pull = k => ({ depthBias: (reversed ? 1 : -1) * k, depthBiasSlopeScale: (reversed ? 1 : -1) * k / 2, depthBiasClamp: 0 });
         const blend = { color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' }, alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' } };
-        if (this.mode === 'world') {
+        // stencil: the glass marks its value, the quads draw masked by it, the glass clears it again
+        if (this.slot?.capacity > 0) {
             this.pAnchor = pipe('gui.anchor', 'vsGlass', 'fsGlass', { pl: glassLayout, depth: D, stencil: st('always', 'replace') });
             this.pQuad = pipe('gui.quads', 'vsQuad', 'fsQuad', { buffers: [GUI_VERTEX_LAYOUT], blend, depth: { depthWriteEnabled: false, depthCompare: 'always' }, stencil: st('equal', 'keep') });
             this.pUnanchor = pipe('gui.unanchor', 'vsGlass', 'fsGlass', { pl: glassLayout, depth: { depthWriteEnabled: false, depthCompare: D.depthCompare }, stencil: st('always', 'zero'), colorWrite: false });
-        } else {
-            this.targets = new GuiTargets(d, 'rgba8unorm', { max: o.rtMax, layout: this.texLayout });
-            this.targetGroups = new WeakMap();
-            this.pTarget = pipe('gui.target', 'vsGlass', 'fsTarget', { depth: D });
         }
+        // bias / offset: the glass (depth written; the quads sit 1.5 mm in front of it), the quads depth-tested 3 mm in front
+        // of the glass, and pulled toward the eye by a bias in the bias mode
+        this.pGlass = pipe('gui.glass', 'vsGlass', 'fsGlass', { pl: glassLayout, depth: D });
+        this.pQuadOffset = pipe('gui.quads.offset', 'vsQuad', 'fsQuad', { buffers: [GUI_VERTEX_LAYOUT], blend, depth: { depthWriteEnabled: false, depthCompare: D.depthCompare } });
+        this.pQuadBias = pipe('gui.quads.bias', 'vsQuad', 'fsQuad', { buffers: [GUI_VERTEX_LAYOUT], blend, depth: { depthWriteEnabled: false, depthCompare: D.depthCompare, ...pull(4) } });
+        // target: each GUI in a render target of its own, the glass showing it
+        this.targets = new GuiTargets(d, 'rgba8unorm', { max: o.rtMax, layout: this.texLayout });
+        this.targetGroups = new WeakMap();
+        this.pTarget = pipe('gui.target', 'vsGlass', 'fsTarget', { depth: D });
         return this;
+    }
+
+    // the mode this frame draws with: the GuiMode choice, else the scene's default (stencil needs its slot)
+    resolved() {
+        let m = GuiMode.of(this.mode === 'world' ? 'stencil' : 'target');
+        if (m === 'stencil' && !(this.slot?.capacity > 0)) m = 'target';
+        return m;
     }
 
     registerMaterial(name, view) {
@@ -134,41 +150,54 @@ class WorldGuiPass {
             U.set([g.width, g.height, g.vw, g.vh, ...o.glass, gain], i * F + 32);
         });
         if (this.list.length) this.device.queue.writeBuffer(this.ubuf, 0, U, 0, this.list.length * F);
-        if (this.mode === 'target') for (const g of this.list) {
+        if (this.resolved() === 'target') for (const g of this.list) {
             const rt = this.targets.update(enc, g);
             if (!this.targetGroups.has(rt)) this.targetGroups.set(rt, this.targets.group(rt.view));
             g._worldGuiGroup = this.targetGroups.get(rt);
         }
     }
 
-    // into the scene pass (its depth-stencil target the one `depth` describes); ref: the stencil reference the slot's
-    // value composes into (the renderer's StencilLayout.compose)
+    // into the scene pass (its depth-stencil target the one `depth` describes)
     draw(pass) {
         if (!this.list.length) return;
-        if (this.mode === 'target') {
+        const mode = this.resolved();
+        if (mode === 'target') {
             pass.setPipeline(this.pTarget);
             this.list.forEach((g, i) => { pass.setBindGroup(0, this.ugroup, [i * UNIFORM]); pass.setBindGroup(1, g._worldGuiGroup); pass.draw(6); });
             return;
         }
-        pass.setStencilReference(this.o.stencil.compose({ [this.o.slot]: 1 }));
+        if (mode === 'stencil') {
+            pass.setStencilReference(this.o.stencil.compose({ [this.o.slot]: 1 }));
+            this.list.forEach((g, i) => {
+                pass.setBindGroup(0, this.ugroup, [i * UNIFORM]);
+                pass.setPipeline(this.pAnchor);
+                pass.draw(6);
+                if (g.model?.count && g.model.buffer) { pass.setPipeline(this.pQuad); this.drawQuads(pass, g.model); }
+                pass.setPipeline(this.pUnanchor);
+                pass.draw(6);
+            });
+            return;
+        }
+        // bias / offset: no stencil
         this.list.forEach((g, i) => {
-            const m = g.model;
             pass.setBindGroup(0, this.ugroup, [i * UNIFORM]);
-            pass.setPipeline(this.pAnchor);
+            pass.setPipeline(this.pGlass);
             pass.draw(6);
-            if (m?.count && m.buffer) {
-                pass.setPipeline(this.pQuad);
-                pass.setVertexBuffer(0, m.buffer);
-                for (const surf of m.surfaces) {
-                    const grp = this.materials.get(surf.material);
-                    if (!grp) continue;
-                    pass.setBindGroup(1, grp);
-                    pass.draw(surf.count, 1, surf.first);
-                }
+            if (g.model?.count && g.model.buffer) {
+                pass.setPipeline(mode === 'bias' ? this.pQuadBias : this.pQuadOffset);
+                this.drawQuads(pass, g.model);
             }
-            pass.setPipeline(this.pUnanchor);
-            pass.draw(6);
         });
+    }
+
+    drawQuads(pass, m) {
+        pass.setVertexBuffer(0, m.buffer);
+        for (const surf of m.surfaces) {
+            const grp = this.materials.get(surf.material);
+            if (!grp) continue;
+            pass.setBindGroup(1, grp);
+            pass.draw(surf.count, 1, surf.first);
+        }
     }
 }
 

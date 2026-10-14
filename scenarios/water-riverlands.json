@@ -5,7 +5,7 @@
         {"type":"water","name":"Riverlands"},
         {"type":"terrain","size":2048,"resolution":512,"base":80,"snowLine":250},
         {
-            "type": "sim", "stepsPerFrame": 32, "stepTime": 0.12, "gravity": 9.81, "diffusion": 0.06, "linDamping": 0.99, "sqrDamping": 0.05,
+            "type": "sim", "stepsPerFrame": 1, "stepTime": 0.12, "gravity": 9.81, "acceleration": 0.4, "diffusion": 0.06, "linDamping": 0.99, "sqrDamping": 0.05,
             "absorption": 1, "evaporation": 10, "frictionMinDepth": 0, "frictionMaxDepth": 1, "frictionAmount": 0.9, "minDepth": 0.03, "wetDecay": 0.9998,
             "warmup": 24000, "edges": "open", "cfl": 0.3, "turbulenceSpeed": 8
         },

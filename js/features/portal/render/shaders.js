@@ -262,6 +262,8 @@ struct GOut {
 fn untonemap(c: vec3f) -> vec3f { return -log(vec3f(1.0) - pow(min(c, vec3f(0.995)), vec3f(2.2))) / 1.15; }
 
 @fragment fn fs(i: GOut) -> @location(0) vec4f {
+    // a page overflowing its screen (text past its panel) is not drawn: the stencil used to cut it
+    if (i.gpos.x < 0.0 || i.gpos.y < 0.0 || i.gpos.x > D.info.w || i.gpos.y > D.info.z) { discard; }
     let c = textureSample(guiAtlas, guiSampler, i.uv) * i.color;
     if (c.a < 0.004) { discard; }
     let scan = 0.93 + 0.07 * sin(i.gpos.y * 2.0944 - G.params.x * 3.0);

@@ -53,6 +53,10 @@ class World {
         this.lib.load(this.sc);
         for (const def of this.sc.entities || []) kits.world.addEntity(this, ENTITY_TYPES, def, { warnings: this.warnings, tolerant: true });
         this.warnings.push(...new Set(this.lib.warnings));
+        // the highest a shadow caster reaches (the terrain's peak plus a margin for the models on it): see writeShadows
+        let peak = 0;
+        for (const h of this.terrain?.heights ?? []) if (h > peak) peak = h;
+        this.casterTop = peak + 60;
         this.list = [...this.archetypes.values()];
         for (const a of this.list) {
             if (a.asset.settings.enabled && !a.asset.atlas) await this.game.bake(a.asset);

@@ -208,11 +208,14 @@ class Renderer {
 
     // Cascades: split the camera range [near, shadowDistance] (log / uniform mix by lambda); fit each slice's
     // bounding sphere with an orthographic light box, snapped to whole texels so shadows do not shimmer, and
-    // stretched far back toward the sun so casters outside the slice still land in the map.
-    writeShadows(cam, env, st, aspect) {
+    // stretched back toward the sun so casters outside the slice still land in the map. How far back: to the
+    // highest caster (`top`, metres) seen along the sun ray from the slice's lowest point. A low sun throws shadows
+    // kilometres long, so a fixed reach dropped the shadows of distant ridges.
+    writeShadows(cam, env, st, aspect, top) {
         const S = this.shadowData, res = this.shadowRes, far = st.shadowDistance, near = 0.5, lambda = st.shadowLambda;
         const { fwd, right, up } = cam.basis();
         const th = Math.tan(cam.fov / 2), tw = th * aspect, L = env.sunDir;
+        const sinSun = Math.max(L[1], 0.02);
         const LV = m4.lookAt(L, [0, 0, 0], Math.abs(L[1]) > 0.99 ? [0, 0, 1] : [0, 1, 0]);
         let prev = near;
         for (let c = 0; c < CASCADES; c++) {
@@ -228,7 +231,8 @@ class Renderer {
             const texel = 2 * radius / res;
             const cl = [0, 1, 2].map(k => LV[k] * center[0] + LV[4 + k] * center[1] + LV[8 + k] * center[2] + LV[12 + k]);
             const x = Math.floor(cl[0] / texel) * texel, y = Math.floor(cl[1] / texel) * texel;
-            const n = -cl[2] - radius - 800, f = -cl[2] + radius;
+            const reach = Math.max(800, (top - (center[1] - radius)) / sinSun);
+            const n = -cl[2] - radius - reach, f = -cl[2] + radius;
             const P = new Float64Array(16);
             P[0] = 1 / radius; P[5] = 1 / radius; P[10] = -1 / (f - n); P[12] = -x / radius; P[13] = -y / radius; P[14] = -n / (f - n); P[15] = 1;
             const M = m4.mul(P, LV);
@@ -344,7 +348,7 @@ class Renderer {
         this.resize();
         const d = this.device, archs = world ? world.list : [];
         this.writeGlobals(cam, env, st, time);
-        this.writeShadows(cam, env, st, this.width / this.height);
+        this.writeShadows(cam, env, st, this.width / this.height, world?.casterTop ?? 0);
         for (let k = 0; k < LISTS; k++) d.queue.writeBuffer(this.viewBuf, k * 256, this.viewData, k * 64, 24);
         const enc = d.createCommandEncoder();
         for (const a of archs) a.upload(this);

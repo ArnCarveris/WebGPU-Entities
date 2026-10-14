@@ -2,7 +2,7 @@
 // The renderer: device, pipelines, instances, GUI materials, views and scene passes.
 
 Features.kit('gui', (engine, kit) => {
-const { MeshBuilder, GuiSurface, sceneShader, VIDEO_SHADER } = kit;
+const { MeshBuilder, GuiSurface, GuiMode, M4, sceneShader, VIDEO_SHADER } = kit;
 const { StencilLayout, buildPipelines } = engine.kits.gpu;
 
 // WebGPU renderer: device, pipelines, instance data, GUI materials and views (view targets: views.js).
@@ -13,6 +13,9 @@ const INSTANCE_FLOATS = 20;      // model 16 + tint 4
 const GUI_STRIDE = 8;            // x y u v r g b a
 const DEPTH_FORMAT = 'depth24plus-stencil8';
 const CLEAR_COLOR = { r: 0.004, g: 0.005, b: 0.007, a: 1 };
+// GUI quads sit on their surface: 'bias' pulls them toward the viewer (Doom 3 polygon-offsets its GUI surfaces)
+const GUI_BIAS = { constant: -4, slopeScale: -2, clamp: 0 };
+const GUI_TARGET_MAX = 1024;     // a target's longest side, texels
 
 const WORLD_VERTEX_LAYOUT = {
     arrayStride: 9 * 4,
@@ -51,20 +54,21 @@ class Renderer {
         this.pipelines = {};
         this.materials = new Map();     // name -> { shading, view, version }
         this.instanceCount = 0;
-        // the depth-stencil target's bits, by name (js/kits/gpu/stencil.js): GUI surfaces reserve theirs with
-        // reserveSurfaces() before createPipelines()
+        this.onError = null;
+        this.mirror = null;             // another renderer (the handheld's) that gets this one's GUI materials too
+        // the depth-stencil target's bits, by name (js/kits/gpu/stencil.js): the stencil mode's GUI surfaces reserve theirs
+        // with reserveSurfaces() before createPipelines()
         this.stencil = new StencilLayout();
         this.surfaceSlot = null;
         this.surfaces = 0;
-        this.useStencil = true;         // false = GUI surfaces rely on the depth test alone (z-fights)
-        this.onError = null;
-        this.mirror = null;             // another renderer (the handheld's) that gets this one's GUI materials too
+        this.targets = null;            // GuiTargets (the target mode): GUIs drawn into textures for their surfaces
     }
 
     async init() {
         this.device = this.fx.device;
         this.format = this.fx.format;
         this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear' });
+        this.targets = new kit.GuiTargets(this.device, 'rgba8unorm', { max: GUI_TARGET_MAX });
         this.resize();
     }
 
@@ -125,25 +129,38 @@ class Renderer {
         if (tint) this.instanceData.set(tint, o + 16);
     }
 
-    // GUI surfaces mask their quads with a stencil value of their own, so one GUI never draws through another: `n`
-    // values of the "gui.surface" slot. It may get fewer (the layout's other users come first); a surface without
-    // one falls back to the depth test.
+    // GUI surfaces reserve their stencil values (the stencil mode) before createPipelines(); the reservation stays whatever
+    // the mode, so the mode can change at runtime
     reserveSurfaces(n) {
         this.surfaceSlot = this.stencil.reserve('gui.surface', { values: Math.max(1, n), min: 0 });
     }
 
-    // an EntityGUI on this renderer (EntityGUI.attach): its surface geometry ("anchor"), instances and stencil value
+    // an EntityGUI on this renderer (EntityGUI.attach): its surface geometry (the stencil mode's anchor, the target
+    // mode's textured surface), its quads' instance and its stencil value
     bindGui(gui) {
         const slot = this.surfaceSlot, i = ++this.surfaces;
         gui.stencilRef = slot && i <= slot.capacity ? slot.ref(i) : null;
         gui.anchorInstance = this.allocInstances(1);
         gui.guiInstance = this.allocInstances(1);
         gui.anchorMesh = this.createMesh(new MeshBuilder(this.worldMaterials).surface(gui.tri, gui.def.anchorMaterial || 'glass'));
+        gui.targetName = 'gui.target#' + i;
     }
 
+    // the quads' placement: the surface, pushed off it in the offset mode
     writeGui(gui) {
+        const surface = GuiMode.of('bias') === 'offset' ? M4.multiply(gui.surfaceMatrix, new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, GuiMode.OFFSET, 1])) : gui.surfaceMatrix;
         this.setInstance(gui.anchorInstance, gui.surfaceMatrix);
-        this.setInstance(gui.guiInstance, GuiSurface.modelMatrix(gui.tri, gui.surfaceMatrix, gui.vw, gui.vh), [gui.crt ? 1 : 0, 0, 0, 0]);
+        this.setInstance(gui.guiInstance, GuiSurface.modelMatrix(gui.tri, surface, gui.vw, gui.vh), [gui.crt ? 1 : 0, gui.vw, gui.vh, 0]);
+    }
+
+    // the target mode: each GUI in view is drawn into its target (when its model changed) before the frame's passes, and
+    // its surface samples that target. Other modes: nothing to do
+    updateGuiTargets(enc, guis) {
+        if (GuiMode.of('bias') !== 'target') return;
+        for (const gui of guis) {
+            const rt = this.targets.update(enc, gui);
+            if (!this.materials.has(gui.targetName)) this.materials.set(gui.targetName, { shading: 'surface', view: rt.view, version: 0 });
+        }
     }
 
     // ---- pipelines: a table (js/kits/gpu/pipelines.js) over the resolved stencil layout ----
@@ -176,30 +193,35 @@ class Renderer {
             blends: { alpha: ALPHA_BLEND }
         };
         const surface = this.surfaceSlot ? ['gui.surface'] : null;
-        // GUI model shading: stencil-masked (depth ALWAYS + its surface's value) or plain depth-tested
+        // GUI model shading, one pipeline per mode: stencil (depth ALWAYS, masked by the surface's value), bias (depth-tested,
+        // pulled toward the eye) and offset (depth-tested; the quads are placed off the surface)
         const gui = (fs, extra = {}) => ({
             layout: '2d', module: 'scene', vs: 'vs_gui', fs, buffers: 'gui', blend: 'alpha', ...extra,
             variants: {
                 stencil: { depth: { compare: 'always' }, stencil: surface && { test: surface } },
-                depth: { depth: { compare: 'less-equal' } }
+                bias: { depth: { compare: 'less-equal', bias: GUI_BIAS } },
+                offset: { depth: { compare: 'less-equal' } },
             }
         });
         const P = buildPipelines(ctx, {
             scene: { layout: '2d', module: 'scene', vs: 'vs_main', fs: 'fs_scene', buffers: 'world', depth: { write: true, compare: 'less' } },
-            // GUI surface geometry ("anchor"): writes its surface's value wherever it survives the depth test
+            // the stencil mode's surface: writes its value wherever it survives the depth test
             anchor: {
                 layout: '2d', module: 'scene', vs: 'vs_main', fs: 'fs_scene', buffers: 'world', depth: { write: true, compare: 'less' },
                 stencil: surface && { op: 'replace', write: surface }
             },
+            // the target mode's surface: its GUI's texture (the surface itself is the world's, so no depth write)
+            surface: { layout: '2d', module: 'scene', vs: 'vs_main', fs: 'fs_surface', buffers: 'world', depth: { write: false, compare: 'less-equal' } },
             gui: gui('fs_gui'),
             cctv: gui('fs_cctv'),
             video: gui('fs_video', { layout: '2d-array', fsModule: 'video' })
         });
         this.pipelines = { scene: P.scene, anchor: P.anchor };
         this.shadings = {
-            gui: { layout: '2d', ...P.gui },
-            cctv: { layout: '2d', ...P.cctv },
-            video: { layout: '2d-array', ...P.video }
+            gui: { layout: '2d', pipes: P.gui },
+            cctv: { layout: '2d', pipes: P.cctv },
+            video: { layout: '2d-array', pipes: P.video },
+            surface: { layout: '2d', pipes: { surface: P.surface } },
         };
     }
 
@@ -214,6 +236,7 @@ class Renderer {
     registerMaterial(name, shading, textureView) {
         if (!this.shadings[shading]) throw new Error(`Unknown shading "${shading}"`);
         this.materials.set(name, { shading, view: textureView, version: 0 });
+        if (shading !== 'video') this.targets?.registerMaterial(name, textureView);   // (a frame pool can't be a 2d target texture)
         if (this.mirror && name !== 'atlas') this.mirror.registerMaterial(name, shading, textureView);
     }
 
@@ -221,6 +244,7 @@ class Renderer {
         const m = this.materials.get(name);
         m.view = textureView;
         m.version++;
+        if (m.shading !== 'video') this.targets?.registerMaterial(name, textureView);
         if (this.mirror && name !== 'atlas') this.mirror.setMaterialTexture(name, textureView);
     }
 
@@ -278,12 +302,12 @@ class Renderer {
     }
 
     // A scene pass into `colorView`. `load` keeps what's already there (the phone draws over the world).
-    beginScenePass(colorView, depthView, view, { load = false, forceStencil = false } = {}) {
+    beginScenePass(colorView, depthView, view, { load = false } = {}) {
         const pass = this.encoder.beginRenderPass({
             colorAttachments: [{ view: colorView, clearValue: CLEAR_COLOR, loadOp: load ? 'load' : 'clear', storeOp: 'store' }],
             depthStencilAttachment: this.depthAttachment(depthView)
         });
-        return new ScenePass(this, pass, view, forceStencil);
+        return new ScenePass(this, pass, view);
     }
 }
 
@@ -316,11 +340,10 @@ class RenderView {
 
 // Thin wrapper over a render pass that avoids redundant pipeline / bind-group switches
 class ScenePass {
-    constructor(renderer, pass, view, forceStencil) {
+    constructor(renderer, pass, view) {
         this.renderer = renderer;
         this.pass = pass;
         this.view = view;
-        this.forceStencil = forceStencil;
         this.pipeline = null;
         this.bindGroup = null;
     }
@@ -336,29 +359,38 @@ class ScenePass {
         this.pass.draw(mesh.count, count, 0, firstInstance);
     }
 
-    // an EntityGUI: its surface geometry marks its visible pixels with its stencil value, then its model's surfaces
-    // draw, each material with its shading's pipeline and texture
+    // an EntityGUI in the frame's mode: stencil (the anchor marks its value, the quads draw masked by it; no value left:
+    // bias), bias / offset (the quads, depth-tested), target (the surface shows the GUI's texture; no quads)
     surface(gui) {
-        const ref = gui.stencilRef;
-        this.use(ref == null ? this.renderer.pipelines.scene : this.renderer.pipelines.anchor, this.view.group('atlas'));
-        if (ref != null) this.pass.setStencilReference(ref);
-        this.pass.setVertexBuffer(0, gui.anchorMesh.buffer);
-        this.pass.draw(gui.anchorMesh.count, 1, 0, gui.anchorInstance);
-        this.gui(gui.model, gui.guiInstance, ref);
+        const r = this.renderer, mode = GuiMode.of('bias');
+        if (mode === 'target' && r.materials.has(gui.targetName)) {
+            this.use(r.shadings.surface.pipes.surface, this.view.group(gui.targetName));
+            this.pass.setVertexBuffer(0, gui.anchorMesh.buffer);
+            this.pass.draw(gui.anchorMesh.count, 1, 0, gui.anchorInstance);
+            return;
+        }
+        let variant = mode === 'offset' ? 'offset' : 'bias';
+        if (mode === 'stencil' && gui.stencilRef != null) {
+            this.use(r.pipelines.anchor, this.view.group('atlas'));
+            this.pass.setStencilReference(gui.stencilRef);
+            this.pass.setVertexBuffer(0, gui.anchorMesh.buffer);
+            this.pass.draw(gui.anchorMesh.count, 1, 0, gui.anchorInstance);
+            variant = 'stencil';
+        }
+        this.gui(gui.model, gui.guiInstance, variant, gui.stencilRef);
     }
 
-    // A GUI model's surfaces; each material picks its shading pipeline and texture. `stencilRef` null: depth-tested
-    gui(model, instance, stencilRef) {
+    // A GUI model's surfaces, each material with its shading's pipeline for the variant and its texture
+    gui(model, instance, variant, stencilRef) {
         if (!model.count) return;
         const r = this.renderer;
-        const stencil = stencilRef != null && (r.useStencil || this.forceStencil);
-        if (stencil) this.pass.setStencilReference(stencilRef);
+        if (variant === 'stencil') this.pass.setStencilReference(stencilRef);
         this.pass.setVertexBuffer(0, model.buffer);
         for (const surf of model.surfaces) {
             const group = this.view.group(surf.material);
             if (!group) continue;
             const shading = r.shadings[r.materials.get(surf.material).shading];
-            this.use(stencil ? shading.stencil : shading.depth, group);
+            this.use(shading.pipes[variant] ?? shading.pipes.bias, group);
             this.pass.draw(surf.count, 1, surf.first, instance);
         }
     }

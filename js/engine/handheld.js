@@ -271,6 +271,10 @@ class Handheld {
                 if (names[c.id] === null) host.hud.toast(`${c.label}: no such GPU here`);
                 else if (c.id !== GpuChoice.id) GpuChoice.pick(c.id);
             } });
+        // how EntityGUI screens are drawn (js/kits/gui/gui-mode.js), every scene's
+        const { GuiMode } = Features.kits.gui;
+        cells.push({ choice: 'GUI', options: GuiMode.MODES.map(m => ({ label: m.label, sub: m.sub })), index: GuiMode.MODES.findIndex(m => m.id === GuiMode.id),
+            value: GuiMode.label(), pick: i => { GuiMode.set(GuiMode.MODES[i].id); host.hud.toast(`GUI: ${GuiMode.label()}`); } });
         cells.push({ label: 'Frame rate', value: `${Math.round(host.fps)} fps` });
         return [{ header: 'ENGINE', cells, footer: 'TAB takes the handheld out, Esc puts it away. Drop a scenario .json on the page to load it.' }];
     }
@@ -463,7 +467,8 @@ class Handheld {
         r.setInstance(this.instance, this.pose);
         g.writeInstances(r);
         r.beginFrame();
-        const pass = r.beginScenePass(r.swapView, r.depthView, this.view, { load: true, forceStencil: true });
+        r.updateGuiTargets(r.encoder, [g]);
+        const pass = r.beginScenePass(r.swapView, r.depthView, this.view, { load: true });
         pass.mesh(this.mesh, this.instance);
         g.render(pass);
         pass.end();

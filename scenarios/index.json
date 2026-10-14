@@ -107,6 +107,15 @@
     ]
   },
   {
+    "id": "gui-stress",
+    "name": "GUI depth stress",
+    "group": "Entity GUI",
+    "description": "EntityGUI screens at 2 m to 512 m, one per view: how deep a world-space GUI can be before it breaks.",
+    "features": [
+      "gui"
+    ]
+  },
+  {
     "id": "gui-sector-07",
     "name": "Sector 07",
     "group": "Entity GUI",

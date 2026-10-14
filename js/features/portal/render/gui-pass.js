@@ -3,7 +3,7 @@
 
 Features.part('portal', (engine, feature) => {
 const { RenderExtensions } = engine.kits.gpu;
-const { GuiAtlas, GUI_VERTEX_LAYOUT, GuiTargets } = engine.kits.gui;
+const { GuiAtlas, GUI_VERTEX_LAYOUT, GuiTargets, GuiMode } = engine.kits.gui;
 const { WGSL_GUI, WGSL_WORLD } = feature;
 
 // the fallback's screen: the glass showing its GUI's render target (the gui kit's GuiTargets): the world shader's own
@@ -26,6 +26,7 @@ fn untonemapScreen(c: vec3f) -> vec3f { return -log(vec3f(1.0) - pow(min(c, vec3
 }
 `;
 const RT_MAX = 1024;            // a fallback target's longest side, in texels
+const GUI_BIAS = { constant: -4, slopeScale: -2, clamp: 0 };     // the bias mode: the quads pulled toward the eye
 
 // World-space GUI screens (kits.entities sectorTypes Screen, js/kits/entities/sectors.js; gui/screens.js) drawn in the portal render pass, as a render
 // extension (render/renderer.js): a 'gui' overlay command for every visible object with a GUI, right after its entry's
@@ -71,7 +72,15 @@ class GuiPass {
         ctx.modules.gui = device.createShaderModule({ code: WGSL_GUI });
         ctx.layouts.gui = device.createPipelineLayout({ bindGroupLayouts: [ctx.bgl0, ctx.bgl1, this.bgl] });
         ctx.buffers.gui = [GUI_VERTEX_LAYOUT];
-        if (this.surface.capacity === 0) await this.initFallback(r, ctx);
+        await this.initFallback(r, ctx);
+    }
+
+    // the mode this frame draws with: the GuiMode choice, else stencil where the screens have a value and targets where
+    // they don't. The portal has no offset mode of its own (its screens sit on their world faces): offset draws as bias
+    resolved() {
+        let m = GuiMode.of(this.surface.capacity > 0 ? 'stencil' : 'target');
+        if (m === 'stencil' && this.surface.capacity === 0) m = 'target';
+        return m === 'offset' ? 'bias' : m;
     }
 
     async initFallback(r, ctx) {
@@ -85,15 +94,17 @@ class GuiPass {
             layout: 'world', module: 'world', vs: 'vs', fs: 'fs', buffers: 'world', cull: 'back', colorWrite: false, depth: { compare: 'less-equal' },
             variants: { stencil: { stencil: { test: R, op, write: SURF } }, plain: { stencil: { op, write: SURF } } },
         });
-        if (this.surface.capacity === 0) {
-            // the fallback: the glass again, showing the GUI's render target, in the entry's region
-            return { screen: {
-                layout: 'gui', module: 'screen', vs: 'vs', fs: 'fsScreen', buffers: 'world', cull: 'back', blend: 'alpha', depth: { compare: 'less-equal' },
-                variants: { stencil: { stencil: { test: R } }, plain: {} },
-            } };
-        }
+        // the target mode's fallback: the glass again, showing the GUI's render target, in the entry's region
+        const pipes = { screen: {
+            layout: 'gui', module: 'screen', vs: 'vs', fs: 'fsScreen', buffers: 'world', cull: 'back', blend: 'alpha', depth: { compare: 'less-equal' },
+            variants: { stencil: { stencil: { test: R } }, plain: {} },
+        } };
+        // the bias mode: the quads on the screen's own face, depth-tested and pulled toward the eye
+        pipes.bias = { layout: 'gui', module: 'gui', vs: 'vs', fs: 'fs', buffers: 'gui', blend: 'alpha', depth: { compare: 'less-equal', bias: GUI_BIAS } };
+        if (this.surface.capacity === 0) return pipes;
         const quads = { layout: 'gui', module: 'gui', vs: 'vs', fs: 'fs', buffers: 'gui', blend: 'alpha' };
         return {
+            ...pipes,
             // the glass again (same vertex shader, so the same depth) sets / clears the mask
             anchor: glass('replace'),
             unanchor: glass('zero'),
@@ -107,10 +118,13 @@ class GuiPass {
     // the GUI shader places quads with y up from the virtual height
     info(o) { return o.gui ? o.gui.vh : undefined; }
 
+    // and its virtual width (info.w): the quads past the screen's virtual rectangle are not drawn
+    infoW(o) { return o.gui ? o.gui.vw : undefined; }
+
     // the fallback, before the frame's pass: the GUI models its commands draw, into their render targets (once however
     // many views draw them, and only when they changed)
     prepare(f, enc, target) {
-        if (this.surface.capacity > 0) return;
+        if (this.resolved() !== 'target') return;
         const skip = target?.material;
         for (const c of f.cmds) if (c.op === 'gui' && c.gui.model.count) this.flat.update(enc, c.gui, this.materials, skip);
     }
@@ -133,12 +147,18 @@ class GuiPass {
     }
 
     draw(c, x) {
-        const m = c.gui.model, P = this.pipes, v = x.variant;
+        const m = c.gui.model, P = this.pipes, v = x.variant, mode = this.resolved();
         if (!m.count || !x.drawSlot(c.slot)) return;
-        if (this.surface.capacity === 0) {
+        if (mode === 'target') {
             x.pass.setStencilReference(x.regions.ref(c.ref));
             x.pass.setBindGroup(2, this.target(c.gui).group);
             x.drawChunk(c.chunk, P.screen[v]);
+            return;
+        }
+        if (mode === 'bias') {
+            // the quads on the screen's face, no mask
+            x.use(P.bias, m.buffer);
+            this.drawSurfaces(x.pass, m, x.target?.material, 2);
             return;
         }
         x.pass.setStencilReference(x.stencil.compose({ 'portal.regions': c.ref, 'gui.surface': 1 }));

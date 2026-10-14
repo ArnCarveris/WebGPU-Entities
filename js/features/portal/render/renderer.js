@@ -183,6 +183,15 @@ class Renderer {
         return 0;
     }
 
+    // the draw slot info.w: the first extension's that has one (a GUI screen's virtual width)
+    infoW(o) {
+        for (const x of this.exts) {
+            const v = x.infoW?.(o);
+            if (v !== undefined) return v;
+        }
+        return 0;
+    }
+
     // f.cmds: draw | sky | mark | glass | veil | water and the extensions' ops, executed in order (portal-tree DFS in
     // stencil mode)
     // f.draws: one { o, fog } per draw slot; fog = the portals it is seen through, nearest first
@@ -196,7 +205,7 @@ class Renderer {
         for (let i = 0; i < nSlots; i++) {
             const { o, fog } = f.draws[i], k = i * F, n = Math.min(fog.length, MAX_FOG_PORTALS);
             D.set(o.model, k);
-            D[k + 16] = o.lightArea; D[k + 17] = n; D[k + 18] = this.info(o); D[k + 19] = 0;
+            D[k + 16] = o.lightArea; D[k + 17] = n; D[k + 18] = this.info(o); D[k + 19] = this.infoW(o);
             D[k + 20] = 1; D[k + 21] = 1; D[k + 22] = 1; D[k + 23] = 1;
             for (let j = 0; j < n; j++) {
                 D.set(fog[j].plane, k + 24 + j * 4);

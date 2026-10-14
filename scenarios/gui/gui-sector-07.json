@@ -132,8 +132,7 @@
                             "header": "QUICK TOGGLES",
                             "cells": [
                                 {"type":"switch","bind":"lights","title":"Room lights"},
-                                {"type":"switch","bind":"alarm","title":"Alarm"},
-                                {"type":"switch","bind":"stencil","title":"Stencil GUI mask"}
+                                {"type":"switch","bind":"alarm","title":"Alarm"}
                             ]
                         },
                         {
@@ -185,11 +184,6 @@
                                 {"type":"slider","bind":"fov","title":"Field of view"},
                                 {"type":"slider","bind":"lamp","title":"Lamp intensity"}
                             ]
-                        },
-                        {
-                            "header": "GUI SURFACES",
-                            "cells": [{"type":"switch","bind":"stencil","title":"Stencil GUI mask"}],
-                            "footerBind": "stencil.description"
                         }
                     ]
                 },
@@ -238,7 +232,6 @@
                             "cells": [
                                 {"type":"label","title":"Frame rate","bind":"stats.fps"},
                                 {"type":"label","title":"Resolution","bind":"stats.resolution"},
-                                {"type":"label","title":"GUI mask","bind":"stats.guiMask"},
                                 {"type":"label","title":"GUI surfaces","bind":"stats.guiSurfaces"}
                             ]
                         },
@@ -275,7 +268,7 @@
                                 },
                                 {
                                     "type": "text",
-                                    "text": "Each surface writes its own stencil value, so a GUI never z-fights, stays hidden behind things in front of it and can't draw through another GUI."
+                                    "text": "Like Doom 3, a GUI draws on its surface with a depth bias and no stencil: it never z-fights, stays hidden behind things in front of it, and its quads are depth-tested against their own screen."
                                 },
                                 {
                                     "type": "text",

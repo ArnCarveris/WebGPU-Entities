@@ -187,10 +187,17 @@ fn surfaceColor(b: Body, n: vec3f, t: f32) -> vec3f {
     let dotW = clamp((4.0 * pix - angR) / (3.0 * pix), 0.0, 1.0);
     let spot = exp(-pow(ang / (angR + 1.3 * pix), 2.0)) * dotW;
     var halo = 0.0;
-    if (b.color.w > 0.0) { halo = exp(-max(ang - angR, 0.0) / (angR * 0.6 + pix * 3.0)) * 0.8; }
+    if (b.color.w > 0.0) {
+        // the billboard's edge: the glow fades out before it, so the quad never shows as a box
+        let angQ = max(R * max(b.shape.w, 1.02) / dist, pix * 8.0);
+        halo = exp(-max(ang - angR, 0.0) / (angR * 0.6 + pix * 3.0)) * 0.8 * (1.0 - smoothstep(0.5, 1.0, (ang - angR) / max(angQ - angR, 1e-9)));
+    }
     let col = b.color.rgb * (spot * select(1.4, b.color.w, b.color.w > 0.0) + halo * 2.0);
-    if (max(col.r, max(col.g, col.b)) < 0.004) { discard; }
-    o.color = vec4f(tone(col), 1.0);
+    // the glow is blended over the sky (alpha = its brightness), not painted over it: a dark box round every star
+    let t = tone(col);
+    let a = max(t.r, max(t.g, t.b));
+    if (a < 0.004) { discard; }
+    o.color = vec4f(t / a, clamp(a, 0.0, 1.0));
     o.depth = clamp(near / (dist * fd), 0.0, 1.0);
     return o;
 }

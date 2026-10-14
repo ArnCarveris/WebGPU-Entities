@@ -35,6 +35,8 @@ class Renderer {
         const layout = device.createPipelineLayout({ bindGroupLayouts: [this.layout] });
         const multisample = { count: SAMPLES };
         const targets = [{ format: this.format }];
+        // stars' glow (fsBody) is alpha-blended over the sky; opaque bodies write alpha 1
+        const glow = [{ format: this.format, blend: { color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' }, alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' } } }];
         const depth = { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'greater' };
         const [sky, body, mesh] = await Promise.all([
             device.createRenderPipelineAsync({
@@ -46,7 +48,7 @@ class Renderer {
             device.createRenderPipelineAsync({
                 layout, multisample,
                 vertex: { module, entryPoint: 'vsBody' },
-                fragment: { module, entryPoint: 'fsBody', targets },
+                fragment: { module, entryPoint: 'fsBody', targets: glow },
                 primitive: { cullMode: 'front' },   // inner faces: works from inside the bounding cube too
                 depthStencil: depth,
             }),

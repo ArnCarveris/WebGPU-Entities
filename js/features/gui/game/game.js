@@ -55,7 +55,6 @@ class Game {
 
     async start() {
         const r = this.renderer, s = this.scenario;
-        // the facility's entities first: their screens are what the renderer reserves stencil values for
         this.world = new World(this, s);
         await r.init();
         await GuiAtlas.loadFonts();
@@ -139,6 +138,7 @@ class Game {
             this.views.set(target, v);
         }
         v.view.update(M4.viewProjection(s.eye, s.dir, s.up, s.fovY, target.aspect, s.near, s.far), s.eye, this.frameState);
+        r.updateGuiTargets(enc, this.world.guis);
         const pass = r.beginScenePass(target.colorView, v.depthView, v.view);
         this.world.render(pass, { showAvatar: s.showAvatar, skip: s.skip });
         pass.end();
@@ -190,6 +190,7 @@ class Game {
         for (const easel of world.ofType(Easel)) easel.canvas.flush(r);
         this.cctv.render(r.encoder);
         this.camera.render(r.encoder, now);
+        r.updateGuiTargets(r.encoder, world.guis);
         const pass = r.beginScenePass(r.swapView, r.depthView, this.mainView);
         world.render(pass, { showAvatar: false });
         pass.end();

@@ -274,28 +274,45 @@ class DoorsGUI extends ScreenGUI {
 
     press(id) {
         const doors = this.doors;
+        if (id.startsWith('page:')) { this.page = (this.page || 0) + +id.slice(5); return; }
         if (id === 'lockdown') doors.forEach(d => this.lock(d, true));
         else if (id === 'release') doors.forEach(d => this.lock(d, false));
         else if (id.startsWith('lock:')) { const d = doors[+id.slice(5)]; if (d) this.lock(d, !d.portal.locked); }
     }
 
     drawBody(dc, t) {
-        const W = this.vw, H = this.vh, doors = this.doors, cols = 2, rows = Math.ceil(doors.length / cols);
-        const top = 46, bottom = H - 50, cw = (W - 36) / cols, rh = Math.min(44, (bottom - top) / Math.max(1, rows));
-        doors.forEach((d, i) => {
-            const P = d.portal, x = 12 + Math.floor(i / rows) * (cw + 12), y = top + (i % rows) * rh;
+        const W = this.vw, H = this.vh, doors = this.doors;
+        // pages of a grid: 3 columns of rows that are ROW px tall (name line, state line and bar, the lock button)
+        const top = 46, bottom = H - 50, gap = 12, cols = 2, rows = Math.max(1, Math.floor((bottom - top) / 32));
+        const per = cols * rows, pages = Math.max(1, Math.ceil(doors.length / per));
+        this.page = Math.min(Math.max(this.page || 0, 0), pages - 1);
+        const cw = (W - 24 - gap * (cols - 1)) / cols, rh = Math.min(44, (bottom - top) / rows);
+        doors.slice(this.page * per, this.page * per + per).forEach((d, j) => {
+            const i = this.page * per + j;
+            const P = d.portal, x = 12 + Math.floor(j / rows) * (cw + gap), y = top + (j % rows) * rh;
             const state = P.locked ? (d.open > 0.02 ? ['SEALING', C.orange] : ['LOCKED', C.red]) : d.open > 0.98 ? ['OPEN', C.green] : d.open > 0.02 ? ['MOVING', C.amber] : ['CLOSED', C.cyan];
             dc.fillRect(x, y + 2, cw, rh - 6, col(state[1], 0.06));
             dc.fillRect(x, y + 2, 3, rh - 6, col(state[1], 0.9));
             const name = `${this.areaName(P.front)} · ${this.areaName(P.back)}`.toUpperCase();
-            dc.text(name, x + 12, y + 18, 12, col(C.white), 'left', false);
-            dc.text(state[0], x + 12, y + rh - 10, 10, col(state[1]), 'left');
-            this.bar(dc, x + 84, y + rh - 18, cw - 210, 6, d.open, state[1]);
+            // three lines: the name (fitted to the space before its lock button), then the state with its travel bar beside it
+            const room = cw - 124;
+            let size = 12, label = name;
+            while (size > 8 && dc.textWidth(label, size) > room) size--;
+            while (label.length > 4 && dc.textWidth(label, size) > room) label = label.slice(0, -1);
+            if (label !== name) label = label.trimEnd() + '..';
+            dc.text(label, x + 12, y + 13, size, col(C.white), 'left', false);
+            dc.text(state[0], x + 12, y + rh - 6, 10, col(state[1]), 'left');
+            this.bar(dc, x + 84, y + rh - 14, Math.max(24, cw - 210), 6, d.open, state[1]);
             this.button(dc, `lock:${i}`, x + cw - 104, y + (rh - 26) / 2, 96, 24, P.locked ? 'UNLOCK' : 'LOCK', P.locked ? C.green : C.red);
         });
         const locked = doors.filter(d => d.portal.locked).length;
         this.button(dc, 'lockdown', 12, H - 42, 150, 30, 'LOCKDOWN', C.red, locked === doors.length && Math.sin(t * 6) > 0);
         this.button(dc, 'release', 172, H - 42, 150, 30, 'RELEASE ALL', C.green);
+        if (pages > 1) {
+            this.button(dc, 'page:-1', 340, H - 42, 36, 30, '<', C.cyan, false);
+            dc.text(`PAGE ${this.page + 1}/${pages}`, 392, H - 22, 11, col(C.white), 'left', false);
+            this.button(dc, 'page:1', 470, H - 42, 36, 30, '>', C.cyan, false);
+        }
         dc.text(`${locked} of ${doors.length} locked · locked doors stay shut, the drone finds another way`, W - 14, H - 22, 11, col(C.dim), 'right', false);
     }
 }
