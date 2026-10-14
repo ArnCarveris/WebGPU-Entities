@@ -133,7 +133,8 @@ fn moonDisc(d: vec3f, mu: f32) -> vec3f {
 // the stars: one in some of the cells of a grid of directions, few bright and many faint, twinkling a little; they sink
 // into the haze at the horizon and fade under a bright moon. Clouds cover them as they cover the sky
 fn stars(d: vec3f) -> vec3f {
-    if (d.y <= 0.0) { return vec3f(0.0); }
+    let up = curveSkyward(d);                                   // (over the horizon as drawn)
+    if (up <= 0.0) { return vec3f(0.0); }
     let p = d * 200.0;
     let cell = floor(p);
     let h = hash12(cell.xy + cell.z * 37.17);
@@ -145,15 +146,16 @@ fn stars(d: vec3f) -> vec3f {
     let x = length(p - o) / rad;
     let b = pow((h - 0.95) / 0.05, 8.0) * 1.5 * (0.85 + 0.15 * sin(F.cam.w * 3.0 + h * 900.0));
     let tint = mix(vec3f(1.0, 0.82, 0.66), vec3f(0.72, 0.84, 1.0), hash12(cell.xz + 9.9));
-    return tint * b * exp(-x * x) * min(1.0, 0.12 / rad) * smoothstep(0.0, 0.12, d.y) * (1.0 - 0.6 * F.sunDir.w) * 1.5 / F.sunCol.w;
+    return tint * b * exp(-x * x) * min(1.0, 0.12 / rad) * smoothstep(0.0, 0.12, up) * (1.0 - 0.6 * F.sunDir.w) * 1.5 / F.sunCol.w;
 }
 
-// geometric grid: linear over the heightfield, then rings growing out to the horizon
+// geometric grid: linear over the heightfield, then rings growing out to the horizon (F.curve.z: 260 km flat; drawn
+// curved, past the horizon over the highest peak)
 fn gridWarp(u: f32) -> f32 {
     let a = abs(u);
     let r0 = F.tdomain.z * 0.5;
     let inner = 0.72;
-    let r = select(r0 * exp((a - inner) / (1.0 - inner) * log(260000.0 / r0)), a / inner * r0, a < inner);
+    let r = select(r0 * exp((a - inner) / (1.0 - inner) * log(max(F.curve.z, r0 * 1.01) / r0)), a / inner * r0, a < inner);
     return sign(u) * r;
 }
 
@@ -169,7 +171,7 @@ struct TerrOut { @builtin(position) pos: vec4f, @location(0) world: vec3f };
     let h = terrainHeight(xz).x;
     var o: TerrOut;
     o.world = vec3f(xz.x, h, xz.y);
-    o.pos = F.viewProj * vec4f(o.world, 1.0);
+    o.pos = F.viewProj * vec4f(curveToRender(o.world), 1.0);
     return o;
 }
 
@@ -356,7 +358,7 @@ struct StructOut { @builtin(position) pos: vec4f, @location(0) world: vec3f, @lo
     o.world = p;
     o.n = n;
     o.col = c;
-    o.pos = F.viewProj * vec4f(p, 1.0);
+    o.pos = F.viewProj * vec4f(curveToRender(p), 1.0);
     return o;
 }
 
@@ -374,7 +376,7 @@ struct StructOut { @builtin(position) pos: vec4f, @location(0) world: vec3f, @lo
     o.world = (busU.model * vec4f(q, 1.0)).xyz;
     o.n = (busU.model * vec4f(n, 0.0)).xyz;
     o.col = c;
-    o.pos = busU.mvp * vec4f(q, 1.0);
+    o.pos = curveClip(busU.mvp * vec4f(q, 1.0), o.world);
     return o;
 }
 
@@ -400,7 +402,7 @@ struct StructOut { @builtin(position) pos: vec4f, @location(0) world: vec3f, @lo
         if (out[k / 2u] * select(1.0, -1.0, (k & 1u) == 1u) < 0.5) { m = m - ${BLD_LIT}u + ${BLD_DARK}u; }
     }
     o.col = vec4f(ic.rgb, f32(m));
-    o.pos = busU.mvp * vec4f(q, 1.0);
+    o.pos = curveClip(busU.mvp * vec4f(q, 1.0), o.world);
     return o;
 }
 
@@ -424,7 +426,7 @@ fn lampGlow(p: vec3f, n: vec3f, col: vec3f) -> vec3f {
     o.world = (busU.model * vec4f(q, 1.0)).xyz;
     o.n = (busU.model * vec4f(n, 0.0)).xyz;
     o.col = c;
-    o.pos = busU.mvp * vec4f(q, 1.0);
+    o.pos = curveClip(busU.mvp * vec4f(q, 1.0), o.world);
     return o;
 }
 
@@ -646,7 +648,7 @@ struct FarOut { @builtin(position) pos: vec4f, @location(0) col: vec3f, @locatio
 @vertex fn vsFar(@builtin(vertex_index) vi: u32, @location(0) a: vec4f, @location(1) b: vec4f, @location(2) c: vec4f, @location(3) e: vec4f) -> FarOut {
     var o: FarOut;
     o.pos = vec4f(0.0, 0.0, -1.0, 1.0);                                 // dropped (behind the far plane of reversed Z)
-    let clip = F.viewProj * vec4f(a.xyz, 1.0);
+    let clip = F.viewProj * vec4f(curveToRender(a.xyz), 1.0);
     if (clip.w < 1.0) { return o; }
     let v = a.xyz - F.cam.xyz;
     let d = length(v);
@@ -687,7 +689,7 @@ struct PoolOut { @builtin(position) pos: vec4f, @location(0) world: vec3f, @loca
     var corners = array<vec2f, 6>(vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(-1.0, 1.0), vec2f(-1.0, 1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0));
     o.world = vec3f(a.x + corners[vi].x * e.y, e.z + 0.2, a.z + corners[vi].y * e.y);
     // drawn a little toward the eye (0.5% of the way), so roads lifted over the terrain and its bumps do not hide it
-    o.pos = F.viewProj * vec4f(mix(o.world, F.cam.xyz, 0.005), 1.0);
+    o.pos = F.viewProj * vec4f(mix(curveToRender(o.world), F.cam.xyz, 0.005), 1.0);
     o.col = b.rgb * fade * vec3f(${POOL_ALBEDO}) / max(F.sunCol.w, 0.2);
     o.lamp = vec4f(a.xyz, e.y);
     o.axis = vec4f(c.xyz, c.w);
@@ -717,7 +719,7 @@ struct PoolOut { @builtin(position) pos: vec4f, @location(0) world: vec3f, @loca
     o.world = vec3f(at.x + p.x * cs - p.z * sn, at.y + p.y, at.z + p.x * sn + p.z * cs);
     o.n = vec3f(n.x * cs - n.z * sn, n.y, n.x * sn + n.z * cs);
     o.col = select(c, vec4f(glow.rgb, c.a), i32(c.a + 0.5) == 7);
-    o.pos = F.viewProj * vec4f(o.world, 1.0);
+    o.pos = F.viewProj * vec4f(curveToRender(o.world), 1.0);
     return o;
 }
 `;

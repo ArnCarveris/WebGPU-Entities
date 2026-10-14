@@ -7,7 +7,9 @@ const { classify } = kit;
 // Object trees. Outdoors and indoors are partitioned differently:
 //   QuadTree   big open outdoor area (terrain chunks, scatter, building shells)
 //   BVHTree    one small tree per indoor area (its static members)
-// Both are queried with a frustum and a plane mask, so nodes fully inside stop testing planes.
+// Both are queried with a frustum and a plane mask, so nodes fully inside stop testing planes. The outdoors may be drawn
+// curved (the curvature kit's Curvature, bound to the QuadTree's query): its nodes and objects are then tested by their
+// bounds as drawn (curve.bounds, O(1) each), which fall away from the eye; the indoor BVHs stay as they are.
 
 function growBounds(n, o) {
     for (let k = 0; k < 3; k++) { n.min[k] = Math.min(n.min[k], o.min[k]); n.max[k] = Math.max(n.max[k], o.max[k]); }
@@ -17,6 +19,19 @@ function queryNode(n, planes, mask, visit, st) {
     if (mask) { mask = classify(n.min, n.max, planes, mask); if (mask < 0) return; }
     if (n.objs) for (const o of n.objs) { st.objs++; if (!mask || classify(o.min, o.max, planes, mask) >= 0) visit(o); }
     if (n.kids) for (const k of n.kids) queryNode(k, planes, mask, visit, st);
+}
+// the same over the bounds as curve draws them
+const lo = [0, 0, 0], hi = [0, 0, 0];
+function queryCurved(n, planes, mask, visit, st, curve) {
+    st.nodes++;
+    if (mask) { curve.bounds(n.min, n.max, lo, hi); mask = classify(lo, hi, planes, mask); if (mask < 0) return; }
+    if (n.objs) for (const o of n.objs) {
+        st.objs++;
+        if (!mask) { visit(o); continue; }
+        curve.bounds(o.min, o.max, lo, hi);
+        if (classify(lo, hi, planes, mask) >= 0) visit(o);
+    }
+    if (n.kids) for (const k of n.kids) queryCurved(k, planes, mask, visit, st, curve);
 }
 const fullMask = planes => planes.length >= 31 ? 0x7fffffff : (1 << planes.length) - 1;
 
@@ -82,7 +97,14 @@ class QuadTree {
         if (!n.objs.length) n.objs = null;
         return !!(n.objs || n.kids);
     }
-    query(planes, visit, st) { if (this.root) queryNode(this.root, planes, fullMask(planes), visit, st); }
+    // curve: the outdoors' Curvature (or anything with on and bounds(min, max, outMin, outMax)), when it is drawn curved
+    query(planes, visit, st, curve = this.curve) {
+        if (!this.root) return;
+        if (curve?.on) queryCurved(this.root, planes, fullMask(planes), visit, st, curve);
+        else queryNode(this.root, planes, fullMask(planes), visit, st);
+    }
+    // binds the outdoors' Curvature to this tree: every query tests what it draws curved
+    bindCurvature(curve) { this.curve = curve; return this; }
 }
 
 return { BVHTree, QuadTree };

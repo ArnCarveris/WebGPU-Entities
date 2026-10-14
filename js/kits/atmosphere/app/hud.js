@@ -66,7 +66,7 @@ class Hud extends kits.world.WorldHud {
         L.font();
         for (const e of [...app.world.entities, ...app.world.buses]) {
             if (!e.label || e.off || (e === app.rideBus && app.inBus)) continue;
-            const p = e.anchor, at = p && L.place(app.frameWriter.viewProj, p);
+            const p = e.anchor, at = p && L.place(app.frameWriter.viewProj, app.world.curvature.toRender(p));
             if (!at) continue;
             const d = v3.len(v3.sub(p, app.camera.pos));
             let s = null;

@@ -34,7 +34,7 @@ const ScenarioFormat = (() => {
     const SCHEMAS = {
         cloud: {
             title: 'Entity Cloud',
-            config: ['terrain', 'render', 'weather', 'lighting', 'hurricane', 'streetLights'],
+            config: ['terrain', 'render', 'weather', 'lighting', 'hurricane', 'streetLights', 'curvature'],
             maps: { 'weather.states': { type: 'weatherState' }, 'lighting.presets': { type: 'light' }, buildings: { type: 'building' },
                 'plans.buildings': { type: 'buildingPlan' }, 'plans.storeys': { type: 'storeyPlan' }, 'plans.cores': { type: 'corePlan' }, 'plans.rooms': { type: 'roomType' }, 'plans.furniture': { type: 'furniture' }, 'plans.furnishings': { type: 'furnishing' } },
             lists: { clouds: 'cloudLayer', views: 'view' },

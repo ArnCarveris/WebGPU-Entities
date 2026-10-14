@@ -67,20 +67,22 @@ class Heightfield {
     // whether raycast() steps over p without testing it (a feature whose terrain ends at the grid says so)
     offMap(p) { return false; }
 
-    // first hit of a ray with the heightfield, or null
-    raycast(o, d, maxDist = this.reach) {
-        const above = t => { const p = v3.add(o, v3.mul(d, t)); return p[1] - this.sample(p[0], p[2]); };
+    // first hit of a ray with the heightfield, or null. bend: the world point a point of the ray stands for (a view ray
+    // where the outdoors is drawn curved: the curvature kit's toWorld), or none
+    raycast(o, d, maxDist = this.reach, bend = null) {
+        const at = t => { const p = v3.add(o, v3.mul(d, t)); return bend ? bend(p) : p; };
+        const above = t => { const p = at(t); return p[1] - this.sample(p[0], p[2]); };
         if (above(0) < 0) return null;
         let t = 0, prev = 0;
         while (t < maxDist) {
             prev = t;
             t += Math.max(this.cell * 0.5, t * 0.004);
-            const p = v3.add(o, v3.mul(d, t));
+            const p = at(t);
             if (this.offMap(p)) { if (p[1] < this.min) return null; continue; }
             if (above(t) < 0) {
                 let a = prev, b = t;
                 for (let k = 0; k < 20; k++) { const m = (a + b) / 2; if (above(m) < 0) b = m; else a = m; }
-                return v3.add(o, v3.mul(d, b));
+                return at(b);
             }
             if (p[1] > this.max + 100 && d[1] >= 0) return null;
         }

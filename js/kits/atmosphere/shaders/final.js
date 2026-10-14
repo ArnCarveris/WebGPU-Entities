@@ -283,7 +283,8 @@ fn splash(k: u32, vi: u32, o: ptr<function, LineOut>) {
 
 // near-field precipitation: drops and flakes in a box that wraps around the camera. The drops' size (F.rain.x) sets how
 // they look: drizzle is a dense, slow mist of fine droplets in a small box, a downpour long, heavy, fast streaks.
-// Instances from F.rain.w on are drops running off roof edges (drip), from F.drips.y on splashes (splash).
+// Instances from F.rain.w on are drops running off roof edges (drip), from F.drips.y on splashes (splash). All of them
+// within some 120 m of the eye, where the outdoors drawn curved (F.curve) is under a millimetre off flat: drawn flat.
 @vertex fn vsPrecip(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> LineOut {
     var o: LineOut;
     o.pos = vec4f(0.0, 0.0, -2.0, 1.0);
@@ -371,7 +372,7 @@ struct GlassOut { @builtin(position) pos: vec4f, @location(0) world: vec3f, @loc
     o.n = (busU.model * vec4f(n, 0.0)).xyz;
     o.local = q;
     o.kind = f32(u32(c.a + 0.5) & 7u);
-    o.pos = busU.mvp * vec4f(q, 1.0);
+    o.pos = curveClip(busU.mvp * vec4f(q, 1.0), o.world);
     return o;
 }
 
@@ -428,7 +429,7 @@ struct PaneOut { @builtin(position) pos: vec4f, @location(0) world: vec3f, @loca
     o.n = n;                                                            // outward
     o.id = u32(c.a + 0.5) / ${BLD_ID}u;
     o.wet = rainReaches(p + n * 0.2);
-    o.pos = F.viewProj * vec4f(p, 1.0);
+    o.pos = F.viewProj * vec4f(curveToRender(p), 1.0);
     return o;
 }
 
@@ -483,8 +484,8 @@ struct PaneOut { @builtin(position) pos: vec4f, @location(0) world: vec3f, @loca
     let s0 = bolts[ii * 2u];
     let s1 = bolts[ii * 2u + 1u];
     if (s0.w <= 0.0) { return o; }
-    let a = F.viewProj * vec4f(s0.xyz, 1.0);
-    let b = F.viewProj * vec4f(s1.xyz, 1.0);
+    let a = F.viewProj * vec4f(curveToRender(s0.xyz), 1.0);
+    let b = F.viewProj * vec4f(curveToRender(s1.xyz), 1.0);
     if (a.w < 1.0 || b.w < 1.0) { return o; }
     let focal = F.screen.y * 0.5 / length(F.up.xyz);
     lineQuad(a, b, max(1.5, s1.w * focal / a.w), vi, &o);

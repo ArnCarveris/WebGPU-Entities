@@ -62,7 +62,8 @@ class KeyCommands {
         const a = this.app;
         for (const [cx, cy] of clicks) {
             const rect = a.canvas.getBoundingClientRect();
-            const hit = a.world.field.raycast(a.camera.pos, a.camera.ray(cx - rect.left, cy - rect.top, rect.width, rect.height));
+            const cv = a.world.curvature;
+            const hit = a.world.field.raycast(a.camera.pos, a.camera.ray(cx - rect.left, cy - rect.top, rect.width, rect.height), undefined, cv.on ? p => cv.toWorld(p) : null);
             if (!hit) { a.hud.toast('Click on the ground'); continue; }
             a.extensions.some(x => x.click?.(hit));
         }

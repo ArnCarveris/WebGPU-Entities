@@ -14,6 +14,7 @@ const FRAME_LAYOUT = [
     ['viewProj', 'mat4x4f'],
     ['prevViewProj', 'mat4x4f'],
     ['cam', 'vec4f'],       // xyz, real time (s)
+    ['curve', 'vec4f'],     // the outdoors drawn curved (kits.curvature: CurvatureWGSL): the eye's sphere radius, on, the terrain's reach (m), the planet's radius
     ['fwd', 'vec4f'],       // xyz, near
     ['right', 'vec4f'],     // right * tan(fovx / 2), frame index
     ['up', 'vec4f'],        // up * tan(fovy / 2), weather time (s)

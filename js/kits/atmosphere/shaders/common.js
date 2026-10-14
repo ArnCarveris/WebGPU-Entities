@@ -5,6 +5,7 @@ Features.kit('atmosphere', (engine, kit) => {
 const { kits } = engine;
 const { NoiseWGSL } = kits.noise;
 const { MAX_LAYERS, MAX_FLASHES } = kits.weather;
+const { CurvatureWGSL } = kits.curvature;
 
 // WGSL
 
@@ -32,8 +33,10 @@ fn aces(x: vec3f) -> vec3f {
 }
 `;
 
-// needs F
+// needs F. The outdoors may be drawn curved (F.curve, the curvature kit's): a view ray's samples are curveToWorld of its
+// points, a vertex's clip position curveClip of its world position; the world, its maps and its lighting stay flat
 const WGSL_SKY = /* wgsl */`
+${CurvatureWGSL('F')}
 fn rayDir(ndc: vec2f) -> vec3f { return normalize(F.fwd.xyz + F.right.xyz * ndc.x + F.up.xyz * ndc.y); }
 
 // interleaved march (F.lod.x): 1 every pixel; 2 a checkerboard, alternating; 4 one pixel of each 2x2 block, cycling
@@ -59,11 +62,13 @@ fn tonemap(c: vec3f) -> vec3f {
     return pow(aces(x * F.sunCol.w), vec3f(1.0 / 2.2));
 }
 
+// (its horizon is the one drawn: below the eye's level where the outdoors is drawn curved, curveSkyward)
 fn skyColor(dir: vec3f) -> vec3f {
     let mu = dot(dir, F.sunDir.xyz);
-    let t = pow(sat(dir.y + 0.02), 0.5);
+    let y = curveSkyward(dir);
+    let t = pow(sat(y + 0.02), 0.5);
     var c = mix(F.horizon.rgb, F.zenith.rgb, t);
-    c = mix(c, F.horizon.rgb * 0.7, sat(-dir.y * 8.0));
+    c = mix(c, F.horizon.rgb * 0.7, sat(-y * 8.0));
     // (the moon's glow is as faint next to it as the night sky is)
     return c + F.sunCol.rgb * (hg(mu, 0.78) * 0.025 + hg(mu, 0.3) * 0.02 * (1.0 - t)) * select(1.0, 0.05, F.sunDir.w > 0.0);
 }

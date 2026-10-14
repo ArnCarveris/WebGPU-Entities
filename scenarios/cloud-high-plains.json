@@ -4,6 +4,7 @@
     "entities": [
         {"type":"cloud","name":"High Plains"},
         {"type":"terrain","size":64000,"resolution":512,"base":1500,"fieldSize":805,"pivots":0.22},
+        {"type":"curvature","radius":6371000,"$comment":"the outdoors drawn on a round planet, O(1) per point; optional: without it the plains are flat (the handheld's GPU menu turns it on or off)"},
         {
             "type": "render", "quality": 1, "shapeScale": 8000, "detailScale": 1400, "detailStrength": 0.5, "maxTop": 12500, "maxDistance": 60000,
             "weatherSize": 128000, "rainExtinction": 0.0024, "snowExtinction": 0.0036, "slant": 0.05, "fallSpeed": 40, "timeScale": 20, "particles": 24000,

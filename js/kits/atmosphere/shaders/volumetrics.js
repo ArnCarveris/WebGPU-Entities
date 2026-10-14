@@ -17,7 +17,8 @@ fn inject(@builtin(global_invocation_id) gid: vec3u) {
     if (any(gid >= n)) { return; }
     let c = (vec3f(gid) + 0.5) / vec3f(n);
     let z = F.froxel.x * pow(F.froxel.y / F.froxel.x, c.z);          // view depth of the cell centre
-    let p = F.cam.xyz + (F.fwd.xyz + F.right.xyz * (c.x * 2.0 - 1.0) + F.up.xyz * (c.y * 2.0 - 1.0)) * z;
+    // (the cell is where it is drawn: its light is the world point's drawn there, curveToWorld)
+    let p = curveToWorld(F.cam.xyz + (F.fwd.xyz + F.right.xyz * (c.x * 2.0 - 1.0) + F.up.xyz * (c.y * 2.0 - 1.0)) * z);
     var sh = shadowAt(p);
     // the shafts shade what lies behind them: march their envelope toward the sun, up to where they start in the cloud
     let s = F.sunDir.xyz;
@@ -49,8 +50,10 @@ fn cloudPossible(p: vec3f) -> bool {
 // distance bin of the tile pre-pass: 64 bins, square-root spaced out to the march distance (fine near, coarse far)
 fn tileBin(t: f32) -> u32 { return min(u32(sqrt(max(t, 0.0) / F.march.z) * 64.0), 63u); }
 
-// the march's clipping of a ray to the cloud slab, [t0, t1]; t1 < t0 when the ray misses it
+// the march's clipping of a ray to the cloud slab, [t0, t1]; t1 < t0 when the ray misses it (from the eye; drawn
+// curved, the slab is the shell between two spheres)
 fn slabSpan(ro: vec3f, dir: vec3f, tMax: f32) -> vec2f {
+    if (curveOn()) { return curveSpan(dir, F.misc.z - 1500.0, F.noise.w, tMax); }
     var t0 = 0.0;
     var t1 = tMax;
     if (abs(dir.y) > 1e-5) {
@@ -85,7 +88,7 @@ fn tiles(@builtin(global_invocation_id) gid: vec3u) {
         for (var b = tileBin(span.x); b <= tileBin(span.y); b++) {
             let f = (f32(b) + 0.5) / 64.0;
             let t = clamp(f * f * F.march.z, span.x, span.y);
-            let p = ro + dir * t;
+            let p = curveToWorld(ro + dir * t);
             if (p.y <= F.layerInfo.z || p.y >= F.features.z) { continue; }
             if (cloudSampleN(p, weatherAt(p.xz), 1, 0xffffffffu, cloudPossible(p)).x > 0.0) {
                 if (b < 32u) { m.x |= 1u << b; } else { m.y |= 1u << (b - 32u); }
@@ -152,12 +155,14 @@ fn hazeIntegrate(@builtin(global_invocation_id) gid: vec3u) {
     var I = vec3f(0.0);
     var Th = 1.0;
     var zPrev = 0.0;
+    var yPrev = F.cam.y;
     var lPrev = vec3f(0.0);
     for (var k = 0u; k < n.z; k++) {
         let z = F.froxel.x * pow(F.froxel.y / F.froxel.x, (f32(k) + 0.5) / f32(n.z));
-        let p = F.cam.xyz + v * z;
+        let p = curveToWorld(F.cam.xyz + v * z);
         let L = hazeLightAt(p, phase, textureLoad(froxelIn, vec3u(gid.xy, k), 0));
-        let tr = exp(-hazeOD(F.cam.y + v.y * zPrev, p.y, (z - zPrev) * vl));
+        let tr = exp(-hazeOD(yPrev, p.y, (z - zPrev) * vl));
+        yPrev = p.y;
         I += Th * select(0.5 * (L + lPrev), L, k == 0u) * (1.0 - tr);
         Th *= tr;
         textureStore(hazeOut, vec3u(gid.xy, k), vec4f(I, Th));
@@ -275,13 +280,14 @@ fn cloudLight(p: vec3f, mu: f32, dirY: f32, w: vec4f, lightSteps: i32, stepScale
 // exponential over the terrain, integrated over the step's height range, so a long step that crosses the thin layers at
 // once still takes all of them. It scales with the rain reaching the ground below (precipEnvelope, so virga throws up
 // none) and the drops' size: drizzle hardly splashes. lift: how far the surface this ray ends on stands above the
-// terrain (paving, asphalt, decks laid over it), so the thin layers lie on that and not under it
-fn rainSpray(p: vec3f, ro: vec3f, dir: vec3f, ta: f32, tb: f32, w: vec4f, lift: f32) -> f32 {
-    let yLo = min(ro.y + dir.y * ta, ro.y + dir.y * tb);
+// terrain (paving, asphalt, decks laid over it), so the thin layers lie on that and not under it. ya, yb: the step's
+// ends' world heights (drawn curved, a ray's height is not linear in its distance)
+fn rainSpray(p: vec3f, ya: f32, yb: f32, w: vec4f, lift: f32) -> f32 {
+    let yLo = min(ya, yb);
     if (yLo - terrainHeight(p.xz).x > ${SPRAY_LAYERS[2][0] * 6 + 40}.0) { return 0.0; }    // the mesh is within metres of it
     let g = meshHeight(p.xz) + lift;
-    let hA = max(ro.y + dir.y * ta - g, 0.0);
-    let hB = max(ro.y + dir.y * tb - g, 0.0);
+    let hA = max(ya - g, 0.0);
+    let hB = max(yb - g, 0.0);
     if (min(hA, hB) > ${SPRAY_LAYERS[2][0] * 6}.0) { return 0.0; }
     let rate = precipEnvelope(vec3f(p.x, g + 1.0, p.z), w).x / max(F.precip.z, 1e-6);
     if (rate <= 0.0) { return 0.0; }
@@ -294,6 +300,12 @@ fn rainSpray(p: vec3f, ro: vec3f, dir: vec3f, ta: f32, tb: f32, w: vec4f, lift: 
     sum += ${SPRAY_MIST[1].toFixed(3)} * far * select(${SPRAY_MIST[0].toFixed(3)} * (exp(-hA / ${SPRAY_MIST[0].toFixed(3)}) - exp(-hB / ${SPRAY_MIST[0].toFixed(3)})) / dh, exp(-hA / ${SPRAY_MIST[0].toFixed(3)}), abs(dh) < 0.002);
     let drops = mix(0.15, 1.0, F.rain.x);
     return SPRAY * rate * drops * sum * sat(rate * 2.0);
+}
+
+// the view ray (from the eye) through world box [lo, hi] as it is drawn (curveBox: padded to the bounds it falls into)
+fn rayBoxC(ro: vec3f, rd: vec3f, lo: vec3f, hi: vec3f, t0: f32, t1: f32) -> bool {
+    let b = curveBox(lo, hi);
+    return rayBox(ro, rd, b.lo, b.hi, t0, t1);
 }
 
 fn rayBox(ro: vec3f, rd: vec3f, lo: vec3f, hi: vec3f, t0: f32, t1: f32) -> bool {
@@ -382,7 +394,8 @@ fn tornadoSpan(ro: vec3f, dir: vec3f, tMax: f32) -> vec2f {
         ta = max(ta, (-qb - sq) / qa);
         tb = min(tb, (-qb + sq) / qa);
     } else if (qc > 0.0) { return vec2f(1.0, 0.0); }
-    // between the ground and the top
+    // between the ground and the top (drawn curved: the cylinder alone, its samples take their heights from curveToWorld)
+    if (curveOn()) { return vec2f(ta, tb); }
     if (abs(dir.y) > 1e-6) {
         let y0 = (A.z - 10.0 - ro.y) / dir.y;
         let y1 = (A.w - ro.y) / dir.y;
@@ -398,10 +411,10 @@ fn tornadoMarch(ro: vec3f, dir: vec3f, ta: f32, tb: f32, mu: f32, jitter: f32) -
     let dt = (tb - ta) / f32(n);
     var col = vec3f(0.0);
     var T = 1.0;
-    let fl = flashLit(ro + dir * (ta + tb) * 0.5) * 0.05;
+    let fl = flashLit(curveToWorld(ro + dir * (ta + tb) * 0.5)) * 0.05;
     let phase = mix(hg(mu, 0.6), hg(mu, 0.0), 0.5);
     for (var i = 0; i < n; i++) {
-        let p = ro + dir * (ta + (f32(i) + jitter) * dt);
+        let p = curveToWorld(ro + dir * (ta + (f32(i) + jitter) * dt));
         let td = tornadoDensity(p);
         let s = td.x + td.y;
         if (s <= 1e-7) { continue; }
@@ -426,12 +439,12 @@ fn featureMask(ro: vec3f, rd: vec3f, t0: f32, t1: f32) -> u32 {
         let B = F.ms[i * 3 + 1];
         let C = F.ms[i * 3 + 2];
         let r = A.z * 1.3;
-        if (rayBox(ro, rd, vec3f(A.x - r, B.x - C.x - 450.0, A.y - r), vec3f(A.x + r, B.y + 2500.0, A.y + r), t0, t1)) { m |= 1u << u32(i); }
+        if (rayBoxC(ro, rd, vec3f(A.x - r, B.x - C.x - 450.0, A.y - r), vec3f(A.x + r, B.y + 2500.0, A.y + r), t0, t1)) { m |= 1u << u32(i); }
     }
     for (var i = 0; i < i32(F.features.y); i++) {
         let D = F.shelves[i * 4 + 3];
         let lipY = F.misc.z + F.shelves[i * 4 + 2].x;
-        if (rayBox(ro, rd, vec3f(D.x, lipY - 600.0, D.y), vec3f(D.z, F.cloud.x + 300.0, D.w), t0, t1)) { m |= 16u << u32(i); }
+        if (rayBoxC(ro, rd, vec3f(D.x, lipY - 600.0, D.y), vec3f(D.z, F.cloud.x + 300.0, D.w), t0, t1)) { m |= 16u << u32(i); }
     }
     return m;
 }
@@ -466,7 +479,7 @@ fn march(@builtin(global_invocation_id) gid: vec3u) {
     // ends on them (rainSpray); eased out where it ends high on a wall or a roof
     var lift = 0.0;
     if (sceneT < 1e8) {
-        let e = ro + dir * sceneT;
+        let e = curveToWorld(ro + dir * sceneT);
         let d = e.y - meshHeight(e.xz);
         lift = d * (1.0 - smoothstep(0.8, 2.0, abs(d)));
     }
@@ -514,7 +527,7 @@ fn march(@builtin(global_invocation_id) gid: vec3u) {
         if (tiles && doClouds) { tm = tileMask(px); }
         let rainPhase = mix(hg(mu, 0.75), hg(mu, 0.0), 0.45);
         // rays through the structures' bounds: no rain under their roofs and decks
-        let sheltered = F.blocks.x > 0.5 && rayBox(ro, dir, vec3f(F.blockBox.x, F.blocks.y, F.blockBox.y), vec3f(F.blockBox.z, F.blocks.z, F.blockBox.w), t0, t1);
+        let sheltered = F.blocks.x > 0.5 && rayBoxC(ro, dir, vec3f(F.blockBox.x, F.blocks.y, F.blockBox.y), vec3f(F.blockBox.z, F.blocks.z, F.blockBox.w), t0, t1);
         // (cab: the stretch of the ray inside the cabin, when it is seen from outside: no rain, snow or haze in there)
         let snowPhase = mix(hg(mu, 0.45), hg(mu, 0.0), 0.6);
         let hazeG = hazePhase(mu);
@@ -539,7 +552,9 @@ fn march(@builtin(global_invocation_id) gid: vec3u) {
                 tornT = 1e9;
                 if (T < 0.004) { T = 0.0; break; }
             }
-            let p = ro + dir * t;
+            // pr: the sample as drawn (the froxel volume's), p: the world point there
+            let pr = ro + dir * t;
+            let p = curveToWorld(pr);
             var sigma = 0.0;
             var S = vec3f(0.0);
             var medium = 0.0;       // cloud and precipitation extinction at this step (not haze)
@@ -581,7 +596,7 @@ fn march(@builtin(global_invocation_id) gid: vec3u) {
             } else if (p.y < base + 700.0) {
                 // light from the froxel volume, or evaluated here (z < 0: lightning not looked up yet)
                 var fx = vec4f(0.0, 0.0, -1.0, -1.0);
-                if (froxels) { fx = froxelAt(p); } else { fx = vec4f(shadowAt(p), -1.0, -1.0); }
+                if (froxels) { fx = froxelAt(pr); } else { fx = vec4f(shadowAt(p), -1.0, -1.0); }
                 let sh = fx.xy;
                 var glow = vec3f(0.0);
                 if (F.glowInfo.x > 0.0) { if (froxels) { glow = GLOW_COLOR * fx.w; } else { glow = cityGlow(p); } }
@@ -593,7 +608,7 @@ fn march(@builtin(global_invocation_id) gid: vec3u) {
                     var sd = 0.0;
                     if (src.z >= 0.003) {
                         pd = precipDensity(p, src);
-                        sd = rainSpray(p, ro, dir, t0 + span * fa * fa, t0 + span * fb * fb, src, lift);
+                        sd = rainSpray(p, curveToWorld(ro + dir * (t0 + span * fa * fa)).y, curveToWorld(ro + dir * (t0 + span * fb * fb)).y, src, lift);
                     }
                     if (sheltered && pd.x + pd.y + sd > 0.0) { let k = rainReaches(p); pd *= k; sd *= k; }
                     if (pd.x + pd.y + sd > 0.0) {
@@ -655,18 +670,19 @@ fn march(@builtin(global_invocation_id) gid: vec3u) {
     // haze beyond the march, up to the terrain
     if (doHaze && sceneT < 1e8 && sceneT > max(t1, 0.0)) {
         let a = max(t1, 0.0);
-        let od = hazeOD(ro.y + dir.y * a, ro.y + dir.y * sceneT, sceneT - a);
+        let od = hazeOD(curveToWorld(ro + dir * a).y, curveToWorld(ro + dir * sceneT).y, sceneT - a);
         let tr = exp(-od);
         var glow = vec3f(0.0);
-        if (F.glowInfo.x > 0.0) { glow = cityGlow(ro + dir * mix(a, sceneT, 0.5)); }   // the domes over the far towns
+        if (F.glowInfo.x > 0.0) { glow = cityGlow(curveToWorld(ro + dir * mix(a, sceneT, 0.5))); }   // the domes over the far towns
         col += T * (hazeLight(hazePhase(mu), vec2f(1.0)) + glow) * (1.0 - tr);
         T *= tr;
     }
 
     // cirrus sheet above everything
-    if (doClouds && sceneT > 1e8 && dir.y > 0.0 && ro.y < F.cirrus.x && F.cirrus.y > 0.0) {
-        let tc = (F.cirrus.x - ro.y) / dir.y;
-        let c = ro + dir * tc;
+    // (drawn curved, a shell: rays a little under the horizontal reach it too)
+    if (doClouds && sceneT > 1e8 && (dir.y > 0.0 || curveOn()) && ro.y < F.cirrus.x && F.cirrus.y > 0.0) {
+        let tc = select((F.cirrus.x - ro.y) / dir.y, curveShell(dir, F.cirrus.x).y, curveOn());
+        let c = curveToWorld(ro + dir * tc);
         let wl = length(F.wind.xy);
         let wd = select(vec2f(1.0, 0.0), F.wind.xy / wl, wl > 0.1);
         let along = vec2f(dot(c.xz, wd), dot(c.xz, vec2f(-wd.y, wd.x)));

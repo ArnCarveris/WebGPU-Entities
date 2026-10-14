@@ -85,6 +85,14 @@ class Controls {
         a.menus.sync();
     }
 
+    // how round the planet the outdoors is drawn on (the world's Curvature: 0 flat .. 1, Curvature.amount)
+    setCurvature(s) {
+        const a = this.app, cv = a.world.curvature;
+        cv.setAmount(s);
+        a.reset = true;                 // no ghost of the last shape in the temporal history
+        a.menus.sync();
+    }
+
     toggleBloom() {
         const a = this.app;
         a.bloom = !a.bloom;

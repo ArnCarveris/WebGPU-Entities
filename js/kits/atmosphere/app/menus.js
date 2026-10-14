@@ -51,6 +51,7 @@ class AppMenus {
             { label: `froxel lighting ${FROXEL.join('×')}`, kind: 'check', on: a.froxels, pick: () => c.toggleFroxels() },
             { label: 'cloud tile pre-pass', kind: 'check', on: a.tiles, pick: () => c.toggleTiles() },
             { label: 'bloom', kind: 'check', on: a.bloom, pick: () => c.toggleBloom() },
+            { label: 'Planet curvature', kind: 'slider', value: a.world.curvature.amount, min: 0, max: 1, fmt: v => a.world.curvature.describe(v), set: v => c.setCurvature(v) },
             { sep: true },
             ...(prof.enabled ? [['total', prof.total], ...Object.entries(prof.ms)].map(([n, v]) => ({ label: n, kind: 'info', key: `${v.toFixed(1)} ms` }))
                 : [{ label: 'no timestamp queries on this adapter', kind: 'info' }]),

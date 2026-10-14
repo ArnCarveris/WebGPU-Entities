@@ -137,6 +137,9 @@ class FrameWriter {
         F.set('viewProj', this.viewProj);
         F.set('prevViewProj', this.prevViewProj || this.viewProj);
         F.set('cam', [...cam.pos, a.time % 3600]);
+        // the outdoors curved about the eye: the terrain drawn out to past the horizon over the highest peak
+        w.curvature.setEye(cam.pos);
+        F.set('curve', w.curvature.gpu(w.field.max - w.curvature.reference));
         F.set('fwd', [...fwd, near]);
         F.set('right', [...v3.mul(right, tanX), a.frameNo % 1024]);
         F.set('up', [...v3.mul(up, tanY), a.weatherTime]);

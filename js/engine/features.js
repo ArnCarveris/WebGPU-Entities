@@ -41,6 +41,8 @@ const Features = {
                 'structures/door-control', 'structures/sound-events',
             ],
         },
+        // a round planet's surface out of a flat world, O(1) per point (the outdoors as drawn: renderers, culling)
+        curvature: { parts: ['curvature'] },
         gpu: { parts: ['stencil', 'pipelines', 'extensions', 'lines', 'half', 'profiler', 'dynamic-scale'] },
         gui: {
             uses: ['noise', 'gpu'],
@@ -54,7 +56,7 @@ const Features = {
         // and what it writes each frame, the World under it (WorldExtensions compose a world type in), its App (with
         // AppExtensions) and the engine adapter (AtmosphereWorld)
         atmosphere: {
-            uses: ['noise', 'view', 'world', 'gpu', 'gui', 'mesh', 'interior', 'transit', 'building', 'settlement', 'terrain', 'weather'],
+            uses: ['noise', 'view', 'world', 'gpu', 'gui', 'mesh', 'interior', 'transit', 'building', 'settlement', 'terrain', 'weather', 'curvature'],
             parts: [
                 'limits', 'quality', 'bindings', 'shaders/common', 'shaders/shelter', 'shaders/occupancy', 'shaders/noise', 'shaders/weather',
                 'shaders/volumetrics', 'shaders/scene', 'shaders/final', 'passes', 'renderer', 'far-lights', 'surroundings', 'light-writer',
@@ -64,7 +66,7 @@ const Features = {
         // the cloud world (Entity Cloud): its entity types, its World extension (Storms: cells, hurricane, tornado) and App
         // extension (Clouds: the cloud picker, storm keys, menus, readout), composed onto the atmosphere kit's
         cloud: {
-            uses: ['noise', 'view', 'world', 'mesh', 'terrain', 'interior', 'transit', 'building', 'settlement', 'weather', 'gpu', 'gui', 'atmosphere'],
+            uses: ['noise', 'view', 'world', 'mesh', 'terrain', 'interior', 'transit', 'building', 'settlement', 'weather', 'gpu', 'gui', 'curvature', 'atmosphere'],
             parts: ['entities', 'storms', 'clouds', 'world-type'],
             worlds: ['cloud'],
         },

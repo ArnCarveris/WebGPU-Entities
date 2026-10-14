@@ -18,6 +18,7 @@ const { MAX_CELLS, MAX_MOTHERSHIPS, MAX_SHELVES, GRID_N, FarLights } = kit;
 const { LandField } = kits.terrain;
 const { LAMPS, Structures, cloudMeshes } = kits.settlement;
 const { WeatherSystem, RainZones, CloudLayers, Lightning } = kits.weather;
+const { Curvature } = kits.curvature;
 
 class World {
     // types: the entity classes by type name; town: the class the lit town (scenario streetLights) is painted with (a
@@ -32,6 +33,8 @@ class World {
         const t = { size: 64000, resolution: 512, base: 1500, fieldSize: 800, pivots: 0.2, ...(scenario.terrain || {}) };
         this.terrain = t;
         this.field = new LandField(t.size, t.resolution, t.base, { grid: GRID_N });
+        // the outdoors drawn on a round planet (the scenario's optional `curvature` entity; off without one)
+        this.curvature = new Curvature(scenario.curvature, t.base);
         this.weather = new WeatherSystem(scenario.weather);
         this.clouds = new CloudLayers(scenario.clouds);
         this.lightning = new Lightning();

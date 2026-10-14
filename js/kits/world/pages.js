@@ -14,15 +14,15 @@ class Menu {
         this.shown = true;
     }
 
-    // items: { label, kind: 'radio' | 'check', on, key (its shortcut), pick }, { label, kind: 'info', key (its value) } or
-    // { sep: true }
+    // items: { label, kind: 'radio' | 'check', on, key (its shortcut), pick }, { label, kind: 'info', key (its value) },
+    // { label, kind: 'slider', value, min, max, fmt(v), set(v) } or { sep: true }
     set(summary, items, shown = true) {
         this.summary = summary;
         this.items = items;
         this.shown = shown;
     }
 
-    // as handheld cells: the radio items one choice, each check item a toggle, each info item a label
+    // as handheld cells: the radio items one choice, each check item a toggle, each slider item a slider, each info item a label
     cells(title, { radios = true } = {}) {
         if (!this.shown) return [];
         const radio = this.items.filter(i => i.kind === 'radio'), out = [];
@@ -32,6 +32,7 @@ class Menu {
         }
         for (const it of this.items) {
             if (it.kind === 'check') out.push({ toggle: it.label, on: !!it.on, set: () => it.pick() });
+            else if (it.kind === 'slider') out.push({ slider: it.label, value: it.value, min: it.min, max: it.max, fmt: it.fmt, set: it.set });
             else if (it.kind === 'info') out.push({ label: it.label, value: it.key || '' });
         }
         return out;

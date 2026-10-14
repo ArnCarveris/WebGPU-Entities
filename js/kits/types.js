@@ -40,6 +40,7 @@ const EntityTypes = (() => {
     def('weather', { storm: 'a storm cell', supercell: 'a supercell', squall: 'a squall line', spawner: 'spawns storm cells' });
     def('settlement', { village: 'a village on a road', busStation: "a town's bus station", skyscraper: 'a skyscraper built from a buildingPlan, its plaza round it' });
     // floor plans (the building kit): data, kept in scenarios/plans/ and included where a world builds from them
+    def('curvature', { curvature: "the outdoors drawn on a round planet (radius, on, reference): O(1) per point, the world itself stays flat" });
     def('building', {
         buildingPlan: 'a building as a floor-plan composition: sections of storeys (storeyPlans), its core (corePlan), its lift groups',
         storeyPlan: 'a storey layout: bands of rooms and corridors round the core, or a hall',
