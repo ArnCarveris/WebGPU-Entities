@@ -1,7 +1,7 @@
 'use strict';
 // Lifts: cars in buildings' cores (Elevator), each in its shaft (the building kit's coreLayout: the car's run, the
 // technical space beside it with the counterweight), its landing doors, what a walker collides with and rides in, the
-// car as an area of its own (aboard it: its own light and air), and its panels: a keypad in the car, a call panel beside
+// car as an area of its own (aboard it: its own light and air), and its panels: a floor slider in the car, a call panel beside
 // each of its landing doors.
 
 Features.kit('transit', (engine, kit) => {
@@ -42,62 +42,92 @@ function button(gui, dc, id, x, y, w, h, label, { lit = false, color = UI.cyan, 
     dc.text(label, x + w / 2, y + h / 2 + size * 0.36, size, col(on ? UI.ink : UI.white), 'center', !on);
 }
 
-// The panel in a car: where it is and how fast; the destination as digits (tap one, pick its value on the keypad that
-// opens, GO), door open / close. The car's stops are storey numbers (stop.g): any number it does not stop at says so
+// The panel in a car: where it is and how fast; the destination on a vertical slider over its stops (the top stop's
+// label above it, the bottom's below: press on it or drag along it, then GO), the car's place and the called stops
+// marked on it; door open / close
 class CarPanel extends EntityGUI {
     constructor(car) {
         super({ id: `lift-${car.slot}`, size: [0.30, 0.52], virtual: [300, 520], range: car.L.reach, hintRange: car.L.reach * 2.5, maxVerts: 12000 });
         this.car = car;
-        const maxG = Math.max(...car.stops.map(s => s.g ?? 0));
-        this.digitCount = Math.max(1, String(maxG).length);       // (not `width`: the EntityGUI's, in metres)
-        this.digits = null;              // the number being entered, as characters
-        this.sel = -1;                   // the digit the keypad is open for
+        this.pick = -1;                  // the stop chosen on the slider (-1: the one the car is at or nearest)
+        this.dragging = false;
         this.msg = null;                 // { text, color, until }
+        this.track = { x: 58, y0: 140, y1: 420 };    // the slider's track (virtual px): x, its top and bottom
     }
 
-    // the number of the storey the car is at or passing, padded to the panel's digits
-    here() { return String(this.car.floorNumber()).padStart(this.digitCount, '0').slice(-this.digitCount).split(''); }
+    // where along its stops the car is, as a fractional stop index
+    at() {
+        const el = this.car.el, S = this.car.stops;
+        if (el.at >= 0) return el.at;
+        let i = 0;
+        while (i + 1 < S.length && S[i + 1].y <= el.y) i++;
+        const j = Math.min(i + 1, S.length - 1);
+        return S[j].y > S[i].y ? i + clamp((el.y - S[i].y) / (S[j].y - S[i].y), 0, 1) : i;
+    }
+
+    // the track's height (px) at stop index i (the top: the last stop)
+    yOf(i) {
+        const n = this.car.stops.length, T = this.track;
+        return n > 1 ? T.y1 - (i / (n - 1)) * (T.y1 - T.y0) : (T.y0 + T.y1) / 2;
+    }
+
+    // the stop at the cursor's height on the track
+    pickFromCursor() {
+        const n = this.car.stops.length, T = this.track;
+        this.pick = n > 1 ? Math.round(clamp((T.y1 - this.cursor.y) / (T.y1 - T.y0), 0, 1) * (n - 1)) : 0;
+    }
+
+    // stop i's storey number (its label, when the storey has one: L, S29, TOP, is said beside it)
+    num(i) { return String(this.car.stops[i].g ?? i); }
+    tag(i) { const s = this.car.stops[i].name; return s && s !== this.num(i) ? s : ''; }
 
     draw(dc, now) {
-        const c = this.car, el = c.el, W = this.vw, Hh = this.vh, A = UI.cyan;
+        const c = this.car, el = c.el, S = c.stops, n = S.length, W = this.vw, Hh = this.vh, A = UI.cyan, T = this.track;
         this.now = now;
-        if (this.digits?.length !== this.digitCount) this.digits = this.here();
+        if (this.pick < 0 || this.pick >= n) this.pick = Math.round(this.at());
         dc.fillRect(0, 0, W, Hh, col([6, 16, 22], 0.98));
         dc.rect(1, 1, W - 2, Hh - 2, 2, col(A, 0.5));
         // the display: the storey it is at or passing, which way, how high and how fast
         dc.fillRect(10, 10, W - 20, 84, col([0, 0, 0], 0.9));
         arrow(dc, 30, 52, 14, el.dir, el.halted ? UI.red : el.dir ? UI.amber : UI.dim);
-        const here = c.floor();
+        const here = String(c.floorNumber()), hereTag = el.at >= 0 ? this.tag(el.at) : '';
         dc.text(here, W / 2 + 10, 64, here.length > 4 ? 28 : 40, col(el.halted ? UI.red : UI.amber), 'center');
+        if (hereTag) dc.text(hereTag, W / 2 + 10, 86, 11, col(UI.amber, 0.7), 'center', false);
         dc.text(el.halted ? 'STOPPED · SAFETY' : `${Math.round(el.y)} m`, W - 18, 28, 11, col(el.halted ? UI.red : UI.dim), 'right', false);
         dc.text(`${Math.abs(el.v).toFixed(el.v ? 1 : 0)} m/s`, W - 18, 86, 11, col(UI.dim), 'right', false);
         dc.text(c.name.toUpperCase(), 18, 26, 10, col(A, 0.8), 'left', false);
-        // the destination: a slot per digit
-        const n = this.digitCount, sw = Math.min(54, (W - 40 - (n - 1) * 8) / n), x0 = (W - (n * sw + (n - 1) * 8)) / 2, y0 = 108;
-        dc.text('DESTINATION', W / 2, y0 - 2, 10, col(UI.dim), 'center', false);
-        for (let i = 0; i < n; i++) button(this, dc, `digit:${i}`, x0 + i * (sw + 8), y0 + 6, sw, 52, this.digits[i], { lit: this.sel === i, color: UI.amber, size: 30 });
-        const ky = y0 + 72;
-        if (this.sel >= 0) {
-            // the keypad for the selected digit
-            const kw = 72, kh = 46, kx = (W - 3 * kw - 2 * 8) / 2;
-            const keys = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '×', '0', '·'];
-            keys.forEach((k, i) => {
-                if (k === '·') return;
-                const r = Math.floor(i / 3), q = i % 3;
-                button(this, dc, k === '×' ? 'keypad:close' : `key:${k}`, kx + q * (kw + 8), ky + r * (kh + 7), kw, kh, k, { size: 22 });
-            });
-        } else {
-            dc.text('TAP A DIGIT TO CHANGE IT', W / 2, ky + 18, 11, col(UI.dim), 'center', false);
-            // what it serves: its stops' labels, the first and last few
-            const names = c.stops.map(s => s.name), list = names.length <= 8 ? names.join(' ') : `${names.slice(0, 3).join(' ')} … ${names.slice(-3).join(' ')}`;
-            dc.text('SERVES', W / 2, ky + 52, 10, col(A, 0.7), 'center', false);
-            dc.text(list, W / 2, ky + 72, 12, col(UI.white, 0.85), 'center', false);
-            const calls = [...el.calls].map(i => c.stops[i].name);
-            dc.text(calls.length ? `CALLED  ${calls.slice(0, 5).join(' ')}${calls.length > 5 ? ' …' : ''}` : '', W / 2, ky + 104, 11, col(UI.amber, 0.9), 'center', false);
-            const want = +this.digits.join(''), i = c.stopIndex(want);
-            button(this, dc, 'go', 20, ky + 130, W - 40, 50, i >= 0 ? `GO → ${c.stops[i].name}` : 'GO', { lit: i >= 0 && el.calls.has(i), color: UI.green, size: 20 });
+        // the slider: the top stop's label above its track, the bottom's below; a tick per stop (called ones amber), the
+        // car's place beside it, the chosen stop's thumb on it
+        this.addButton('slider', T.x - 40, T.y0 - 14, 80, T.y1 - T.y0 + 28);
+        const hover = this.isHover('slider') || this.dragging;
+        dc.text(this.num(n - 1), T.x, T.y0 - 18, 16, col(UI.white), 'center', false);
+        dc.text(this.num(0), T.x, T.y1 + 32, 16, col(UI.white), 'center', false);
+        dc.roundRect(T.x - 3, T.y0, 6, T.y1 - T.y0, 3, col(A, hover ? 0.45 : 0.25));
+        const every = Math.max(1, Math.ceil(n / 40));
+        for (let i = 0; i < n; i++) {
+            const called = el.calls.has(i);
+            if (!called && i % every && i !== n - 1) continue;
+            dc.fillRect(T.x - (called ? 12 : 8), this.yOf(i) - (called ? 1.5 : 1), called ? 24 : 16, called ? 3 : 2, col(called ? UI.amber : UI.cyan, called ? 1 : 0.55));
         }
-        if (this.msg && now < this.msg.until) dc.text(this.msg.text, W / 2, Hh - 64, 13, col(this.msg.color), 'center');
+        // (the car: a triangle left of the track, pointing at it)
+        const cy = this.yOf(this.at());
+        dc.polygon([[T.x - 14, cy], [T.x - 24, cy - 6], [T.x - 24, cy + 6]], col(el.halted ? UI.red : UI.amber));
+        const ty = this.yOf(this.pick), pick = this.num(this.pick), pickTag = this.tag(this.pick);
+        dc.roundRect(T.x - 22, ty - 9, 44, 18, 4, col(UI.green, hover ? 1 : 0.85));
+        dc.text(pick, T.x, ty + 4.5, pick.length > 4 ? 9 : 12, col(UI.ink), 'center', false);
+        // beside it: the chosen stop, GO, what is called
+        const rx = 116, rw = W - rx - 14, mid = rx + rw / 2;
+        dc.text('DESTINATION', mid, T.y0 - 4, 10, col(UI.dim), 'center', false);
+        dc.text(pick, mid, T.y0 + 44, pick.length > 4 ? 26 : 40, col(UI.green), 'center');
+        dc.text(pickTag || (n > 1 ? 'DRAG THE SLIDER' : ''), mid, T.y0 + 72, pickTag ? 13 : 10, col(pickTag ? UI.green : UI.dim, pickTag ? 0.8 : 1), 'center', false);
+        button(this, dc, 'go', rx, T.y0 + 90, rw, 50, `GO → ${pick}`, { lit: el.calls.has(this.pick), color: UI.green, size: 18 });
+        const calls = [...el.calls].map(i => this.num(i));
+        if (calls.length) {
+            dc.text('CALLED', mid, T.y0 + 172, 10, col(A, 0.7), 'center', false);
+            for (let k = 0; k * 4 < Math.min(calls.length, 12); k++)
+                dc.text(calls.slice(k * 4, k * 4 + 4).join(' ') + (k === 2 && calls.length > 12 ? ' …' : ''), mid, T.y0 + 192 + k * 18, 12, col(UI.amber, 0.9), 'center', false);
+        }
+        if (this.msg && now < this.msg.until) dc.text(this.msg.text, mid, T.y1 + 6, 13, col(this.msg.color), 'center');
         button(this, dc, 'open', 14, Hh - 50, (W - 34) / 2, 38, '‹ › OPEN', { size: 14 });
         button(this, dc, 'close', 20 + (W - 34) / 2, Hh - 50, (W - 34) / 2, 38, '› ‹ CLOSE', { size: 14 });
     }
@@ -110,21 +140,24 @@ class CarPanel extends EntityGUI {
         if (!b) return;
         const c = this.car, el = c.el, id = b.id;
         this.game.audio.emit('liftButton', { id });
-        if (id.startsWith('digit:')) { const i = +id.slice(6); this.sel = this.sel === i ? -1 : i; }
-        else if (id.startsWith('key:')) { this.digits[this.sel] = id.slice(4); this.sel = -1; }
-        else if (id === 'keypad:close') this.sel = -1;
-        else if (id === 'go') {
-            const want = +this.digits.join(''), i = c.stopIndex(want);
-            if (i < 0) this.say(`NO STOP AT ${want}`, UI.red);
-            else if (el.halted) this.say('SAFETY CIRCUIT OPEN', UI.red);
+        if (id === 'slider') { this.pickFromCursor(); this.dragging = true; return true; }
+        if (id === 'go') {
+            const i = this.pick;
+            if (i < 0 || i >= c.stops.length) return;
+            if (el.halted) this.say('SAFETY CIRCUIT OPEN', UI.red);
             else {
                 el.call(i);
                 if (el.at !== i) el.wait = Math.min(el.wait, 1.5);          // (a destination chosen: the doors shut soon)
-                this.say(el.at === i ? 'HERE' : `TO ${c.stops[i].name}`, UI.green);
+                this.say(el.at === i ? 'HERE' : `TO ${this.num(i)}`, UI.green);
             }
         } else if (id === 'open') el.open();
         else if (id === 'close') el.close();
     }
+
+    // held on the slider: the stop follows the cursor
+    pointerDrag() { if (this.dragging && this.active) this.pickFromCursor(); }
+
+    pointerUp() { this.dragging = false; }
 }
 
 // The call panel beside a car's landing door (shown at the storey the camera is on, where the car stops): where the car

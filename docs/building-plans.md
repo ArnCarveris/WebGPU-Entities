@@ -60,8 +60,10 @@ shuttles (lobby, sky lobbies, deck) and a pair of locals per zone.
 
 - Each landing door has its own **call panel** (the car's floor and direction, CALL). `E` at a landing door calls its
   car; **holding** `E` releases the door (emergency): every car of that shaft halts until it shuts again.
-- In the car, the **keypad**: the destination as digits — tap a digit, pick its value on the keypad that opens, then
-  GO. A storey the car does not serve says `NO STOP`.
+- In the car, the **floor slider**: a vertical track over the car's stops, the top stop's label above it and the
+  bottom's below (storey numbers; a storey's label, L, S29, TOP, beside the number), the car's place and the
+  called stops marked on it. `E` on the track picks the stop there (held,
+  drag it up or down), then GO.
 - The car is an area of its own aboard it (the walker rides in its frame; the vis traversal from inside reaches only
   the car while its doors are shut; its own lamp; no weather or haze inside: the frame's cabin is the car).
 - In a shaft (through a released door, on a car's roof, in the pit), `E` takes hold of the **emergency ladder**; `W`

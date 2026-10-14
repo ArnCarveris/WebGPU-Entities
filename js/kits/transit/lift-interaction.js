@@ -41,9 +41,11 @@ class LiftInteraction {
         this.ray = dir ? { eye, dir } : null;
         this.ia.hover();
         const inCar = L.carAt(feet);
+        // a press a panel holds (its slider): dragged while E is held, let go with it
+        if (this.ia.capture) { if (hold) this.ia.drag(); else this.ia.pointerUp(); }
         if (this.ia.focus) {
-            if (press) { this.ia.pointerDown(); this.ia.pointerUp(); out.used = true; }
-            out.prompt = 'E press';
+            if (press) { if (this.ia.pointerDown() !== 'capture') this.ia.pointerUp(); out.used = true; }
+            out.prompt = this.ia.capture ? 'hold E: drag' : 'E press';
             this.held = 0;
         } else if (dir && !inCar) {
             const at = this.landing(eye, dir, feet, reach);
