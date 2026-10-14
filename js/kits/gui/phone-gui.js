@@ -15,6 +15,8 @@ const IOS = {
     blue: [0, 122, 255], green: [52, 199, 89], red: [255, 59, 48], orange: [255, 149, 0], pink: [255, 45, 85],
     press: [209, 209, 214], track: [233, 233, 234], chevron: [196, 196, 199]
 };
+// the frame's inner corner radius (handheld.js: 0.007 m): the screen's corners follow it, in virtual units
+const FRAME_INNER_R = 0.007;
 const PHONE_NAV_H = 82;             // status bar + navigation bar
 const PHONE_TRANSITION_MS = 300;
 const TEXT_CELL = { size: 13, lead: 18, width: 214 };
@@ -181,7 +183,7 @@ class PhoneGUI extends EntityGUI {
     }
 
     drawDisplayCorners(dc) {
-        const W = this.vw, H = this.vh, R = 30;
+        const W = this.vw, H = this.vh, R = FRAME_INNER_R * W / this.width;
         for (const [x, y, a0] of [[0, 0, Math.PI], [W, 0, -Math.PI / 2], [W, H, 0], [0, H, Math.PI / 2]]) {
             const ccx = x === 0 ? R : W - R, ccy = y === 0 ? R : H - R;
             dc.polygon([[x, y], ...dc.arcPts(ccx, ccy, R, a0, a0 + Math.PI / 2, 8)], col([6, 6, 7]));

@@ -38,7 +38,12 @@ const HANDHELD_DEFAULTS = {
     zOffset: 0.0047,
     pose: { hidden: { offset: [0.08, -0.2], yaw: -0.45, tilt: 0.95 }, shown: { offset: [0.062, -0.012, -0.2], yaw: -0.14, tilt: 0.04 }, landscape: { offset: [0, 0, -0.16] } },
     model: [
-        { box: [-0.0385, -0.079, -0.0045, 0.0385, 0.079, 0.0045], mat: 'phoneBody' },
+        // the body: a slab with rounded corners, the frame's outline (the screen is 0.068 x 0.1435 m)
+        { roundedBox: [-0.0385, -0.07625, -0.0045, 0.0385, 0.07625, 0.0045], radius: 0.012, mat: 'phoneBody', seg: 6 },
+        // the frame round the screen: a rounded lip ~0.7 mm proud of the body, 5 mm wide on every side; its inner edge
+        // overlaps the screen's edge by 0.5 mm, so the screen's corners tuck under it. Inner radius = outer radius - width: both
+        // corners share one centre, so the frame is 5 mm wide round the corners too
+        { ring: { outer: [-0.0385, -0.07625, 0.0385, 0.07625, 0.012], inner: [-0.0335, -0.07125, 0.0335, 0.07125, 0.007] }, z: [0.0045, 0.0052], mat: 'phoneBody', seg: 6 },
         { box: [0.0385, 0.018, -0.002, 0.0395, 0.042, 0.002], mat: 'lightMetal' },
         { box: [-0.0395, 0.03, -0.002, -0.0385, 0.04, 0.002], mat: 'lightMetal' },
         { box: [-0.0395, 0.015, -0.002, -0.0385, 0.025, 0.002], mat: 'lightMetal' },
