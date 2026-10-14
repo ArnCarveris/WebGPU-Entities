@@ -69,6 +69,7 @@ class Hud extends kits.world.WorldHud {
             const p = e.anchor, at = p && L.place(app.frameWriter.viewProj, app.world.curvature.toRender(p));
             if (!at) continue;
             const d = v3.len(v3.sub(p, app.camera.pos));
+            if (e.labelRange && d > e.labelRange) continue;          // (a place name: only near it)
             let s = null;
             for (const x of app.extensions) if ((s = x.label?.(e, d))) break;
             if (s?.skip) continue;

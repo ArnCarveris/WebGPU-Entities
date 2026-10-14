@@ -3,7 +3,7 @@
 
 Features.kit('atmosphere', (engine, kit) => {
 const {
-    LIGHT_CABIN, LIGHT_ROOM, POOL_ALBEDO, FAR_LAMP_PITCH, TOWN_BLOCK, FAR_LAMP_SIDE, FAR_LAMP_H, POLE_DRAW, GRID_N,
+    LIGHT_CABIN, LIGHT_ROOM, POOL_ALBEDO, FAR_LAMP_PITCH, TOWN_BLOCK, FAR_LAMP_SIDE, FAR_LAMP_H, POLE_DRAW,
 } = kit;
 const { BUS, BUS_IN } = engine.kits.transit;
 const { INTERIOR_DRAW, BLD_ID, BLD_LIT, BLD_STACK, BLD_DARK } = engine.kits.settlement;
@@ -25,7 +25,7 @@ fn meshHeight(xz: vec2f) -> f32 {
     let r0 = F.tdomain.z * 0.5;
     let c = F.tdomain.xy + r0;
     if (any(abs(xz - c) >= vec2f(r0))) { return terrainHeight(xz).x; }
-    let n = f32(${GRID_N - 1});
+    let n = F.geo.z - 1.0;
     let g = ((xz - c) / r0 * 0.72 + 1.0) * 0.5 * n;
     let i = floor(g);
     let f = g - i;
@@ -162,7 +162,7 @@ fn gridWarp(u: f32) -> f32 {
 struct TerrOut { @builtin(position) pos: vec4f, @location(0) world: vec3f };
 
 @vertex fn vsTerrain(@builtin(vertex_index) vi: u32) -> TerrOut {
-    let N = ${GRID_N}u;
+    let N = u32(F.geo.z);
     let i = vi % N;
     let j = vi / N;
     let u = f32(i) / f32(N - 1u) * 2.0 - 1.0;
@@ -214,6 +214,42 @@ fn fieldColor(xz: vec2f, px: f32) -> vec3f {
     let e = min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y)) * fs;
     let road = (1.0 - smoothstep(4.0, 4.0 + px, e)) * sat(8.0 / max(px, 0.5));
     return mix(c, vec3f(0.44, 0.42, 0.39), road * 0.85);
+}
+
+// the slope (dh/dx, dh/dz) of a wind-blown sea at xz: three wave trains (value noise stretched across the wind) and a
+// fine chop, fading where a pixel (px, m) is too big for them
+fn seaSlope(xz: vec2f, px: f32) -> vec2f {
+    let w = normalize(F.wind.xy + vec2f(1e-3, 0.0));
+    let q = vec2f(dot(xz, w), dot(xz, vec2f(-w.y, w.x)));
+    let t = F.cam.w;
+    var g = vec2f(0.0);
+    let e = 0.5;
+    for (var k = 0; k < 3; k++) {
+        let s = vec2f(60.0, 140.0) / pow(2.6, f32(k));
+        let a = (q + vec2f(t * 3.0 / (1.0 + f32(k)), 0.0)) / s;
+        let gx = (vnoise2(a + vec2f(e, 0.0)) - vnoise2(a - vec2f(e, 0.0))) / (2.0 * e * s.x);
+        let gy = (vnoise2(a + vec2f(0.0, e)) - vnoise2(a - vec2f(0.0, e))) / (2.0 * e * s.y);
+        g += vec2f(gx, gy) * s.x * 0.12 * (1.0 - smoothstep(s.x * 0.05, s.x * 0.4, px));
+    }
+    return (w * g.x + vec2f(-w.y, w.x) * g.y);
+}
+
+// a real place's open ground (F.geo.x): grass and scrub, greener up the slopes and in the wetter patches, drier and
+// browner low down, with bare earth here and there; no farm sections (its land cover says where the woods are)
+fn naturalColor(xz: vec2f, px: f32, y: f32) -> vec3f {
+    let detail = sat(40.0 / max(px, 1.0));
+    let moist = sat(vnoise2(xz / 3000.0) * 0.9 + vnoise2(xz / 800.0) * 0.3 + smoothstep(80.0, 450.0, y - F.misc.z) * 0.6 - 0.75 + F.geo.w);
+    var c = mix(vec3f(0.30, 0.26, 0.15), vec3f(0.12, 0.20, 0.07), moist);
+    c = mix(c, vec3f(0.33, 0.25, 0.17), smoothstep(0.72, 0.9, vnoise2(xz / 260.0 + 17.0)) * (1.0 - moist) * 0.7);
+    return c * (0.85 + 0.3 * mix(0.5, vnoise2(xz / 35.0), detail) + 0.1 * (vnoise2(xz / 1500.0) - 0.5));
+}
+
+// a real place's built-up ground (F.geo.x): yards and lawns between pavement, no street grid (its roads are its own)
+fn urbanColor(xz: vec2f, px: f32) -> vec3f {
+    let detail = sat(20.0 / max(px, 1.0));
+    let lawn = smoothstep(0.45, 0.65, mix(0.5, vnoise2(xz / 28.0), detail) * 0.7 + vnoise2(xz / 220.0) * 0.3);
+    let paved = mix(vec3f(0.30, 0.29, 0.28), vec3f(0.42, 0.40, 0.37), vnoise2(xz / 60.0));
+    return mix(paved, vec3f(0.15, 0.22, 0.09), lawn * 0.6) * (0.9 + 0.2 * mix(0.5, vnoise2(xz / 9.0), detail));
 }
 
 fn townColor(xz: vec2f, px: f32) -> vec3f {
@@ -301,10 +337,14 @@ fn streetGlow(p: vec3f, n: vec3f, v: vec3f, shin: f32, px: f32, share: f32) -> L
     let inside = all(uv > vec2f(0.0)) && all(uv < vec2f(1.0));
     let th = terrainHeight(p.xz);
     let n = th.yzw;
-    let land4 = select(vec4f(0.0), textureSampleLevel(landTex, clampSamp, uv, 0.0), inside);
+    // (beyond the map: nothing, or the sea round a real island, F.geo.y)
+    let land4 = select(vec4f(0.0, 0.0, F.geo.y, 0.0), textureSampleLevel(landTex, clampSamp, uv, 0.0), inside);
     let land = land4.xyz;
-    var alb = fieldColor(p.xz, px);
-    alb = mix(alb, townColor(p.xz, px), sat(land.x * (0.6 + 0.8 * vnoise2(p.xz / 700.0)) * 1.4 - 0.2));
+    let natural = F.geo.x > 0.5;
+    var alb = select(fieldColor(p.xz, px), naturalColor(p.xz, px, p.y), natural);
+    alb = mix(alb, select(townColor(p.xz, px), urbanColor(p.xz, px), natural), sat(land.x * (0.6 + 0.8 * vnoise2(p.xz / 700.0)) * 1.4 - 0.2));
+    // a natural shore: sand just over the water's edge
+    alb = mix(alb, vec3f(0.62, 0.56, 0.44) * (0.9 + 0.2 * vnoise2(p.xz / 7.0)), select(0.0, (1.0 - smoothstep(1.5, 4.0, p.y - F.misc.z)) * (1.0 - land.x) * smoothstep(0.82, 0.95, n.y), natural));
     let forest = sat(land.y * (0.4 + vnoise2(p.xz / 300.0)) * 1.3);
     alb = mix(alb, vec3f(0.07, 0.11, 0.06) * (0.8 + 0.4 * vnoise2(p.xz / 40.0)), forest);
     // mountains: conifers, then rock above the tree line and on steep slopes
@@ -327,7 +367,9 @@ fn streetGlow(p: vec3f, n: vec3f, v: vec3f, shin: f32, px: f32, share: f32) -> L
     let puddle = puddleAt(p.xz, wet) * paved * (1.0 - water) * smoothstep(0.97, 0.995, n.y);
     let pool = max(water, puddle);
     let rainNow = sat(F.near.x * 1.5) * sl.y * (1.0 - snow);
-    let rg = rainRipples(p.xz, px, rainNow) * max(pool, 0.25 * wet * paved);
+    var rg = rainRipples(p.xz, px, rainNow) * max(pool, 0.25 * wet * paved);
+    // a real place's sea (F.geo.x): swell and chop, drifting with the wind, smoothing out with distance
+    if (natural && water > 0.5) { rg += seaSlope(p.xz, px) * water; }
     let nw = normalize(vec3f(-rg.x, 1.0, -rg.y));
     alb *= 1.0 - 0.4 * puddle;
 
@@ -342,7 +384,9 @@ fn streetGlow(p: vec3f, n: vec3f, v: vec3f, shin: f32, px: f32, share: f32) -> L
     let r = reflect(-v, nw);
     let fres = 0.02 + 0.98 * pow(1.0 - max(dot(nw, v), 0.0), 5.0);
     let spec = skyColor(r) * sh.y + F.sunCol.rgb * sh.x * pow(max(dot(r, s), 0.0), 400.0) * 4.0 + lp.s;
-    col = mix(col, vec3f(0.01, 0.02, 0.025) * F.ambient.rgb + spec * fres, pool);
+    // (a real place's sea is tropical blue-green, paler over the shallows by the shore)
+    let body = select(vec3f(0.01, 0.02, 0.025), mix(vec3f(0.012, 0.045, 0.06), vec3f(0.03, 0.11, 0.10), smoothstep(0.995, 0.6, water)), natural);
+    col = mix(col, body * F.ambient.rgb + spec * fres, pool);
     col += spec * fres * wet * 0.35 * (1.0 - pool);
     col += skyColor(r) * sh.y * length(rg) * 1.5;                         // the rings catch the sky at any angle
     let kind = select(select(select(1.0, 2.0, rock * wild > 0.5), 3.0, paved > 0.5), 4.0, water > 0.5);
@@ -410,6 +454,44 @@ struct StructOut { @builtin(position) pos: vec4f, @location(0) world: vec3f, @lo
     let mat = i32(i.col.a + 0.5);
     if (mat == 7) { return vec4f(lampGlow(i.world, i.n, i.col.rgb), 0.0); }
     return shadeStruct(i.world, i.n, i.col.rgb, mat);
+}
+
+// bulk geometry (Structures.bulk: a real place's roads and buildings): position and a colour word (rgb the square root of
+// the linear colour, a the material); flat-shaded, its normal from the triangle's slope on screen. The position goes to
+// the fragment about the eye, so the normal stays exact far from the world's origin
+struct BulkOut { @builtin(position) pos: vec4f, @location(0) rel: vec3f, @location(1) col: vec4f };
+
+@vertex fn vsBulk(@location(0) p: vec3f, @location(1) c: vec4f) -> BulkOut {
+    var o: BulkOut;
+    o.rel = p - F.cam.xyz;
+    o.col = c;
+    o.pos = F.viewProj * vec4f(curveToRender(p), 1.0);
+    return o;
+}
+
+@fragment fn fsBulk(i: BulkOut) -> @location(0) vec4f {
+    let n = normalize(cross(dpdy(i.rel), dpdx(i.rel)));
+    let p = i.rel + F.cam.xyz;
+    var col = i.col.rgb * i.col.rgb;
+    var mat = i32(i.col.a * 255.0 + 0.5);
+    var lit = 0.0;
+    // a facade (material 8): rows of windows on its walls, storeys 3.4 m apart, bays 2.6 m along the world axis the wall
+    // runs closest to (the derived normal is too rough for the wall's own axis so far from the origin); by night some
+    // of them lit
+    if (mat == 8) {
+        let u = select(p.z, p.x, abs(n.z) > abs(n.x)) / 2.6;
+        let v = p.y / 3.4;
+        let px = pixelSize(p, n, normalize(-i.rel));
+        let fade = 1.0 - smoothstep(0.6, 1.6, px);
+        let win = step(0.18, fract(u)) * step(fract(u), 0.82) * step(0.28, fract(v)) * step(fract(v), 0.86) * step(abs(n.y), 0.5);
+        let w = mix(0.45, win, fade);
+        col = mix(col, vec3f(0.05, 0.07, 0.09), w);
+        mat = select(0, 2, w > 0.5);
+        if (F.lightInfo.y > 0.5) { lit = select(0.0, 1.0, hash12(floor(vec2f(u, v)) + floor(p.xz / 40.0)) < 0.3) * w; }
+    }
+    var o = shadeStruct(p, n, col, mat);
+    o = vec4f(o.rgb + vec3f(1.0, 0.72, 0.42) * lit * 0.9 / max(F.sunCol.w, 0.2), o.a);
+    return o;
 }
 
 // a lamp's diffuser (material 7: street lamps, porch lights, the canopy's lights): glass lit like any by day, glowing by

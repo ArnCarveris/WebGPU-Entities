@@ -142,6 +142,7 @@ class Host {
         });
         const scenario = this.scenario = await this.loadScenario(id);
         document.title = `${scenario.name} · WebGPU Entities`;
+        await ScenarioData.load(scenario);         // the data its entities name (a real place's heights, roads, buildings)
         await this.initGpu();
         this.engine = { Expr, GpuChoice, Common, CamMath, LayerFrame, host: this, kits: Features.kits };
         for (const k of Features.ENGINE_KITS) await Features.loadKit(k, this.engine);

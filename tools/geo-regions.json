@@ -1,0 +1,12 @@
+{
+    "$comment": "Real places for tools/geo-import.mjs: the square of ground (size m, centred on center [lat, lon]) sampled on a resolution x resolution grid (heights and land cover), and the OpenStreetMap extract its roads, buildings, land cover and place names come from. Heights: AWS Terrain Tiles (Terrarium, zoom `zoom`).",
+    "oahu": {
+        "name": "Oʻahu",
+        "center": [21.4835, -157.9645],
+        "size": 73728,
+        "resolution": 2048,
+        "zoom": 13,
+        "pbf": "https://download.geofabrik.de/north-america/us/hawaii-latest.osm.pbf",
+        "sea": -1.5
+    }
+}

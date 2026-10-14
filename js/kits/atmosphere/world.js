@@ -32,7 +32,8 @@ class World {
         this.lamps = LAMPS;             // lamp kinds, for what lights itself (a bus's headlights, tail lights, cabin)
         const t = { size: 64000, resolution: 512, base: 1500, fieldSize: 800, pivots: 0.2, ...(scenario.terrain || {}) };
         this.terrain = t;
-        this.field = new LandField(t.size, t.resolution, t.base, { grid: GRID_N });
+        // (drawn as a mesh of `grid` vertices a side, GRID_N unless the scenario's terrain says: a real place's cliffs need more)
+        this.field = new LandField(t.size, t.resolution, t.base, { grid: t.grid || GRID_N });
         // the outdoors drawn on a round planet (the scenario's optional `curvature` entity; off without one)
         this.curvature = new Curvature(scenario.curvature, t.base);
         this.weather = new WeatherSystem(scenario.weather);

@@ -71,6 +71,15 @@
     ]
   },
   {
+    "id": "cloud-oahu",
+    "name": "Oʻahu",
+    "group": "Entity Cloud",
+    "description": "The island of Oʻahu at 1:1: its real ground (AWS Terrain Tiles, 36 m cells, cut to OpenStreetMap's coastline), its 6,800 km of mapped roads with rounded curves, bridges and US markings, and its 97,000 mapped buildings stood up from their footprints, under trade-wind weather. Map data © OpenStreetMap contributors (ODbL); made by tools/geo-import.mjs.",
+    "features": [
+      "cloud"
+    ]
+  },
+  {
     "id": "water-riverlands",
     "name": "Riverlands",
     "group": "Entity Water",

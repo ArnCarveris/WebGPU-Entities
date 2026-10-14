@@ -40,6 +40,13 @@ const EntityTypes = (() => {
     def('weather', { storm: 'a storm cell', supercell: 'a supercell', squall: 'a squall line', spawner: 'spawns storm cells' });
     def('settlement', { village: 'a village on a road', busStation: "a town's bus station", skyscraper: 'a skyscraper built from a buildingPlan, its plaza round it' });
     // floor plans (the building kit): data, kept in scenarios/plans/ and included where a world builds from them
+    // a real place, imported by tools/geo-import.mjs into scenarios/data/<region>/ (an entity's `data` names it)
+    def('geo', {
+        geoTerrain: "a real place's ground: its heights and land cover (built-up, woods, water) from data",
+        geoRoads: "a real place's roads from data: ribbons with rounded curves on the ground, bridges, markings",
+        geoBuildings: "a real place's buildings from data: their footprints stood up to their heights, flat or hipped roofs",
+        geoPlaces: "a real place's names from data (towns, peaks...) as place labels", place: 'a named place (its label)',
+    });
     def('curvature', { curvature: "the outdoors drawn on a round planet (radius, on, reference): O(1) per point, the world itself stays flat" });
     def('building', {
         buildingPlan: 'a building as a floor-plan composition: sections of storeys (storeyPlans), its core (corePlan), its lift groups',

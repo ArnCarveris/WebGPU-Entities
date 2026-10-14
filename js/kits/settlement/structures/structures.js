@@ -14,6 +14,8 @@ class Structures {
     constructor(field, types = {}, plans = {}) {
         this.field = field;
         this.v = []; this.iv = []; this.glass = []; this.panes = [];
+        // big static geometry (a real place's roads and buildings: the geo kit) in compact tiles, drawn by the tiles in view
+        this.bulk = new kits.mesh.TiledMesh({ tile: 2048 });
         this.cur = this.v;           // where tri() puts its triangles: the outside (v), or a building's interior (iv)
         this.solids = new Solids();
         this.boxes = new ShelterBoxes();

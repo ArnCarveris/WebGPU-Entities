@@ -1,0 +1,118 @@
+{
+    "name": "Oʻahu",
+    "group": "Entity Cloud",
+    "description": "The island of Oʻahu at 1:1: its real ground (AWS Terrain Tiles, 36 m cells, cut to OpenStreetMap's coastline), its 6,800 km of mapped roads with rounded curves, bridges and US markings, and its 97,000 mapped buildings stood up from their footprints, under trade-wind weather. Map data © OpenStreetMap contributors (ODbL); made by tools/geo-import.mjs.",
+    "entities": [
+        {"type":"cloud","name":"Oʻahu"},
+        {
+            "type": "terrain", "size": 73728, "resolution": 2048, "base": -1.5, "grid": 1024, "style": "natural", "moisture": 0.75, "outside": "sea", "fieldSize": 805, "pivots": 0,
+            "$comment": "1 m = 1 m: the 73.7 km square about 21.4835 N 157.9645 W (x east, z south), one cell per data cell; drawn as a 1024-vertex mesh (72 m apart, twice the default) so the Koʻolau cliffs keep their shape; natural ground (no farm sections or street grid; moisture: how green the open ground is, 0.5 by default), the sea round it to the horizon"
+        },
+        {"type":"curvature","radius":6371000},
+        {
+            "type": "render", "quality": 1, "shapeScale": 6000, "detailScale": 1100, "detailStrength": 0.55, "maxTop": 9000, "maxDistance": 80000,
+            "weatherSize": 128000, "rainExtinction": 0.0024, "snowExtinction": 0.0036, "slant": 0.08, "fallSpeed": 40, "timeScale": 20, "particles": 24000
+        },
+
+        {"$comment":"the island: its ground and land cover, roads, buildings and place names (scenarios/data/oahu/: node tools/geo-import.mjs oahu)"},
+        {"type":"geoTerrain","data":"oahu/terrain"},
+        {"type":"geoRoads","data":"oahu/roads","skip":["footway","path","steps","cycleway"],"minor":true,"curves":true,"marks":true},
+        {"type":"geoBuildings","data":"oahu/buildings","seed":7},
+        {"type":"geoPlaces","data":"oahu/terrain","kinds":{"city":0,"town":25000,"suburb":2500,"peak":6000,"cape":5000},"height":{"city":400,"town":120,"suburb":60,"peak":40,"cape":40}},
+
+        {"type":"weather","start":"trades","transition":12,"cycle":{"enabled":false,"hold":45}},
+        {"type":"lighting","start":"morning"},
+        {"$comment":"trade-wind weather: the trades blow from the east-northeast (toward -x, +z), cumulus under the inversion at ~2 km, showers piling up on the windward Koʻolau; a Kona low brings the rain from the south"},
+        {
+            "type": "weatherState", "id": "trades", "coverage": 0.3, "base": 650, "top": 2100, "density": 0.07, "cirrus": 0.1, "wind": [-7,3],
+            "temperature": 27, "haze": 0.7, "drizzle": 0, "storms": 0.15, "power": 0.4, "lightning": 0
+        },
+        {
+            "type": "weatherState", "id": "clear", "coverage": 0.05, "base": 700, "top": 1500, "density": 0.06, "cirrus": 0.35, "wind": [-5,2],
+            "temperature": 28, "haze": 0.6, "drizzle": 0, "storms": 0, "power": 0.4, "lightning": 0
+        },
+        {
+            "type": "weatherState", "id": "windward showers", "coverage": 0.45, "base": 600, "top": 2600, "density": 0.08, "cirrus": 0.1, "wind": [-9,4],
+            "layers": {"stratus":0.25}, "temperature": 25, "haze": 1, "drizzle": 0.15, "storms": 0.8, "power": 0.6, "lightning": 0, "rain": 0.4, "drops": 0.3
+        },
+        {
+            "type": "weatherState", "id": "vog", "coverage": 0.12, "base": 900, "top": 1900, "density": 0.06, "cirrus": 0.2, "wind": [2,-2],
+            "temperature": 29, "haze": 2.6, "drizzle": 0, "storms": 0, "power": 0.4, "lightning": 0
+        },
+        {
+            "type": "weatherState", "id": "mackerel sky", "coverage": 0.1, "base": 900, "top": 1800, "density": 0.06, "cirrus": 0.5, "wind": [-6,2],
+            "layers": {"altocumulus":0.75}, "temperature": 26, "haze": 0.7, "drizzle": 0, "storms": 0, "power": 0.5, "lightning": 0
+        },
+        {
+            "type": "weatherState", "id": "kona storm", "coverage": 0.45, "base": 500, "top": 7000, "density": 0.09, "cirrus": 0.4, "wind": [3,-9],
+            "layers": {"nimbostratus":0.7,"altostratus":0.4}, "temperature": 23, "haze": 1.4, "drizzle": 0.1, "storms": 1.6, "power": 1.3, "lightning": 1.2, "rain": 1.6, "drops": 0.8
+        },
+        {
+            "type": "weatherState", "id": "overcast rain", "coverage": 0.25, "base": 450, "top": 3000, "density": 0.06, "cirrus": 0, "wind": [-4,4],
+            "layers": {"nimbostratus":0.95,"stratus":0.45}, "temperature": 23, "haze": 1.6, "drizzle": 0.2, "storms": 0.3, "power": 0.8, "lightning": 0.1, "rain": 1, "drops": 0.6
+        },
+        {
+            "type": "weatherState", "id": "downpour", "coverage": 0.3, "base": 400, "top": 4600, "density": 0.07, "cirrus": 0, "wind": [-6,4],
+            "layers": {"nimbostratus":1,"stratus":0.6}, "temperature": 23, "haze": 2, "drizzle": 0, "storms": 0.4, "power": 1.2, "lightning": 0.2, "rain": 2.6, "drops": 1
+        },
+        {"type":"light","id":"morning","azimuth":100,"elevation":18,"intensity":11,"exposure":0.46},
+        {"type":"light","id":"noon","azimuth":175,"elevation":75,"intensity":12,"exposure":0.34},
+        {"type":"light","id":"afternoon","azimuth":255,"elevation":30,"intensity":12,"exposure":0.42},
+        {"type":"light","id":"golden","azimuth":290,"elevation":6,"intensity":11,"exposure":0.55},
+        {"type":"light","id":"sunrise","azimuth":75,"elevation":3,"intensity":10,"exposure":0.75},
+        {"type":"light","id":"full moon","azimuth":160,"elevation":50,"intensity":2.4,"exposure":0.32,"moon":1},
+        {"type":"light","id":"half moon","azimuth":215,"elevation":30,"intensity":1.3,"exposure":0.65,"moon":0.5},
+        {
+            "type": "cloudLayer", "name": "stratus", "kind": "sheet", "base": 450, "top": 900, "density": 0.03, "mapScale": 26000, "shapeScale": 9000,
+            "stretch": 2.5, "erosion": 0.15, "ambient": 0.75, "precip": 0.12
+        },
+        {
+            "type": "cloudLayer", "name": "nimbostratus", "kind": "sheet", "base": 600, "top": 4200, "density": 0.02, "mapScale": 40000,
+            "shapeScale": 12000, "stretch": 2, "erosion": 0.2, "ambient": 0.45, "precip": 0.55
+        },
+        {
+            "type": "cloudLayer", "name": "altostratus", "kind": "sheet", "base": 4600, "top": 5600, "density": 0.004, "mapScale": 50000,
+            "shapeScale": 14000, "stretch": 4, "erosion": 0.1, "ambient": 0.9, "precip": 0
+        },
+        {
+            "type": "cloudLayer", "name": "altocumulus", "kind": "cellular", "base": 3900, "top": 4400, "density": 0.035, "mapScale": 18000,
+            "shapeScale": 5000, "stretch": 0.45, "erosion": 0.35, "ambient": 1, "precip": 0
+        },
+        {
+            "$comment": "trade-wind showers: small, shallow cells drifting in over the windward side",
+            "type": "spawner", "id": "trade-showers", "area": [-10000,-40000,45000,20000], "rate": 6, "max": 10, "initial": 5, "seed": 21,
+            "template": {"radius":[900,2200],"top":[2200,3600],"precip":[0.2,0.6],"core":[0.3,0.5],"grow":[400,800],"mature":[600,1500],"decay":[500,1000],"lightning":[0,0],"virga":[0,0.3],"drift":[0.8,1.2]}
+        },
+
+        {"type":"view","of":"cloud","name":"Island from the south (airliner)","pos":[-2000,9500,52000],"look":[0,0,0]},
+        {"type":"view","of":"cloud","name":"Waikīkī Beach","pos":[14114,6,22908],"look":[16440,149,24591]},
+        {"type":"view","of":"cloud","name":"Kalākaua Avenue on foot","pos":[14108,5,22672],"look":[14254,8,22808],"walk":true},
+        {"type":"view","of":"cloud","name":"Diamond Head summit","pos":[16471,118,24558],"look":[13127,1,21978]},
+        {"type":"view","of":"cloud","name":"Downtown Honolulu","pos":[10583,6,19321],"look":[10946,60,18934]},
+        {"type":"view","of":"cloud","name":"Honolulu from above","pos":[19000,2400,30500],"look":[11500,0,20500]},
+        {"type":"view","of":"cloud","name":"Nuʻuanu Pali Lookout","pos":[17746,392,12932],"look":[19751,190,7252]},
+        {"type":"view","of":"cloud","name":"H-3 over North Hālawa Valley","pos":[10790,460,8900],"look":[9866,280,8675]},
+        {"type":"view","of":"cloud","name":"Koʻolau windward cliffs","pos":[25000,700,4000],"look":[17000,500,10500],"weather":"windward showers"},
+        {"type":"view","of":"cloud","name":"Hanauma Bay","pos":[27969,80,23252],"look":[28125,-1,23750]},
+        {"type":"view","of":"cloud","name":"Makapuʻu Point","pos":[32424,212,19653],"look":[28475,-1,15889]},
+        {"type":"view","of":"cloud","name":"Kualoa and Mokoliʻi","pos":[13937,121,-1827],"look":[13107,201,-3045]},
+        {"type":"view","of":"cloud","name":"Waimea Bay","pos":[-10300,32,-17937],"look":[-10507,-1,-17328]},
+        {"type":"view","of":"cloud","name":"Kaʻena Point","pos":[-30089,171,-8470],"look":[-32613,3,-10164]},
+        {"type":"view","of":"cloud","name":"Kaʻala summit","pos":[-18495,1228,-2713],"look":[-6789,222,1495]},
+        {"type":"view","of":"cloud","name":"Pearl Harbor from above","pos":[5654,1804,18103],"look":[1504,-1,13121]},
+        {"type":"view","of":"cloud","name":"Kona storm over Honolulu","pos":[22000,900,30000],"look":[9000,600,16000],"weather":"kona storm","lighting":"afternoon"},
+        {"type":"view","of":"cloud","name":"Sunset off Waiʻanae","pos":[-26500,300,9000],"look":[-40000,0,14000],"lighting":"golden","weather":"trades"},
+
+        {"$comment":"the sound of the weather around the camera"},
+        {"type":"sound.bed","id":"rain","source":"white","filters":[["highpass",500,0.7],["lowpass",7000,0.7]],
+            "gain":"pow(cloud.rain, 0.7) * 0.3 * (cloud.inside ? 0.25 : cloud.sheltered ? 0.55 : 1)","filter":[1,"cloud.inside ? 1400 : 7000"],"smooth":0.25},
+        {"type":"sound.bed","id":"wind","source":"brown","filters":[["bandpass",350,0.9]],"smooth":0.6,
+            "gain":"(clamp(cloud.wind / 25) * 0.12 * (0.6 + 0.4 * smoothstep(0, 400, cloud.agl)) * (0.7 + 0.3 * sin(cloud.time * 0.37) * sin(cloud.time * 0.13 + 1.3)) + smoothstep(200, 3000, cloud.agl) * 0.05) * (cloud.inside ? 0.15 : 1)",
+            "filter":[0,"250 + 300 * (0.7 + 0.3 * sin(cloud.time * 0.37) * sin(cloud.time * 0.13 + 1.3)) + cloud.wind * 6"]},
+        {"type":"sound.cue","on":"thunder","parts":[{"thunder":{"near":"near","far":"far","bolt":"bolt"}}]},
+        {"type":"sound.cue","on":"step","parts":[
+            {"shot":{"source":"brown","filter":"lowpass","freq":300,"q":1,"env":[[0.01,"(run ? 0.32 : 0.22) * rand(0.8, 1.2)"],[0.12,0]]}},
+            {"shot":{"source":"white","filter":"wet ? 'bandpass' : 'highpass'","freq":"wet ? 1800 : 2500","q":"wet ? 1.2 : 0.5","env":[[0.005,"(run ? 0.16 : 0.11) * (wet ? 0.6 : 0.3)"],["wet ? 0.18 : 0.07",0]]}}]},
+        {"$comment":"the handheld's pages (the controls are High Plains')","type":"include","scenario":"gui/cloud-high-plains"}
+    ]
+}

@@ -23,7 +23,7 @@ const Features = {
     // kit: { uses (kits it builds on), parts, worlds (the world types it offers) }
     KITS: {
         noise: { parts: ['random', 'value', 'wgsl'] },
-        mesh: { parts: ['geometry', 'builder', 'interface'] },
+        mesh: { parts: ['geometry', 'builder', 'interface', 'tiled'] },
         view: { parts: ['first-person'] },
         world: { parts: ['entity', 'hud', 'pages', 'feature-world'] },
         entities: { uses: ['noise', 'world', 'mesh', 'gui'], parts: ['spin', 'camera', 'door', 'light', 'drone', 'space', 'ground-props', 'sectors', 'fixtures'] },
@@ -43,6 +43,8 @@ const Features = {
         },
         // a round planet's surface out of a flat world, O(1) per point (the outdoors as drawn: renderers, culling)
         curvature: { parts: ['curvature'] },
+        // a real place (tools/geo-import.mjs's data, ScenarioData): its ground, roads, buildings and place names as entities
+        geo: { uses: ['noise', 'world', 'mesh', 'terrain'], parts: ['data', 'curves', 'roads', 'buildings', 'types'] },
         gpu: { parts: ['stencil', 'pipelines', 'extensions', 'lines', 'half', 'profiler', 'dynamic-scale'] },
         gui: {
             uses: ['noise', 'gpu'],
@@ -66,7 +68,7 @@ const Features = {
         // the cloud world (Entity Cloud): its entity types, its World extension (Storms: cells, hurricane, tornado) and App
         // extension (Clouds: the cloud picker, storm keys, menus, readout), composed onto the atmosphere kit's
         cloud: {
-            uses: ['noise', 'view', 'world', 'mesh', 'terrain', 'interior', 'transit', 'building', 'settlement', 'weather', 'gpu', 'gui', 'curvature', 'atmosphere'],
+            uses: ['noise', 'view', 'world', 'mesh', 'terrain', 'interior', 'transit', 'building', 'settlement', 'weather', 'gpu', 'gui', 'curvature', 'geo', 'atmosphere'],
             parts: ['entities', 'storms', 'clouds', 'world-type'],
             worlds: ['cloud'],
         },

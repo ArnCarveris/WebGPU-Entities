@@ -3,17 +3,18 @@
 
 Features.kit('atmosphere', (engine, kit) => {
 const { Common, kits } = engine;
-const { makeBuffer, gridIndices, bindLayout, bindGroup } = Common;
+const { makeBuffer, gridIndices, bindLayout, bindGroup, frustumPlanes } = Common;
 const { GuiAtlas, DeviceContext, WorldGuiPass } = kits.gui;
 const { StencilLayout } = kits.gpu;
 const {
-    MAX_CELLS, CELL_FLOATS, FAR_FLOATS, MAX_FAR_DYN, FAR_LAMP_H, FAR_LAMP_REACH, MAX_POLES, GRID_N, BLOOM_LEVELS,
+    MAX_CELLS, CELL_FLOATS, FAR_FLOATS, MAX_FAR_DYN, FAR_LAMP_H, FAR_LAMP_REACH, MAX_POLES, BLOOM_LEVELS,
     FrameBlock, WORLD_BINDINGS, BindingSet, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_SHADOW_SAMPLE, WGSL_SHELTER,
     WGSL_BUILDING, BUS_UNIFORM, wgslBus, WGSL_TERRAIN, WGSL_SCENE, WGSL_FINAL, WGSL_BLOOM, NoiseVolumes, shaderSource,
     WeatherPass, GroundPass, FroxelPass, CloudPass,
 } = kit;
 const { MAX_BOLT_SEGS } = kits.weather;
 const { STRUCT_FLOATS, BUILDING_FLOATS, STRUCT_COLORS, Structures } = kits.settlement;
+const { TiledMesh } = kits.mesh;
 const { GroundFrame } = Common;
 const { GpuProfiler } = kits.gpu;
 const { BOX_FLOATS } = kits.transit;
@@ -50,9 +51,6 @@ class Renderer {
         this.cloudPass = new CloudPass(this);
         this.createPipelines();
         await this.initGui();
-        const gi = gridIndices(GRID_N);
-        this.terrainIndex = makeBuffer(d, gi.byteLength, B.INDEX, gi);
-        this.terrainCount = gi.length;
         this.width = this.height = 0;
         this.scale = 0.5;
     }
@@ -123,6 +121,10 @@ class Renderer {
                 { shaderLocation: 2, offset: 24, format: 'float32x4' }],
         }];
         this.pStruct = pipe(layoutA, scene, 'vsStruct', 'fsStruct', 'rgba16float', { write: true, compare: 'greater' }, undefined, structVerts);
+        // big static geometry (Structures.bulk, the mesh kit's TiledMesh: a real place's roads and buildings): indexed,
+        // position + colour word, flat-shaded
+        this.pBulk = pipe(layoutA, scene, 'vsBulk', 'fsBulk', 'rgba16float', { write: true, compare: 'greater' }, undefined, [{
+            arrayStride: TiledMesh.FLOATS * 4, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }, { shaderLocation: 1, offset: 12, format: 'unorm8x4' }] }]);
         this.pBus = pipe(layoutBus, scene, 'vsBus', 'fsBus', 'rgba16float', { write: true, compare: 'greater' }, undefined, structVerts);
         // buildings (Buildings.add): interiors near them, door leaves, the opaque panes far off, the glass near
         this.pInterior = pipe(layoutBus, scene, 'vsInterior', 'fsInterior', 'rgba16float', { write: true, compare: 'greater' }, undefined, structVerts);
@@ -194,11 +196,26 @@ class Renderer {
         this.landMap = d.createTexture({ size: [f.n, f.n], format: 'rgba8unorm', usage: U.TEXTURE_BINDING | U.COPY_DST });
         d.queue.writeTexture({ texture: this.landMap }, f.packLand(), { bytesPerRow: f.n * 4 }, [f.n, f.n]);
         this.heightView = this.heightMap.createView();
+        // the terrain mesh: f.grid vertices a side (vsTerrain)
+        if (this.terrainGrid !== f.grid) {
+            this.terrainIndex?.destroy();
+            const gi = gridIndices(f.grid);
+            this.terrainIndex = makeBuffer(d, gi.byteLength, GPUBufferUsage.INDEX, gi);
+            this.terrainCount = gi.length;
+            this.terrainGrid = f.grid;
+        }
         this.groundPass = new GroundPass(this, world);
         this.structBuf?.destroy();
         const sv = new Float32Array(world.structures.v);
         this.structCount = sv.length / STRUCT_FLOATS;
         this.structBuf = this.structCount ? makeBuffer(d, sv.byteLength, GPUBufferUsage.VERTEX, sv) : null;
+        // the bulk geometry: one vertex and one index buffer, drawn by the tiles in view (bulkDraws)
+        this.bulkV?.destroy();
+        this.bulkI?.destroy();
+        const bk = world.structures.bulk.finish();
+        this.bulkTiles = bk.tiles;
+        this.bulkV = bk.indices.length ? makeBuffer(d, bk.vertices.byteLength, GPUBufferUsage.VERTEX, bk.vertices) : null;
+        this.bulkI = bk.indices.length ? makeBuffer(d, bk.indices.byteLength, GPUBufferUsage.INDEX, bk.indices) : null;
         // the buildings: their records (WGSL_BUILDING), interiors (one vertex range each, drawn near them: interiorDraws),
         // window glass and far panes, and the door leaves (rewritten when one moves: writeDoors)
         const S = world.structures, vb = arr => { const a = new Float32Array(arr); return { n: a.length / STRUCT_FLOATS, buf: a.length ? makeBuffer(d, a.byteLength, GPUBufferUsage.VERTEX, a) : null }; };
@@ -242,6 +259,23 @@ class Renderer {
             clampSamp: this.clampSamp, cells: this.cellBuf, ground: this.groundPass.buffer, bolts: this.boltBuf, anvilTex: this.weatherPass.anvilView,
             layerTex: this.weatherPass.layerView, styleTex: this.weatherPass.styleView, occ: this.weatherPass.occ, buildings: this.buildingBuf,
         }, 'world');
+    }
+
+    // the bulk tiles in view this frame, neighbouring ones merged: [[first index, count], ...]. A tile's box reaches down by
+    // as much as the outdoors drawn curved lowers it at its far side (curveToRender), so no tile is culled where it shows
+    bulkDraws() {
+        const F = this.frame.data, o = this.frame.offsets, planes = frustumPlanes(F.subarray(o.viewProj, o.viewProj + 16), { reversed: true });
+        const cam = [F[o.cam], F[o.cam + 1], F[o.cam + 2]], R = F[o.curve + 3] || 6371000, out = [];
+        this.bulkSeen = 0;
+        for (const t of this.bulkTiles) {
+            const b = t.box, far = Math.hypot(Math.max(Math.abs(cam[0] - b[0]), Math.abs(cam[0] - b[3])), Math.max(Math.abs(cam[2] - b[2]), Math.abs(cam[2] - b[5])));
+            const lo = [b[0], b[1] - far * far / (2 * R), b[2]], hi = [b[3], b[4], b[5]];
+            if (planes.some(p => p[0] * (p[0] > 0 ? hi[0] : lo[0]) + p[1] * (p[1] > 0 ? hi[1] : lo[1]) + p[2] * (p[2] > 0 ? hi[2] : lo[2]) + p[3] < 0)) continue;
+            const last = out[out.length - 1];
+            if (last && last[0] + last[1] === t.first) last[1] += t.count; else out.push([t.first, t.count]);
+            this.bulkSeen++;
+        }
+        return out;
     }
 
     // a depth-stencil attachment's stencil ops (none on a depth-only target)
@@ -407,6 +441,12 @@ class Renderer {
             a.setPipeline(this.pStruct);
             a.setVertexBuffer(0, this.structBuf);
             a.draw(this.structCount);
+        }
+        if (this.bulkV) {
+            a.setPipeline(this.pBulk);
+            a.setVertexBuffer(0, this.bulkV);
+            a.setIndexBuffer(this.bulkI, 'uint32');
+            for (const [first, count] of this.bulkDraws()) a.drawIndexed(count, 1, first);
         }
         if (this.busDraws.length) {
             a.setPipeline(this.pBus);

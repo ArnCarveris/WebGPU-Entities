@@ -157,6 +157,7 @@ class FrameWriter {
         F.set('precip', [w.weather.freezingLevel, cfg.slant, cfg.rainExtinction, cfg.snowExtinction]);
         F.set('wdomain', [wo[0], wo[1], ws, WEATHER_RES]);
         F.set('tdomain', [f.origin, f.origin, f.size, f.n]);
+        F.set('geo', [w.terrain.style === 'natural' ? 1 : 0, w.terrain.outside === 'sea' ? 1 : 0, f.grid, w.terrain.moisture ?? 0.5]);
         F.set('ground', [w.terrain.fieldSize, w.terrain.pivots, GROUND_RES, this.outdoors?.seen === false ? 1 : a.mode]);     // (mode 1: the scene alone, no volumetrics: also indoors with the outdoors out of sight)
         F.set('cirrus', [cfg.maxTop + 800, c.cirrus, 9000, c.drizzle]);
         F.set('march', [q.steps, q.light, cfg.maxDistance, a.radar ? 1 : 0]);

@@ -9,6 +9,7 @@ class Solids {
         this.stacks = [];
         this.grid = null;
         this.into = null;            // a stack being filled (stack()): add() puts its boxes there
+        this.sources = [];           // what makes its boxes when asked: { near(x, z, r, y) -> boxes } (a real place's walls)
     }
 
     // what a walker collides with (see Walker): every box, and the bridges' decks and parapets. { x, z, hx, hz, cs, sn,
@@ -36,7 +37,7 @@ class Solids {
     }
 
     // the solids that reach within r of x, z (a 16 m grid over their footprints, built on first use); of the stacks,
-    // the storeys within one of height y (all of them for y undefined: not meant for stacks that tall)
+    // the storeys within one of height y (all of them for y undefined: not meant for stacks that tall); and the sources'
     near(x, z, r, y) {
         const G = 16, key = (i, j) => i * 65536 + j;
         if (!this.grid) {
@@ -60,6 +61,7 @@ class Solids {
                 const st = it.st, s0 = y === undefined ? 0 : Math.floor((y - st.base) / st.H);
                 for (let s = s0 - 1; s <= s0 + 1; s++) if (s >= 0 && st.has(s)) out.add(Solids.lift(st, it.b, s));
             }
+        for (const src of this.sources) for (const b of src.near(x, z, r, y)) out.add(b);
         return [...out];
     }
 

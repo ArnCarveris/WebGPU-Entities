@@ -37,8 +37,9 @@
 
 Features.kit('mesh', (engine, kit) => {
 
-// what a coloured surface is made of, for the worlds that draw colours with a material kind
-const KINDS = ['matte', 'paint', 'glass', 'road', 'metal', 'window', 'water', 'lamp'];
+// what a coloured surface is made of, for the worlds that draw colours with a material kind (facade: a wall with rows of
+// windows the renderer draws on it, where it has no geometry for them)
+const KINDS = ['matte', 'paint', 'glass', 'road', 'metal', 'window', 'water', 'lamp', 'facade'];
 
 // the colours structures are built in: walls and roofs to pick from, and each material's
 const PALETTE = {

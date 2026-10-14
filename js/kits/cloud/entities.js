@@ -1,5 +1,5 @@
 'use strict';
-// The scenario's entity types, by name: the kits' (terrain, settlement, transit, weather), over the cloud's entity base.
+// The scenario's entity types, by name: the kits' (terrain, settlement, transit, weather, geo), over the cloud's entity base.
 
 Features.kit('cloud', (engine, kit) => {
 const { kits } = engine;
@@ -15,6 +15,7 @@ const { Village, BusStation, Skyscraper, Structure } = kits.settlement.settlemen
 const { Bus, BusLine } = kits.transit.busTypes(Entity);
 const { StormCell, Supercell, SquallLine, Spawner } = kits.weather.weatherTypes(Entity);
 const { HURRICANE, TORNADO } = kits.weather;
+const { GeoTerrain, GeoRoads, GeoBuildings, GeoPlaces, Place } = kits.geo.geoTypes(Entity);
 
 const ENTITY_TYPES = {
     clearing: Clearing,
@@ -35,6 +36,11 @@ const ENTITY_TYPES = {
     supercell: Supercell,
     squall: SquallLine,
     spawner: Spawner,
+    geoTerrain: GeoTerrain,
+    geoRoads: GeoRoads,
+    geoBuildings: GeoBuildings,
+    geoPlaces: GeoPlaces,
+    place: Place,
 };
 
 return { Entity, ENTITY_TYPES, Town, River, Bus, BusLine, StormCell, Supercell, SquallLine, Spawner, HURRICANE, TORNADO };
