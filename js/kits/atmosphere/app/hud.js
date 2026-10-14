@@ -50,17 +50,19 @@ class Hud extends kits.world.WorldHud {
         if (wk.active) {
             g.fillStyle = wk.aim ? 'rgba(255,201,74,0.95)' : 'rgba(255,255,255,0.7)';
             g.beginPath(); g.arc(W / 2, H / 2, (wk.aim ? 3 : 2) * dpr, 0, 2 * Math.PI); g.fill();
-            if (wk.prompt) {
-                g.font = `${13 * dpr}px 'Share Tech Mono', monospace`;
-                g.textAlign = 'center';
-                g.textBaseline = 'top';
-                g.fillStyle = 'rgba(0,0,0,0.55)';
-                const tw = g.measureText(wk.prompt).width;
-                g.fillRect(W / 2 - tw / 2 - 6 * dpr, H / 2 + 14 * dpr, tw + 12 * dpr, 20 * dpr);
-                g.fillStyle = 'rgba(255,201,74,0.95)';
-                g.fillText(wk.prompt, W / 2, H / 2 + 17 * dpr);
-                g.textAlign = 'left';
-            }
+        }
+        // what E (on foot) or F (by a bus) would do
+        const prompt = (wk.active && wk.prompt) || app.drive?.prompt;
+        if (prompt) {
+            g.font = `${13 * dpr}px 'Share Tech Mono', monospace`;
+            g.textAlign = 'center';
+            g.textBaseline = 'top';
+            g.fillStyle = 'rgba(0,0,0,0.55)';
+            const tw = g.measureText(prompt).width;
+            g.fillRect(W / 2 - tw / 2 - 6 * dpr, H / 2 + 14 * dpr, tw + 12 * dpr, 20 * dpr);
+            g.fillStyle = 'rgba(255,201,74,0.95)';
+            g.fillText(prompt, W / 2, H / 2 + 17 * dpr);
+            g.textAlign = 'left';
         }
         if (!this.showLabels) return;
         L.font();

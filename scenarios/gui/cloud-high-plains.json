@@ -17,7 +17,8 @@
                         {"type":"label","title":"Faster","value":"Shift ×5"},
                         {"type":"label","title":"Speed","value":"wheel"},
                         {"type":"label","title":"Walk / fly","value":"H"},
-                        {"type":"label","title":"Door, sit / stand","value":"E"}
+                        {"type":"label","title":"Door, sit / stand","value":"E"},
+                        {"type":"label","title":"Drive a bus / get out","value":"F (by it)"}
                     ]
                 },
                 {
@@ -45,7 +46,7 @@
                     "cells": [
                         {"type":"label","title":"Quality","value":"Q"},
                         {"type":"label","title":"Render mode","value":"M"},
-                        {"type":"label","title":"Froxels","value":"F"},
+                        {"type":"label","title":"Froxels","value":"F (no bus near)"},
                         {"type":"label","title":"Tiles","value":"G"},
                         {"type":"label","title":"Bloom","value":"O"}
                     ]

@@ -46,7 +46,7 @@ class KeyCommands {
                 case 'KeyR': a.radar = !a.radar; break;
                 case 'KeyG': c.toggleTiles(); break;
                 case 'KeyO': c.toggleBloom(); break;
-                case 'KeyF': c.toggleFroxels(); break;
+                case 'KeyF': if (!a.drive.toggle()) c.toggleFroxels(); break;      // by a bus: drive it (or get out); else the froxels
                 case 'KeyM': c.setMode((a.mode + 1) % RENDER_MODES.length); break;
                 case 'KeyQ': c.setQuality((a.quality + 1) % QUALITY.length); break;
                 case 'KeyV': if (a.views.length) c.setView((a.viewIndex + 1) % a.views.length); break;

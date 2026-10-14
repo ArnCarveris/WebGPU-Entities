@@ -35,6 +35,7 @@ class App {
         this.hud = new Hud(fx.ui);
         this.camera = new FirstPersonView({ pos: [0, 3000, 0], speed: 400, wheel: { step: 1.25, min: 5, max: 20000 }, clearance: 1.5, ceiling: 25000, slow: SLOW_ALT });
         this.walker = new Walker();
+        this.drive = new kits.transit.DriveControl(this);     // F: at the wheel of a bus
         this.time = 0;
         this.weatherTime = 0;
         this.paused = false;
@@ -100,6 +101,7 @@ class App {
         this.views = scenario.views || [];
         this.viewIndex = 0;
         this.walker = new Walker();
+        this.drive.vehicle = null;
         if (this.views[0]) this.controls.jump(this.views[0]);
         this.reset = true;
     }
@@ -124,6 +126,7 @@ class App {
             for (const x of this.extensions) x.update?.(dt, io);
             // on foot after the bus has moved, so a rider's eye is where the bus is this frame
             if (this.walker.active && !locked) this.walker.update(dt, io, this.input, this);
+            this.drive.update(this.input.keys);
             this.liftControl.update(dt, io, now);
             this.doors.update(dt, io);
             if (v3.len(v3.sub(before, this.camera.pos)) > 3000) this.reset = true;

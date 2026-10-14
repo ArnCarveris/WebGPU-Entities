@@ -56,7 +56,47 @@ function busTypes(Base) {
             // mesh and glass in its own frame, colliders, seats; a moving shader box (rain shadow, sun shadow)
             this.mesh = livery ? buildBus(livery, world.meshes) : null;
             this.box = { x: 0, z: 0, hx: BUS.hl, hz: BUS.hw, cs: 1, sn: 0, y0: 0, y1: 1, ao: 0.35, slope: 0, base: 0, dyn: true };
+            // the driver's seat (a seat as the Walker takes one: its eye in the bus's frame; its name the prompt while
+            // seated in it), and where its driver gets out: by the front door, outside
+            const bus = this;
+            this.driverSeat = { x: BUS.hl - 1.1, z: -0.72, eye: [BUS.hl - 1.1, 2.05, -0.72],
+                get name() { return `at the wheel of ${bus.label} · ${(Math.abs(bus.v) * 3.6).toFixed(0)} km/h · W S A D drive · Space brake · F get out`; } };
+            this.exitSpot = [BUS.bay0 + (BUS.doorBays[0] + 0.5) * BUS.bay, 0, BUS.hw + 1.2];
             this.place();
+        }
+
+        // off its line (LineVehicle: driven, rejoining its route, parked): its wheels on the terrain as drawn, a road's lift
+        // over it, or on a deck (a bridge: a solid's top within a metre of where it is)
+        groundAt(x, z, y) {
+            const S = this.world.structures;
+            let g = S.ground(x, z) + 0.14;
+            for (const b of S.solids.near(x, z, 0.5, y)) {
+                if (b.off) continue;
+                const rx = x - b.x, rz = z - b.z, lx = rx * b.cs + rz * b.sn, lz = -rx * b.sn + rz * b.cs;
+                if (Math.abs(lx) > b.hx || Math.abs(lz) > b.hz) continue;
+                const top = b.y1 + b.slope * lx;
+                if (top <= y + 1 && top > g) g = top;
+            }
+            return g;
+        }
+
+        // with its origin at x, z heading cs, sn: a wall or anything taller than a kerb along its sides, or open water
+        // (no deck over it), in the way
+        blocked(x, z, cs, sn, y) {
+            const S = this.world.structures, K = BUS, at = (u, v) => [x + cs * u - sn * v, z + sn * u + cs * v];
+            const pts = [];
+            for (let u = -K.hl; u <= K.hl + 1e-6; u += K.hl / 3) for (const v of [-K.hw, K.hw]) pts.push(at(u, v));
+            for (const [px, pz] of pts) {
+                const g = this.groundAt(px, pz, y);
+                if (this.world.water?.(px, pz) && g < S.ground(px, pz) + 0.5) return true;
+                for (const b of S.solids.near(px, pz, 0.1, y)) {
+                    if (b.off) continue;
+                    const rx = px - b.x, rz = pz - b.z, lx = rx * b.cs + rz * b.sn, lz = -rx * b.sn + rz * b.cs;
+                    if (Math.abs(lx) > b.hx || Math.abs(lz) > b.hz) continue;
+                    if (b.y1 + b.slope * lx > g + 0.6 && b.y0 + b.slope * lx < g + K.roof) return true;
+                }
+            }
+            return false;
         }
 
         get anchor() { const p = this.pose; return [p.x, p.y + 5, p.z]; }

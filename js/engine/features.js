@@ -31,7 +31,7 @@ const Features = {
         hydrology: { uses: ['terrain'], parts: ['sources'] },
         weather: { uses: ['noise'], parts: ['storms', 'climate', 'sky', 'lightning'] },
         interior: { uses: ['mesh'], parts: ['origin', 'vis-area', 'frustum', 'trees', 'areas', 'area-set', 'portal-vis', 'vis-debug', 'area-map', 'vis-inspector', 'floorplan', 'interior'] },
-        transit: { uses: ['interior', 'mesh', 'gui'], parts: ['paths', 'line', 'bus', 'ship', 'elevator', 'lifts', 'lift-interaction'] },
+        transit: { uses: ['interior', 'mesh', 'gui'], parts: ['paths', 'line', 'bus', 'ship', 'elevator', 'lifts', 'lift-interaction', 'drive-control'] },
         building: { uses: ['noise', 'mesh', 'interior', 'transit', 'gui'], parts: ['library', 'core', 'furnish', 'floors', 'ladders', 'planned', 'sectors', 'doors', 'room-vis', 'lift-control'] },
         settlement: {
             uses: ['noise', 'mesh', 'interior', 'transit', 'building'],

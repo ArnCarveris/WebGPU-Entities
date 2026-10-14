@@ -36,6 +36,13 @@ class PolylineRoute {
         const a = this.path[i], b = this.path[j];
         return [lerp(a[0], b[0], t), lerp(this.heights[i], this.heights[j], t), lerp(a[1], b[1], t)];
     }
+
+    // the arc length of the sample nearest x, z, and how far it is (m)
+    nearest(x, z) {
+        let best = 0, d = Infinity;
+        this.path.forEach((p, i) => { const e = Math.hypot(p[0] - x, p[1] - z); if (e < d) { d = e; best = i; } });
+        return { s: best * this.step, d };
+    }
 }
 
 // A line round a closed `route` (anything with a `length` and at(s); a PolylineRoute, a SplineRoute...). Its vehicles
@@ -77,11 +84,11 @@ class TransitLine {
         return this.vehicles;
     }
 
-    // dt s on: each vehicle keeps clear of the one ahead round the loop
+    // dt s on: each vehicle keeps clear of the one ahead round the loop (one off it, free, is not on it)
     update(dt) {
         for (const v of this.vehicles) {
             let gap = Infinity;
-            for (const o of this.vehicles) if (o !== v) { const g = (o.s - v.s + this.len) % this.len; if (g > 0 && g < gap) gap = g; }
+            for (const o of this.vehicles) if (o !== v && !o.free) { const g = (o.s - v.s + this.len) % this.len; if (g > 0 && g < gap) gap = g; }
             v.step(dt, gap - v.spec.length);
         }
     }
@@ -101,6 +108,15 @@ class TransitLine {
 // Each step ends with moved(): by default place(), which poses it from its axles on the route: `model` (column-major,
 // local -> world: x along the heading, pitched by the axles' heights, y up, z to its right) and `pose` { x, y, z, cs, sn,
 // slope }. A vehicle that poses itself overrides moved() (and `frame`, the rigid local -> world matrix its interior uses).
+//
+// Off its line (`free`): a player at the wheel ('manual': control { throttle, steer, brake }, -1..1, -1..1, 0..1), then,
+// let go, it drives itself back onto its route ('rejoin': pure pursuit of the route ahead of its nearest point, onto it
+// where it lines up) or, too far from it, stands where it was left ('parked'). It drives as a bicycle about its rear
+// axle on the ground (groundAt(x, z, y): m; by default where it stands), stopped by what blocked(x, z, cs, sn, y) says is
+// in the way (by default nothing). spec.drive: { accel, brake, reverse, vmax (m/s), steer (rad at the wheels), steerRate
+// (rad/s), rejoin (m: the farthest from its route it goes back from) }.
+const DRIVE = { accel: 1.6, brake: 5, reverse: 4, vmax: 25, steer: 0.6, steerRate: 1.2, rejoin: 400 };
+
 class LineVehicle {
     constructor(line, spec) {
         this.line = line;
@@ -119,9 +135,11 @@ class LineVehicle {
 
     get focus() { const p = this.pose; return [p.x, p.y, p.z]; }
 
-    // pose from the axles on the path: heading from the rear axle to the front one, pitched by their heights
+    // pose from the axles on the path (off its line: on the ground where it drives): heading from the rear axle to the
+    // front one, pitched by their heights
     place() {
-        const K = this.spec, r = this.line.at(this.s + K.axleR), f = this.line.at(this.s + K.axleF);
+        const K = this.spec, off = this.free && this.dir;
+        const r = off ? this.axle(K.axleR) : this.line.at(this.s + K.axleR), f = off ? this.axle(K.axleF) : this.line.at(this.s + K.axleF);
         const dx = f[0] - r[0], dz = f[2] - r[2], l = Math.hypot(dx, dz) || 1, cs = dx / l, sn = dz / l, slope = (f[1] - r[1]) / l;
         const x = r[0] - cs * K.axleR, z = r[2] - sn * K.axleR, y = r[1] - slope * K.axleR;
         const cp = 1 / Math.hypot(1, slope), sp = slope * cp;
@@ -148,10 +166,67 @@ class LineVehicle {
     // the fly-camera yaw (Common.yawPitch) that looks along it
     get yaw() { return Math.atan2(-this.pose.cs, -this.pose.sn); }
 
+    // ---------------------------------------------------------------------------------------------- off its line
+    groundAt(x, z, y) { return this.pose ? this.pose.y : 0; }
+    blocked(x, z, cs, sn, y) { return false; }
+
+    // its axle `a` m along it, on the ground: [x, y, z]
+    axle(a) { const x = this.fx + this.dir[0] * a, z = this.fz + this.dir[1] * a; return [x, this.groundAt(x, z, this.pose?.y ?? 0), z]; }
+
+    // a player takes the wheel where it is
+    takeWheel() {
+        const p = this.pose;
+        Object.assign(this, { free: 'manual', control: { throttle: 0, steer: 0, brake: 0 }, fx: p.x, fz: p.z, dir: [p.cs, p.sn], wheel: 0, mode: 'drive' });
+    }
+
+    // and lets go: back to its route, or parked where it is when that is too far
+    leaveWheel() {
+        this.control = null;
+        const n = this.line.route.nearest?.(this.fx, this.fz);
+        this.free = n && n.d < { ...DRIVE, ...this.spec.drive }.rejoin ? 'rejoin' : 'parked';
+    }
+
+    // dt s on off its line
+    drive(dt) {
+        const D = { ...DRIVE, ...this.spec.drive }, K = this.spec, route = this.line.route;
+        let { throttle, steer, brake } = this.control || { throttle: 0, steer: 0, brake: this.free === 'parked' ? 1 : 0 };
+        if (this.free === 'rejoin') {
+            const n = route.nearest(this.fx, this.fz), aim = route.at(n.s + 20), q = route.at(n.s), tg = route.at(n.s + 2);
+            const want = Math.atan2(aim[2] - this.fz, aim[0] - this.fx), h = Math.atan2(this.dir[1], this.dir[0]);
+            const err = Math.atan2(Math.sin(want - h), Math.cos(want - h)), th = Math.atan2(tg[2] - q[2], tg[0] - q[0]);
+            steer = clamp(err * 2, -1, 1);
+            throttle = this.v < 6 ? 0.5 : 0;
+            brake = this.v > 8 ? 1 : 0;
+            // lined up on its route: on it again, to its next stop
+            if (n.d < 1.5 && Math.abs(Math.atan2(Math.sin(th - h), Math.cos(th - h))) < 0.25) {
+                let next = 0;
+                this.line.stops.forEach((_, k) => { if (this.line.toStop(n.s, k) < this.line.toStop(n.s, next)) next = k; });
+                Object.assign(this, { free: null, s: n.s, stop: next, mode: 'drive', dir: null });
+                return;
+            }
+        }
+        // speed: pulling away, braking (then backing up), coasting
+        const v = this.v;
+        if (brake) this.v = Math.sign(v) * Math.max(Math.abs(v) - D.brake * brake * dt, 0);
+        else if (throttle > 0) this.v = v < -0.1 ? Math.min(v + D.brake * dt, 0) : Math.min(v + D.accel * throttle * dt, D.vmax);
+        else if (throttle < 0) this.v = v > 0.1 ? Math.max(v - D.brake * -throttle * dt, 0) : Math.max(v - D.accel * 0.6 * -throttle * dt, -D.reverse);
+        else this.v = Math.sign(v) * Math.max(Math.abs(v) - 0.4 * dt, 0);
+        this.braking = !!brake || (throttle < 0 && v > 0.1);
+        // the wheels turn toward the steer, less at speed; a bicycle about the rear axle (+ steers toward +z, its right)
+        const target = steer * D.steer / (1 + (this.v / 12) ** 2);
+        this.wheel += clamp(target - this.wheel, -D.steerRate * dt, D.steerRate * dt);
+        const h = Math.atan2(this.dir[1], this.dir[0]) + this.v / (K.axleF - K.axleR) * Math.tan(this.wheel) * dt;
+        const dir = [Math.cos(h), Math.sin(h)], rx = this.fx + this.dir[0] * K.axleR + dir[0] * this.v * dt, rz = this.fz + this.dir[1] * K.axleR + dir[1] * this.v * dt;
+        const nx = rx - dir[0] * K.axleR, nz = rz - dir[1] * K.axleR;
+        if (this.blocked(nx, nz, dir[0], dir[1], this.pose.y)) { this.v = -this.v * 0.2; return; }      // bumped into something
+        Object.assign(this, { fx: nx, fz: nz, dir });
+    }
+
     // dt s on, with `room` m of clear road ahead of its front bumper (to the vehicle ahead), of which it leaves spec.gap
     step(dt, room = Infinity) {
         const L = this.line, K = this.spec;
-        if (this.mode === 'dwell') {
+        if (this.free) this.drive(dt);
+        else if (this.mode === 'dwell') {
             this.clock -= dt;
             if (this.clock <= 0 && this.doors <= 0) { this.mode = 'drive'; this.stop = (this.stop + 1) % L.stops.length; }
         } else {
@@ -176,9 +251,10 @@ class LineVehicle {
 
     moved() { this.place(); }
 
-    // where it is: at a stop (its doors) or on the way to the next (how far, how fast)
+    // where it is: at a stop (its doors) or on the way to the next (how far, how fast); off its line, what it does
     describe() {
         const L = this.line, name = L.names[this.stop] || `stop ${this.stop + 1}`;
+        if (this.free) return `${{ manual: 'driven', rejoin: 'back to its route', parked: 'parked' }[this.free]} · ${(Math.abs(this.v) * 3.6).toFixed(0)} km/h`;
         if (this.mode === 'dwell') return `at ${name} · ${this.clock > this.spec.doorLead ? `doors open, leaves in ${Math.ceil(this.clock)} s` : 'doors closing'}`;
         return `to ${name} · ${fmtKm(L.toStop(this.s, this.stop))} · ${(this.v * 3.6).toFixed(0)} km/h`;
     }
