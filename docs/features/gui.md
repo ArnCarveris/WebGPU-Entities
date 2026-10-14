@@ -64,7 +64,8 @@ js/main.js      entry point
   light `signal` (`flicker` / `pulse`) besides `roomLights` / `door` / `alarmColor`, a camera `phase`.
   `drone` is shared too: `center` + `radius` + `speed` (rad/s) patrol, `bob`, `pingEvery`, `light` { ahead, ... }.
 - **GUI surfaces**: `terminal` / `easel` entries carry a `gui` block (`size` in metres, `virtual`
-  resolution, `range`, `crt`, `zOffset`) and their content (texts, codes, brushes, palette...).
+  resolution, `range`, `crt`, `zOffset`) and their content (texts, codes, brushes, palette...; a terminal's
+  `content.page` is the page it starts on: `main`, `cctv` or `keypad`).
 - **Phone pages**: `phone.pages` are data. Cells (`nav`, `switch`, `slider`, `label`, `action`,
   `picker`, `text`) read and write game state through named bindings in `js/game/bindings.js`;
   pages with `app` are drawn by a `PhoneApp` (`js/gui/phone-apps.js`).

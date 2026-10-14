@@ -116,6 +116,15 @@
     ]
   },
   {
+    "id": "gui-swarm",
+    "name": "GUI swarm stress",
+    "group": "Entity GUI",
+    "description": "296 world-space EntityGUIs at once: a ring of terminals, a 72-panel video wall, 144 hovering panels at every angle, a stack of overlapping screens, giants up to 25 m wide and 24 easels with their own paint targets, on every terminal page, CRT and flat. More GUIs than the 8-bit stencil has values: the rest fall back to the depth test.",
+    "features": [
+      "gui"
+    ]
+  },
+  {
     "id": "gui-sector-07",
     "name": "Sector 07",
     "group": "Entity GUI",

@@ -77,11 +77,17 @@ class PlayerController extends kits.view.FirstPersonView {
         }
     }
 
-    // Move with collision: room bounds, a doorway that opens with its door, entity colliders
+    // Move with collision: room bounds, a doorway that opens with its door (if the room has one), entity colliders
     step(dx, dz) {
         const p = this.pos, { bounds, doorway } = this.cfg;
         let x = p[0] + dx;
         const z = p[2] + dz;
+        if (!doorway) {
+            p[0] = clamp(x, bounds.x[0], bounds.x[1]);
+            p[2] = clamp(z, bounds.z[0], bounds.z[1]);
+            this.game.world.collide(p);
+            return;
+        }
         const [dx0, dx1] = doorway.x;
         if (p[2] < doorway.enterZ) x = clamp(x, dx0, dx1);            // inside the doorway / corridor
         const canPass = this.game.world.get(doorway.door).passable && x > dx0 && x < dx1;

@@ -35,6 +35,7 @@ class TerminalGUI extends EntityGUI {
         this.scrollTarget = 0;
         this.thumbDrag = null;
         this.scrollInfo = { maxScroll: 0, travel: 1, thumbH: 0 };
+        if (content.page) this.showPage(content.page);     // the page it starts on (default: main)
     }
 
     attach(game) {

@@ -42,9 +42,9 @@ class GuiWorld extends FeatureWorld {
         if (!P) return null;
         if (!this.interiors) {
             const { bounds: b, doorway: d } = P.cfg, ix = this.interiors = new InteriorIndex(8), at = Origin.IDENTITY, top = 4;
-            const hatch = { c: [(d.x[0] + d.x[1]) / 2, 1.2, b.z[0]], n: [0, 0, -1], w: d.x[1] - d.x[0], h: 2.4, kind: 'door', open: () => this.app.world.get(d.door).passable };
-            ix.add(new Interior({ owner: this, origin: at, lo: [b.x[0] - 0.3, -0.5, b.z[0] - 0.3], hi: [b.x[1] + 0.3, top, b.z[1] + 0.3], portals: [hatch] }));
-            ix.add(new Interior({ owner: this, origin: at, lo: [d.x[0] - 0.3, -0.5, d.minZ - 0.3], hi: [d.x[1] + 0.3, top, b.z[0]], portals: [{ ...hatch, n: [0, 0, 1] }] }));
+            const hatch = d && { c: [(d.x[0] + d.x[1]) / 2, 1.2, b.z[0]], n: [0, 0, -1], w: d.x[1] - d.x[0], h: 2.4, kind: 'door', open: () => this.app.world.get(d.door).passable };
+            ix.add(new Interior({ owner: this, origin: at, lo: [b.x[0] - 0.3, -0.5, b.z[0] - 0.3], hi: [b.x[1] + 0.3, top, b.z[1] + 0.3], portals: hatch ? [hatch] : [] }));
+            if (d) ix.add(new Interior({ owner: this, origin: at, lo: [d.x[0] - 0.3, -0.5, d.minZ - 0.3], hi: [d.x[1] + 0.3, top, b.z[0]], portals: [{ ...hatch, n: [0, 0, 1] }] }));
         }
         return this.interiors.sheltered(p);
     }
