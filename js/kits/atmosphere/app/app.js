@@ -60,7 +60,7 @@ class App {
         this.controls = new Controls(this);
         this.keys = new KeyCommands(this);
         this.doors = new DoorControl(this, { moved: () => { this.renderer.writeDoors(this.world.structures.doors.mesh()); this.renderer.writeBuildings(this.world.structures.buildings); } });
-        this.liftControl = new LiftControl(this, { reach: DOOR_REACH, cars: () => this.frameWriter.roomVis?.cars });
+        this.liftControl = new LiftControl(this, { reach: DOOR_REACH, cars: () => this.frameWriter.roomVis?.cars, view: () => this.frameWriter.view() });
         this.surroundings = new Surroundings(this);
         this.sounds = new SoundEvents(this);
         this.lights = new LightWriter(this);

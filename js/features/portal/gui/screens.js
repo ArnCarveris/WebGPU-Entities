@@ -5,6 +5,7 @@
 Features.part('portal', (engine, feature) => {
 const { clamp, col, deg, wrapIndex, pad3, cardinal, timeText, fitRect, EntityGUI } = engine.kits.gui;
 const { g2, RATED_RPM } = feature;
+const { m4 } = engine.Common;
 
 // Every kind is an EntityGUI whose screen is a Screen entity (js/kits/entities/sectors.js): `this.screen`, `this.world`, and once
 // the game has the world, `this.app` (the Game: player, fx). The base draws the frame (background, header, border);
@@ -62,6 +63,16 @@ class ScreenGUI extends EntityGUI {
     // picking (the gui kit's InteractionSystem): the screen's own face, usable within `range` of the hit
     trace(eye, dir) { return this.screen.trace(eye, dir); }
     inRange(eye, hit) { return hit.t <= this.range; }
+
+    // the surface in the world, in metres about its centre (the gui kit's GuiSchedule sizes it on screen): the screen's
+    // model (virtual units from its corner, aboard a vehicle the vehicle's) scaled back to metres. Placed by the screen,
+    // not set
+    get surfaceMatrix() {
+        const m = this.screen?.model;
+        if (!m) return m4.identity();
+        return m4.mul(m, [this.vw / this.width, 0, 0, 0, 0, this.vh / this.height, 0, 0, 0, 0, 1, 0, this.vw / 2, this.vh / 2, 0, 1]);
+    }
+    set surfaceMatrix(m) {}
 
     get accent() { return C.cyan; }
     get title() { return this.def.title || 'TERMINAL'; }

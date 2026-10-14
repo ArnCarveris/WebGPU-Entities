@@ -1,15 +1,17 @@
 'use strict';
-// Using lifts: their panels near the eye (placed and rebuilt each frame), the button under the view pressed; at a
-// landing door in view, its car called; held, the door's emergency release (from either side: the lobby, or the shaft).
+// Using lifts: their panels near the eye (placed each frame, rebuilt as the gui kit's GuiSchedule has them due), the
+// button under the view pressed; at a landing door in view, its car called; held, the door's emergency release (from
+// either side: the lobby, or the shaft).
 
 Features.kit('transit', (engine, kit) => {
 const { v3 } = engine.Common;
-const { InteractionSystem } = engine.kits.gui;
-const BUILD_RANGE = 25;          // m: panels nearer than this are rebuilt each frame (further ones keep their last picture)
+const { InteractionSystem, GuiSchedule } = engine.kits.gui;
+const BUILD_RANGE = 25;          // m: panels nearer than this are rebuilt (when due; further ones keep their last picture)
 const RELEASE_HOLD = 1.0;        // s: E held at a landing door forces it open
 
 // Over a Lifts: each frame (update) its panels near the eye are placed (shown: what the renderer draws), aimed at along
-// the view (the gui kit's InteractionSystem), and rebuilt into their models with the renderer's device context.
+// the view (the gui kit's InteractionSystem), and rebuilt into their models with the renderer's device context when the
+// schedule has them due (the one aimed at every frame, the others by their size on screen).
 // host: { renderer (device; dc: a DeviceContext over the gui atlas), audio: { emit } } (what an EntityGUI attaches to)
 class LiftInteraction {
     constructor(lifts, host) {
@@ -20,12 +22,14 @@ class LiftInteraction {
         this.ray = null;
         this.held = 0;
         this.ia = new InteractionSystem(() => this.shown, () => this.ray);
+        this.schedule = new GuiSchedule();
     }
 
     // eye, dir (the view ray; null: nothing aimed at), feet (where a walker stands, or the eye), press (E this frame),
-    // hold (E held), reach (m: a landing door this near can be used), cars (the cars the camera sees: their panels).
+    // hold (E held), reach (m: a landing door this near can be used), cars (the cars the camera sees: their panels),
+    // view (the camera the host renders with: { viewProj, height (px) }; null: every panel in range rebuilt each frame).
     // Returns { prompt, used (the press went to a button or a door) }
-    update(dt, now, { eye, dir, feet = eye, press = false, hold = false, reach = 2.4, cars = null }) {
+    update(dt, now, { eye, dir, feet = eye, press = false, hold = false, reach = 2.4, cars = null, view = null }) {
         const L = this.lifts, out = { prompt: '', used: false };
         if (!L.cars.length) { this.shown = []; return out; }
         this.shown = L.panels(eye, cars);
@@ -59,10 +63,12 @@ class LiftInteraction {
                 out.landing = at;
             } else this.held = 0;
         }
+        const near = [];
         for (const g of this.shown) {
             g.update(dt, now);
-            if (v3.len(v3.sub(g.center(), eye)) < BUILD_RANGE) g.build(this.host.renderer.dc, now);
+            if (v3.len(v3.sub(g.center(), eye)) < BUILD_RANGE) near.push(g);
         }
+        for (const g of view ? this.schedule.due(near, { viewProj: view.viewProj, eye, height: view.height }) : near) g.build(this.host.renderer.dc, now);
         return out;
     }
 

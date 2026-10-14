@@ -26,10 +26,29 @@ class GuiModel {
         this.surfaces.length = 0;
     }
 
-    // `version` counts uploads: what caches a picture of the model (a render target) redraws when it changes
+    // Uploads what changed since the last upload: the range from the first to the last float that differs from `sent`
+    // (a copy of what the buffer holds), nothing when the model is the same. `version` counts changes: what caches a
+    // picture of the model (a render target) redraws when it changes
     upload(renderer) {
-        if (this.count) renderer.device.queue.writeBuffer(this.buffer, 0, this.verts, 0, this.count * GUI_STRIDE);
-        this.version = (this.version || 0) + 1;
+        const n = this.count * GUI_STRIDE, v = this.verts;
+        const layout = this.surfaces.map(s => `${s.material}:${s.first}:${s.count}`).join();
+        let sent = this.sent;
+        if (!sent || sent.length < n) {
+            const grown = new Float32Array(Math.min(v.length, Math.max(n, (sent?.length || 0) * 2)));
+            if (sent) grown.set(sent);
+            sent = this.sent = grown;
+        }
+        let lo = 0, hi = n;
+        while (lo < n && v[lo] === sent[lo]) lo++;
+        if (lo < n) while (v[hi - 1] === sent[hi - 1]) hi--;
+        const changed = lo < n || n !== this.sentCount || layout !== this.sentLayout;
+        if (lo < n) {
+            sent.set(v.subarray(lo, hi), lo);
+            renderer.device.queue.writeBuffer(this.buffer, lo * 4, v, lo, hi - lo);
+        }
+        this.sentCount = n;
+        this.sentLayout = layout;
+        if (changed || this.version === undefined) this.version = (this.version || 0) + 1;
     }
 
     get quads() {

@@ -36,6 +36,13 @@ class FrameWriter {
     // after the frame is submitted: its projection is the next one's history
     advance() { this.prevViewProj = this.viewProj; this.prevOffset = this.offset; }
 
+    // the camera as it renders this frame (the projection write() puts in the globals): { viewProj, height (px) }
+    view() {
+        const a = this.app, r = a.renderer, cam = a.camera, { fwd, right, up } = cam.basis();
+        const proj = m4.reversedInfinite(cam.fov, r.width / r.height, a.walker.active ? 0.05 : NEAR);
+        return { viewProj: m4.mul(proj, m4.view(cam.pos, right, up, fwd)), height: r.height };
+    }
+
     write(dt, wdt) {
         const a = this.app, r = a.renderer, F = r.frame, cam = a.camera, w = a.world, c = w.weather.cur, cfg = a.cfg, q = QUALITY[a.quality];
         const sun = a.sun, sky = Sky.compute(sun.azimuth, sun.elevation, sun.intensity, c, sun.moon);

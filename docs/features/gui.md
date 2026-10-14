@@ -29,6 +29,11 @@ Every screen is an `EntityGUI` (`js/gui/entity-gui.js`), modelled on Doom 3:
   GUI quads then draw with depth ALWAYS + stencil EQUAL. No z-fighting, correct occlusion, and GUIs
   can't draw through each other.
 
+In WebGPU Entities the facility doesn't rebuild every GUI every frame: `GuiSchedule` ([`js/kits/gui/gui-schedule.js`](../../js/kits/gui/gui-schedule.js))
+rebuilds the one under the cursor every frame, the others by their size on screen (small ones every few frames, ones out of
+view about once a second), and `GuiModel.upload` sends only the vertex range that changed. The portal's screens (among
+the ones its frame draws; the ones only a view target sees every 4 frames) and the transit kit's lift panels use it too.
+
 Subclasses implement `draw(dc, now)` and input hooks (`onPress`, `pointerDrag`, `pointerUp`, `wheel`,
 `drawRangeHint`, `drawCursor`): `TerminalGUI`, `EaselGUI`, `PhoneGUI`.
 

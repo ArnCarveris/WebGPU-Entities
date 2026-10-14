@@ -4,16 +4,19 @@
 // release), takes hold of the emergency ladder in a shaft, steps out from it through a landing door. Someone in a shaft
 // (on its ladder, a car's roof, the pit) keeps its cars halted. host: { world (its structures: lifts, ladders), walker,
 // camera, renderer (the lifts' panels' GUI), input (keys held), fx (emit, cameraLocked), rideCar (set: the car the
-// camera is in) }; reach (m): how near a panel or door can be used; cars(): the cars in view (RoomVis's), or null.
+// camera is in) }; reach (m): how near a panel or door can be used; cars(): the cars in view (RoomVis's), or null;
+// view(): the camera the host renders with ({ viewProj, height (px) }: the panels rebuilt when GuiSchedule has them
+// due), or null (every panel near rebuilt each frame).
 
 Features.kit('building', (engine, kit) => {
 const { LiftInteraction, Lifts } = engine.kits.transit;
 
 class LiftControl {
-    constructor(app, { reach = 2.4, cars = () => null } = {}) {
+    constructor(app, { reach = 2.4, cars = () => null, view = () => null } = {}) {
         this.app = app;
         this.reach = reach;
         this.cars = cars;
+        this.view = view;
         this.lifts = null;
         this.use = null;
     }
@@ -50,7 +53,7 @@ class LiftControl {
             }
             return;
         }
-        const r = this.use.update(dt, now, { eye: cam.pos, dir, feet, press, hold: this.app.input.keys.has('KeyE') && !wk.bus, reach: this.reach, cars: this.cars() });
+        const r = this.use.update(dt, now, { eye: cam.pos, dir, feet, press, hold: this.app.input.keys.has('KeyE') && !wk.bus, reach: this.reach, cars: this.cars(), view: this.view() });
         if (r.used && k >= 0) io.pressed.splice(k, 1);
         let prompt = wk.bus ? '' : r.prompt;
         if (wk.active && !wk.bus) {

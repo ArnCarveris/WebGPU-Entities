@@ -20,6 +20,7 @@ const { VisInspector } = engine.kits.interior;
 const NO_LINES = new Float32Array(0);
 
 const MASK_MODES = ['stencil', 'scissor', 'none'];
+const VIEW_EVERY = 4;           // frames between rebuilds of a screen only a view target (not the main view) sees
 
 class Game {
     constructor(fx) {
@@ -51,6 +52,7 @@ class Game {
     async start() {
         await this.renderer.init();
         this.dc = new engine.kits.gui.DeviceContext(this.renderer.ext.gui.atlas);
+        this.schedule = new engine.kits.gui.GuiSchedule();
         this.input.attach();
     }
 
@@ -204,7 +206,7 @@ class Game {
         stats.objs = fr.objs.length;
         this.frameStats = fr.stats;
         this.frameMode = mode;
-        this.updateScreens(now, eye, fwd, viewProj);
+        this.updateScreens(now, eye, fwd, viewProj, H);
         this.media.frame(now);
 
         const lines = I.lines();
@@ -222,7 +224,7 @@ class Game {
         if (!o.occluders) vis.occluders = [];
         const mode = o.culling ? o.mode : 'none';
         const fr = this.viewBuilder.build(vis, mode, W, H);
-        this.buildScreens(this.viewBuilder.stamp, this.frameNow);
+        this.buildViewScreens(this.viewBuilder.stamp, this.frameNow);
         this.renderer.render({
             globals: this.globals(viewProj, s.eye, t, W, H, mode === 'stencil'), areas: w.lightingTable(t, s.eye), draws: fr.draws, cmds: fr.cmds,
             polys: fr.polys, stencil: mode === 'stencil', lines: NO_LINES, lineDepthCount: 0,
@@ -230,9 +232,9 @@ class Game {
     }
 
     // GUI screens (kits.entities sectorTypes Screen, js/kits/entities/sectors.js): the interaction system (the gui kit) gives the nearest screen the view ray
-    // meets the cursor, if within the GUI's range; the screens in this frame's draws rebuild their GUI models (the
-    // others aren't seen)
-    updateScreens(now, eye, fwd, viewProj) {
+    // meets the cursor, if within the GUI's range; the screens in this frame's draws rebuild their GUI models when the
+    // gui kit's GuiSchedule says so (the others aren't seen)
+    updateScreens(now, eye, fwd, viewProj, H) {
         const dt = Math.min(0.1, (now - (this.screenT ?? now)) / 1000), screens = this.world.screens, ia = this.interaction;
         this.screenT = now;
         const dir = this.viewRay(eye, fwd, viewProj);
@@ -243,16 +245,28 @@ class Game {
         if (free && ia.focus) { this.canvas.style.cursor = 'none'; this.cursorHidden = true; }
         else if (this.cursorHidden) { this.canvas.style.cursor = ''; this.cursorHidden = false; }
         for (const s of screens) s.gui.update(dt, now);
-        this.buildScreens(this.frameBuilder.stamp, now);
+        this.buildScreens(this.frameBuilder.stamp, now, { viewProj, eye, height: H });
     }
 
-    // the screens a frame (the main view's, a view target's) draws rebuild their GUI models, once per frame however
-    // many views see them; the others aren't seen and keep theirs
-    buildScreens(stamp, now) {
+    // the screens the main view draws (this frame's stamp) rebuild their GUI models as the schedule has them due: the one
+    // with the cursor every frame, the others by their size on screen; the others aren't seen and keep theirs
+    buildScreens(stamp, now, cam) {
+        const seen = [];
+        for (const s of this.world.screens) if (s.stamp === stamp) seen.push(s.gui);
+        for (const g of this.schedule.due(seen, cam)) {
+            g.build(this.dc, now);
+            g.builtAt = this.frameNo;
+        }
+    }
+
+    // the screens only a view target (CCTV, the phone's camera) draws: rebuilt every VIEW_EVERY frames, once per frame
+    // however many views see them
+    buildViewScreens(stamp, now) {
         for (const s of this.world.screens) {
-            if (s.stamp !== stamp || s.gui.builtAt === this.frameNo) continue;
-            s.gui.build(this.dc, now);
-            s.gui.builtAt = this.frameNo;
+            const g = s.gui;
+            if (s.stamp !== stamp || this.frameNo - (g.builtAt ?? -Infinity) < VIEW_EVERY) continue;
+            g.build(this.dc, now);
+            g.builtAt = this.frameNo;
         }
     }
 

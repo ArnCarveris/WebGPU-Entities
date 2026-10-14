@@ -3,7 +3,7 @@
 
 Features.part('gui', (engine, feature) => {
 const {
-    M4, MaterialTable, Renderer, GuiAtlas, DeviceContext, DEPTH_FORMAT, InteractionSystem, CctvSystem, PhoneCamera, IptvPlayer,
+    M4, MaterialTable, Renderer, GuiAtlas, DeviceContext, DEPTH_FORMAT, InteractionSystem, GuiSchedule, CctvSystem, PhoneCamera, IptvPlayer,
     mediaApps,
 } = engine.kits.gui;
 const { AudioSystem, Easel, SecurityCamera, RadarApp, World, PlayerController, InputSystem, Bindings } = feature;
@@ -11,7 +11,7 @@ const { AudioSystem, Easel, SecurityCamera, RadarApp, World, PlayerController, I
 // Game: builds every system from the scenario and runs the frame.
 //
 // Frame order:
-//   simulate (player, world) -> route the cursor -> update + rebuild GUI models
+//   simulate (player, world) -> route the cursor -> update GUIs, rebuild the models that are due (GuiSchedule)
 //   -> decide which views are needed -> write instances -> encode passes:
 //      paint canvases, CCTV, phone camera, player view -> submit
 // The CCTV, the phone's camera and IPTV are the gui kit's (js/kits/gui/): this game is their scene (renderView),
@@ -65,6 +65,7 @@ class Game {
         this.atlas = new GuiAtlas();
         r.registerMaterial('atlas', 'gui', this.atlas.upload(r));
         this.dc = new DeviceContext(this.atlas);
+        this.schedule = new GuiSchedule();
 
         this.player = new PlayerController(this, s.player);
         this.scene = this;
@@ -168,7 +169,8 @@ class Game {
         interaction.drag();
         this.canvas.style.cursor = this.input.cursorStyle;
         for (const g of this.guis) g.update(dt, now);
-        for (const g of world.guis) g.build(dc, now);
+        const r = this.renderer, viewProj = M4.multiply(M4.perspective(player.fovy, r.aspect, 0.02, this.far), player.viewMatrix());
+        for (const g of this.schedule.due(world.guis, { viewProj, eye: player.eye, height: r.height })) g.build(dc, now);
     }
 
     render(now, dt, t) {

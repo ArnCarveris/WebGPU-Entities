@@ -45,7 +45,7 @@ const Features = {
         gui: {
             uses: ['noise', 'gpu'],
             parts: [
-                'math', 'materials', 'geometry', 'gui-mode', 'shaders', 'renderer', 'atlas', 'device-context', 'entity-gui', 'interaction', 'gui-targets', 'world-gui',
+                'math', 'materials', 'geometry', 'gui-mode', 'shaders', 'renderer', 'atlas', 'device-context', 'entity-gui', 'gui-schedule', 'interaction', 'gui-targets', 'world-gui',
                 'phone-gui', 'phone-apps', 'paint-shader', 'paint-canvas', 'easel-gui', 'views', 'media', 'cctv', 'phone-camera',
                 'iptv', 'apps/camera', 'apps/gallery', 'apps/viewer', 'apps/tv', 'media-phone',
             ],
