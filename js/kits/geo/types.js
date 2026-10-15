@@ -5,7 +5,7 @@
 Features.kit('geo', (engine, kit) => {
 const { Common } = engine;
 const { clamp, lerp } = Common;
-const { terrainData, roadData, buildingData, buildRoads, buildBuildings } = kit;
+const { terrainData, roadData, buildingData, buildRoads, buildBuildings, smoothRoads, smoothBuildings } = kit;
 
 function geoTypes(Base) {
     // The ground of `data` (a geo terrain id): its heights, and its land cover painted (built-up, woods, water). On a
@@ -37,6 +37,7 @@ function geoTypes(Base) {
     // marks (the geo kit's buildRoads)
     class GeoRoads extends Base {
         get anchor() { return null; }
+        stamp(f) { smoothRoads(f, roadData(this.def.data), this.def); }
         build(S) {
             const t0 = performance.now();
             this.stats = buildRoads(S, roadData(this.def.data), this.def);
@@ -47,6 +48,7 @@ function geoTypes(Base) {
     // The buildings of `data` (a geo buildings id) (the geo kit's buildBuildings)
     class GeoBuildings extends Base {
         get anchor() { return null; }
+        stamp(f) { smoothBuildings(f, buildingData(this.def.data)); }
         build(S) {
             const t0 = performance.now();
             this.stats = buildBuildings(S, buildingData(this.def.data), this.def);

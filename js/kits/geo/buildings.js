@@ -167,5 +167,18 @@ class FootprintWalls {
     }
 }
 
-return { BUILDING_TYPES, buildBuildings, FootprintWalls };
+// Keeps the field's procedural detail off the buildings' plots and a margin round them (LandField.keepSmooth)
+function smoothBuildings(field, data) {
+    if (!field.rough) return;
+    for (const b of data.buildings) {
+        const f = b.pts, n = f.length / 2;
+        if (n < 3) continue;
+        let cx = 0, cz = 0, r = 0;
+        for (let k = 0; k < n; k++) { cx += f[k * 2] / n; cz += f[k * 2 + 1] / n; }
+        for (let k = 0; k < n; k++) r = Math.max(r, Math.hypot(f[k * 2] - cx, f[k * 2 + 1] - cz));
+        field.keepSmooth(cx, cz, r + 3);
+    }
+}
+
+return { BUILDING_TYPES, buildBuildings, smoothBuildings, FootprintWalls };
 });

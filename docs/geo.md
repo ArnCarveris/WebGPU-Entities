@@ -51,6 +51,8 @@ What a real place needs of the cloud world's `terrain`:
 
 | Key | |
 |---|---|
-| `grid` | the terrain mesh's vertices a side (default 512): Oʻahu draws 1024, 72 m apart, for its cliffs |
+| `step` | the finest terrain lod's vertex spacing (m; default 1 with `rough`, else a quarter of a data cell) |
+| `detail` | how far each terrain lod reaches (default 1, at least 1): the finest out to 64 x `detail` vertex spacings, each next lod twice as coarse and twice as far. Oʻahu: 2 (1 m out to 128 m, about 8 m at 1 km) |
+| `rough` | procedural detail over the data (m, default 0: none): value-noise octaves of 29 to 1.7 m wavelength, about `rough` x 0.25 m on gentle ground and up to 2.25x on cliffs; kept off roads, buildings (`keepSmooth`, painted by geoRoads / geoBuildings), the shore and open water. The heights are drawn bicubic either way |
 | `style: "natural"` | open ground as grass and scrub (greener up the slopes; `moisture` 0..1), built-up ground as yards and paving, sand along the shore: no farm sections, no street grid |
 | `outside: "sea"` | the sea beyond the map, out to the horizon (with `base` at the sea level) |

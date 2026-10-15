@@ -27,7 +27,7 @@ const Features = {
         view: { parts: ['first-person'] },
         world: { parts: ['entity', 'hud', 'pages', 'feature-world'] },
         entities: { uses: ['noise', 'world', 'mesh', 'gui'], parts: ['spin', 'camera', 'door', 'light', 'drone', 'space', 'ground-props', 'sectors', 'fixtures'] },
-        terrain: { uses: ['world', 'noise', 'gpu'], parts: ['heightfield', 'stamps', 'channels', 'landuse', 'mesh-terrain', 'land-field'] },
+        terrain: { uses: ['world', 'noise', 'gpu'], parts: ['heightfield', 'stamps', 'channels', 'landuse', 'mesh-terrain', 'land-field', 'terrain-lod'] },
         hydrology: { uses: ['terrain'], parts: ['sources'] },
         weather: { uses: ['noise'], parts: ['storms', 'climate', 'sky', 'lightning'] },
         interior: { uses: ['mesh'], parts: ['origin', 'vis-area', 'frustum', 'trees', 'areas', 'area-set', 'portal-vis', 'vis-debug', 'area-map', 'vis-inspector', 'floorplan', 'interior'] },

@@ -5,8 +5,8 @@
     "entities": [
         {"type":"cloud","name":"Oʻahu"},
         {
-            "type": "terrain", "size": 73728, "resolution": 2048, "base": -1.5, "grid": 1024, "style": "natural", "moisture": 0.75, "outside": "sea", "fieldSize": 805, "pivots": 0,
-            "$comment": "1 m = 1 m: the 73.7 km square about 21.4835 N 157.9645 W (x east, z south), one cell per data cell; drawn as a 1024-vertex mesh (72 m apart, twice the default) so the Koʻolau cliffs keep their shape; natural ground (no farm sections or street grid; moisture: how green the open ground is, 0.5 by default), the sea round it to the horizon"
+            "type": "terrain", "size": 73728, "resolution": 2048, "base": -1.5, "rough": 1, "detail": 2, "style": "natural", "moisture": 0.75, "outside": "sea", "fieldSize": 805, "pivots": 0,
+            "$comment": "1 m = 1 m: the 73.7 km square about 21.4835 N 157.9645 W (x east, z south), one cell per data cell, drawn smooth (bicubic) with vertices 1 m apart near the eye, coarser with distance (TerrainLod; detail 2: each lod reaches twice as far); rough: procedural detail of about a metre where the 36 m data is too coarse to hold it, more on steep ground, none on roads, buildings, the shore or water; natural ground (no farm sections or street grid; moisture: how green the open ground is, 0.5 by default), the sea round it to the horizon"
         },
         {"type":"curvature","radius":6371000},
         {

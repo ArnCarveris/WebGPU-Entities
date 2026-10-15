@@ -34,7 +34,6 @@ const SPRAY = 0.03, SPRAY_LAYERS = [[0.2, 3.8], [1.0, 1.0], [8.0, 0.2]];
 // beyond the splashes' mist sprites (splash), the carpet takes over their share: [scale height (m), weight]
 const SPRAY_MIST = [0.25, 2.4];
 const SPLASH_FADE = 0.4;            // the splashes and their mist fade out from this share of SPLASH_RADIUS to its end
-const GRID_N = 512;                 // terrain mesh vertices per side (inner part covers the heightfield, outer rings run to the horizon)
 const NOISE_SHAPE = 128;
 const NOISE_DETAIL = 32;
 const SHAPE_MIPS = 3;               // the shape volume's mip chain (the smooth look samples mip 2)
@@ -53,7 +52,7 @@ return {
     NEAR, MAX_CELLS, CELL_FLOATS, MAX_MOTHERSHIPS, MAX_SHELVES, MAX_LIGHTS, LIGHT_RANGE, LIGHT_GRID, LIGHT_SPOT, LIGHT_CABIN,
     LIGHT_ROOM, ROOM_LIGHTS, ROOM_RANGE, FAR_FLOATS, POOL_ALBEDO, MAX_FAR_DYN, FAR_LAMP_PITCH, TOWN_BLOCK, FAR_LAMP_SIDE,
     FAR_LAMP_H, FAR_LAMP_REACH, POLE_DRAW, MAX_POLES, MAX_GLOWS, GLOW_GAIN, SPLASH_RADIUS, SPLASH_GRID, SPLASH_PIECES,
-    SPLASH_MIST, SPLASH_PARTICLES, SPRAY, SPRAY_LAYERS, SPRAY_MIST, SPLASH_FADE, GRID_N, NOISE_SHAPE, NOISE_DETAIL,
+    SPLASH_MIST, SPLASH_PARTICLES, SPRAY, SPRAY_LAYERS, SPRAY_MIST, SPLASH_FADE, NOISE_SHAPE, NOISE_DETAIL,
     SHAPE_MIPS, OCC_RES, CLOUD_TILE, TILE_COVER_PAD, WEATHER_RES, SHADOW_RES, GROUND_RES,
 };
 });

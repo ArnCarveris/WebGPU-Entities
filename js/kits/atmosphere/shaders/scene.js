@@ -7,39 +7,118 @@ const {
 } = kit;
 const { BUS, BUS_IN } = engine.kits.transit;
 const { INTERIOR_DRAW, BLD_ID, BLD_LIT, BLD_STACK, BLD_DARK } = engine.kits.settlement;
+const { TERRAIN_PATCH, DETAIL_OCTAVES, TERRAIN_EASE } = engine.kits.terrain;
 
-// needs F, heightTex, clampSamp: the terrain's height and normal at xz (beyond the heightfield it flattens to the base)
+// needs F, heightTex, clampSamp: the terrain's height and normal at xz (beyond the heightfield it flattens to the base).
+// heightTex: the height as two half floats (r + g), the normal's x and z
 const WGSL_TERRAIN = /* wgsl */`
 fn terrainHeight(xz: vec2f) -> vec4f {
     let uv = (xz - F.tdomain.xy) / F.tdomain.z;
     let s = textureSampleLevel(heightTex, clampSamp, uv, 0.0);
     let out = max(max(abs(uv.x - 0.5), abs(uv.y - 0.5)) - 0.5, 0.0) * F.tdomain.z;
     let k = exp(-out / 4000.0);
-    return vec4f(mix(F.misc.z, s.x, k), normalize(mix(vec3f(0.0, 1.0, 0.0), s.yzw, k * k * k)));
+    let n = vec3f(s.z, sqrt(max(1.0 - s.z * s.z - s.w * s.w, 0.0)), s.w);
+    return vec4f(mix(F.misc.z, s.x + s.y, k), normalize(mix(vec3f(0.0, 1.0, 0.0), n, k * k * k)));
 }
 
-// the height of the terrain as drawn (vsTerrain), which between its vertices runs above or below terrainHeight (its
-// vertices sample it, its triangles do not): over the heightfield the grid is linear (gridWarp's inner part), each cell
-// two triangles split from vertex (i + 1, j) to (i, j + 1). Beyond it, the sampled height
-fn meshHeight(xz: vec2f) -> f32 {
-    let r0 = F.tdomain.z * 0.5;
-    let c = F.tdomain.xy + r0;
-    if (any(abs(xz - c) >= vec2f(r0))) { return terrainHeight(xz).x; }
-    let n = F.geo.z - 1.0;
-    let g = ((xz - c) / r0 * 0.72 + 1.0) * 0.5 * n;
-    let i = floor(g);
-    let f = g - i;
-    let vert = (i / n * 2.0 - 1.0) / 0.72 * r0 + c;
-    let step = 2.0 / n / 0.72 * r0;
-    let hb = terrainHeight(vert + vec2f(step, 0.0)).x;
-    let hc = terrainHeight(vert + vec2f(0.0, step)).x;
-    if (f.x + f.y <= 1.0) {
-        let ha = terrainHeight(vert).x;
-        return ha + (hb - ha) * f.x + (hc - ha) * f.y;
-    }
-    let hd = terrainHeight(vert + vec2f(step)).x;
-    return hd + (hc - hd) * (1.0 - f.x) + (hb - hd) * (1.0 - f.y);
+// The terrain as drawn (LandField.surface, term for term): the heights interpolated bicubically (Catmull-Rom, through
+// the data), plus where it is rough (F.tdetail.x) octaves of value noise (DETAIL_OCTAVES), kept off roads and
+// buildings (smoothTex), the shore and open water, stronger on steep ground. sp: the spacing (m) the result is sampled
+// at (vertices, a pixel's footprint): octaves shorter than 4 sp are left out, so nothing aliases. x height, yz gradient
+fn detailHash(ix: i32, iz: i32, s: u32) -> f32 {
+    var h = (bitcast<u32>(ix) * 0x8da6b343u) ^ (bitcast<u32>(iz) * 0xd8163841u) ^ (s * 0xcb1ab31fu);
+    h = (h ^ (h >> 16u)) * 0x7feb352du;
+    h = (h ^ (h >> 15u)) * 0x846ca68bu;
+    h = h ^ (h >> 16u);
+    return f32(h) * (2.0 / 4294967296.0) - 1.0;
 }
+
+// value noise at p (lattice units): value, d/dx, d/dz
+fn detailNoise(p: vec2f, s: u32) -> vec3f {
+    let i = floor(p);
+    let f = p - i;
+    let u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);
+    let du = 30.0 * f * f * (f - 1.0) * (f - 1.0);
+    let ix = i32(i.x);
+    let iz = i32(i.y);
+    let a = detailHash(ix, iz, s);
+    let b = detailHash(ix + 1, iz, s);
+    let c = detailHash(ix, iz + 1, s);
+    let d = detailHash(ix + 1, iz + 1, s);
+    let k = a - b - c + d;
+    return vec3f(a + (b - a) * u.x + (c - a) * u.y + k * u.x * u.y, du.x * (b - a + k * u.y), du.y * (c - a + k * u.x));
+}
+
+fn cubicW(t: f32) -> vec4f {
+    let t2 = t * t;
+    let t3 = t2 * t;
+    return vec4f(-t3 + 2.0 * t2 - t, 3.0 * t3 - 5.0 * t2 + 2.0, -3.0 * t3 + 4.0 * t2 + t, t3 - t2) * 0.5;
+}
+fn cubicD(t: f32) -> vec4f {
+    let t2 = t * t;
+    return vec4f(-3.0 * t2 + 4.0 * t - 1.0, 9.0 * t2 - 10.0 * t, -9.0 * t2 + 8.0 * t + 1.0, 3.0 * t2 - 2.0 * t) * 0.5;
+}
+
+// the bicubic heights at xz: height, gradient (beyond the map easing back to the base)
+fn terrainCubic(xz: vec2f) -> vec3f {
+    let n = i32(F.tdomain.w);
+    let cell = F.tdomain.z / F.tdomain.w;
+    let g = clamp((xz - F.tdomain.xy) / cell - 0.5, vec2f(0.0), vec2f(f32(n - 1)));
+    let i = vec2i(floor(g));
+    let t = g - floor(g);
+    let wx = cubicW(t.x);
+    let wz = cubicW(t.y);
+    let dx = cubicD(t.x);
+    let dz = cubicD(t.y);
+    var v = 0.0;
+    var gx = 0.0;
+    var gz = 0.0;
+    for (var b = 0; b < 4; b++) {
+        let row = clamp(i.y + b - 1, 0, n - 1);
+        var hs = vec4f(0.0);
+        for (var a = 0; a < 4; a++) {
+            let s = textureLoad(heightTex, vec2i(clamp(i.x + a - 1, 0, n - 1), row), 0);
+            hs[a] = s.x + s.y;
+        }
+        let r = dot(wx, hs);
+        v += wz[b] * r;
+        gx += wz[b] * dot(dx, hs);
+        gz += dz[b] * r;
+    }
+    let out = max(max(abs(xz.x - F.tdomain.x - F.tdomain.z * 0.5), abs(xz.y - F.tdomain.y - F.tdomain.z * 0.5)) - F.tdomain.z * 0.5, 0.0);
+    let k = exp(-out / ${TERRAIN_EASE}.0);
+    return vec3f(mix(F.misc.z, v, k), vec2f(gx, gz) / cell * k);
+}
+
+// the smooth heights for spacing sp: bicubic where the samples are a data cell or less apart, the filtered texture
+// (bilinear, its normals) two cells apart or more (coarser samples gain nothing from bicubic), blended between
+fn terrainSmooth(xz: vec2f, sp: f32) -> vec3f {
+    let t = sat(sp / (F.tdomain.z / F.tdomain.w) - 1.0);
+    var lin = vec3f(0.0);
+    if (t > 0.0) {
+        let b = terrainHeight(xz);
+        lin = vec3f(b.x, -b.yw / max(b.z, 0.05));
+        if (t >= 1.0) { return lin; }
+    }
+    return mix(terrainCubic(xz), lin, t);
+}
+
+fn terrainSurface(xz: vec2f, sp: f32) -> vec3f {
+    let c = terrainSmooth(xz, sp);
+    if (F.tdetail.x <= 0.0) { return c; }
+    let uv = (xz - F.tdomain.xy) / F.tdomain.z;
+    let water = sat(textureSampleLevel(landTex, clampSamp, uv, 0.0).z);
+    let m = (1.0 - textureSampleLevel(smoothTex, clampSamp, uv, 0.0).x) * sat((c.x - 1.0) / 3.0) * (1.0 - water);
+    if (m <= 0.0) { return c; }
+    var d = vec3f(0.0);
+${DETAIL_OCTAVES.map(([l, a], k) => `    let w${k} = sat(${l} / (2.0 * sp) - 1.0);
+    if (w${k} > 0.0) { d += w${k} * ${a} * detailNoise(xz / ${l}, ${k + 1}u) * vec3f(1.0, vec2f(1.0 / ${l})); }`).join('\n')}
+    let amp = F.tdetail.x * m * (0.25 + min(length(c.yz), 2.0));
+    return c + d * amp;
+}
+
+// the height of the terrain as drawn near the eye (its finest lod, 1 m apart by default)
+fn meshHeight(xz: vec2f) -> f32 { return terrainSurface(xz, 1.0).x; }
 
 // The scene pass writes a rain surface code into the HDR target's alpha, for the splashes (splash): 0 where no rain lands
 // (sky, walls, glass, interiors, the buses, under roofs, snow), else the kind of surface, an integer, plus 0.45 x its
@@ -149,28 +228,23 @@ fn stars(d: vec3f) -> vec3f {
     return tint * b * exp(-x * x) * min(1.0, 0.12 / rad) * smoothstep(0.0, 0.12, up) * (1.0 - 0.6 * F.sunDir.w) * 1.5 / F.sunCol.w;
 }
 
-// geometric grid: linear over the heightfield, then rings growing out to the horizon (F.curve.z: 260 km flat; drawn
-// curved, past the horizon over the highest peak)
-fn gridWarp(u: f32) -> f32 {
-    let a = abs(u);
-    let r0 = F.tdomain.z * 0.5;
-    let inner = 0.72;
-    let r = select(r0 * exp((a - inner) / (1.0 - inner) * log(max(F.curve.z, r0 * 1.01) / r0)), a / inner * r0, a < inner);
-    return sign(u) * r;
-}
+// The terrain: a CDLOD node per instance (TerrainLod: x0, z0, size, lod), each the same patch of ${TERRAIN_PATCH}^2 cells.
+// Over the last 25% of its lod's range (F.geo.z * 2^lod) a vertex slides onto the next lod's grid (the odd rows and
+// columns onto the even ones), by its distance from the eye, so neighbouring lods meet without cracks or popping. The
+// surface's gradient (terrainSurface) goes with each vertex, for the normal: no surface evaluated per pixel
+struct TerrOut { @builtin(position) pos: vec4f, @location(0) world: vec3f, @location(1) grad: vec2f };
 
-struct TerrOut { @builtin(position) pos: vec4f, @location(0) world: vec3f };
-
-@vertex fn vsTerrain(@builtin(vertex_index) vi: u32) -> TerrOut {
-    let N = u32(F.geo.z);
-    let i = vi % N;
-    let j = vi / N;
-    let u = f32(i) / f32(N - 1u) * 2.0 - 1.0;
-    let v = f32(j) / f32(N - 1u) * 2.0 - 1.0;
-    let xz = F.tdomain.xy + F.tdomain.z * 0.5 + vec2f(gridWarp(u), gridWarp(v));
-    let h = terrainHeight(xz).x;
+@vertex fn vsTerrain(@builtin(vertex_index) vi: u32, @location(0) node: vec4f) -> TerrOut {
+    let P = ${TERRAIN_PATCH}.0;
+    let g = vec2f(f32(vi % ${TERRAIN_PATCH + 1}u), f32(vi / ${TERRAIN_PATCH + 1}u));
+    let xz0 = node.xy + g / P * node.z;
+    let r = F.geo.z * exp2(node.w);
+    let k = sat((distance(F.cam.xyz, vec3f(xz0.x, terrainHeight(xz0).x, xz0.y)) - 0.75 * r) / (0.2 * r));
+    let xz = node.xy + (g - fract(g * 0.5) * 2.0 * k) / P * node.z;
     var o: TerrOut;
-    o.world = vec3f(xz.x, h, xz.y);
+    let ts = terrainSurface(xz, node.z / P * (1.0 + k));
+    o.world = vec3f(xz.x, ts.x, xz.y);
+    o.grad = ts.yz;
     o.pos = F.viewProj * vec4f(curveToRender(o.world), 1.0);
     return o;
 }
@@ -335,8 +409,7 @@ fn streetGlow(p: vec3f, n: vec3f, v: vec3f, shin: f32, px: f32, share: f32) -> L
     let px = max(length(fwidth(p.xz)), 0.05);
     let uv = (p.xz - F.tdomain.xy) / F.tdomain.z;
     let inside = all(uv > vec2f(0.0)) && all(uv < vec2f(1.0));
-    let th = terrainHeight(p.xz);
-    let n = th.yzw;
+    let n = normalize(vec3f(-i.grad.x, 1.0, -i.grad.y));
     // (beyond the map: nothing, or the sea round a real island, F.geo.y)
     let land4 = select(vec4f(0.0, 0.0, F.geo.y, 0.0), textureSampleLevel(landTex, clampSamp, uv, 0.0), inside);
     let land = land4.xyz;

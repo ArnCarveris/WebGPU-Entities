@@ -3,7 +3,7 @@
 
 Features.kit('atmosphere', (engine, kit) => {
 const { Common, kits } = engine;
-const { makeBuffer, gridIndices, bindLayout, bindGroup, frustumPlanes } = Common;
+const { makeBuffer, bindLayout, bindGroup, frustumPlanes } = Common;
 const { GuiAtlas, DeviceContext, WorldGuiPass } = kits.gui;
 const { StencilLayout } = kits.gpu;
 const {
@@ -17,6 +17,7 @@ const { STRUCT_FLOATS, BUILDING_FLOATS, STRUCT_COLORS, Structures } = kits.settl
 const { TiledMesh } = kits.mesh;
 const { GroundFrame } = Common;
 const { GpuProfiler } = kits.gpu;
+const { TerrainLod, TERRAIN_MAX_NODES, terrainPatchIndices } = kits.terrain;
 const { BOX_FLOATS } = kits.transit;
 const MAX_BOXES = 4096;          // lift parts drawn a frame (vsBox)
 const MAX_ORIGINS = 96;          // buildings whose interiors (and lifts) are drawn a frame, each in its Origin's frame (busData slots)
@@ -114,7 +115,9 @@ class Renderer {
             depthStencil: { format: this.depthFormat, depthWriteEnabled: depth.write, depthCompare: depth.compare },
         });
         this.pSky = pipe(layoutA, scene, 'vsSky', 'fsSky', 'rgba16float', { write: false, compare: 'always' });
-        this.pTerrain = pipe(layoutA, scene, 'vsTerrain', 'fsTerrain', 'rgba16float', { write: true, compare: 'greater' });
+        // the terrain patch: vertex index -> patch corner; a node (x0, z0, size, lod) per instance
+        this.pTerrain = pipe(layoutA, scene, 'vsTerrain', 'fsTerrain', 'rgba16float', { write: true, compare: 'greater' }, undefined, [{
+            arrayStride: 16, stepMode: 'instance', attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x4' }] }]);
         const structVerts = [{
             arrayStride: STRUCT_FLOATS * 4, attributes: [
                 { shaderLocation: 0, offset: 0, format: 'float32x3' }, { shaderLocation: 1, offset: 12, format: 'float32x3' },
@@ -196,13 +199,16 @@ class Renderer {
         this.landMap = d.createTexture({ size: [f.n, f.n], format: 'rgba8unorm', usage: U.TEXTURE_BINDING | U.COPY_DST });
         d.queue.writeTexture({ texture: this.landMap }, f.packLand(), { bytesPerRow: f.n * 4 }, [f.n, f.n]);
         this.heightView = this.heightMap.createView();
-        // the terrain mesh: f.grid vertices a side (vsTerrain)
-        if (this.terrainGrid !== f.grid) {
-            this.terrainIndex?.destroy();
-            const gi = gridIndices(f.grid);
-            this.terrainIndex = makeBuffer(d, gi.byteLength, GPUBufferUsage.INDEX, gi);
-            this.terrainCount = gi.length;
-            this.terrainGrid = f.grid;
+        this.smoothMap?.destroy();
+        this.smoothMap = d.createTexture({ size: [f.mres, f.mres], format: 'r8unorm', usage: U.TEXTURE_BINDING | U.COPY_DST });
+        d.queue.writeTexture({ texture: this.smoothMap }, f.packSmooth(), { bytesPerRow: f.mres }, [f.mres, f.mres]);
+        // the terrain: CDLOD nodes picked each frame (terrainDraws), each the same patch (vsTerrain), its node an instance
+        this.terrainLod = new TerrainLod(f, { step: world.terrain.step, detail: world.terrain.detail });
+        if (!this.terrainIndex) {
+            const pi = terrainPatchIndices();
+            this.terrainIndex = makeBuffer(d, pi.byteLength, GPUBufferUsage.INDEX, pi);
+            this.terrainQuarter = pi.length / 4;
+            this.terrainNodes = d.createBuffer({ size: TERRAIN_MAX_NODES * 16, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
         }
         this.groundPass = new GroundPass(this, world);
         this.structBuf?.destroy();
@@ -255,7 +261,7 @@ class Renderer {
         this.busDraws = [];
         this.worldGroup = this.worldSet.group({
             F: this.frameBuf, shapeTex: this.noise.shapeView, detailTex: this.noise.detailView, weatherTex: this.weatherPass.weatherView,
-            shadowTex: this.weatherPass.shadowView, heightTex: this.heightView, landTex: this.landMap.createView(), repSamp: this.repSamp,
+            shadowTex: this.weatherPass.shadowView, heightTex: this.heightView, landTex: this.landMap.createView(), smoothTex: this.smoothMap.createView(), repSamp: this.repSamp,
             clampSamp: this.clampSamp, cells: this.cellBuf, ground: this.groundPass.buffer, bolts: this.boltBuf, anvilTex: this.weatherPass.anvilView,
             layerTex: this.weatherPass.layerView, styleTex: this.weatherPass.styleView, occ: this.weatherPass.occ, buildings: this.buildingBuf,
         }, 'world');
@@ -263,6 +269,15 @@ class Renderer {
 
     // the bulk tiles in view this frame, neighbouring ones merged: [[first index, count], ...]. A tile's box reaches down by
     // as much as the outdoors drawn curved lowers it at its far side (curveToRender), so no tile is culled where it shows
+    // the terrain's nodes for this frame's eye (TerrainLod.select), written to terrainNodes: [quadrant (0 the whole
+    // patch, q + 1 its quarter q), first instance, instances]
+    terrainDraws() {
+        const F = this.frame.data, o = this.frame.offsets, L = this.terrainLod, planes = frustumPlanes(F.subarray(o.viewProj, o.viewProj + 16), { reversed: true });
+        const n = L.select([F[o.cam], F[o.cam + 1], F[o.cam + 2]], planes, F[o.curve + 2], F[o.curve + 3] || 6371000);
+        if (n) this.device.queue.writeBuffer(this.terrainNodes, 0, L.nodes, 0, n * 4);
+        return L.draws;
+    }
+
     bulkDraws() {
         const F = this.frame.data, o = this.frame.offsets, planes = frustumPlanes(F.subarray(o.viewProj, o.viewProj + 16), { reversed: true });
         const cam = [F[o.cam], F[o.cam + 1], F[o.cam + 2]], R = F[o.curve + 3] || 6371000, out = [];
@@ -436,7 +451,11 @@ class Renderer {
         a.draw(3);
         a.setPipeline(this.pTerrain);
         a.setIndexBuffer(this.terrainIndex, 'uint32');
-        a.drawIndexed(this.terrainCount);
+        a.setVertexBuffer(0, this.terrainNodes);
+        for (const [q, first, n] of this.terrainDraws()) {
+            if (q) a.drawIndexed(this.terrainQuarter, n, (q - 1) * this.terrainQuarter, 0, first);
+            else a.drawIndexed(this.terrainQuarter * 4, n, 0, 0, first);
+        }
         if (this.structCount) {
             a.setPipeline(this.pStruct);
             a.setVertexBuffer(0, this.structBuf);

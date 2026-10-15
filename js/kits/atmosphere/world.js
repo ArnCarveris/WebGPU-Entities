@@ -14,7 +14,7 @@
 
 Features.kit('atmosphere', (engine, kit) => {
 const { kits } = engine;
-const { MAX_CELLS, MAX_MOTHERSHIPS, MAX_SHELVES, GRID_N, FarLights } = kit;
+const { MAX_CELLS, MAX_MOTHERSHIPS, MAX_SHELVES, FarLights } = kit;
 const { LandField } = kits.terrain;
 const { LAMPS, Structures, cloudMeshes } = kits.settlement;
 const { WeatherSystem, RainZones, CloudLayers, Lightning } = kits.weather;
@@ -32,8 +32,7 @@ class World {
         this.lamps = LAMPS;             // lamp kinds, for what lights itself (a bus's headlights, tail lights, cabin)
         const t = { size: 64000, resolution: 512, base: 1500, fieldSize: 800, pivots: 0.2, ...(scenario.terrain || {}) };
         this.terrain = t;
-        // (drawn as a mesh of `grid` vertices a side, GRID_N unless the scenario's terrain says: a real place's cliffs need more)
-        this.field = new LandField(t.size, t.resolution, t.base, { grid: t.grid || GRID_N });
+        this.field = new LandField(t.size, t.resolution, t.base, { rough: t.rough || 0 });
         // the outdoors drawn on a round planet (the scenario's optional `curvature` entity; off without one)
         this.curvature = new Curvature(scenario.curvature, t.base);
         this.weather = new WeatherSystem(scenario.weather);
@@ -46,7 +45,6 @@ class World {
         this.busBoost = 1;               // their time runs this many times as fast (hold Z)
         for (const def of scenario.entities || []) this.add(def, false);
         for (const e of this.entities) { e.stamp(this.field); this.field.updateRange(); }
-        this.field.freeze();
         this.structures = new Structures(this.field, scenario.buildings, scenario.plans);
         for (const e of this.entities) e.build(this.structures);
         this.structures.finish();

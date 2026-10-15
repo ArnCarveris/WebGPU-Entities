@@ -79,15 +79,24 @@ Each frame runs these passes. All distances are metres and heights are above sea
    builds up where precipitation reaches the ground below freezing, following the same slanted shafts (lapse rate 6.5 °C/km). Rain wets
    the ground. Snow melts and the ground dries afterwards.
 4. **Scene** (`WGSL_SCENE`): the sky, then the terrain.
-   - The terrain mesh is a geometric grid: linear over the heightfield, then rings growing out to
-     260 km.
+   - The terrain mesh is CDLOD (the terrain kit's `TerrainLod`): a quadtree of nodes about the heightfield picked each
+     frame by distance from the eye, out to past the horizon (260 km flat), each drawn as the same 16² patch (an
+     instance). The finest lod has vertices `step` m apart (1 m with procedural detail, else a quarter of a data cell);
+     each lod doubles the spacing and range, and
+     its vertices morph onto the next lod's grid over the last 25% of its range, so lods meet without cracks or popping.
+     Nodes outside the view are culled with their min / max heights. Heights are two half floats (r + g) for
+     centimetre precision on the peaks. The surface (`terrainSurface`, mirrored on the CPU by `LandField.surface`) is
+     bicubic (Catmull-Rom) where vertices are a data cell apart or closer, the filtered texture where they are two
+     cells or more, plus the scenario's `rough` procedural detail (value noise, octaves shorter than 4x the vertex
+     spacing left out), kept off roads and buildings by the `smoothTex` mask. Normals come from the surface's gradient
+     at the vertices.
    - Ground shading: section-line farm fields, centre-pivot circles, towns, forests, rivers and lakes,
      and mountains with rock above the tree line.
    - It is lit with cloud shadows, snow, wet darkening and reflections, and lightning.
    - Then the **structures** (`vsStruct` / `fsStruct`): houses, a bus shelter, bridges, roads and the river's water in a
      village, and a town's central bus station, as flat-shaded triangles built on the CPU. Every building has an
-     interior, glass windows and doors that open (see **Buildings**). They stand on `Heightfield.surface`, the terrain exactly as
-     drawn (half-float heights, filtered at the mesh vertices, flat triangles between them), so they neither float
+     interior, glass windows and doors that open (see **Buildings**). They stand on `LandField.surface`, the same surface the
+     finest lod draws (1 m apart near the eye), so they neither float
      nor sink. They get cloud shadows, wetness, snow on what faces up, and glass, metal and wet surfaces reflect the
      sky. See **Rain shelter** below.
 5. **Froxel lighting** (`WGSL_FROXEL`, `FroxelPass`): a 160 × 96 × 128 volume of frustum-aligned cells (froxels),

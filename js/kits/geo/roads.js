@@ -112,6 +112,20 @@ function block(mesh, x, z, dir, hx, hz, y0, y1, color) {
     mesh.tri(t, v[1], v[3], v[5]); mesh.tri(t, v[1], v[5], v[7]);
 }
 
+// Keeps the field's procedural detail off the roads buildRoads lays (the same skip / minor), and a margin round them
+// (LandField.keepSmooth), so the ground they are laid on is the ground drawn under them
+function smoothRoads(field, data, { skip = [], minor = true } = {}) {
+    if (!field.rough) return;
+    for (const r of data.roads) {
+        const T = ROAD_TYPES[r.kind];
+        if (!T || skip.includes(r.kind) || (r.flags & TUNNEL) || (!minor && (r.flags & MINOR))) continue;
+        const pts = toPoints(r.pts);
+        if (pts.length < 2) continue;
+        const r0 = roadWidth(r, T) / 2 + 4;
+        for (const p of densify(pts, field.mcell / 2)) field.keepSmooth(p[0], p[1], r0);
+    }
+}
+
 // The roads of `data` (the geo kit's roadData) into S.bulk (the world's TiledMesh), standing on S.ground; the bridge
 // decks walkable (S.solids). opts: skip (highway classes left out), minor (driveways and parking aisles; default true),
 // curves (round the corners; default true), marks (default true). Tunnels are left out (they are under the ground).
@@ -198,5 +212,5 @@ function bridgeUnder(S, mesh, K, color) {
     }
 }
 
-return { ROAD_TYPES, buildRoads };
+return { ROAD_TYPES, buildRoads, smoothRoads };
 });

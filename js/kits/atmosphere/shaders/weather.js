@@ -226,7 +226,8 @@ fn groundUpdate(@builtin(global_invocation_id) gid: vec3u) {
     if (gid.x >= n || gid.y >= n) { return; }
     let uv = (vec2f(gid.xy) + 0.5) / f32(n);
     let xz = F.tdomain.xy + uv * F.tdomain.z;
-    let h = textureSampleLevel(heightTex, clampSamp, uv, 0.0).x;
+    let hs = textureSampleLevel(heightTex, clampSamp, uv, 0.0);
+    let h = hs.x + hs.y;
     let w = precipSourceAt(vec3f(xz.x, h, xz.y));                     // where the slanted shafts land
     let reach = sat(1.0 - virgaOf(w) * 1.25);                         // virga never lands
     let pr = w.z * reach;
