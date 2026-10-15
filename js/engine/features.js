@@ -61,7 +61,7 @@ const Features = {
             uses: ['noise', 'view', 'world', 'gpu', 'gui', 'mesh', 'interior', 'transit', 'building', 'settlement', 'terrain', 'weather', 'curvature'],
             parts: [
                 'limits', 'quality', 'bindings', 'shaders/common', 'shaders/shelter', 'shaders/occupancy', 'shaders/noise', 'shaders/weather',
-                'shaders/volumetrics', 'shaders/scene', 'shaders/final', 'passes', 'renderer', 'far-lights', 'surroundings', 'light-writer',
+                'shaders/volumetrics', 'shaders/scene', 'shaders/vegetation', 'shaders/final', 'passes', 'vegetation', 'renderer', 'far-lights', 'surroundings', 'light-writer',
                 'frame-writer', 'world', 'app/hud', 'app/menus', 'app/controls', 'app/key-commands', 'app/app', 'app/phone-pages', 'app/feature',
             ],
         },

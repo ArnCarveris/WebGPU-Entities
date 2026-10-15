@@ -93,6 +93,14 @@ Each frame runs these passes. All distances are metres and heights are above sea
    - Ground shading: section-line farm fields, centre-pivot circles, towns, forests, rivers and lakes,
      and mountains with rock above the tree line.
    - It is lit with cloud shadows, snow, wet darkening and reflections, and lightning.
+   - With the terrain's `vegetation`, the **plants** (`VegetationPass`): a compute pass (`vegScatter`) puts at most one
+     plant in each cell of a 6 m lattice within 1.5 km of the eye, chosen by the cell alone (so plants stay put): how
+     likely from the forest cover (`forestCover`, as the ground is shaded) or a few on open ground and in town, none on
+     roads, buildings or water; the kind from the shore (palms), town (street trees and palms), the forest and the dry
+     lowland (kiawe, shrubs). It frustum-culls them and counts them into indirect draws, one per species and lod: full
+     meshes within 250 m, low-poly beyond, dithering out from 1150 m as the terrain raises the forest canopy
+     (`canopyLift`, by 3D distance, so from high up the canopy alone). Mid-range imposters will replace the low-poly
+     meshes once the imposter pipeline is a shared kit.
    - Then the **structures** (`vsStruct` / `fsStruct`): houses, a bus shelter, bridges, roads and the river's water in a
      village, and a town's central bus station, as flat-shaded triangles built on the CPU. Every building has an
      interior, glass windows and doors that open (see **Buildings**). They stand on `LandField.surface`, the same surface the

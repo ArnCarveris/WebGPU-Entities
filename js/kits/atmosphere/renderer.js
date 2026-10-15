@@ -10,7 +10,7 @@ const {
     MAX_CELLS, CELL_FLOATS, FAR_FLOATS, MAX_FAR_DYN, FAR_LAMP_H, FAR_LAMP_REACH, MAX_POLES, BLOOM_LEVELS,
     FrameBlock, WORLD_BINDINGS, BindingSet, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_SHADOW_SAMPLE, WGSL_SHELTER,
     WGSL_BUILDING, BUS_UNIFORM, wgslBus, WGSL_TERRAIN, WGSL_SCENE, WGSL_FINAL, WGSL_BLOOM, NoiseVolumes, shaderSource,
-    WeatherPass, GroundPass, FroxelPass, CloudPass,
+    WeatherPass, GroundPass, FroxelPass, CloudPass, VegetationPass, WGSL_FOREST, WGSL_VEG,
 } = kit;
 const { MAX_BOLT_SEGS } = kits.weather;
 const { STRUCT_FLOATS, BUILDING_FLOATS, STRUCT_COLORS, Structures } = kits.settlement;
@@ -31,7 +31,7 @@ class Renderer {
 
     async init() {
         this.device = this.fx.device;
-        this.profiler = new GpuProfiler(this.device, ['weather', 'ground', 'scene', 'froxel', 'tiles', 'march', 'resolve', 'bloom', 'final']);
+        this.profiler = new GpuProfiler(this.device, ['weather', 'ground', 'vegetation', 'scene', 'froxel', 'tiles', 'march', 'resolve', 'bloom', 'final']);
         this.format = this.fx.format;
         // the scene's depth: with a stencil when the device has one to share out (StencilLayout: the world-space GUIs'
         // masks), else depth only (the GUIs fall back to render targets)
@@ -96,7 +96,7 @@ class Renderer {
     createPipelines() {
         const d = this.device;
         this.screenLayout = bindLayout(d, GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, ['tex', 'tex', 'depth', 'tex']);
-        const scene = this.sceneModule = d.createShaderModule({ label: 'scene', code: shaderSource(this.worldSet, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_SHADOW_SAMPLE, WGSL_SHELTER, WGSL_BUILDING, WGSL_TERRAIN, wgslBus(1), WGSL_SCENE) });
+        const scene = this.sceneModule = d.createShaderModule({ label: 'scene', code: shaderSource(this.worldSet, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_SHADOW_SAMPLE, WGSL_SHELTER, WGSL_BUILDING, WGSL_TERRAIN, WGSL_FOREST, wgslBus(1), WGSL_SCENE, WGSL_VEG) });
         const final = d.createShaderModule({ label: 'final', code: shaderSource(this.worldSet, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_SHADOW_SAMPLE, WGSL_SHELTER, WGSL_BUILDING, WGSL_TERRAIN, wgslBus(2), WGSL_FINAL) });
         const layoutA = d.createPipelineLayout({ bindGroupLayouts: [this.worldSet.layout] });
         const layoutB = d.createPipelineLayout({ bindGroupLayouts: [this.worldSet.layout, this.screenLayout] });
@@ -265,10 +265,12 @@ class Renderer {
             clampSamp: this.clampSamp, cells: this.cellBuf, ground: this.groundPass.buffer, bolts: this.boltBuf, anvilTex: this.weatherPass.anvilView,
             layerTex: this.weatherPass.layerView, styleTex: this.weatherPass.styleView, occ: this.weatherPass.occ, buildings: this.buildingBuf,
         }, 'world');
+        // the plants (the scenario's terrain says vegetation: true), scattered each frame about the eye
+        this.vegetation?.destroy();
+        this.vegetation = world.terrain.vegetation ? new VegetationPass(this) : null;
+        if (this.vegetation) this.pVeg = this.vegetation.pipeline(this.sceneModule, [this.worldSet.layout, this.busLayout], 'rgba16float', this.depthFormat);
     }
 
-    // the bulk tiles in view this frame, neighbouring ones merged: [[first index, count], ...]. A tile's box reaches down by
-    // as much as the outdoors drawn curved lowers it at its far side (curveToRender), so no tile is culled where it shows
     // the terrain's nodes for this frame's eye (TerrainLod.select), written to terrainNodes: [quadrant (0 the whole
     // patch, q + 1 its quarter q), first instance, instances]
     terrainDraws() {
@@ -278,6 +280,8 @@ class Renderer {
         return L.draws;
     }
 
+    // the bulk tiles in view this frame, neighbouring ones merged: [[first index, count], ...]. A tile's box reaches down by
+    // as much as the outdoors drawn curved lowers it at its far side (curveToRender), so no tile is culled where it shows
     bulkDraws() {
         const F = this.frame.data, o = this.frame.offsets, planes = frustumPlanes(F.subarray(o.viewProj, o.viewProj + 16), { reversed: true });
         const cam = [F[o.cam], F[o.cam + 1], F[o.cam + 2]], R = F[o.curve + 3] || 6371000, out = [];
@@ -434,6 +438,7 @@ class Renderer {
         this.gui.prepare(enc, this.panelDraws, Fd.subarray(fo.viewProj, fo.viewProj + 16), 0.9 / Math.max(Fd[fo.sunCol + 3], 0.2));
         this.weatherPass.encode(enc, probeTexel, prof, shadowSlices);
         this.groundPass.encode(enc, prof);
+        this.vegetation?.encode(enc, prof);
 
         const a = enc.beginRenderPass({
             label: 'scene', timestampWrites: prof.writes('scene'),
@@ -467,6 +472,7 @@ class Renderer {
             a.setIndexBuffer(this.bulkI, 'uint32');
             for (const [first, count] of this.bulkDraws()) a.drawIndexed(count, 1, first);
         }
+        if (this.vegetation) this.vegetation.draw(a, this.pVeg, this.busGroup);
         if (this.busDraws.length) {
             a.setPipeline(this.pBus);
             for (const k of this.busDraws) {
