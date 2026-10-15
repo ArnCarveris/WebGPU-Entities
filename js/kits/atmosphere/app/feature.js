@@ -55,7 +55,8 @@ class AtmosphereWorld extends FeatureWorld {
             name: w.scenario.name, fps: a.fps, paused: a.paused, time: a.time, weather: w.weather.target, light: a.lightName,
             rain: a.near.rain, snow: a.near.snow, inside: !!a.indoors || !!a.inBus || !!a.forceIndoors, sheltered: !!a.sheltered, inBus: !!a.inBus,
             walking: a.walker.active, wind: Math.hypot(c.wind[0], c.wind[1]), agl: cam[1] - w.field.surface(cam[0], cam[2]),
-            busDist: bd, busSpeed: bus ? bus.v : 0, riding: !!a.inBus && a.rideBus === bus,
+            busDist: bd, busSpeed: bus ? Math.abs(bus.v) : 0, riding: !!a.inBus && a.rideBus === bus,
+            busLoad: bus?.load ?? 0, busBraking: !!bus?.braking && Math.abs(bus.v) > 0.5, driving: !!a.drive?.active,
             temperature: c.temperature, coverage: c.coverage, flashes: w.flashCount, veil: a.flashVeil,
         };
         for (const x of a.extensions) x.stats?.(out);

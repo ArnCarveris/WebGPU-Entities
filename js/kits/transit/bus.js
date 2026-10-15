@@ -59,7 +59,7 @@ function busTypes(Base) {
             // the driver's seat (a seat as the Walker takes one: its eye in the bus's frame; its name the prompt while
             // seated in it), and where its driver gets out: by the front door, outside
             const bus = this;
-            this.driverSeat = { x: BUS.hl - 1.1, z: -0.72, eye: [BUS.hl - 1.1, 2.05, -0.72],
+            this.driverSeat = { x: BUS.hl - 1.1, z: -0.72, eye: [BUS.hl - 1.1, BUS.floor + 1.25, -0.72],
                 get name() { return `at the wheel of ${bus.label} · ${(Math.abs(bus.v) * 3.6).toFixed(0)} km/h · W S A D drive · Space brake · F get out`; } };
             this.exitSpot = [BUS.bay0 + (BUS.doorBays[0] + 0.5) * BUS.bay, 0, BUS.hw + 1.2];
             this.place();
@@ -112,8 +112,15 @@ function busTypes(Base) {
         board(app, spot) {
             const wk = app.walker, cam = app.camera;
             if (spot === 'seat') { wk.sit(app, this); wk.eye(app); return; }
+            if (spot === 'wheel' && app.drive) { app.drive.take(this); return; }
             const doorX = BUS.bay0 + (BUS.doorBays[0] + 0.5) * BUS.bay;
-            if (this.mode === 'dwell') {
+            if (this.free === 'parked') {
+                // parked (its doors shut): a few steps back from its door side, looking at its front half
+                const p = this.toWorld([doorX + 2, 0, BUS.hw + 2.2]);
+                wk.place(app, p[0], p[2], p[1]);
+                wk.eye(app);
+                cam.lookAt(this.toWorld([1.5, 1.4, 0]));
+            } else if (this.mode === 'dwell') {
                 const p = this.toWorld([doorX, 0, BUS.hw + 1.2]);
                 wk.place(app, p[0], p[2], p[1]);
                 wk.eye(app);
@@ -302,8 +309,11 @@ function busTypes(Base) {
     // `fleet` buses (default: the station's `buses`, which then all run the line) leave the station at even intervals round
     // the trip, and none closes up to within a few metres of the one ahead. The first is `label` in `livery`, the others are
     // numbered after it in the station's liveries. A bus can be walked into (Walker): its floor, walls, seats and doors are
-    // colliders in its frame. Viewpoint (`spot`): "seat" (seated aboard the first bus). The route, its stops and speed limits
-    // are built here; running the buses round it is the line's (kits.transit's TransitLine, `line`).
+    // colliders in its frame. Viewpoints (`spot`): "seat" (seated aboard the first bus), "door" (by its door, or aboard
+    // while it drives), "wheel" (at its wheel: the app's DriveControl). The route, its stops and speed limits are built
+    // here; running the buses round it is the line's (kits.transit's TransitLine, `line`).
+    // Without `from` and `to`: one bus parked at `pos` [x, z] heading `yaw` degrees (0 along +x, 90 along +z), on no line,
+    // there to be driven (F) and left where it was driven to.
     class BusLine extends Base {
         constructor(def, world) {
             super(def, world);
@@ -318,6 +328,7 @@ function busTypes(Base) {
         board(app, spot) { this.buses[0]?.board(app, spot); }
 
         build(S) {
+            if (!this.def.from && !this.def.to && this.def.pos) return this.parked(S);
             const d = this.def, st = this.world.get(d.from), vil = this.world.get(d.to);
             const W = st?.busWay, V = vil?.road;
             if (!W || !V) throw new Error('bus: `from` must be a busStation and `to` a village');
@@ -400,7 +411,24 @@ function busTypes(Base) {
             this.world.buses.forEach((b, k) => { b.slot = k; });     // its slot in the renderer's bus uniforms
         }
 
-        update(dt) { this.line.update(dt * (this.world.busBoost || 1)); }
+        // one bus parked at pos, heading yaw: its line a stand-in (it never runs it), from where it stands
+        parked(S) {
+            const d = this.def, [x, z] = d.pos, a = (d.yaw || 0) * DEG, cs = Math.cos(a), sn = Math.sin(a);
+            const at = s => [x + cs * s, S.ground(x + cs * s, z + sn * s) + 0.14, z + sn * s];
+            this.line = { at, dwell: [0], stops: [0], names: [], route: {}, vehicles: [], len: 1, toStop: () => 0, update() {} };
+            const bus = new Bus(this.line, this.label || 'Bus', d.livery || [0.12, 0.36, 0.62], this.world);
+            bus.park(x, z, cs, sn);
+            this.buses = [bus];
+            S.boxes.list.push(bus.box);
+            S.interiors.add(bus.interior);
+            this.world.buses.push(bus);
+            this.world.buses.forEach((b, k) => { b.slot = k; });
+        }
+
+        update(dt) {
+            if (this.line.vehicles.length) this.line.update(dt * (this.world.busBoost || 1));
+            else for (const b of this.buses) b.step(dt);
+        }
     }
 
     return { Bus, BusLine };

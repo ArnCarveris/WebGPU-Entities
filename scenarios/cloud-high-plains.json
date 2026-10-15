@@ -190,18 +190,11 @@
         {"type":"sound.bed","id":"wind","source":"brown","filters":[["bandpass",350,0.9]],"smooth":0.6,
             "gain":"(clamp(cloud.wind / 25) * 0.12 * (0.6 + 0.4 * smoothstep(0, 400, cloud.agl)) * (0.7 + 0.3 * sin(cloud.time * 0.37) * sin(cloud.time * 0.13 + 1.3)) + smoothstep(200, 3000, cloud.agl) * 0.05) * (cloud.inside ? 0.15 : 1)",
             "filter":[0,"250 + 300 * (0.7 + 0.3 * sin(cloud.time * 0.37) * sin(cloud.time * 0.13 + 1.3)) + cloud.wind * 6"]},
-        {"type":"sound.bed","id":"bus-rumble","source":"brown","filters":[["lowpass",220,0.7]],"smooth":0.25,
-            "gain":"(cloud.riding ? 0.35 : cloud.busDist < 300 ? 0.5 / (1 + cloud.busDist / 12) : 0) * (0.55 + 0.45 * clamp(cloud.busSpeed / 12))"},
-        {"type":"sound.bed","id":"bus-engine","source":"osc","wave":"sawtooth","freq":32,"filters":[["lowpass",260,0.7],["lowpass",220,0.7]],"smooth":0.3,
-            "gain":"0.35 * (cloud.riding ? 0.35 : cloud.busDist < 300 ? 0.5 / (1 + cloud.busDist / 12) : 0) * (0.55 + 0.45 * clamp(cloud.busSpeed / 12))",
-            "pitch":"30 + cloud.busSpeed * 3.2"},
+        {"$comment":"the buses' engines, tyres, brakes and doors (shared)","type":"include","scenario":"sounds/bus"},
         {"type":"sound.cue","on":"thunder","parts":[{"thunder":{"near":"near","far":"far","bolt":"bolt"}}]},
         {"type":"sound.cue","on":"door","when":"dist < 40","parts":[
             {"shot":{"source":"white","filter":"bandpass","freq":"open ? 500 : 900","q":12,"env":[[0.05,"0.15 / (1 + dist / 4)"],[0.5,"0.1 / (1 + dist / 4)"],[0.7,0]],"sweep":["open ? 900 : 450",0.7]}},
             {"shot":{"source":"brown","filter":"lowpass","freq":160,"q":1,"env":[[0.01,"open ? 0 : 0.625 / (1 + dist / 4)"],[0.25,0]]},"delay":0.75}]},
-        {"type":"sound.cue","on":"busDoor","when":"dist < 80","parts":[
-            {"shot":{"source":"white","filter":"highpass","freq":3000,"q":0.7,"env":[[0.03,"0.35 / (1 + dist / 5)"],[0.5,"0.175 / (1 + dist / 5)"],[0.9,0]]}},
-            {"shot":{"source":"brown","filter":"lowpass","freq":140,"q":1,"env":[[0.01,"0.525 / (1 + dist / 5)"],[0.2,0]]},"delay":0.9}]},
         {"type":"sound.cue","on":"liftButton","parts":[
             {"shot":{"source":"white","filter":"bandpass","freq":2600,"q":40,"env":[[0.005,0.12],[0.09,0]]}}]},
         {"type":"sound.cue","on":"step","parts":[

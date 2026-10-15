@@ -173,6 +173,12 @@ class LineVehicle {
     // its axle `a` m along it, on the ground: [x, y, z]
     axle(a) { const x = this.fx + this.dir[0] * a, z = this.fz + this.dir[1] * a; return [x, this.groundAt(x, z, this.pose?.y ?? 0), z]; }
 
+    // parked at x, z heading cs, sn (a vehicle that has no line to run: its line a stand-in)
+    park(x, z, cs, sn) {
+        Object.assign(this, { free: 'parked', control: null, fx: x, fz: z, dir: [cs, sn], wheel: 0, v: 0, mode: 'drive' });
+        this.place();
+    }
+
     // a player takes the wheel where it is
     takeWheel() {
         const p = this.pose;
@@ -212,13 +218,21 @@ class LineVehicle {
         else if (throttle < 0) this.v = v > 0.1 ? Math.max(v - D.brake * -throttle * dt, 0) : Math.max(v - D.accel * 0.6 * -throttle * dt, -D.reverse);
         else this.v = Math.sign(v) * Math.max(Math.abs(v) - 0.4 * dt, 0);
         this.braking = !!brake || (throttle < 0 && v > 0.1);
+        this.load = this.braking ? 0 : Math.abs(throttle);
         // the wheels turn toward the steer, less at speed; a bicycle about the rear axle (+ steers toward +z, its right)
         const target = steer * D.steer / (1 + (this.v / 12) ** 2);
         this.wheel += clamp(target - this.wheel, -D.steerRate * dt, D.steerRate * dt);
         const h = Math.atan2(this.dir[1], this.dir[0]) + this.v / (K.axleF - K.axleR) * Math.tan(this.wheel) * dt;
         const dir = [Math.cos(h), Math.sin(h)], rx = this.fx + this.dir[0] * K.axleR + dir[0] * this.v * dt, rz = this.fz + this.dir[1] * K.axleR + dir[1] * this.v * dt;
-        const nx = rx - dir[0] * K.axleR, nz = rz - dir[1] * K.axleR;
-        if (this.blocked(nx, nz, dir[0], dir[1], this.pose.y)) { this.v = -this.v * 0.2; return; }      // bumped into something
+        const nx = rx - dir[0] * K.axleR, nz = rz - dir[1] * K.axleR, y = this.pose.y;
+        // the turn would swing it into something: straight on if that is clear, else it bumps (already touching it,
+        // it may move out)
+        if (this.blocked(nx, nz, dir[0], dir[1], y) && !this.blocked(this.fx, this.fz, this.dir[0], this.dir[1], y)) {
+            const sx = this.fx + this.dir[0] * this.v * dt, sz = this.fz + this.dir[1] * this.v * dt;
+            if (this.blocked(sx, sz, this.dir[0], this.dir[1], y)) { if (Math.abs(this.v) > 0.5) this.bumped = Math.abs(this.v); this.v = -this.v * 0.2; return; }   // (bumped: m/s, its sound)
+            Object.assign(this, { fx: sx, fz: sz });
+            return;
+        }
         Object.assign(this, { fx: nx, fz: nz, dir });
     }
 
@@ -236,10 +250,11 @@ class LineVehicle {
             const left = L.toStop(this.s, this.stop) || L.len, clear = Math.max(room - K.gap, 0);
             const vt = Math.min(L.limit(this.s), Math.sqrt(2 * K.brake * Math.max(left - K.stopMargin, 0)), Math.sqrt(2 * K.brake * clear));
             this.braking = vt < this.v - 0.05;
+            this.load = vt > this.v + 0.05 ? 1 : this.braking ? 0 : 0.4;       // how hard its engine works (its sounds)
             this.v = vt >= this.v ? Math.min(vt, this.v + K.accel * dt) : K.maxDecel === Infinity ? vt : Math.max(vt, this.v - K.maxDecel * dt);
             const ds = Math.min(this.v * dt, left, clear);
             this.s = (this.s + ds) % L.len;
-            if (left - ds < K.arrive) { this.s = L.stops[this.stop]; this.v = 0; this.mode = 'dwell'; this.clock = L.dwell[this.stop]; }
+            if (left - ds < K.arrive) { this.s = L.stops[this.stop]; this.v = 0; this.mode = 'dwell'; this.clock = L.dwell[this.stop]; this.load = 0; }
         }
         // the doors open once it stands, and close doorLead s before it leaves
         if (K.doors) {
