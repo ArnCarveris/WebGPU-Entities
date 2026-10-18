@@ -2,12 +2,12 @@
 // The renderer: culling, shadows, meshes, imposters and the overlay.
 
 Features.part('imposter', (engine, feature) => {
-const { Common } = engine;
+const { Common, kits } = engine;
 const { DEG, clamp, lerp, v3, frustumPlanes } = Common;
+const { ImposterGpu, MESH_BUFFERS, drawImposters } = kits.imposter;
 const {
-    MSAA, DEPTH_FORMAT, BAKE_DEPTH_FORMAT, ALBEDO_FORMAT, NORMAL_FORMAT, EMISSIVE_FORMAT, CASCADES, SHADOW_FLOATS,
-    LISTS, CHEAP_CASCADE, VF, GLOBAL_FLOATS, LOD_MODES, ATLAS_VIEWS, m4, TextureFactory, uploadImage, WGSL_SKY,
-    WGSL_MESH, WGSL_BAKE, WGSL_AO, WGSL_MIP, WGSL_CULL, WGSL_IMPOSTER, WGSL_OVERLAY, atlasLayers,
+    MSAA, DEPTH_FORMAT, CASCADES, SHADOW_FLOATS, LISTS, CHEAP_CASCADE, GLOBAL_FLOATS, LOD_MODES, ATLAS_VIEWS, m4,
+    TextureFactory, uploadImage, WGSL_SKY, WGSL_MESH, WGSL_CULL, WGSL_IMPOSTER, WGSL_OVERLAY,
 } = feature;
 
 class Renderer {
@@ -45,35 +45,21 @@ class Renderer {
         this.clampSampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear' });
         this.whiteTexture = device.createTexture({ size: [1, 1], format: 'rgba8unorm-srgb', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
         device.queue.writeTexture({ texture: this.whiteTexture }, new Uint8Array([255, 255, 255, 255]), { bytesPerRow: 4 }, [1, 1]);
-        this.blackTexture = device.createTexture({ size: [1, 1], format: EMISSIVE_FORMAT, usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST });
-        device.queue.writeTexture({ texture: this.blackTexture }, new Uint8Array([0, 0, 0, 255]), { bytesPerRow: 4 }, [1, 1]);
+        // the imposter kit's layouts: atlases, instance lists, LOD list culling (and its bakes)
+        const imp = this.imposters = ImposterGpu.of(device);
+        this.overlayBGs = new WeakMap();
 
         const tex = (binding, visibility = S.FRAGMENT) => ({ binding, visibility, texture: {} });
         const smp = binding => ({ binding, visibility: S.FRAGMENT, sampler: {} });
         this.bgl0 = device.createBindGroupLayout({ entries: [
-            { binding: 0, visibility: S.VERTEX | S.FRAGMENT | S.COMPUTE, buffer: { type: 'uniform' } }, smp(1), smp(2),
+            { binding: 0, visibility: S.VERTEX | S.FRAGMENT | S.COMPUTE, buffer: { type: 'uniform' } }, smp(1),
             { binding: 3, visibility: S.VERTEX | S.FRAGMENT | S.COMPUTE, buffer: { type: 'uniform' } },
             { binding: 4, visibility: S.FRAGMENT, texture: { sampleType: 'depth', viewDimension: '2d-array' } },
             { binding: 5, visibility: S.FRAGMENT, sampler: { type: 'comparison' } },
         ] });
         this.viewBgl = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: S.VERTEX | S.FRAGMENT, buffer: { type: 'uniform', hasDynamicOffset: true, minBindingSize: 96 } }] });
         this.matBgl = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: S.VERTEX | S.FRAGMENT, buffer: { type: 'uniform' } }, tex(1)] });
-        this.instBgl = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: S.VERTEX, buffer: { type: 'read-only-storage' } }] });
-        this.impBgl = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: S.VERTEX | S.FRAGMENT, buffer: { type: 'uniform' } }, tex(1), tex(2), tex(3), tex(4)] });
-        this.cullBgl = device.createBindGroupLayout({ entries: [
-            { binding: 0, visibility: S.COMPUTE, buffer: { type: 'uniform' } }, { binding: 1, visibility: S.COMPUTE, buffer: { type: 'read-only-storage' } },
-            { binding: 2, visibility: S.COMPUTE, buffer: { type: 'storage' } }, { binding: 3, visibility: S.COMPUTE, buffer: { type: 'storage' } },
-            { binding: 4, visibility: S.COMPUTE, buffer: { type: 'storage' } },
-        ] });
-        this.bakeBgl = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: S.VERTEX | S.FRAGMENT, buffer: { type: 'uniform', hasDynamicOffset: true, minBindingSize: 96 } }, smp(1)] });
-        this.mipBgl = device.createBindGroupLayout({ entries: [tex(0), smp(1)] });
         this.ovBgl = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: S.VERTEX | S.FRAGMENT, buffer: { type: 'uniform' } }, smp(1), tex(2), tex(3), tex(4), tex(5)] });
-        this.aoBgl = device.createBindGroupLayout({ entries: [
-            { binding: 0, visibility: S.COMPUTE, buffer: { type: 'uniform' } }, { binding: 1, visibility: S.COMPUTE, buffer: { type: 'read-only-storage' } },
-            { binding: 2, visibility: S.COMPUTE, buffer: { type: 'read-only-storage' } },
-            { binding: 3, visibility: S.COMPUTE, texture: { sampleType: 'depth', viewDimension: '2d-array' } },
-            { binding: 4, visibility: S.COMPUTE, buffer: { type: 'storage' } },
-        ] });
         this.shadowBuf = device.createBuffer({ size: SHADOW_FLOATS * 4, usage: U.UNIFORM | U.COPY_DST });
         this.shadowData = new Float32Array(SHADOW_FLOATS);
         this.viewBuf = device.createBuffer({ size: LISTS * 256, usage: U.UNIFORM | U.COPY_DST });
@@ -87,14 +73,11 @@ class Renderer {
 
         const layout = (...bgls) => device.createPipelineLayout({ bindGroupLayouts: bgls });
         const mod = code => device.createShaderModule({ code });
-        const vertexLayout = [{ arrayStride: VF * 4, attributes: [
-            { shaderLocation: 0, offset: 0, format: 'float32x3' }, { shaderLocation: 1, offset: 12, format: 'float32x3' },
-            { shaderLocation: 2, offset: 24, format: 'float32x2' }, { shaderLocation: 3, offset: 32, format: 'float32x3' },
-        ] }, { arrayStride: 4, attributes: [{ shaderLocation: 4, offset: 0, format: 'float32' }] }];      // + per-vertex AO
+        const vertexLayout = MESH_BUFFERS;          // the imposter kit's standard mesh: + per-vertex AO
         const mainDepth = (write, compare) => ({ format: DEPTH_FORMAT, depthWriteEnabled: write, depthCompare: compare });
         const target = [{ format: this.format }], ms = { count: MSAA }, a2c = { count: MSAA, alphaToCoverageEnabled: true };
 
-        const meshMod = mod(WGSL_MESH), meshLayout = layout(this.bgl0, this.matBgl, this.instBgl, this.viewBgl);
+        const meshMod = mod(WGSL_MESH), meshLayout = layout(this.bgl0, this.matBgl, imp.instanceLayout, this.viewBgl);
         const mesh = cullMode => device.createRenderPipeline({
             layout: meshLayout,
             vertex: { module: meshMod, entryPoint: 'vs', buffers: vertexLayout },
@@ -120,7 +103,7 @@ class Renderer {
             depthStencil: shadowDepth(2),
         });
 
-        const impMod = mod(WGSL_IMPOSTER), impLayout = layout(this.bgl0, this.impBgl, this.instBgl, this.viewBgl);
+        const impMod = mod(WGSL_IMPOSTER), impLayout = layout(this.bgl0, imp.atlasLayout, imp.instanceLayout, this.viewBgl);
         this.shadowImpPipe = device.createRenderPipeline({
             layout: impLayout,
             vertex: { module: impMod, entryPoint: 'vs' },
@@ -158,39 +141,14 @@ class Renderer {
         });
 
         const cullMod = mod(WGSL_CULL);
-        this.cullPipe = device.createComputePipeline({ layout: layout(this.bgl0, this.cullBgl), compute: { module: cullMod, entryPoint: 'cull' } });
+        this.cullPipe = device.createComputePipeline({ layout: layout(this.bgl0, imp.listsLayout), compute: { module: cullMod, entryPoint: 'cull' } });
 
-        const mipMod = mod(WGSL_MIP), mipLayout = layout(this.mipBgl);
-        const mip = format => device.createRenderPipeline({
-            layout: mipLayout, vertex: { module: mipMod, entryPoint: 'vs' }, fragment: { module: mipMod, entryPoint: 'fs', targets: [{ format }] },
-            primitive: { topology: 'triangle-list' },
-        });
-        this.mipAlbedo = mip(ALBEDO_FORMAT);
-        this.mipNormal = mip(NORMAL_FORMAT);
-
-        const bakeMod = mod(WGSL_BAKE), bakeLayout = layout(this.bakeBgl, this.matBgl);
-        const bake = (emissive, cullMode) => device.createRenderPipeline({
-            layout: bakeLayout,
-            vertex: { module: bakeMod, entryPoint: 'vs', buffers: vertexLayout },
-            fragment: { module: bakeMod, entryPoint: 'fs', targets: atlasLayers(this, emissive).map(([, format]) => ({ format })) },
-            primitive: { topology: 'triangle-list', cullMode, frontFace: 'ccw' },
-            depthStencil: { format: BAKE_DEPTH_FORMAT, depthWriteEnabled: true, depthCompare: 'less' }, multisample: ms,
-        });
-        this.bakePipes = [false, true].map(e => [bake(e, 'back'), bake(e, 'none')]);        // [emissive][two-sided]
-        this.aoDepthPipe = device.createRenderPipeline({
-            layout: bakeLayout,
-            vertex: { module: bakeMod, entryPoint: 'vs', buffers: vertexLayout },
-            fragment: { module: bakeMod, entryPoint: 'fsDepth', targets: [] },
-            primitive: { topology: 'triangle-list', cullMode: 'none' },
-            depthStencil: { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'less' },
-        });
-        this.aoPipe = device.createComputePipeline({ layout: layout(this.aoBgl), compute: { module: mod(WGSL_AO), entryPoint: 'main' } });
         this.resize();
     }
 
     makeGlobalBG(shadowTex) {
         return this.device.createBindGroup({ layout: this.bgl0, entries: [
-            { binding: 0, resource: { buffer: this.globalBuf } }, { binding: 1, resource: this.repSampler }, { binding: 2, resource: this.clampSampler },
+            { binding: 0, resource: { buffer: this.globalBuf } }, { binding: 1, resource: this.repSampler },
             { binding: 3, resource: { buffer: this.shadowBuf } }, { binding: 4, resource: shadowTex.createView({ dimension: '2d-array' }) },
             { binding: 5, resource: this.shadowSampler },
         ] });
@@ -299,6 +257,15 @@ class Renderer {
         this.viewData.set([...cam.pos, 1, ...cam.basis().fwd, 0], 16);
     }
 
+    // the atlas overlay's bind group for an atlas (its layers through the kit's ImposterAtlas.views)
+    overlayBG(atlas) {
+        let bg = this.overlayBGs.get(atlas);
+        if (!bg) this.overlayBGs.set(atlas, bg = this.device.createBindGroup({ layout: this.ovBgl, entries: [
+            { binding: 0, resource: { buffer: this.overlayBuf } }, { binding: 1, resource: this.clampSampler }, ...atlas.views.map((v, i) => ({ binding: i + 2, resource: v })),
+        ] }));
+        return bg;
+    }
+
     stamps(i) { return this.querySet ? { querySet: this.querySet, beginningOfPassWriteIndex: i, endOfPassWriteIndex: i + 1 } : undefined; }
 
     // is a static archetype's bounding sphere inside list `list`'s volume (camera frustum + far, or a cascade box)
@@ -320,25 +287,23 @@ class Renderer {
                 if (list) a.cpuCasters += seen ? 1 : 0; else a.visible[0] = seen ? 1 : 0;
                 if (!seen) continue;
             }
-            const gm = a.asset.gpu(this), base = list * a.setStride;
+            const gm = a.asset.gpu(this), L = a.lists;
             pass.setVertexBuffer(0, gm.vbuf);
             pass.setVertexBuffer(1, gm.aoBuf);
             pass.setIndexBuffer(gm.ibuf, 'uint32');
-            pass.setBindGroup(2, a.static ? a.srcBG : a.meshBG[list]);
+            pass.setBindGroup(2, a.static ? L.srcBG : L.meshBG[list]);
             a.asset.mesh.submeshes.forEach((s, i) => {
                 const p = meshPipe(s.material);
                 if (p !== cur) { pass.setPipeline(p); cur = p; }
                 pass.setBindGroup(1, s.material.bindGroup(this));
                 if (a.static) pass.drawIndexed(s.count, a.count, s.first, 0, 0);
-                else pass.drawIndexedIndirect(a.args, base + 16 + 20 * i);
+                else pass.drawIndexedIndirect(L.args, L.meshArgs(list, i));
             });
         }
         pass.setPipeline(impPipe);
         for (const a of archs) {
             if (!a.count || a.static || !a.asset.atlas || (shadow && !a.asset.castShadows)) continue;
-            pass.setBindGroup(1, a.asset.atlas.bg);
-            pass.setBindGroup(2, a.impBG[list]);
-            pass.drawIndirect(a.args, list * a.setStride);
+            drawImposters(pass, a.asset.atlas, a.lists.impBG[list], a.lists.args, a.lists.impArgs(list));
         }
     }
 
@@ -356,20 +321,20 @@ class Renderer {
             const cp = enc.beginComputePass({ timestampWrites: this.stamps(0) });
             cp.setPipeline(this.cullPipe);
             cp.setBindGroup(0, this.globalBG);
-            for (const a of archs) if (a.count && !a.static) { cp.setBindGroup(1, a.cullBG); cp.dispatchWorkgroups(Math.ceil(a.count / 64)); }
+            for (const a of archs) if (a.count && !a.static) { cp.setBindGroup(1, a.lists.cullBG); cp.dispatchWorkgroups(Math.ceil(a.count / 64)); }
             cp.end();
         }
         // a few times a second: copy the indirect args back for the HUD's counts
         const doRead = archs.length > 0 && !this.readPending && time - this.lastRead > 0.25;
         const offsets = [];
         let readBytes = 0;
-        for (const a of archs) { offsets.push(readBytes); readBytes += a.static ? 0 : a.setStride * LISTS; }
+        for (const a of archs) { offsets.push(readBytes); readBytes += a.static ? 0 : a.lists.setStride * LISTS; }
         if (doRead) {
             if (!this.readBuf || this.readBuf.size < readBytes) {
                 this.readBuf?.destroy();
                 this.readBuf = d.createBuffer({ size: readBytes * 2, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
             }
-            archs.forEach((a, i) => { if (!a.static) enc.copyBufferToBuffer(a.args, 0, this.readBuf, offsets[i], a.setStride * LISTS); });
+            archs.forEach((a, i) => { if (!a.static) enc.copyBufferToBuffer(a.lists.args, 0, this.readBuf, offsets[i], a.lists.setStride * LISTS); });
         }
 
         if (st.shadows && archs.length) for (let c = 0; c < CASCADES; c++) {
@@ -402,7 +367,7 @@ class Renderer {
                 ...s.cells[0], ...s.cells[1], ...s.cells[2], overlay.atlas.grid, ATLAS_VIEWS.indexOf(overlay.view), ...s.w, 0,
             ]));
             pass.setPipeline(this.ovPipe);
-            pass.setBindGroup(0, overlay.atlas.overlayBG);
+            pass.setBindGroup(0, this.overlayBG(overlay.atlas));
             pass.draw(6);
         }
         pass.end();
@@ -431,8 +396,7 @@ class Renderer {
                 const u = new Uint32Array(buf.getMappedRange(0, n));
                 list.forEach((a, i) => {
                     if (a.static) return;
-                    const words = a.setStride / 4, subs = a.asset.mesh.submeshes.length;
-                    const count = (k, mesh) => u[offsets[i] / 4 + k * words + (mesh ? 5 : 1)] * (mesh ? (subs ? 1 : 0) : 1);
+                    const count = (k, mesh) => a.lists.counted(u, offsets[i] / 4, k, mesh);
                     a.visible[0] = count(0, true);
                     a.visible[1] = count(0, false);
                     a.casters = [0, 0];

@@ -17,8 +17,9 @@
 // into a mesh list and an imposter list (with a dithered cross-fade band) that feed indirect draws, plus
 // caster lists for 4 cascaded shadow maps, into which imposters render their reconstructed depth.
 //
-// Sections: config, math, noise, octahedral mapping | textures, materials, geometry, models, loaders |
-// WGSL, GPU mesh, baker, renderer | archetypes, entities, world | camera, input, HUD, panel, game | main
+// Sections: config, math, noise | textures, materials, geometry, models, loaders | WGSL, GPU mesh, renderer |
+// archetypes, entities, world | camera, input, HUD, panel, game | main. The octahedral mapping, atlas, baker, imposter
+// WGSL and LOD lists are the imposter kit's (js/kits/imposter/, docs/imposter.md).
 
 Features.part('imposter', (engine, feature) => {
 const { Common, kits } = engine;

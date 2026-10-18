@@ -2,7 +2,8 @@
 // Models: a model's mesh, GPU buffers and imposter atlas, and the library that builds them.
 
 Features.part('imposter', (engine, feature) => {
-const { Common } = engine;
+const { Common, kits } = engine;
+const { meshSource } = kits.imposter;
 const { clamp } = Common;
 const { lin, m4, Material, SHAPES, MeshBuilder, GpuMesh } = feature;
 
@@ -23,6 +24,9 @@ class ModelAsset {
     }
 
     gpu(r) { return this.gpuMesh || (this.gpuMesh = new GpuMesh(r, this.mesh, this.settings.ao || 0)); }
+
+    // what the imposter kit's baker renders: the GPU mesh as its standard mesh, with this model's emission
+    bakeSource(r) { return meshSource(r.device, { ...this.gpu(r).standard(r, this.mesh), emissive: this.emissive }); }
 
     destroy() {
         this.gpuMesh?.destroy(); this.gpuMesh = null;

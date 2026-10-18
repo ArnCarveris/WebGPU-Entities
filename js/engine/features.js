@@ -45,6 +45,9 @@ const Features = {
         curvature: { parts: ['curvature'] },
         // a real place (tools/geo-import.mjs's data, ScenarioData): its ground, roads, buildings and place names as entities
         geo: { uses: ['noise', 'world', 'mesh', 'terrain'], parts: ['data', 'curves', 'roads', 'buildings', 'types'] },
+        // octahedral imposters for any renderer: bake a mesh into a light-agnostic G-buffer atlas, draw instances as
+        // imposters from it (WGSL pieces), cull them into LOD lists feeding indirect draws (docs/imposter.md)
+        imposter: { parts: ['octahedral', 'atlas', 'shaders', 'gpu', 'baker', 'lists'] },
         gpu: { parts: ['stencil', 'pipelines', 'extensions', 'lines', 'half', 'profiler', 'dynamic-scale'] },
         gui: {
             uses: ['noise', 'gpu'],
@@ -77,7 +80,7 @@ const Features = {
     USES: {
         water: ['noise', 'view', 'world', 'terrain', 'hydrology'],
         origin: ['noise', 'world', 'entities'],
-        imposter: ['noise', 'view', 'world', 'terrain', 'entities'],
+        imposter: ['noise', 'view', 'world', 'terrain', 'entities', 'imposter'],
         portal: ['noise', 'view', 'world', 'mesh', 'entities', 'interior', 'transit', 'building', 'gpu', 'gui'],
         gui: ['noise', 'view', 'world', 'entities', 'interior', 'gpu', 'gui'],
     },
@@ -93,10 +96,9 @@ const Features = {
             'game/camera', 'game/hud', 'game/app', 'phone-pages', 'feature',
         ],
         imposter: [
-            'core/config', 'core/util', 'core/math', 'core/octahedral', 'assets/textures',
+            'core/config', 'core/util', 'core/math', 'assets/textures',
             'assets/materials', 'assets/geometry', 'gpu/mesh', 'assets/models', 'assets/loaders', 'shaders/common',
-            'shaders/mesh', 'shaders/bake', 'shaders/cull', 'shaders/imposter', 'shaders/overlay', 'gpu/atlas',
-            'gpu/baker', 'gpu/renderer', 'world/lighting', 'world/archetype', 'world/entities', 'world/world',
+            'shaders/mesh', 'shaders/cull', 'shaders/imposter', 'shaders/overlay', 'gpu/renderer', 'world/lighting', 'world/archetype', 'world/entities', 'world/world',
             'game/camera', 'game/hud', 'game/game', 'phone-pages', 'feature',
         ],
         portal: [

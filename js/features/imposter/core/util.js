@@ -2,7 +2,6 @@
 // Small helpers: yielding a frame, path names, colour conversion.
 
 Features.part('imposter', (engine, feature) => {
-const sgn = x => (x >= 0 ? 1 : -1);
 // yield to the browser (lets a toast paint); the timer covers background tabs, where rAF is paused
 const nextFrame = () => new Promise(r => { requestAnimationFrame(r); setTimeout(r, 50); });
 const basename = p => p.split(/[\\/]/).pop();
@@ -16,5 +15,5 @@ function hexToSrgb(h) {
 }
 const lin = h => srgbToLinear(hexToSrgb(h));
 
-return { sgn, nextFrame, basename, srgbToLinear, lin };
+return { nextFrame, basename, srgbToLinear, lin };
 });

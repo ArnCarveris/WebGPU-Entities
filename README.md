@@ -229,6 +229,11 @@ js/kits/<kit>/              generic building blocks, not any one feature's (Feat
                             slots, resources, pipelines, commands) without touching it: portal's renderer takes
                             them (its GUI screens pass is one: render/gui-pass.js). Half floats (toHalf / fromHalf)
                             and GpuProfiler (GPU time per pass from timestamp queries)
+    imposter/               octahedral imposters for any renderer: ImposterBaker bakes a source (any mesh it can
+                            draw; meshSource for the standard mesh, bakeVertexAO) into a light-agnostic G-buffer
+                            ImposterAtlas; imposterWGSL (billboard, frame selection, reconstruction with parallax)
+                            and drawImposters draw instances from it; LodLists + lodListsWGSL cull instances into
+                            mesh / imposter lists feeding indirect draws (imposter; docs/imposter.md)
     gui/                    the Doom 3-style GUI toolkit (an engine kit: the handheld uses it): math, world
                             materials, meshes and GUI surfaces, WGSL, the Renderer (views, render targets, scene
                             passes; GUI surfaces reserve its "gui.surface" stencil slot), the font atlas, GuiModel +

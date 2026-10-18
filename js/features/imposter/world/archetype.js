@@ -4,12 +4,12 @@
 Features.part('imposter', (engine, feature) => {
 const { Common } = engine;
 const { v3 } = Common;
+const { LodLists } = engine.kits.imposter;
 const { LISTS, INSTANCE_FLOATS, INSTANCE_BYTES, quat } = feature;
 
-// Archetype: every instance of one ModelAsset in a world, and the GPU side of drawing them: source
-// instances, the culled mesh / imposter lists (LISTS of them: camera, then one per shadow cascade, each
-// `seg` instances long) and their indirect draw arguments (per list, `setStride` bytes: 0..15 imposter draw,
-// then one drawIndexedIndirect per submesh), whose instance counts the cull pass fills in.
+// Archetype: every instance of one ModelAsset in a world, and the GPU side of drawing them: the imposter kit's
+// LodLists (source instances, the culled mesh / imposter lists, LISTS of them: camera, then one per shadow cascade,
+// and their indirect draw arguments, whose instance counts the cull pass fills in).
 class Archetype {
     constructor(asset) {
         this.asset = asset;
@@ -43,57 +43,32 @@ class Archetype {
     }
 
     create(r) {
-        const d = r.device, U = GPUBufferUsage, bytes = Math.max(1, this.count) * INSTANCE_BYTES, subs = this.asset.mesh.submeshes;
+        const subs = this.asset.mesh.submeshes;
         this.data = new Float32Array(this.items);
         this.items = null;
-        this.seg = Math.max(16, Math.ceil(this.count / 16) * 16);      // 16 instances = 768 bytes: lists start 256-aligned
-        const listBytes = this.seg * INSTANCE_BYTES;
-        this.setStride = 16 + 20 * subs.length;
-        this.src = d.createBuffer({ size: bytes, usage: U.STORAGE | U.COPY_DST });
-        this.meshOut = d.createBuffer({ size: listBytes * LISTS, usage: U.STORAGE });
-        this.impOut = d.createBuffer({ size: listBytes * LISTS, usage: U.STORAGE });
-        this.args = d.createBuffer({ size: this.setStride * LISTS, usage: U.INDIRECT | U.STORAGE | U.COPY_SRC | U.COPY_DST });
-        this.params = d.createBuffer({ size: 48, usage: U.UNIFORM | U.COPY_DST });
-        const args = new Uint32Array(this.setStride / 4 * LISTS);
-        for (let k = 0, o = 0; k < LISTS; k++, o += this.setStride / 4) {
-            args[o] = 6;
-            subs.forEach((s, i) => { args[o + 4 + 5 * i] = s.count; args[o + 4 + 5 * i + 2] = s.first; });
-        }
-        this.argsTemplate = args;          // instance counts 0; written back every frame before culling
-        if (this.count) d.queue.writeBuffer(this.src, 0, this.data);
-        this.cullBG = d.createBindGroup({ layout: r.cullBgl, entries: [
-            { binding: 0, resource: { buffer: this.params } }, { binding: 1, resource: { buffer: this.src } },
-            { binding: 2, resource: { buffer: this.meshOut } }, { binding: 3, resource: { buffer: this.impOut } },
-            { binding: 4, resource: { buffer: this.args } },
-        ] });
-        const list = (buffer, k) => d.createBindGroup({ layout: r.instBgl, entries: [{ binding: 0, resource: { buffer, offset: k * listBytes, size: listBytes } }] });
-        this.meshBG = Array.from({ length: LISTS }, (_, k) => list(this.meshOut, k));
-        this.srcBG = d.createBindGroup({ layout: r.instBgl, entries: [{ binding: 0, resource: { buffer: this.src } }] });
+        this.lists = new LodLists(r.device, { count: this.count, instanceBytes: INSTANCE_BYTES, submeshes: subs, lists: LISTS });
+        if (this.count) r.device.queue.writeBuffer(this.lists.src, 0, this.data);
         // world-space bounding sphere of a static archetype (its instances do not move)
         const m = this.asset.mesh, inst = this.count ? this.instance(0) : null;
         this.sphere = inst ? [v3.add(inst.pos, quat.rotate(inst.rot, v3.mul(m.center, inst.scale))), m.radius * inst.scale * (this.count > 1 ? 1e6 : 1)] : [[0, 0, 0], 0];
-        this.impBG = Array.from({ length: LISTS }, (_, k) => list(this.impOut, k));
     }
 
     upload(r) {
-        const d = r.device, a = this.asset;
+        const a = this.asset, L = this.lists;
         if (this.version !== a.version) {
             this.version = a.version;
-            const m = a.mesh, R = m.radius * 1.02, buf = new ArrayBuffer(48), u = new Uint32Array(buf), f = new Float32Array(buf);
-            u[0] = this.count; u[1] = a.atlas ? 1 : 0; f[2] = R; f[3] = R / 5 * a.lodBias;
-            f.set(m.center, 4);
-            u[8] = this.seg; u[9] = a.castShadows ? 1 : 0; u[10] = this.setStride / 4; u[11] = m.submeshes.length;
-            d.queue.writeBuffer(this.params, 0, buf);
+            const m = a.mesh, R = m.radius * 1.02;
+            L.writeParams({ hasImposter: !!a.atlas, radius: R, lodScale: R / 5 * a.lodBias, center: m.center, casts: a.castShadows });
         }
-        d.queue.writeBuffer(this.args, 0, this.argsTemplate);
+        L.reset();
         if (this.dirty) {
             const [i0, i1] = this.dirty;
-            d.queue.writeBuffer(this.src, i0 * INSTANCE_BYTES, this.data, i0 * INSTANCE_FLOATS, (i1 - i0 + 1) * INSTANCE_FLOATS);
+            r.device.queue.writeBuffer(L.src, i0 * INSTANCE_BYTES, this.data, i0 * INSTANCE_FLOATS, (i1 - i0 + 1) * INSTANCE_FLOATS);
             this.dirty = null;
         }
     }
 
-    destroy() { for (const b of [this.src, this.meshOut, this.impOut, this.args, this.params]) b?.destroy(); }
+    destroy() { this.lists?.destroy(); }
 }
 
 return { Archetype };

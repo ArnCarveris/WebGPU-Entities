@@ -34,7 +34,7 @@ and a field of copies is scattered around the valley (see `drop` below).
 
 ## How the imposter works
 
-**Bake** (`ImposterBaker`), once per model:
+**Bake** (`ImposterBaker`, the imposter kit's: [docs/imposter.md](../imposter.md)), once per model:
 
 1. The model's bounding sphere (centre, radius R) is the imposter's volume.
 2. For each frame (i, j) of an N x N grid, the direction is `octDecode((i, j) / (N - 1) * 2 - 1)`:
@@ -57,14 +57,14 @@ and a field of copies is scattered around the valley (see `drop` below).
 4. Each frame is resolved into a small cell texture and copied into its atlas cell. A box-filter mip
    chain follows, with cells kept at 8 px or more.
 
-**Ambient occlusion** (`GpuMesh.bakeAO`, `WGSL_AO`) is geometry only, so it bakes with the mesh:
+**Ambient occlusion** (the kit's `bakeVertexAO`, `WGSL_AO`) is geometry only, so it bakes with the mesh:
 
 1. Render the model's depth from 48 directions around it.
 2. A compute pass tests every vertex against those views, cosine-weighted around its normal.
 3. The result is a per-vertex AO buffer. Meshes read it as a vertex attribute and the imposter bake
    writes it into the surface layer, so both darken the same creases and canopy interiors.
 
-**Runtime** (`WGSL_IMPOSTER`), per instance:
+**Runtime** (`WGSL_IMPOSTER`, over the kit's `imposterWGSL`), per instance:
 
 1. **Vertex**:
    - A quad faces the camera and is sized to the silhouette cone of the bounding sphere, so it covers
@@ -89,7 +89,7 @@ and a field of copies is scattered around the valley (see `drop` below).
 4. **Pixel depth offset**: the blended hit points give the surface position. Its depth is written, so
    imposters intersect the terrain and each other correctly.
 
-**LOD and culling** (`WGSL_CULL`), one compute dispatch per model:
+**LOD and culling** (`WGSL_CULL`, over the kit's `LodLists` / `lodListsWGSL`), one compute dispatch per model:
 
 1. Pick mesh or imposter by camera distance. The switch distance is `lod.distance` per 5 m of bounding
    radius, times the model's `lodBias`.
@@ -134,6 +134,10 @@ The shadow maps are rebuilt every frame from the current sun, so they follow eve
 without any rebake.
 
 ## Layout (sections of the script in `index.html`)
+
+In WebGPU Entities the octahedral mapping, the atlas, the baker, the AO bake, the imposter WGSL and the LOD lists are
+the imposter kit's (`js/kits/imposter/`, [docs/imposter.md](../imposter.md)); the feature keeps its models, renderer,
+lighting, shadows and app.
 
 ```
 config, math, noise, Oct          constants, vectors / matrices / quaternions, value noise, octahedral mapping

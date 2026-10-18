@@ -2,11 +2,12 @@
 // The game: the frame loop, scenario loading, settings and imports.
 
 Features.part('imposter', (engine, feature) => {
-const { Common } = engine;
+const { Common, kits } = engine;
 const { lerp, v3, fmtK } = Common;
+const { Oct, ImposterBaker } = kits.imposter;
 const {
-    INSTANCE_FLOATS, FORCE, LOD_MODES, ATLAS_VIEWS, nextFrame, quat, Oct, ModelLibrary, GltfLoader, ObjLoader,
-    ImposterBaker, Renderer, Lighting, World, FlyCamera, InputSystem, Hud, ControlPanel,
+    INSTANCE_FLOATS, FORCE, LOD_MODES, ATLAS_VIEWS, nextFrame, quat, ModelLibrary, GltfLoader, ObjLoader,
+    Renderer, Lighting, World, FlyCamera, InputSystem, Hud, ControlPanel,
 } = feature;
 
 class Game {
@@ -41,7 +42,7 @@ class Game {
     // the world loads (and bakes) while frames already run
     async start() {
         await this.renderer.init();
-        this.baker = new ImposterBaker(this.renderer);
+        this.baker = new ImposterBaker(this.renderer.device);
         this.panel = new ControlPanel(this);
         this.input.attach();
         this.attachFiles();
@@ -96,7 +97,7 @@ class Game {
         await nextFrame();
         await nextFrame();
         const old = asset.atlas;
-        asset.atlas = await this.baker.bake(asset);
+        asset.atlas = await this.baker.bake(asset.bakeSource(this.renderer), { grid: s.grid, res: s.res, full: s.mode === 'full' });
         asset.version++;
         this.bakes++;
         this.fx.emit('baked', { name: asset.name, ms: asset.atlas.bakeMs });
