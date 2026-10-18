@@ -45,6 +45,19 @@ class LandField extends kit.Heightfield {
         this.mres = rough > 0 ? Math.min(4096, n * 2) : 1;
         this.mcell = size / this.mres;
         this.smooth = new Uint8Array(this.mres * this.mres);
+        this.canopy = null;
+    }
+
+    // the tree canopy over the map (geoCanopy: { n, cover, height } over the same square): canopyTex
+    setCanopy(c) { this.canopy = { n: c.n, cover: c.cover, height: c.height }; }
+
+    // rg8 texels: canopy cover (0..255), height (m); a single empty texel without one
+    packCanopy() {
+        const c = this.canopy;
+        if (!c) return { n: 1, bytes: new Uint8Array(2) };
+        const out = new Uint8Array(c.n * c.n * 2);
+        for (let k = 0; k < c.n * c.n; k++) { out[k * 2] = c.cover[k]; out[k * 2 + 1] = c.height[k]; }
+        return { n: c.n, bytes: out };
     }
 
     sample(x, z) {

@@ -95,7 +95,8 @@ Each frame runs these passes. All distances are metres and heights are above sea
    - It is lit with cloud shadows, snow, wet darkening and reflections, and lightning.
    - With the terrain's `vegetation`, the **plants** (`VegetationPass`): a compute pass (`vegScatter`) puts at most one
      plant in each cell of a 6 m lattice within 1.5 km of the eye, chosen by the cell alone (so plants stay put): how
-     likely from the forest cover (`forestCover`, as the ground is shaded) or a few on open ground and in town, none on
+     likely from the forest cover (`forestCover`, as the ground is shaded: the `geoCanopy` map's cover where there is
+     one, its height sizing the plants and the far canopy, else the land use's woods) or a few on open ground and in town, none on
      roads, buildings or water; the kind from the shore (palms), town (street trees and palms), the forest and the dry
      lowland (kiawe, shrubs). It frustum-culls them and counts them into indirect draws, one per species and lod: full
      meshes within 250 m, low-poly beyond, dithering out from 1150 m as the terrain raises the forest canopy

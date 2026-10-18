@@ -32,7 +32,7 @@ const FRAME_LAYOUT = [
     ['tdomain', 'vec4f'],   // terrain origin x, z, size, resolution
     ['ground', 'vec4f'],    // field size, pivot chance, ground state resolution, render mode
     ['geo', 'vec4f'],       // the terrain's look: 1 natural ground (a real place's: no farm sections, no street grid), beyond the map 1 sea, the finest terrain lod's range (m: TerrainLod.range0), its moisture (0..1: how green)
-    ['tdetail', 'vec4f'],   // the terrain's procedural detail: roughness (m; 0 none), smooth mask resolution, the finest lod's vertex spacing (m), 1 with vegetation (its canopy: canopyLift)
+    ['tdetail', 'vec4f'],   // the terrain's procedural detail: roughness (m; 0 none), smooth mask resolution, the finest lod's vertex spacing (m), 1 with vegetation (its canopy: canopyLift), 2 with a canopy map as well (canopyTex)
     ['cirrus', 'vec4f'],    // altitude, coverage, scale, drizzle
     ['flash', `array<vec4f, ${MAX_FLASHES}>`], // xyz, intensity
     ['march', 'vec4f'],     // steps, light steps, max distance, radar on
@@ -97,6 +97,7 @@ const WORLD_BINDINGS = [
     ['shadowTex', 'tex', 'var shadowTex: texture_2d<f32>'],
     ['heightTex', 'tex', 'var heightTex: texture_2d<f32>'],
     ['landTex', 'tex', 'var landTex: texture_2d<f32>'],
+    ['canopyTex', 'tex', 'var canopyTex: texture_2d<f32>'],   // the tree canopy: cover (0..1), height (m / 255) (LandField.canopy)
     ['smoothTex', 'tex', 'var smoothTex: texture_2d<f32>'],   // where the terrain's procedural detail is kept off (LandField.smooth)
     ['repSamp', 'sampler', 'var repSamp: sampler'],
     ['clampSamp', 'sampler', 'var clampSamp: sampler'],

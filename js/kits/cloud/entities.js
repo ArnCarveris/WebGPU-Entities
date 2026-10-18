@@ -15,7 +15,7 @@ const { Village, BusStation, Skyscraper, Structure } = kits.settlement.settlemen
 const { Bus, BusLine } = kits.transit.busTypes(Entity);
 const { StormCell, Supercell, SquallLine, Spawner } = kits.weather.weatherTypes(Entity);
 const { HURRICANE, TORNADO } = kits.weather;
-const { GeoTerrain, GeoRoads, GeoBuildings, GeoPlaces, Place } = kits.geo.geoTypes(Entity);
+const { GeoTerrain, GeoRoads, GeoBuildings, GeoCanopy, GeoPlaces, Place } = kits.geo.geoTypes(Entity);
 
 const ENTITY_TYPES = {
     clearing: Clearing,
@@ -39,6 +39,7 @@ const ENTITY_TYPES = {
     geoTerrain: GeoTerrain,
     geoRoads: GeoRoads,
     geoBuildings: GeoBuildings,
+    geoCanopy: GeoCanopy,
     geoPlaces: GeoPlaces,
     place: Place,
 };

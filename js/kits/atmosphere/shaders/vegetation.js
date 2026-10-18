@@ -15,9 +15,19 @@ const VEG_CAP = [8192, 49152];      // instances per species, near and far
 const VEG_SLOT = VEG_CAP[0] + VEG_CAP[1];
 const CANOPY = 11;                  // m: the canopy's height over the ground beyond the plants
 
-// the forest cover the ground is shaded with (fsTerrain), the plants scattered by and the canopy raised over (0..1)
+// the forest cover the ground is shaded with (fsTerrain), the plants scattered by and the canopy raised over (0..1): the
+// canopy map's where there is one (F.tdetail.w 2: geoCanopy), else the land use's woods, broken up a little
 const WGSL_FOREST = /* wgsl */`
-fn forestCover(xz: vec2f, woods: f32) -> f32 { return sat(woods * (0.4 + vnoise2(xz / 300.0)) * 1.3); }
+// the canopy map at xz: cover (0..1), mean height (m)
+fn canopyAt(xz: vec2f) -> vec2f {
+    let c = textureSampleLevel(canopyTex, clampSamp, (xz - F.tdomain.xy) / F.tdomain.z, 0.0).xy;
+    return vec2f(c.x, c.y * 255.0);
+}
+
+fn forestCover(xz: vec2f, woods: f32) -> f32 {
+    if (F.tdetail.w > 1.5) { return sat(canopyAt(xz).x * 1.15); }
+    return sat(woods * (0.4 + vnoise2(xz / 300.0)) * 1.3);
+}
 
 // the canopy over the ground at xz, d m from the eye (in 3D, as the plants fade by): none within the plants' reach,
 // rising as they fade out
@@ -27,7 +37,10 @@ fn canopyLift(xz: vec2f, d: f32) -> f32 {
     if (any(uv < vec2f(0.0)) || any(uv > vec2f(1.0))) { return 0.0; }
     let land = textureSampleLevel(landTex, clampSamp, uv, 0.0);
     let keep = 1.0 - textureSampleLevel(smoothTex, clampSamp, uv, 0.0).x;
-    return smoothstep(${VEG_FADE}.0, ${VEG_FAR}.0, d) * forestCover(xz, land.y) * keep * (1.0 - sat(land.z * 2.0)) * ${CANOPY}.0;
+    // the canopy's own height where it is mapped (thinner cover, lower), else a typical forest's
+    var top = forestCover(xz, land.y) * ${CANOPY}.0;
+    if (F.tdetail.w > 1.5) { let c = canopyAt(xz); top = c.y * sat(c.x * 1.3); }
+    return smoothstep(${VEG_FADE}.0, ${VEG_FAR}.0, d) * top * keep * (1.0 - sat(land.z * 2.0));
 }
 `;
 
@@ -61,8 +74,12 @@ fn vegScatter(@builtin(global_invocation_id) gid: vec3u) {
         wet = max(wet, textureSampleLevel(landTex, clampSamp, uv + o, 0.0).z);
     }
     let coast = th.x < 6.0 && wet > 0.5;
+    // with a canopy map: as much as it covers (and a few palms on the shore), its height setting the plants' size
+    let mapped = F.tdetail.w > 1.5;
+    let cn = select(vec2f(0.0), canopyAt(xz), mapped);
     var p = forest * 0.9 + (1.0 - forest) * (0.035 + 0.05 * land.x + select(0.0, 0.06, coast));
-    p *= select(1.0, 0.5, th.z < 0.55);
+    if (mapped) { p = cn.x * 0.95 + (1.0 - cn.x) * select(0.008, 0.05, coast); }
+    else { p *= select(1.0, 0.5, th.z < 0.55); }
     if (rnd(seed + 2u) > p) { return; }
     // what grows: palms on the shore and in town, kiawe and scrub on the dry lowland, broadleaf forest above
     let r = rnd(seed + 3u);
@@ -71,8 +88,14 @@ fn vegScatter(@builtin(global_invocation_id) gid: vec3u) {
     else if (land.x > 0.3) { sp = select(0u, 2u, r < 0.35); }
     else if (forest > 0.3) { sp = select(select(0u, 1u, th.x < 150.0 && forest < 0.7), 3u, r < 0.18); }
     else { sp = select(select(0u, 3u, r < 0.5), select(3u, 1u, r < 0.6), th.x < 250.0); }
+    if (mapped && cn.y < 3.5 && sp != 2u) { sp = 3u; }       // low canopy: scrub
     let sizes = array<vec2f, ${VEG_SPECIES}>(vec2f(0.8, 1.5), vec2f(0.7, 1.3), vec2f(0.75, 1.25), vec2f(0.6, 1.4));
-    let scale = mix(sizes[sp].x, sizes[sp].y, rnd(seed + 4u)) * select(1.0, 0.8, th.z < 0.55);
+    var scale = mix(sizes[sp].x, sizes[sp].y, rnd(seed + 4u)) * select(1.0, 0.8, th.z < 0.55);
+    if (mapped && cn.y > 0.5) {
+        // the meshes' heights at scale 1: broadleaf, kiawe, palm, shrub
+        let tall = array<f32, ${VEG_SPECIES}>(9.1, 5.1, 12.0, 1.8);
+        scale = clamp(cn.y * (0.8 + 0.4 * rnd(seed + 4u)) / tall[sp], 0.4, select(3.0, 1.6, sp == 3u));
+    }
     // on the terrain as drawn there (its lod's vertex spacing), sunk a little so no root floats
     let spacing = F.tdetail.z * max(1.0, 2.0 * d / F.geo.z);
     let y = terrainSurface(xz, spacing).x - 0.3 * scale;

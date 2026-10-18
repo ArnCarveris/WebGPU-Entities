@@ -3,18 +3,20 @@
 //
 //   node tools/geo-import.mjs <region> [--pbf <file.osm.pbf>] [--cache <dir>]
 //
-// Writes scenarios/data/<region>/{terrain,roads,buildings}.js: classic scripts (the page opened from disk can run them,
+// Writes scenarios/data/<region>/{terrain,roads,buildings,canopy}.js: classic scripts (the page opened from disk can run them,
 // not fetch them) each calling ScenarioData.put(id, meta, base64), the payload deflated (js/engine/scenario-data.js
 // inflates it before the worlds are built). The geo kit (js/kits/geo/) reads them: the `geoTerrain`, `geoRoads` and
-// `geoBuildings` entities.
+// `geoBuildings` entities, and `geoCanopy` (where the region has a `canopy`).
 //
 // Sources, downloaded once into the cache (default: <tmp>/webgpu-entities-geo):
 //   heights   AWS Terrain Tiles (Terrarium PNGs, public): land and bathymetry, area-averaged into the grid's cells
 //   the rest  an OpenStreetMap extract (.osm.pbf, the region's `pbf`): roads (highway=*), building footprints
 //             (ways and multipolygons), land cover (landuse / natural / water polygons), place names and peaks
-// OpenStreetMap data is (c) OpenStreetMap contributors, ODbL; it says so in each file's meta.
+//   canopy    Meta / WRI Global Canopy Height Map v2 (CC BY 4.0; region's `canopy`): GeoTIFF tiles, read at an overview
+// OpenStreetMap data is (c) OpenStreetMap contributors, ODbL; the canopy credits Meta, WRI and the imagery; each file's
+// meta says so.
 //
-// No dependencies: the PBF and PNG readers are here.
+// No dependencies: the PBF, PNG and (tiled, Deflate) TIFF readers are here.
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join, dirname, basename } from 'path';
 import { fileURLToPath } from 'url';
@@ -136,6 +138,92 @@ async function heights() {
         h[j * N + i] = s / 9;
     }
     return h;
+}
+
+// ------------------------------------------------------------------------------------------------ canopy
+// Tree canopy height (the region's `canopy`: Meta and WRI's global canopy height map v2, CC BY 4.0): cloud-optimised
+// GeoTIFFs of 1.2 m pixels (Web Mercator, uint8 metres, Deflate, 512^2 tiles, one per zoom-10 quadkey, with overviews).
+// Read at the overview nearest `pixel` m, each cell of an M^2 grid over the square gets the share of it under canopy
+// (pixels of 2 m and taller) and the canopy's mean height there.
+const CANOPY_URL = 'https://dataforgood-fb-data.s3.amazonaws.com/forests/v2/global/dinov3_global_chm_v2_ml3/chm';
+const CANOPY_ATTR = 'Canopy height: Meta and World Resources Institute (WRI), Global Canopy Height Map v2, CC BY 4.0; imagery (c) 2016 Vantor.';
+const MERC = 6378137;
+
+// a classic little-endian TIFF's image file directories: size, tiles (offsets, byte counts), compression, and the first
+// one's georeference (pixel scale, tie point), which the overviews share at their own scale
+function tiffIfds(buf) {
+    if (buf.toString('latin1', 0, 2) !== 'II' || buf.readUInt16LE(2) !== 42) throw new Error('canopy: not a little-endian classic TIFF');
+    const SIZE = { 1: 1, 2: 1, 3: 2, 4: 4, 12: 8, 16: 8 }, out = [];
+    for (let ifd = buf.readUInt32LE(4); ifd; ) {
+        const n = buf.readUInt16LE(ifd), t = {};
+        for (let k = 0; k < n; k++) {
+            const e = ifd + 2 + k * 12, tag = buf.readUInt16LE(e), type = buf.readUInt16LE(e + 2), cnt = buf.readUInt32LE(e + 4);
+            const sz = SIZE[type] || 1, at = cnt * sz <= 4 ? e + 8 : buf.readUInt32LE(e + 8);
+            const v = i => type === 3 ? buf.readUInt16LE(at + i * 2) : type === 4 ? buf.readUInt32LE(at + i * 4) : type === 12 ? buf.readDoubleLE(at + i * 8) : buf[at + i];
+            t[tag] = cnt === 1 ? v(0) : Array.from({ length: cnt }, (_, i) => v(i));
+        }
+        const arr = x => [].concat(x ?? []);
+        out.push({ w: t[256], h: t[257], tw: t[322], th: t[323], comp: t[259], bits: t[258], offs: arr(t[324]), counts: arr(t[325]), scale: t[33550], tie: t[33922] });
+        ifd = buf.readUInt32LE(ifd + 2 + n * 12);
+    }
+    return out;
+}
+
+async function canopy() {
+    const C = R.canopy, M = C.resolution || N * 2, MC = SIZE / M, z = 10, n2 = 2 ** z;
+    const tx = lon => (lon + 180) / 360 * n2;
+    const ty = lat => (1 - Math.log(Math.tan(lat * DEG) + 1 / Math.cos(lat * DEG)) / Math.PI) / 2 * n2;
+    const quad = (x, y) => { let q = ''; for (let i = z; i > 0; i--) { const m = 1 << (i - 1); q += ((x & m) ? 1 : 0) + ((y & m) ? 2 : 0); } return q; };
+    const dir = join(cache, 'canopy-v2');
+    mkdirSync(dir, { recursive: true });
+    const cnt = new Uint16Array(M * M), cov = new Uint16Array(M * M), sum = new Float32Array(M * M);
+    let files = 0, tilesRead = 0;
+    for (let y = Math.floor(ty(BBOX.n)); y <= Math.floor(ty(BBOX.s)); y++) for (let x = Math.floor(tx(BBOX.w)); x <= Math.floor(tx(BBOX.e)); x++) {
+        const q = quad(x, y);
+        let buf;
+        try { buf = await download(`${CANOPY_URL}/${q}.tif`, join(dir, `${q}.tif`)); } catch (e) { console.log(`canopy: ${q} none (${e.message})`); continue; }
+        const ifds = tiffIfds(buf), top = ifds[0];
+        // the overview nearest the wanted pixel size (on the ground, Mercator's scale at this latitude)
+        const ground = s => s * Math.cos(LAT0 * DEG);
+        const L = ifds.reduce((b, d) => Math.abs(ground(top.scale[0] * top.w / d.w) - (C.pixel || 4)) < Math.abs(ground(top.scale[0] * top.w / b.w) - (C.pixel || 4)) ? d : b);
+        if (L.comp !== 8 || L.bits !== 8) throw new Error(`canopy: ${q}: compression ${L.comp}, ${L.bits} bits (want Deflate, 8)`);
+        const sx = top.scale[0] * top.w / L.w, sy = top.scale[1] * top.h / L.h, X0 = top.tie[3], Y0 = top.tie[4];
+        const across = Math.ceil(L.w / L.tw);
+        files++;
+        for (let t = 0; t < L.offs.length; t++) {
+            if (!L.counts[t]) continue;
+            const c0 = (t % across) * L.tw, r0 = Math.floor(t / across) * L.th;
+            // the tile's lat / lon box against the square's
+            const lonA = (X0 + c0 * sx) / MERC / DEG, lonB = (X0 + (c0 + L.tw) * sx) / MERC / DEG;
+            const latOf = Y => (2 * Math.atan(Math.exp(Y / MERC)) - Math.PI / 2) / DEG;
+            const latA = latOf(Y0 - r0 * sy), latB = latOf(Y0 - (r0 + L.th) * sy);
+            if (lonB < BBOX.w || lonA > BBOX.e || latA < BBOX.s || latB > BBOX.n) continue;
+            const px = inflateSync(buf.subarray(L.offs[t], L.offs[t] + L.counts[t]));
+            tilesRead++;
+            for (let r = 0; r < L.th && r0 + r < L.h; r++) {
+                const lat = latOf(Y0 - (r0 + r + 0.5) * sy), zz = -(lat - LAT0) * mLat((lat + LAT0) / 2), j = Math.floor((zz - ORIGIN) / MC);
+                if (j < 0 || j >= M) continue;
+                const ml = mLon(lat);
+                for (let c = 0; c < L.tw && c0 + c < L.w; c++) {
+                    const xx = ((X0 + (c0 + c + 0.5) * sx) / MERC / DEG - LON0) * ml, i = Math.floor((xx - ORIGIN) / MC);
+                    if (i < 0 || i >= M) continue;
+                    const k = j * M + i, v = px[r * L.tw + c];
+                    cnt[k]++;
+                    if (v >= 2) { cov[k]++; sum[k] += v; }
+                }
+            }
+        }
+    }
+    const out = Buffer.alloc(M * M * 2);
+    let covered = 0;
+    for (let k = 0; k < M * M; k++) {
+        if (!cnt[k]) continue;
+        out[k] = Math.round(cov[k] / cnt[k] * 255);
+        out[M * M + k] = cov[k] ? Math.min(255, Math.round(sum[k] / cov[k])) : 0;
+        covered += cov[k] / cnt[k];
+    }
+    console.log(`canopy: ${files} files, ${tilesRead} tiles, ${M}^2 cells of ${MC.toFixed(1)} m, ${(covered * MC * MC / 1e6).toFixed(0)} km^2 under canopy`);
+    return { M, bytes: out };
 }
 
 // ------------------------------------------------------------------------------------------------ OSM PBF
@@ -307,7 +395,7 @@ async function osm() {
         return out;
     };
     // the closed rings ways make, joined end to end (node id lists), as points
-    const join = list => {
+    const joinRings = list => {
         const parts = list.map(r => [...r]), out = [];
         while (parts.length) {
             let ring = parts.shift();
@@ -323,8 +411,8 @@ async function osm() {
     };
     // a multipolygon's rings: { outer: [...], inner: [...] }
     const rings = rel => ({
-        outer: join(rel.members.filter(m => (m.role || 'outer') === 'outer').map(m => members.get(m.ref)).filter(Boolean)),
-        inner: join(rel.members.filter(m => m.role === 'inner').map(m => members.get(m.ref)).filter(Boolean)),
+        outer: joinRings(rel.members.filter(m => (m.role || 'outer') === 'outer').map(m => members.get(m.ref)).filter(Boolean)),
+        inner: joinRings(rel.members.filter(m => m.role === 'inner').map(m => members.get(m.ref)).filter(Boolean)),
     });
     const inside = pts => pts.some(([x, z]) => Math.abs(x) < HALF && Math.abs(z) < HALF);
     const roads = [], buildings = [], covers = [];
@@ -342,7 +430,7 @@ async function osm() {
         else covers.push({ ...rg, tags: r.tags });
     }
     // the coastline: the land's outlines (islands; an extract cuts none of them inside the square)
-    const shore = join(coast).filter(inside);
+    const shore = joinRings(coast).filter(inside);
     console.log(`osm: ${count} nodes; ${roads.length} roads, ${buildings.length} buildings, ${covers.length} land cover areas, ${places.length} places, ${shore.length} coastline rings`);
     return { roads, buildings, covers, places, shore };
 }
@@ -436,6 +524,12 @@ const places = data.places.map(p => { const [x, z] = toLocal(p.lat, p.lon); retu
     .filter(p => Math.abs(p.x) < HALF && Math.abs(p.z) < HALF);
 writeData('terrain', { ...frame, sea: seaLevel, min: lo, max: hi, layout: 'int16 heights (dm, each row delta coded), then u8 planes: built-up, woods, water',
     places, attribution: `Heights: AWS Terrain Tiles (Terrarium; USGS 3DEP, NOAA and others). Land cover and places: ${OSM_ATTR}` }, terr);
+
+// the tree canopy (the region's `canopy`): u8 cover (0..255, the share of each cell under canopy), then u8 height (m)
+if (R.canopy) {
+    const cn = await canopy();
+    writeData('canopy', { ...frame, resolution: cn.M, layout: 'u8 cover (share of the cell under canopy of 2 m and taller, 0..255), then u8 height (m: the canopy\'s mean height there)', attribution: CANOPY_ATTR }, cn.bytes);
+}
 
 // roads: per way: class, flags, layer + 8, lanes, width (dm), then its points
 const rw = new Writer();

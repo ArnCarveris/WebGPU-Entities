@@ -199,6 +199,10 @@ class Renderer {
         this.landMap = d.createTexture({ size: [f.n, f.n], format: 'rgba8unorm', usage: U.TEXTURE_BINDING | U.COPY_DST });
         d.queue.writeTexture({ texture: this.landMap }, f.packLand(), { bytesPerRow: f.n * 4 }, [f.n, f.n]);
         this.heightView = this.heightMap.createView();
+        this.canopyMap?.destroy();
+        const cp = f.packCanopy();
+        this.canopyMap = d.createTexture({ size: [cp.n, cp.n], format: 'rg8unorm', usage: U.TEXTURE_BINDING | U.COPY_DST });
+        d.queue.writeTexture({ texture: this.canopyMap }, cp.bytes, { bytesPerRow: cp.n * 2 }, [cp.n, cp.n]);
         this.smoothMap?.destroy();
         this.smoothMap = d.createTexture({ size: [f.mres, f.mres], format: 'r8unorm', usage: U.TEXTURE_BINDING | U.COPY_DST });
         d.queue.writeTexture({ texture: this.smoothMap }, f.packSmooth(), { bytesPerRow: f.mres }, [f.mres, f.mres]);
@@ -261,7 +265,7 @@ class Renderer {
         this.busDraws = [];
         this.worldGroup = this.worldSet.group({
             F: this.frameBuf, shapeTex: this.noise.shapeView, detailTex: this.noise.detailView, weatherTex: this.weatherPass.weatherView,
-            shadowTex: this.weatherPass.shadowView, heightTex: this.heightView, landTex: this.landMap.createView(), smoothTex: this.smoothMap.createView(), repSamp: this.repSamp,
+            shadowTex: this.weatherPass.shadowView, heightTex: this.heightView, landTex: this.landMap.createView(), smoothTex: this.smoothMap.createView(), canopyTex: this.canopyMap.createView(), repSamp: this.repSamp,
             clampSamp: this.clampSamp, cells: this.cellBuf, ground: this.groundPass.buffer, bolts: this.boltBuf, anvilTex: this.weatherPass.anvilView,
             layerTex: this.weatherPass.layerView, styleTex: this.weatherPass.styleView, occ: this.weatherPass.occ, buildings: this.buildingBuf,
         }, 'world');

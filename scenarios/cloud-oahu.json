@@ -18,6 +18,7 @@
         {"type":"geoTerrain","data":"oahu/terrain"},
         {"type":"geoRoads","data":"oahu/roads","skip":["footway","path","steps","cycleway"],"minor":true,"curves":true,"marks":true},
         {"type":"geoBuildings","data":"oahu/buildings","seed":7},
+        {"type":"geoCanopy","data":"oahu/canopy"},
         {"$comment":"a bus to drive (F by it): parked in Kalākaua Avenue's right lane, heading toward Diamond Head","type":"bus","id":"bus","label":"Bus 8","pos":[14114,22680],"yaw":43,"livery":[0.86,0.82,0.18]},
         {"type":"geoPlaces","data":"oahu/terrain","kinds":{"city":0,"town":25000,"suburb":2500,"peak":6000,"cape":5000},"height":{"city":400,"town":120,"suburb":60,"peak":40,"cape":40}},
 

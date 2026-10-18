@@ -39,7 +39,7 @@ const ScenarioFormat = (() => {
                 'plans.buildings': { type: 'buildingPlan' }, 'plans.storeys': { type: 'storeyPlan' }, 'plans.cores': { type: 'corePlan' }, 'plans.rooms': { type: 'roomType' }, 'plans.furniture': { type: 'furniture' }, 'plans.furnishings': { type: 'furnishing' } },
             lists: { clouds: 'cloudLayer', views: 'view' },
             kinds: ['clearing', 'tilt', 'hills', 'mountain', 'range', 'river', 'lake', 'town', 'forest', 'village', 'busStation', 'skyscraper', 'structure', 'bus',
-                'storm', 'supercell', 'squall', 'spawner', 'geoTerrain', 'geoRoads', 'geoBuildings', 'geoPlaces', 'place'],
+                'storm', 'supercell', 'squall', 'spawner', 'geoTerrain', 'geoRoads', 'geoBuildings', 'geoCanopy', 'geoPlaces', 'place'],
         },
         water: {
             title: 'Entity Water',

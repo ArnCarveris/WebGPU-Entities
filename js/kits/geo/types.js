@@ -5,7 +5,7 @@
 Features.kit('geo', (engine, kit) => {
 const { Common } = engine;
 const { clamp, lerp } = Common;
-const { terrainData, roadData, buildingData, buildRoads, buildBuildings, smoothRoads, smoothBuildings } = kit;
+const { terrainData, roadData, buildingData, canopyData, buildRoads, buildBuildings, smoothRoads, smoothBuildings } = kit;
 
 function geoTypes(Base) {
     // The ground of `data` (a geo terrain id): its heights, and its land cover painted (built-up, woods, water). On a
@@ -56,6 +56,13 @@ function geoTypes(Base) {
         }
     }
 
+    // The tree canopy of `data` (a geo canopy id: where trees stand and how tall, over the same square as the terrain),
+    // given to the field (LandField.setCanopy): the plants grow by it and the far canopy is raised by it
+    class GeoCanopy extends Base {
+        get anchor() { return null; }
+        stamp(f) { f.setCanopy?.(canopyData(this.def.data)); }
+    }
+
     // A named place: its label `labelHeight` m over the ground at pos, shown within `range` m of the eye (0: always)
     class Place extends Base {
         get labelRange() { return this.def.range || 0; }
@@ -76,7 +83,7 @@ function geoTypes(Base) {
         }
     }
 
-    return { GeoTerrain, GeoRoads, GeoBuildings, GeoPlaces, Place };
+    return { GeoTerrain, GeoRoads, GeoBuildings, GeoCanopy, GeoPlaces, Place };
 }
 
 return { geoTypes };

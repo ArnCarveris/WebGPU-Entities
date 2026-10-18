@@ -1,6 +1,7 @@
 'use strict';
 // A real place's data as tools/geo-import.mjs writes it (scenarios/data/<region>/*.js, loaded by ScenarioData before
-// the worlds are built), decoded once per id: the terrain (heights, land cover, place names), the roads, the buildings.
+// the worlds are built), decoded once per id: the terrain (heights, land cover, place names), the roads, the buildings,
+// the tree canopy.
 // Coordinates are the scenario's metres about the region's centre: x east, z south.
 
 Features.kit('geo', (engine, kit) => {
@@ -57,5 +58,13 @@ function buildingData(id) {
     });
 }
 
-return { GeoReader, terrainData, roadData, buildingData };
+// { meta, n, size, cover (n x n, 0..255: the share of each cell under canopy), height (n x n, m: the canopy's mean height) }
+function canopyData(id) {
+    return once(id, ({ meta, bytes }) => {
+        const n = meta.resolution;
+        return { meta, n, size: meta.size, cover: bytes.subarray(0, n * n), height: bytes.subarray(n * n, 2 * n * n) };
+    });
+}
+
+return { GeoReader, terrainData, roadData, buildingData, canopyData };
 });
