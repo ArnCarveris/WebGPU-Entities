@@ -40,11 +40,11 @@
                 {
                     "header": "WORLDS",
                     "cells": [
-                        {"type":"label","title":"Keys to the next world","value":"`"},
+                        {"type":"label","title":"Keys to another world","value":"Keys, on the engine's page"},
                         {"type":"label","title":"Hide a world","value":"untick it in the bar"},
                         {"type":"label","title":"One world alone","value":"Alt+click its name"}
                     ],
-                    "footer": "The sky takes 1-9 weather, T lighting, K lightning; the river R rain, X dams. Each world's own page under Controls."
+                    "footer": "Every option (weather, lighting, lightning, rain, dams...) is on its world's own page under Controls."
                 }
             ]
         }

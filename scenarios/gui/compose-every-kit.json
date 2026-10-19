@@ -1,0 +1,34 @@
+{
+    "$comment": "the handheld's pages of Every kit (scenarios/compose-every-kit.json includes them)",
+    "entities": [
+        {
+            "type": "handheld.page",
+            "id": "every",
+            "title": "Every kit",
+            "nav": {"section":"SCENARIO","sub":"Six worlds, twenty kits","icon":[[255,45,85],"K"]},
+            "sections": [
+                {
+                    "header": "WHERE YOU ARE",
+                    "cells": [
+                        {"type":"label","title":"Near","expr":"{sol.body}"},
+                        {"type":"label","title":"Altitude","expr":"{sol.altitude|dist}"}
+                    ]
+                },
+                {
+                    "header": "WORLDS",
+                    "cells": [
+                        {"type":"label","title":"Weather","expr":"{sky.weather}"},
+                        {"type":"label","title":"Storm cells","expr":"{sky.cells}"},
+                        {"type":"label","title":"River volume","expr":"{river.volume|num: m³}"},
+                        {"type":"label","title":"River rain","expr":"{river.rain ? 'on' : 'off'}"},
+                        {"type":"label","title":"Valley instances","expr":"{valley.instances|int}"},
+                        {"type":"label","title":"Bunker area","expr":"{bunker.area}"},
+                        {"type":"label","title":"Facility lights","expr":"{sector.lightsOn ? 'on' : 'off'}"},
+                        {"type":"label","title":"Facility alarm","expr":"{sector.alarm ? 'on' : 'off'}"}
+                    ],
+                    "footer": "Keys (the engine's page) hands the camera between the flight and the facility's player. Each world's options are on its own page."
+                }
+            ]
+        }
+    ]
+}

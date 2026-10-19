@@ -15,7 +15,7 @@
                         {"type":"label","title":"Facility lights","expr":"{sector.lightsOn ? 'on' : 'off'}"},
                         {"type":"label","title":"Alarm","expr":"{sector.alarm ? 'on' : 'off'}"}
                     ],
-                    "footer": "` hands the keys and the camera between Entity Origin's flight and the facility's player."
+                    "footer": "The engine's Keys hands the camera between Entity Origin's flight and the facility's player."
                 }
             ]
         }

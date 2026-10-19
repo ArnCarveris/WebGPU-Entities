@@ -482,7 +482,10 @@ class Host {
         for (const l of this.links) {
             let v;
             try { v = l.value(scope); } catch { continue; }
-            if (!Host.same(v, l.last)) { l.last = Array.isArray(v) ? [...v] : v; l.inst.world.set?.(l.param, v); }
+            if (Host.same(v, l.last)) continue;
+            l.last = Array.isArray(v) ? [...v] : v;
+            // (every world's `visible`: shown or hidden as by its tick in the bar; the rest is the world's own)
+            if (l.param === 'visible') { if (!!v !== l.inst.visible) this.setVisible(l.inst, !!v); } else l.inst.world.set?.(l.param, v);
         }
         this.audio.update(scope);
         this.sidePanels(now);

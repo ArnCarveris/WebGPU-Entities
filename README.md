@@ -20,16 +20,18 @@ The scenario picker (top right) lists every original demo's scenario, rendered b
 | Imposter Valley weather | cloud (atmosphere) + imposter: the valley's forests under the plains' clouds and sun |
 | Bunker on the Reservoir | cloud (atmosphere) + portal: the bunker island in a lake; indoors, the rain stays out |
 | Planetfall | origin + imposter: the valley on the real-scale Earth, flown to from orbit; the valley's sun is the Sun |
-| Sector 07 on the Moon | origin + gui: the GUI facility at Shackleton Base; <kbd>`</kbd> hands the camera to its player inside |
+| Sector 07 on the Moon | origin + gui: the GUI facility at Shackleton Base; the handheld's Keys hands the camera to its player inside |
 | Grand tour of the plains | cloud (atmosphere) + water + imposter + portal, with the engine's free camera and viewpoints |
+| Every kit | origin + cloud (atmosphere) + water + imposter + portal + gui: all six worlds and all twenty kits, the plains standing on the real-scale Earth |
 | High Plains · Riverlands · Sol Transit · Imposter Valley · Bunker compound · Sector 07 | each original demo on its own |
 | Oʻahu | cloud: the real island at 1:1, its heights, mapped roads and buildings ([real places](docs/geo.md)) |
 
 The screen shows the worlds and nothing else (their in-world labels, toasts, a corner chip). Every option and readout is
 on the **handheld**, a phone the engine holds in every scenario: <kbd>TAB</kbd> (or the chip) takes it out, <kbd>Esc</kbd>
 puts it away. Its root page has a section per world (its status, its options, its controls), the scenario's pages, and
-the engine's options: scenario, worlds (in a composition: show / hide each one, give one the keys, or press
-<kbd>`</kbd>), view, move, sound, GPU.
+the engine's options: scenario, worlds (in a composition: show / hide each one, give one the keys),
+view, move, sound, GPU. The only keys are moving, looking, using what is at hand and the handheld itself; a toast lists
+them when a scenario starts.
 
 Views are the engine's too: the handheld's **View** lists the scenario's `view` entities and every world's own
 (`view` with `of`, `bookmark`; a world offers them through `views()`, by default its `view` entities' `pos` / `look` /
@@ -143,7 +145,7 @@ the engines work) are the original READMEs, in [docs/features](docs/features).
 |---|---|---|
 | `camera` | `from: "<world>"` or `["a", "b"]`, `carry` · or `controller: "fly"`, `pos`, `look`, `fov`, `speed` · `mode: "walk"` | which world's camera drives the others, or the engine's free camera (WASD, drag, wheel, Space / C); `mode` starts it walking (<kbd>H</kbd> switches) |
 | `view` | `name`, `pos`, `look`, `fov` | a viewpoint in composition space, picked on the handheld's View |
-| `link` | `to: "<world>.<param>"`, `value: expr` | sets a world's parameter from an expression every frame (when it changes) |
+| `link` | `to: "<world>.<param>"`, `value: expr` | sets a world's parameter from an expression every frame (when it changes); every world has `visible` (shown or hidden, as by its tick in the bar) |
 | `include` | `scenario`, `as`, `skip`, `only`, `root` | splices another scenario's entities, or a part kept in its own file (`"gui/<id>"`: a scenario's GUIs, under `scenarios/gui/`): `as` renames its world (and its name in expressions), `skip` / `only` filter by type (`"view"`, `"sound.*"`), `root` merges fields into its root |
 | `handheld` | `startShown`, `title`, `fovDeg`, `pose`, `screen`, `model`, `materials`, `lighting`, `sounds` | the engine's handheld, in every scenario (<kbd>TAB</kbd> / <kbd>Esc</kbd>, or the corner chip): merged over its defaults, later entities winning |
 | `handheld.page` | `id`, `of`, `title`, `nav: { section, sub, icon }`, `sections` | a page of the handheld, the scenario's HUD: cells `label` `text` `nav` `switch` `slider` `picker` `action`; `label` / `text` take `expr`, a template of the frame scope (`"{sky.rain\|pct}"`); `nav` lists it in that section of the root page, `of` ties it to a world |

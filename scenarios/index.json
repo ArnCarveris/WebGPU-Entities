@@ -43,7 +43,7 @@
     "id": "compose-moonbase-sector07",
     "name": "Sector 07 on the Moon",
     "group": "Compositions",
-    "description": "Entity GUI's facility (airlock terminal, CCTV, easel, handheld) stands at Entity Origin's Shackleton Base on the Moon. Fly around it with the floating-origin camera; ` hands the keys and the camera to the facility's player inside, with its world-space GUIs.",
+    "description": "Entity GUI's facility (airlock terminal, CCTV, easel, handheld) stands at Entity Origin's Shackleton Base on the Moon. Fly around it with the floating-origin camera; the handheld's Keys hands the camera to the facility's player inside, with its world-space GUIs.",
     "worlds": [
       "origin",
       "gui"
@@ -59,6 +59,20 @@
       "water",
       "imposter",
       "portal"
+    ]
+  },
+  {
+    "id": "compose-every-kit",
+    "name": "Every kit",
+    "group": "Compositions",
+    "description": "All six worlds and all twenty kits at once, on Entity Origin's real-scale Earth: Entity Cloud's High Plains (structures, buses, vegetation, a named place) with Entity Water's Riverlands, Entity Imposter's valley, Entity Portal's bunker island and Entity GUI's Sector 07 (its easel, radar and CCTV) standing on the plains. One floating-origin camera flies from the river up through the clouds to orbit and the planets; the handheld hands the camera to the facility's player.",
+    "worlds": [
+      "origin",
+      "cloud",
+      "water",
+      "imposter",
+      "portal",
+      "gui"
     ]
   },
   {
