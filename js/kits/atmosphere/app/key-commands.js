@@ -37,16 +37,11 @@ class KeyCommands {
                     c.setWeather(names[(names.indexOf(wx.target) + 1) % names.length]);
                     break;
                 }
-                case 'KeyB':
-                    // to the next bus of the fleet (each press another)
-                    if (!w.buses.length) { a.hud.toast('No bus in this scenario'); break; }
-                    c.toBus(((a.busPick ?? -1) + 1) % w.buses.length);
-                    break;
                 case 'KeyU': a.hud.toast(`Sound ${a.fx.sound.toggle() ? 'on' : 'off'}`); break;
                 case 'KeyR': a.radar = !a.radar; break;
                 case 'KeyG': c.toggleTiles(); break;
                 case 'KeyO': c.toggleBloom(); break;
-                case 'KeyF': if (!a.drive.toggle()) c.toggleFroxels(); break;      // by a bus: drive it (or get out); else the froxels
+                case 'KeyF': c.toggleFroxels(); break;          // (by a bus F drives it: the buses feature's, before this)
                 case 'KeyM': c.setMode((a.mode + 1) % RENDER_MODES.length); break;
                 case 'KeyQ': c.setQuality((a.quality + 1) % QUALITY.length); break;
                 case 'KeyV': if (a.views.length) c.setView((a.viewIndex + 1) % a.views.length); break;

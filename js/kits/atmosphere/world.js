@@ -1,24 +1,29 @@
 'use strict';
-// World: a world under the atmosphere: the scenario's entities (its types) on a terrain (the terrain kit's LandField),
-// what they build (the settlement kit's Structures: buildings, lifts, doors, roads), the buses running on it, the weather
-// state, the cloud layers and lightning (the weather kit's), the distant lights by night (FarLights). The Renderer and
-// FrameWriter draw it. What a world type adds is composed in as extensions, never by subclassing.
+// World: a world under the atmosphere: the scenario's entities (its types) on a terrain (the terrain kit's LandField), the
+// weather state, the cloud layers and lightning (the weather kit's). The Renderer and FrameWriter draw it. What a world
+// type adds, and what the features on in it bring (the structures the entities build, the buses running on them...), is
+// composed in as extensions, never by subclassing.
 //
 // WorldExtension: a class built with the world (new E(world), before its entities), kept as world.ext[E.key]: the
 // world type's and the features' on in it (their extensions.world); each hook optional, called in order:
 //   created()           after the core's systems (terrain, curvature, weather, clouds, lightning), before the entities:
 //                       a feature puts its own in their place (the curvature feature's Curvature)
 //   centre()            [x, z]: where what the scenario does not place goes (the lit town); the first one's
+//   build()             after the entities stamped the terrain: what they build (the structures feature's Structures:
+//                       each entity's build(structures))
+//   townLit()           after the lit town (streetLights) is painted (the structures feature's distant lights)
 //   spawned()           after the entities spawned
 //   advance(dt, wdt)    each frame, before the entities (dt real s, wdt weather s)
+//   after(dt, wdt, t)   each frame, after the entities (the structures feature's lifts)
 //   features(out)       the GPU's analytic structures: out { ms, shelves, tornado } (the entities' are in already)
 //   hurricane(maxTop)   a hurricane for the GPU (12 floats: the weather pass, hurricaneKeep) or null; the first one's
+//   colliders(p, out)   what a walker at feet p walks on and into (Walker); carrierAt(p): the moving floor it stands on
+//   sheltered(p)        the interior that shelters p from the weather, or null (AtmosphereWorld.sheltered)
 
 Features.kit('atmosphere', (engine, kit) => {
 const { kits } = engine;
-const { MAX_CELLS, MAX_MOTHERSHIPS, MAX_SHELVES, FarLights } = kit;
+const { MAX_CELLS, MAX_MOTHERSHIPS, MAX_SHELVES } = kit;
 const { LandField } = kits.terrain;
-const { LAMPS, Structures, cloudMeshes } = kits.settlement;
 const { WeatherSystem, RainZones, CloudLayers, Lightning } = kits.weather;
 
 // The outdoors drawn flat, what a world without a `curvature` entity has (the curvature feature's Curvature in its place):
@@ -49,8 +54,8 @@ class World {
         this.types = types;
         this.ext = {};
         this.extensions = extensions.map(E => (this.ext[E.key] = new E(this)));
-        this.meshes = cloudMeshes;      // the common mesh interface (kits.mesh), for what draws itself (buses)
-        this.lamps = LAMPS;             // lamp kinds, for what lights itself (a bus's headlights, tail lights, cabin)
+        this.meshes = null;             // the common mesh interface (kits.mesh), for what draws itself (a bus): the structures'
+        this.lamps = null;              // lamp kinds, for what lights itself (a bus's headlights, tail lights, cabin): theirs
         const t = { size: 64000, resolution: 512, base: 1500, fieldSize: 800, pivots: 0.2, ...(scenario.terrain || {}) };
         this.terrain = t;
         this.field = new LandField(t.size, t.resolution, t.base, { rough: t.rough || 0 });
@@ -63,18 +68,16 @@ class World {
         this.entities = [];
         this.byId = new Map();
         this.flashCount = 0;
-        this.buses = [];                 // every bus of every BusLine (each drawn, and can be ridden)
+        this.buses = [];                 // the vehicles to board and ride (the buses feature's: every bus of every BusLine)
         this.busBoost = 1;               // their time runs this many times as fast (hold Z)
         for (const def of scenario.entities || []) this.add(def, false);
         for (const e of this.entities) { e.stamp(this.field); this.field.updateRange(); }
-        this.structures = new Structures(this.field, scenario.buildings, scenario.plans);
-        for (const e of this.entities) e.build(this.structures);
-        this.structures.finish();
-        // the lit town (streetLights): painted like a town entity, its streets given the fake lamps
+        for (const x of this.extensions) x.build?.();
+        // the lit town (streetLights): painted like a town entity (the structures feature gives its streets the fake lamps)
         const sl = scenario.streetLights;
         this.streetLights = sl ? { pos: sl.pos || this.centre, radius: sl.radius || 4000, density: sl.density ?? 0.95 } : null;
         if (this.streetLights) new town(this.streetLights, this).stamp(this.field);
-        this.far = new FarLights(this.field, this.structures, this.streetLights);     // distant lights by night
+        for (const x of this.extensions) x.townLit?.();
         for (const e of [...this.entities]) e.spawn();
         for (const x of this.extensions) x.spawned?.();
         this.rainZones = new RainZones(this);
@@ -118,7 +121,7 @@ class World {
         this.rainZones.update(dt);
         for (const x of this.extensions) x.advance?.(dt, wdt);
         for (const e of [...this.entities]) e.update(dt, wdt, t);
-        this.structures.lifts.update(dt, this.busBoost);            // (Z runs them ten times as fast too)
+        for (const x of this.extensions) x.after?.(dt, wdt, t);
         if (this.entities.some(e => e.dead)) {
             this.entities = this.entities.filter(e => !e.dead);
             for (const [k, e] of this.byId) if (e.dead) this.byId.delete(k);

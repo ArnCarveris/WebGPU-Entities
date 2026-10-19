@@ -1,28 +1,28 @@
 'use strict';
 // The app: owns the world, the camera and the settings, and runs the frame (update, then render) through its parts:
-// its own (menus, commands, keys, HUD), the kits' (the settlement kit's walker, doors and sound events, the building
-// kit's lifts, this kit's surroundings, lights, frame uniform and renderer, the gpu kit's dynamic resolution), for which
-// it is the host (world, camera, walker, renderer, settings, fx), and what a world type composes in: its extensions.
+// its own (menus, commands, keys, HUD, the walker and its footsteps, surroundings, lights, frame uniform and renderer,
+// the gpu kit's dynamic resolution), for which it is the host (world, camera, walker, renderer, settings, fx), and what is
+// composed in: its extensions, the features' on in the world (their extensions.app: the structures' doors and lifts, the
+// buses' wheel), then the world type's. The features' WorldExtensions (extensions.world) go to the world it makes.
 //
-// AppExtension: a class built with the app (new E(app)), kept as app.ext[E.key]; each hook optional: load(world) (a
-// new world), update(dt, io) (each frame, after the world's update), key(code) / click(hit) (KeyCommands), beforeJump /
-// afterJump(v, e) (Controls.jump), syncMenus() (AppMenus), page(id) (phonePages), air() / label(e, d) (Hud), stats(out)
-// and set(key, v) (the host's, through AtmosphereWorld). The features on in the world add theirs (extensions.app), before
-// the world type's; and their WorldExtensions (extensions.world) go to the world it makes.
+// AppExtension: a class built with the app (new E(app)), kept as app.ext[E.key]; each hook optional: configure(cfg)
+// (the scenario's render settings, before the renderer takes the world), load(world) (a new world), update(dt, io) (each
+// frame, after the world's update), afterWalk(dt, io, now) (after the walker moved), sounds() (the frame's sound events),
+// key(code) / click(hit) (KeyCommands), beforeJump / afterJump(v, e) (Controls.jump), syncMenus() (AppMenus), page(id)
+// (phonePages), air() / lines() / label(e, d) (Hud), stats(out) and set(key, v) (the host's, through AtmosphereWorld); the
+// frame's: draws(fw, view), cabin(), shelter(fw, F, o) (FrameWriter), surround(p), shelters(p, dir) (Surroundings),
+// lights(all, cam), lightMasks(lights, mask), writeFar(F, night, adapt), farLights(out) (LightWriter).
 
 Features.kit('atmosphere', (engine, kit) => {
 const { GpuChoice, Common, kits } = engine;
 const { clamp, v3, PointerInput } = Common;
 const { FirstPersonView } = kits.view;
 const SLOW_ALT = { keys: ['AltLeft'], factor: 0.2 };       // Alt held: a fifth of the speed
-const { Hud, AppMenus, Controls, KeyCommands, SPLASH_PARTICLES, RENDER_DEFAULTS, QUALITY, FRAME_BUDGET, Renderer, Surroundings, LightWriter, FrameWriter } = kit;
-const { Walker, DoorControl, SoundEvents, DOOR_REACH } = kits.settlement;
-const { LiftControl } = kits.building;
+const { Hud, AppMenus, Controls, KeyCommands, SPLASH_PARTICLES, RENDER_DEFAULTS, QUALITY, FRAME_BUDGET, Renderer, Surroundings, LightWriter, FrameWriter,
+    Walker, Footsteps } = kit;
 const { DynamicScale } = kits.gpu;
 
 class App {
-    // the world-space GUIs drawn this frame (FrameWriter): the lifts' panels
-    get panels() { return this.liftControl.shown; }
 
     // world(scenario): the world (World, with the world type's extensions); extensions: AppExtension classes; title: the
     // readout's
@@ -36,7 +36,6 @@ class App {
         this.hud = new Hud(fx.ui);
         this.camera = new FirstPersonView({ pos: [0, 3000, 0], speed: 400, wheel: { step: 1.25, min: 5, max: 20000 }, clearance: 1.5, ceiling: 25000, slow: SLOW_ALT });
         this.walker = new Walker();
-        this.drive = new kits.transit.DriveControl(this);     // F: at the wheel of a bus
         this.time = 0;
         this.weatherTime = 0;
         this.paused = false;
@@ -62,19 +61,10 @@ class App {
         this.extensions = [...kits.gpu.extensionsOf(fx.features, 'app'), ...extensions].map(E => (this.ext[E.key] = new E(this)));
         this.controls = new Controls(this);
         this.keys = new KeyCommands(this);
-        this.doors = new DoorControl(this, { moved: () => { this.renderer.writeDoors(this.world.structures.doors.mesh()); this.renderer.writeBuildings(this.world.structures.buildings); } });
-        this.liftControl = new LiftControl(this, { reach: DOOR_REACH, cars: () => this.frameWriter.roomVis?.cars, view: () => this.frameWriter.view() });
         this.surroundings = new Surroundings(this);
-        this.sounds = new SoundEvents(this);
+        this.footsteps = new Footsteps(this);
         this.lights = new LightWriter(this);
         this.frameWriter = new FrameWriter(this);
-        // the portal visibility's inspector (the building kit's RoomVis has one: floor map, traversal, frames): a tap on
-        // the map walks (or flies) the camera there, onto the floor of the area tapped
-        this.inspect = { map: { teleport: (x, z, area) => {
-            const A = this.world.structures.areas.areas[area], y = A ? A.y : this.camera.pos[1] - (this.walker.active ? 1.62 : 0);
-            if (this.walker.active) this.walker.place(this, x, z, y + 0.05);
-            else this.camera.pos = [x, y + 1.62, z];
-        } } };
         this.dynamicScale = new DynamicScale(FRAME_BUDGET);
     }
 
@@ -93,7 +83,7 @@ class App {
         this.quality = clamp(this.cfg.quality, 0, QUALITY.length - 1);
         this.timeScale = this.cfg.timeScale;
         this.radar = this.cfg.radar ?? false;       // off unless the scenario wants it: the screen stays clean
-        this.renderer.setGui(this.cfg.gui || {});
+        for (const x of this.extensions) x.configure?.(this.cfg);
         this.renderer.setWorld(world);
         for (const x of this.extensions) x.load?.(world);
         const L = scenario.lighting || {};
@@ -103,7 +93,6 @@ class App {
         this.views = scenario.views || [];
         this.viewIndex = 0;
         this.walker = new Walker();
-        this.drive.vehicle = null;
         if (this.views[0]) this.controls.jump(this.views[0]);
         this.reset = true;
     }
@@ -128,12 +117,11 @@ class App {
             for (const x of this.extensions) x.update?.(dt, io);
             // on foot after the bus has moved, so a rider's eye is where the bus is this frame
             if (this.walker.active && !locked) this.walker.update(dt, io, this.input, this);
-            this.drive.update(this.input.keys);
-            this.liftControl.update(dt, io, now);
-            this.doors.update(dt, io);
+            for (const x of this.extensions) x.afterWalk?.(dt, io, now);
             if (v3.len(v3.sub(before, this.camera.pos)) > 3000) this.reset = true;
             this.surroundings.update(dt);
-            this.sounds.update();
+            for (const x of this.extensions) x.sounds?.();
+            this.footsteps.update();
         }
         if (!render) return;
         // the volumetric resolution: the preset's, or lower while the GPU time is over budget (a resize keeps the history)
@@ -144,7 +132,7 @@ class App {
         const enc = r.device.createCommandEncoder();
         const total = this.near.rain + this.near.snow;
         const particles = total > 0.001 ?fw.splashStart + (this.near.rain > 0.02 ? SPLASH_PARTICLES : 0) : 0;
-        // (from inside, with the outdoors out of sight through the portals: no volumetrics, no rain)
+        // (from inside, with the outdoors out of sight through the portals: no volumetrics, no rain; FrameWriter.outdoors)
         const out = fw.outdoors?.seen !== false;
         r.render(enc, fw.probeTexel, out ? particles : 0, w.lightning.count, QUALITY[this.quality].interleave, fw.shadowSlices, this.froxels && out, this.mode !== 1 && out, this.tiles, this.bloom && this.cfg.bloom > 0);
         r.device.queue.submit([enc.finish()]);

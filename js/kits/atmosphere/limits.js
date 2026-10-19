@@ -13,6 +13,9 @@ const LIGHT_RANGE = 700;             // m: lights further from the camera than t
 const LIGHT_GRID = 32;               // cells per side over the lights' reach, each listing the lights that reach into it (2 x 32 bits)
 const LIGHT_CABIN = 1, LIGHT_SPOT = 2;  // light flags: a bus's cabin glow (not on the cabin's own surfaces), a spot (cone),
 const LIGHT_ROOM = 4;                // a building's lit storey (out through its windows and doors only; the room has its own lamps)
+// the flashlight in hand (L): a spot along the view (as the structures' lamps are given: colour, intensity, range, size,
+// cone degrees: edge, core)
+const FLASHLIGHT = { color: [1.0, 0.94, 0.84], intensity: 30, range: 60, size: 0.8, cone: [22, 6] };
 const ROOM_LIGHTS = 16, ROOM_RANGE = 160;  // at most this many lit storeys of the buildings within this many m become lights
 // distant lights by night (FarLights, WGSL_FAR): every lamp as a glowing point sprite, lighting nothing
 // per far light: [x, y, z, size (m)] [rgb intensity, fake] [axis, cos of the cone's edge (-2 none)] [cos of its core, range (m), ground height, -]
@@ -50,7 +53,7 @@ const GROUND_RES = 256;
 
 return {
     NEAR, MAX_CELLS, CELL_FLOATS, MAX_MOTHERSHIPS, MAX_SHELVES, MAX_LIGHTS, LIGHT_RANGE, LIGHT_GRID, LIGHT_SPOT, LIGHT_CABIN,
-    LIGHT_ROOM, ROOM_LIGHTS, ROOM_RANGE, FAR_FLOATS, POOL_ALBEDO, MAX_FAR_DYN, FAR_LAMP_PITCH, TOWN_BLOCK, FAR_LAMP_SIDE,
+    LIGHT_ROOM, FLASHLIGHT, ROOM_LIGHTS, ROOM_RANGE, FAR_FLOATS, POOL_ALBEDO, MAX_FAR_DYN, FAR_LAMP_PITCH, TOWN_BLOCK, FAR_LAMP_SIDE,
     FAR_LAMP_H, FAR_LAMP_REACH, POLE_DRAW, MAX_POLES, MAX_GLOWS, GLOW_GAIN, SPLASH_RADIUS, SPLASH_GRID, SPLASH_PIECES,
     SPLASH_MIST, SPLASH_PARTICLES, SPRAY, SPRAY_LAYERS, SPRAY_MIST, SPLASH_FADE, NOISE_SHAPE, NOISE_DETAIL,
     SHAPE_MIPS, OCC_RES, CLOUD_TILE, TILE_COVER_PAD, WEATHER_RES, SHADOW_RES, GROUND_RES,

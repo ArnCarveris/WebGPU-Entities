@@ -55,6 +55,7 @@ function busTypes(Base) {
             this.world = world;
             // mesh and glass in its own frame, colliders, seats; a moving shader box (rain shadow, sun shadow)
             this.mesh = livery ? buildBus(livery, world.meshes) : null;
+            this.body = BUS;            // its dimensions (the Walker's: its floor, walls)
             this.box = { x: 0, z: 0, hx: BUS.hl, hz: BUS.hw, cs: 1, sn: 0, y0: 0, y1: 1, ao: 0.35, slope: 0, base: 0, dyn: true };
             // the driver's seat (a seat as the Walker takes one: its eye in the bus's frame; its name the prompt while
             // seated in it), and where its driver gets out: by the front door, outside

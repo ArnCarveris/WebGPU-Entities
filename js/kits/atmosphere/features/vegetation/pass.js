@@ -153,7 +153,7 @@ class VegetationPass {
         this.argsBuf = d.createBuffer({ label: 'veg-args', size: this.args.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC });
         // the scatter: the world's bindings (as the scene pass), its output
         const out = bindLayout(d, GPUShaderStage.COMPUTE, ['storage', 'storage']);
-        const code = shaderSource(r.worldSet, r.wgsl.code('SKY', 'WEATHER_SAMPLE', 'SHADOW_SAMPLE', 'SHELTER', 'BUILDING', 'TERRAIN', 'FOREST', 'VEG_SCATTER'));
+        const code = shaderSource(r, r.worldSet, r.wgsl.code('SKY', 'WEATHER_SAMPLE', 'SHADOW_SAMPLE', 'SHELTER', 'TERRAIN', 'FOREST', 'VEG_SCATTER'));
         const module = d.createShaderModule({ label: 'vegetation', code });
         const layout = d.createPipelineLayout({ bindGroupLayouts: [r.worldSet.layout, out] });
         this.scatter = d.createComputePipeline({ label: 'veg-scatter', layout, compute: { module, entryPoint: 'vegScatter' } });

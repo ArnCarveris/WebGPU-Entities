@@ -3,7 +3,7 @@
 // street lamps of the lit town are points on its TOWN_BLOCK m street grid, one every FAR_LAMP_PITCH m, kept where the
 // town is dense enough (with a hash, so its edges thin out), never on water nor near the structures' real lamps.
 
-Features.kit('atmosphere', (engine, kit) => {
+Features.feature('atmosphere/structures', (engine, kit) => {
 const { Common, kits } = engine;
 const { clamp, sat01 } = Common;
 const { FAR_FLOATS, TOWN_BLOCK, FAR_LAMP_PITCH, FAR_LAMP_SIDE, FAR_LAMP_REACH, FAR_LAMP_H, MAX_GLOWS } = kit;

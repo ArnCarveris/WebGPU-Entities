@@ -3,18 +3,20 @@
 // Ladders): E presses the panel button in view, calls the car at the landing door in view (held: its emergency
 // release), takes hold of the emergency ladder in a shaft, steps out from it through a landing door. Someone in a shaft
 // (on its ladder, a car's roof, the pit) keeps its cars halted. host: { world (its structures: lifts, ladders), walker,
-// camera, renderer (the lifts' panels' GUI), input (keys held), fx (emit, cameraLocked), rideCar (set: the car the
-// camera is in) }; reach (m): how near a panel or door can be used; cars(): the cars in view (RoomVis's), or null;
-// view(): the camera the host renders with ({ viewProj, height (px) }: the panels rebuilt when GuiSchedule has them
-// due), or null (every panel near rebuilt each frame).
+// camera, renderer, input (keys held), fx (emit, cameraLocked), rideCar (set: the car the camera is in) }; reach (m): how
+// near a panel or door can be used; cars(): the cars in view (RoomVis's), or null; view(): the camera the host renders
+// with ({ viewProj, height (px) }: the panels rebuilt when GuiSchedule has them due), or null (every panel near rebuilt
+// each frame); gui(): what draws the panels' GUIs (device, dc: a DeviceContext over the gui atlas), the host's renderer
+// by default.
 
 Features.kit('building', (engine, kit) => {
 const { LiftInteraction, Lifts } = engine.kits.transit;
 
 class LiftControl {
-    constructor(app, { reach = 2.4, cars = () => null, view = () => null } = {}) {
+    constructor(app, { reach = 2.4, cars = () => null, view = () => null, gui = () => app.renderer } = {}) {
         this.app = app;
         this.reach = reach;
+        this.gui = gui;
         this.cars = cars;
         this.view = view;
         this.lifts = null;
@@ -28,7 +30,7 @@ class LiftControl {
         const a = this.app, S = a.world.structures, L = S.lifts, cam = a.camera, wk = a.walker;
         if (this.lifts !== L) {
             this.lifts = L;
-            this.use = new LiftInteraction(L, { renderer: a.renderer, audio: { emit: (name, payload) => a.fx.emit(name, payload) } });
+            this.use = new LiftInteraction(L, { renderer: this.gui(), audio: { emit: (name, payload) => a.fx.emit(name, payload) } });
         }
         const k = io.pressed.indexOf('KeyE'), press = k >= 0 && !wk.bus, feet = wk.active ? wk.feet : cam.pos;
         const dir = a.fx.cameraLocked ? null : cam.basis().fwd;
@@ -68,7 +70,7 @@ class LiftControl {
             }
             if (l && (!r.prompt || r.prompt.startsWith('hold') || r.prompt === 'E step out')) {
                 prompt = 'E climb onto the emergency ladder';
-                if (press && !r.used) { wk.ladder = { l, y }; wk.feet = S.ladders.hang(l, y); io.pressed.splice(io.pressed.indexOf('KeyE'), 1); }
+                if (press && !r.used) { wk.ladder = { l, y, of: S.ladders }; wk.feet = S.ladders.hang(l, y); io.pressed.splice(io.pressed.indexOf('KeyE'), 1); }
             }
             // in a shaft (not in its car): its cars stay halted
             const sh = this.shaftAt(wk.feet);

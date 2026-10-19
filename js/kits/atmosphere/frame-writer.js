@@ -1,10 +1,10 @@
 'use strict';
-// The frame uniform and the per-frame GPU data: camera and projection, sky, weather map domain, quality, the buses
-// and building interiors to draw, rain, storm cells, cloud features and the weather probe. It keeps what the frame's
-// render and the HUD read back (viewProj, the particle counts, the probe texel, the shadow slices). Written for the app
-// that runs a world under this kit's Renderer (host: world (field, weather, structures, buses, lightning...), camera,
-// renderer, settings (quality, cfg, sun, time...), its surroundings (near, indoors...), panels: the world-space GUIs to
-// draw this frame).
+// The frame uniform and the per-frame GPU data: camera and projection, sky, weather map domain, quality, rain, storm
+// cells, cloud features and the weather probe. It keeps what the frame's render and the HUD read back (viewProj, the
+// particle counts, the probe texel, the shadow slices). Written for the app that runs a world under this kit's Renderer
+// (host: world (field, weather, lightning...), camera, renderer, settings (quality, cfg, sun, time...), its surroundings
+// (near...), extensions). What the features draw this frame, the cabin the camera is in and what shelters it from the
+// weather are its app's extensions' (AppExtension.draws / cabin / shelter: app/app.js).
 
 Features.kit('atmosphere', (engine, kit) => {
 const { Common } = engine;
@@ -12,9 +12,7 @@ const { clamp, sat01, v3, m4, frustumPlanes } = Common;
 const {
     NEAR, WEATHER_RES, GROUND_RES, CELL_FLOATS, QUALITY, SHADOW_SLICES, FROXEL_NEAR, BUS_UNIFORM,
 } = kit;
-const { DRIP_PARTICLES, INTERIOR_DRAW } = engine.kits.settlement;
 const { rainFall, Sky } = engine.kits.weather;
-const { BUS_DRAW, BUS } = engine.kits.transit;
 
 class FrameWriter {
     constructor(app) {
@@ -51,84 +49,21 @@ class FrameWriter {
         // on foot the near plane comes in to 5 cm (seat backs and bus walls are within a metre); reversed-Z keeps the far depth precise
         const near = a.walker.active ? 0.05 : NEAR, proj = m4.reversedInfinite(cam.fov, aspect, near);
         this.viewProj = m4.mul(proj, m4.view(cam.pos, right, up, fwd));
-        // each bus near enough to see (the InteriorIndex's coarse cells within BUS_DRAW, not every bus): its model-view
-        // built in doubles about the camera (its interior a metre away would jitter in f32 world space), nearest first.
-        // k: its slot in busData
-        const draws = [];
-        w.structures.interiors.near(cam.pos, BUS_DRAW, 'vehicle').forEach(({ owner: bus }) => {
-            const k = bus.slot;
-            const m = bus.model, dist = Math.hypot(m[12] - cam.pos[0], m[13] - cam.pos[1], m[14] - cam.pos[2]);
-            if (dist > BUS_DRAW) return;
-            const o = k * BUS_UNIFORM / 4;
-            r.busData.set(m4.mul(proj, m4.aboutEye(m, cam.pos, right, up, fwd)), o);
-            r.busData.set(m, o + 16);
-            r.busData.set(bus.inverse, o + 32);
-            r.busData.set([bus.v, bus.doors, 0, 0], o + 48);
-            draws.push([dist, k]);
-        });
-        r.busDraws = draws.sort((p, q2) => p[0] - q2[0] || p[1] - q2[1]).map(e => e[1]);
-        // building interiors: the rooms of the planned ones the portal traversal reaches (the building kit's RoomVis: the interior kit's
-        // PortalVis, from the camera's room, or from outside through the windows of the storeys within INTERIOR_DRAW,
-        // the same test fsWindow and fsPane make); the unplanned ones (one room each) within INTERIOR_DRAW of their box
-        // that the camera is in or sees into through a portal in the view frustum: only the InteriorIndex cells within
-        // INTERIOR_DRAW are visited, whatever the number of buildings
-        const planes = frustumPlanes(this.viewProj, { reversed: true }), S = w.structures, inside = [];
-        if (this.roomVis?.world !== S) this.roomVis = new engine.kits.building.RoomVis(S, { range: INTERIOR_DRAW, inspect: a.inspect });
-        this.rooms = this.roomVis.compute(cam.pos, this.viewProj, r.width, r.height, inside, near, { basis: { fwd, right, up }, aspect, fov: cam.fov });
-        // the outdoors as the traversal sees it (the renderer leaves it out, or draws it within the portals' rectangle);
-        // the unplanned buildings are seen from it
-        r.outdoors = this.outdoors = this.roomVis.outdoors;
-        if (this.outdoors.seen) for (const [, it] of S.interiors.seen(cam.pos, planes, INTERIOR_DRAW, 'building')) S.buildings.draws(it.owner, inside);
-        // its sector and portal frames, about the eye
-        r.lineLayer.write(this.roomVis.inspector.lines(cam.pos), m4.mul(proj, m4.view([0, 0, 0], right, up, fwd)));
-        // the lift cars the traversal reached (their areas), the landing doors and counterweights near
-        // each building drawn in the frame of its storey nearest the eye (its Origin's level, kits.interior), so what is
-        // near the camera is a few metres from its origin in f32 at any height
-        const frameOf = b => b.interior.origin.level(b.interior.origin.levelNear(cam.pos));
-        r.boxGroups = S.lifts.instances(cam.pos, r.boxData, this.roomVis.cars, this.roomVis.ranges, b => frameOf(b).M[13]);
-        // the doors' leaves in the rooms drawn, after them (the same boxes)
-        const lifted = r.boxGroups.reduce((n, g) => n + g.count, 0);
-        r.boxGroups.push(...S.innerDoors.instances(cam.pos, r.boxData, lifted, this.roomVis.seen, b => frameOf(b).M[13]));
-        r.boxCount = r.boxGroups.reduce((n, g) => n + g.count, 0);
-        // each building drawn, in its Origin's frame: its model-view built in doubles about the camera, in a slot of
-        // busData after the buses' (the interiors' and the lifts' draws name it)
-        const slots = new Map();
-        const slotOf = b => {
-            let k = slots.get(b);
-            if (k !== undefined) return k;
-            if (slots.size >= r.busData.length / (BUS_UNIFORM / 4) - r.originSlot0) return -1;
-            k = r.originSlot0 + slots.size;
-            slots.set(b, k);
-            // its storey's frame (its Origin's level nearest the eye): vsInterior stands each storey (s - that level)
-            // storeys up in it
-            const O = b.interior.origin, s = O.levelNear(cam.pos), M = O.level(s).M, o = k * BUS_UNIFORM / 4;
-            r.busData.set(m4.mul(proj, m4.aboutEye(M, cam.pos, right, up, fwd)), o);
-            r.busData.set(M, o + 16);
-            r.busData.set([0, 0, s, 0], o + 48);
-            return k;
-        };
-        r.interiorDraws = inside.map(d => [d[0], d[1], d[2], d[3], d[4], slotOf(d[4])]).filter(d => d[5] >= 0).sort((p, q) => p[5] - q[5]);
-        for (const g of r.boxGroups) g.slot = slotOf(g.b);
-        r.boxGroups = r.boxGroups.filter(g => g.slot >= 0);
-        r.originCount = slots.size;
-        r.setPanels(a.panels || []);
-        // the cabin the rain and the march leave out: the bus ridden, or the nearest; the lift car the camera is in (its
-        // own air: nothing of the shaft's or the weather's in it); else the building the camera is in
-        const car = a.rideCar;
-        if (car) {
-            const M = car.matrix(), [x0, x1, z0, z1] = car.out;
-            F.set('busInv', [M[0], 0, M[8], 0, 0, 1, 0, 0, M[2], 0, M[10], 0, -(M[0] * M[12] + M[2] * M[14]), -M[13], -(M[8] * M[12] + M[10] * M[14]), 1]);
-            F.set('cabinLo', [x0, -0.2, z0, 1]);
-            F.set('cabinHi', [x1, car.h + 0.15, z1, 0]);
-        } else if (a.rideBus) {
-            F.set('busInv', a.rideBus.inverse);
-            F.set('cabinLo', [-BUS.hl, BUS.skirt, -BUS.hw, 1]);
-            F.set('cabinHi', [BUS.hl, BUS.roof, BUS.hw, 0]);
-        } else if (a.indoors) {
-            const b = a.indoors, { cs, sn, c } = b.f, tx = c[0], tz = c[1];
-            F.set('busInv', [cs, 0, -sn, 0, 0, 1, 0, 0, sn, 0, cs, 0, -(cs * tx + sn * tz), -b.floor, -(-sn * tx + cs * tz), 1]);
-            F.set('cabinLo', [-b.hx + b.t, -0.2, -b.hz + b.t, 1]);
-            F.set('cabinHi', [b.hx - b.t, b.top - b.floor, b.hz - b.t, 0]);
+        // what the features draw this frame (their AppExtension.draws: the buses near, the rooms the portal traversal reaches
+        // and their lifts, the world-space GUIs); one that sees the outdoors from inside sets this.outdoors ({ seen, rect })
+        this.outdoors = null;
+        const view = { proj, near, basis: { fwd, right, up }, aspect, planes: frustumPlanes(this.viewProj, { reversed: true }) };
+        for (const x of a.extensions) x.draws?.(this, view);
+        r.outdoors = this.outdoors;
+        // the cabin the rain and the march leave out (the features': AppExtension.cabin() { rank, inv (world to its frame),
+        // lo, hi }, the lowest rank's: the lift car the camera is in, the bus ridden or the nearest, the building it is in),
+        // or none
+        let cabin = null;
+        for (const x of a.extensions) { const cb = x.cabin?.(); if (cb && (!cabin || cb.rank < cabin.rank)) cabin = cb; }
+        if (cabin) {
+            F.set('busInv', cabin.inv);
+            F.set('cabinLo', cabin.lo);
+            F.set('cabinHi', cabin.hi);
         } else F.set('cabinLo', [0, 0, 0, 0]);
         // weather map follows the camera, snapped to its texels so it does not swim
         const ws = cfg.weatherSize, texel = ws / WEATHER_RES;
@@ -180,9 +115,12 @@ class FrameWriter {
         this.rainParticles = Math.round(cfg.particles * (1 + 2 * sat01((a.near.rain - 0.6) / 0.8) * drops));
         F.set('rain', [drops, rainFall(drops), c.rain, this.rainParticles]);
         w.rainZones.write(F);
-        this.drips = w.structures.boxes.write(F, cam.pos, sky.dir, c.wind, w.weather.freezingLevel, rainFall(drops));
+        // what shelters from the weather (AppExtension.shelter: the structures' boxes, their sun and rain shadows, the roof
+        // edges the rain drips off: this.drips of them, this.dripParticles the drops falling off them)
+        this.drips = this.dripParticles = 0;
+        for (const x of a.extensions) x.shelter?.(this, F, { cam: cam.pos, sun: sky.dir, wind: c.wind, freezing: w.weather.freezingLevel, fall: rainFall(drops) });
         a.lights.write(F, cam.pos, fwd, right, up);
-        this.splashStart = this.rainParticles + (this.drips && a.near.rain > 0.02 ? DRIP_PARTICLES : 0);
+        this.splashStart = this.rainParticles + (this.drips && a.near.rain > 0.02 ? this.dripParticles : 0);
         F.set('drips', [this.splashStart], 1);
         F.set('misc', [c.temperature, a.time * cfg.fallSpeed % 52000, f.base, wdt]);
         w.lightning.write(F);

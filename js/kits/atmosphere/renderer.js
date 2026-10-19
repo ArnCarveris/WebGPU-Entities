@@ -1,44 +1,46 @@
 'use strict';
-// The renderer: owns the GPU resources and encodes a frame.
+// The renderer: owns the GPU resources and encodes a frame: the sky, the terrain, the weather, the volumetrics, the
+// precipitation, the bloom and the composite. What a world has beyond that (its structures, plants, buses...) the features
+// on in it draw, as its extensions.
 
 Features.kit('atmosphere', (engine, kit) => {
 const { Common, kits } = engine;
 const { makeBuffer, bindLayout, bindGroup, frustumPlanes } = Common;
-const { GuiAtlas, DeviceContext, WorldGuiPass } = kits.gui;
-const { StencilLayout } = kits.gpu;
 const {
-    MAX_CELLS, CELL_FLOATS, FAR_FLOATS, MAX_FAR_DYN, FAR_LAMP_H, FAR_LAMP_REACH, MAX_POLES, BLOOM_LEVELS,
-    FrameBlock, WORLD_BINDINGS, BindingSet, BUS_UNIFORM, NoiseVolumes, shaderSource, atmosphereWgsl,
+    MAX_CELLS, CELL_FLOATS, BLOOM_LEVELS, FrameBlock, WORLD_BINDINGS, BindingSet, BUS_UNIFORM, NoiseVolumes, shaderSource, atmosphereWgsl,
     WeatherPass, GroundPass, FroxelPass, CloudPass,
 } = kit;
 const { MAX_BOLT_SEGS } = kits.weather;
-const { STRUCT_FLOATS, BUILDING_FLOATS, STRUCT_COLORS, Structures } = kits.settlement;
-const { TiledMesh } = kits.mesh;
-const { GroundFrame } = Common;
 const { GpuProfiler } = kits.gpu;
 const { TerrainLod, TERRAIN_MAX_NODES, terrainPatchIndices } = kits.terrain;
-const { BOX_FLOATS } = kits.transit;
-const MAX_BOXES = 4096;          // lift parts drawn a frame (vsBox)
-const MAX_ORIGINS = 96;          // buildings whose interiors (and lifts) are drawn a frame, each in its Origin's frame (busData slots)
-const MAX_PANELS = 16;           // world-space GUIs drawn a frame (the GUI pass's default; render.gui.max)
 
 // Renderer. What the features on in its world add to it are its extensions (RendererExtension: a class built with the
-// renderer, new E(renderer)), in the features' order; each hook optional:
+// renderer, new E(renderer), kept as renderer.ext[E.key]), in the features' order; each member optional:
+//   frame                    its fields of the frame uniform (FrameBlock: [name, type] pairs, after the core's)
 //   wgsl(library, modules)   its shader chunks, over the core's stubs, before any module is made; modules: the chunk
 //                            names of the scene and final modules ({ scene, final }), to add its own to
 //   pipelines(ctx)           its pipelines, after the core's: ctx { scene, final (modules), layoutA (world), layoutB
 //                            (+ screen), layoutBus (+ object frame), layoutGlass, pipe(layout, module, vs, fs, format,
-//                            depth, blend, buffers), structVerts }
-//   setWorld(world)          its buffers for a new world
+//                            depth, blend, buffers) }
+//   init()                   its resources (async), after the pipelines
+//   frames(world)            how many object frames (busData slots) it draws in; its first is frameBase
+//   setWorld(world)          its buffers for a new world (before the world's bind group)
+//   bindings(res)            its resources of the world bind group (res: the core's, by name; 'buildings')
+//   prepare(enc)             before the frame's passes (its targets)
 //   encode(enc, prof)        its compute passes, before the scene pass
-//   outdoor(pass, ctx)       its draws of the outdoors in the scene pass (after the terrain; scissored to the portals
-//                            the outdoors is seen through): ctx { drawPatches() (the terrain's patches again) }
+//   outdoor(pass, ctx)       its draws of the outdoors in the scene pass (after the terrain; scissored to the portals the
+//                            outdoors is seen through): ctx { drawPatches() (the terrain's patches again) }
+//   indoor(pass)             its draws of what is inside, over the whole screen, after the outdoors
+//   late(pass)               the outdoors after the indoors (scissored as outdoor's)
+//   final(pass)              its draws in the final pass, after the composite and the precipitation
 class Renderer {
     // fx: the world context (the host's device, canvas size, target, the features on in its world (fx.features), and in
     // a composition the other worlds to put under the clouds: fx.inject; see js/engine/host.js)
     constructor(fx) {
         this.fx = fx;
-        this.extensions = kits.gpu.extensionsOf(fx.features, 'renderer').map(E => new E(this));
+        this.ext = {};
+        this.extensions = kits.gpu.extensionsOf(fx.features, 'renderer').map(E => (this.ext[E.key] = new E(this)));
+        this.outdoors = null;           // the outdoors seen from inside ({ seen, rect }: a feature's portal traversal), or all of it
     }
 
     async init() {
@@ -46,8 +48,8 @@ class Renderer {
         // the shaders: the core's chunks, the features' over them; the scene and final modules' chunks
         this.wgsl = atmosphereWgsl();
         this.modules = {
-            scene: ['SKY', 'WEATHER_SAMPLE', 'SHADOW_SAMPLE', 'SHELTER', 'BUILDING', 'TERRAIN', 'FOREST', 'BUS1', 'SCENE'],
-            final: ['SKY', 'WEATHER_SAMPLE', 'SHADOW_SAMPLE', 'SHELTER', 'BUILDING', 'TERRAIN', 'BUS2', 'FINAL'],
+            scene: ['SKY', 'WEATHER_SAMPLE', 'SHADOW_SAMPLE', 'SHELTER', 'TERRAIN', 'FOREST', 'SCENE'],
+            final: ['SKY', 'WEATHER_SAMPLE', 'SHADOW_SAMPLE', 'SHELTER', 'TERRAIN', 'FINAL'],
         };
         for (const x of this.extensions) x.wgsl?.(this.wgsl, this.modules);
         this.profiler = new GpuProfiler(this.device, ['weather', 'ground', 'vegetation', 'scene', 'froxel', 'tiles', 'march', 'resolve', 'bloom', 'final']);
@@ -57,11 +59,13 @@ class Renderer {
         this.depthFormat = this.device.features.has('depth32float-stencil8') ? 'depth32float-stencil8' : 'depth32float';
         this.stencilBits = this.depthFormat === 'depth32float' ? 0 : 8;
         const d = this.device, B = GPUBufferUsage;
-        this.frame = new FrameBlock();
+        this.frame = new FrameBlock(this.extensions.flatMap(x => x.frame || []));
         this.frameBuf = makeBuffer(d, this.frame.data.byteLength, B.UNIFORM | B.COPY_DST);
         this.cellData = new Float32Array(MAX_CELLS * CELL_FLOATS);
         this.cellBuf = makeBuffer(d, this.cellData.byteLength, B.STORAGE | B.COPY_DST);
         this.boltBuf = makeBuffer(d, MAX_BOLT_SEGS * 32, B.STORAGE | B.COPY_DST);
+        // the world bind group's 'buildings' when no feature binds its own (the structures' records)
+        this.noBuildings = makeBuffer(d, 512, B.STORAGE);
         this.repSamp = d.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'repeat', addressModeV: 'repeat', addressModeW: 'repeat' });
         this.clampSamp = d.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' });
         this.noise = new NoiseVolumes(d);
@@ -70,56 +74,20 @@ class Renderer {
         this.froxelPass = new FroxelPass(this);
         this.cloudPass = new CloudPass(this);
         this.createPipelines();
-        await this.initGui();
+        for (const x of this.extensions) await x.init?.();
         this.width = this.height = 0;
         this.scale = 0.5;
     }
 
-    // the world-space GUIs (the lifts' panels: the gui kit's WorldGuiPass, set up for the scenario's `render.gui` by
-    // setGui); the box instances of the lifts (vsBox)
-    async initGui() {
-        const d = this.device;
-        await GuiAtlas.loadFonts();
-        this.atlas = new GuiAtlas();
-        this.atlasView = this.atlas.upload(this);
-        this.dc = new DeviceContext(this.atlas);
-        this.panelDraws = [];
-        this.setGui({});
-        this.boxData = new Float32Array(MAX_BOXES * BOX_FLOATS);
-        this.boxBuf = makeBuffer(d, this.boxData.byteLength, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST);
-        this.boxCount = 0;
-        this.boxGroups = [];
-        this.originCount = 0;
-    }
-
-    // How world-space GUIs are drawn (data: the scenario's `render.gui`: { mode: 'auto' (world-space while the stencil
-    // has a value free for them, else render targets) | 'world' | 'target', max (GUIs a frame), rtMax (a target's
-    // longest side, texels), glass ([r, g, b]: under the GUI, linear), stencil (bits the layout shares out; default the
-    // depth target's) }): a stencil layout for the scene's depth, the GUI pass reserving its slot in it
-    setGui(cfg = {}) {
-        const key = JSON.stringify(cfg);
-        if (this.guiKey === key) return;
-        this.guiKey = key;
-        this.stencil = new StencilLayout(Math.min(this.stencilBits, cfg.stencil ?? this.stencilBits));
-        this.gui = new WorldGuiPass(this.device, { color: 'rgba16float', depth: { format: this.depthFormat, compare: 'greater' }, stencil: this.stencil,
-            mode: cfg.mode ?? 'auto', max: cfg.max ?? MAX_PANELS, rtMax: cfg.rtMax ?? 512, ...(cfg.glass ? { glass: cfg.glass } : {}) });
-        this.gui.reserve();
-        this.stencil.resolve();
-        this.gui.init();
-        this.gui.registerMaterial('atlas', this.atlasView);
-    }
-
-    // the GUIs to draw this frame (EntityGUIs, placed)
-    setPanels(list) { this.panelDraws = list.slice(0, this.gui.o.max); }
-
     createPipelines() {
         const d = this.device;
         this.screenLayout = bindLayout(d, GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, ['tex', 'tex', 'depth', 'tex']);
-        const scene = this.sceneModule = d.createShaderModule({ label: 'scene', code: shaderSource(this.worldSet, this.wgsl.code(...this.modules.scene)) });
-        const final = d.createShaderModule({ label: 'final', code: shaderSource(this.worldSet, this.wgsl.code(...this.modules.final)) });
+        const scene = this.sceneModule = d.createShaderModule({ label: 'scene', code: shaderSource(this, this.worldSet, this.wgsl.code(...this.modules.scene)) });
+        const final = d.createShaderModule({ label: 'final', code: shaderSource(this, this.worldSet, this.wgsl.code(...this.modules.final)) });
         const layoutA = d.createPipelineLayout({ bindGroupLayouts: [this.worldSet.layout] });
         const layoutB = d.createPipelineLayout({ bindGroupLayouts: [this.worldSet.layout, this.screenLayout] });
-        // one bus's uniforms (wgslBus), at a dynamic offset per bus: group 1 in the scene pass, group 2 in the final one
+        // an object's frame (busData: wgslObject), at a dynamic offset per object: group 1 in the scene pass, group 2 in the
+        // final one
         this.busLayout = d.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT,
             buffer: { type: 'uniform', hasDynamicOffset: true, minBindingSize: 208 } }] });
         const layoutBus = d.createPipelineLayout({ bindGroupLayouts: [this.worldSet.layout, this.busLayout] });
@@ -137,57 +105,14 @@ class Renderer {
         // the terrain patch: vertex index -> patch corner; a node (x0, z0, size, lod) per instance
         this.pTerrain = pipe(layoutA, scene, 'vsTerrain', 'fsTerrain', 'rgba16float', { write: true, compare: 'greater' }, undefined, [{
             arrayStride: 16, stepMode: 'instance', attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x4' }] }]);
-        const structVerts = [{
-            arrayStride: STRUCT_FLOATS * 4, attributes: [
-                { shaderLocation: 0, offset: 0, format: 'float32x3' }, { shaderLocation: 1, offset: 12, format: 'float32x3' },
-                { shaderLocation: 2, offset: 24, format: 'float32x4' }],
-        }];
-        this.pStruct = pipe(layoutA, scene, 'vsStruct', 'fsStruct', 'rgba16float', { write: true, compare: 'greater' }, undefined, structVerts);
-        // big static geometry (Structures.bulk, the mesh kit's TiledMesh: a real place's roads and buildings): indexed,
-        // position + colour word, flat-shaded
-        this.pBulk = pipe(layoutA, scene, 'vsBulk', 'fsBulk', 'rgba16float', { write: true, compare: 'greater' }, undefined, [{
-            arrayStride: TiledMesh.FLOATS * 4, attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }, { shaderLocation: 1, offset: 12, format: 'unorm8x4' }] }]);
-        this.pBus = pipe(layoutBus, scene, 'vsBus', 'fsBus', 'rgba16float', { write: true, compare: 'greater' }, undefined, structVerts);
-        // buildings (Buildings.add): interiors near them, door leaves, the opaque panes far off, the glass near
-        this.pInterior = pipe(layoutBus, scene, 'vsInterior', 'fsInterior', 'rgba16float', { write: true, compare: 'greater' }, undefined, structVerts);
-        // the lifts' parts: a unit cube per instance (Lifts.instances), shaded as the interior they stand in
-        const boxVerts = [structVerts[0], { arrayStride: BOX_FLOATS * 4, stepMode: 'instance', attributes: [3, 4, 5].map((k, i) => ({ shaderLocation: k, offset: i * 16, format: 'float32x4' })) }];
-        this.pBox = pipe(layoutBus, scene, 'vsBox', 'fsInterior', 'rgba16float', { write: true, compare: 'greater' }, undefined, boxVerts);
-        const U = new Structures(null);
-        U.cur = [];
-        U.prism(new GroundFrame([0, 0], 0), 0, 0, 1, 1, -1, 1, [1, 1, 1], 0);
-        const cm = new Float32Array(U.cur);
-        this.cube = { n: cm.length / STRUCT_FLOATS, buf: makeBuffer(d, cm.byteLength, GPUBufferUsage.VERTEX, cm) };
-        this.pDoor = pipe(layoutA, scene, 'vsStruct', 'fsDoor', 'rgba16float', { write: true, compare: 'greater' }, undefined, structVerts);
-        this.pPane = pipe(layoutA, scene, 'vsStruct', 'fsPane', 'rgba16float', { write: true, compare: 'greater' }, undefined, structVerts);
-        // the distant lights (vsFar): a quad per instance, added
-        const farVerts = [{ arrayStride: FAR_FLOATS * 4, stepMode: 'instance', attributes: [0, 1, 2, 3].map(k => ({ shaderLocation: k, offset: k * 16, format: 'float32x4' })) }];
-        const blendSum = { color: { srcFactor: 'one', dstFactor: 'one' }, alpha: { srcFactor: 'zero', dstFactor: 'one' } };
-        this.pFar = pipe(layoutA, scene, 'vsFar', 'fsFar', 'rgba16float', { write: false, compare: 'greater' }, blendSum, farVerts);
-        this.pFarPool = pipe(layoutA, scene, 'vsFarPool', 'fsFarPool', 'rgba16float', { write: false, compare: 'greater' }, blendSum, farVerts);
-        const poleVerts = [structVerts[0], { arrayStride: 32, stepMode: 'instance', attributes: [3, 4].map((k, i) => ({ shaderLocation: k, offset: i * 16, format: 'float32x4' })) }];
-        this.pFarPole = pipe(layoutA, scene, 'vsFarPole', 'fsStruct', 'rgba16float', { write: true, compare: 'greater' }, undefined, poleVerts);
-        // one street lamp in its own frame (as Fixtures.lamp builds it, head FAR_LAMP_H up), for every fake one drawn
-        const T = new Structures(null), f = new GroundFrame([0, 0], 0), h = FAR_LAMP_H + 0.3, reach = FAR_LAMP_REACH, C = STRUCT_COLORS;
-        T.cur = [];
-        T.prism(f, 0, 0, 0.08, 0.08, -0.3, h, C.metal, 4);
-        T.prism(f, reach / 2, 0, reach / 2, 0.04, h - 0.07, h, C.metal, 4);
-        T.prism(f, reach, 0, 0.34, 0.15, h - 0.14, h + 0.04, C.metal, 4);
-        T.prism(f, reach, 0, 0.29, 0.12, h - 0.19, h - 0.14, [1, 1, 1], 7);
-        const pm = new Float32Array(T.cur);
-        this.poleMesh = { n: pm.length / STRUCT_FLOATS, buf: makeBuffer(d, pm.byteLength, GPUBufferUsage.VERTEX, pm) };
-        this.poleBuf = makeBuffer(d, MAX_POLES * 32, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST);
-        this.poleCount = 0;
-        this.pWindow = pipe(layoutB, final, 'vsWindow', 'fsWindow', this.format, { write: false, compare: 'greater' }, blendAlpha, structVerts);
         this.pComposite = pipe(layoutB, final, 'vsFull', 'fsComposite', this.format, { write: false, compare: 'always' });
-        this.pGlass = pipe(layoutGlass, final, 'vsGlass', 'fsGlass', this.format, { write: false, compare: 'greater' }, blendAlpha, structVerts);
         this.pPrecip = pipe(layoutB, final, 'vsPrecip', 'fsPrecip', this.format, { write: false, compare: 'greater' }, blendAlpha);
         this.pBolt = pipe(layoutB, final, 'vsBolt', 'fsBolt', this.format, { write: false, compare: 'greater' }, blendAdd);
         // the sector and portal frames (the interior kit's VisInspector lines, about the eye), over the finished frame
-        this.lineLayer = new engine.kits.gpu.LineLayer(d, { format: this.format, depth: { format: this.depthFormat, compare: 'greater' } });
+        this.lineLayer = new kits.gpu.LineLayer(d, { format: this.format, depth: { format: this.depthFormat, compare: 'greater' } });
         // bloom (WGSL_BLOOM): fullscreen passes into the levels of this.bloom, no depth
         this.bloomLayout = bindLayout(d, GPUShaderStage.FRAGMENT, ['tex', 'tex']);
-        const bloom = d.createShaderModule({ label: 'bloom', code: shaderSource(this.worldSet, this.wgsl.code('BLOOM')) });
+        const bloom = d.createShaderModule({ label: 'bloom', code: shaderSource(this, this.worldSet, this.wgsl.code('BLOOM')) });
         const layoutBloom = d.createPipelineLayout({ bindGroupLayouts: [this.worldSet.layout, this.bloomLayout] });
         const bloomPipe = (fs, blend) => d.createRenderPipeline({
             label: fs, layout: layoutBloom,
@@ -206,7 +131,7 @@ class Renderer {
             fragment: { module: final, entryPoint: 'fsBoltGlow', targets: [{ format: 'rgba16float', blend: blendOne }] },
             primitive: { topology: 'triangle-list' },
         });
-        const ctx = { scene, final, layoutA, layoutB, layoutBus, layoutGlass, pipe, structVerts };
+        const ctx = { scene, final, layoutA, layoutB, layoutBus, layoutGlass, pipe, blendAlpha };
         for (const x of this.extensions) x.pipelines?.(ctx);
     }
 
@@ -236,62 +161,28 @@ class Renderer {
             this.terrainNodes = d.createBuffer({ size: TERRAIN_MAX_NODES * 16, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
         }
         this.groundPass = new GroundPass(this, world);
-        this.structBuf?.destroy();
-        const sv = new Float32Array(world.structures.v);
-        this.structCount = sv.length / STRUCT_FLOATS;
-        this.structBuf = this.structCount ? makeBuffer(d, sv.byteLength, GPUBufferUsage.VERTEX, sv) : null;
-        // the bulk geometry: one vertex and one index buffer, drawn by the tiles in view (bulkDraws)
-        this.bulkV?.destroy();
-        this.bulkI?.destroy();
-        const bk = world.structures.bulk.finish();
-        this.bulkTiles = bk.tiles;
-        this.bulkV = bk.indices.length ? makeBuffer(d, bk.vertices.byteLength, GPUBufferUsage.VERTEX, bk.vertices) : null;
-        this.bulkI = bk.indices.length ? makeBuffer(d, bk.indices.byteLength, GPUBufferUsage.INDEX, bk.indices) : null;
-        // the buildings: their records (WGSL_BUILDING), interiors (one vertex range each, drawn near them: interiorDraws),
-        // window glass and far panes, and the door leaves (rewritten when one moves: writeDoors)
-        const S = world.structures, vb = arr => { const a = new Float32Array(arr); return { n: a.length / STRUCT_FLOATS, buf: a.length ? makeBuffer(d, a.byteLength, GPUBufferUsage.VERTEX, a) : null }; };
-        for (const k of ['interior', 'glassV', 'paneV', 'doorV']) this[k]?.buf?.destroy();
-        this.buildingBuf?.destroy();
-        this.interior = vb(S.iv);
-        this.glassV = vb(S.glass);
-        this.paneV = vb(S.panes);
-        const dm = S.doors.mesh();
-        this.doorV = { n: dm.length / STRUCT_FLOATS, buf: dm.length ? makeBuffer(d, dm.length * 4, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST, new Float32Array(dm)) : null };
-        const rec = S.buildings.buffer(BUILDING_FLOATS);          // (the records, then the planned storeys' codes)
-        this.buildingBuf = makeBuffer(d, rec.byteLength, GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST, rec);
-        this.buildingRec = rec;
-        this.interiorDraws = [];
-        // the distant lights: the static ones (FarLights), then MAX_FAR_DYN slots for the buses' (LightWriter.writeFar)
-        this.farBuf?.destroy();
-        this.farStatic = world.far.lights.length / FAR_FLOATS;
-        this.farBuf = makeBuffer(d, (this.farStatic + MAX_FAR_DYN) * FAR_FLOATS * 4, GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST);
-        if (this.farStatic) d.queue.writeBuffer(this.farBuf, 0, world.far.lights);
-        this.farCount = 0;
-        this.realFar = world.far.real;
-        // the buses, each in its own frame: opaque mesh and glass, and its uniforms (busData, BUS_UNIFORM bytes each); the
-        // app lists the ones to draw this frame in busDraws, nearest first
-        for (const m of this.busMeshes || []) { m.buf?.destroy(); m.glass?.destroy(); }
-        this.busMeshes = world.buses.map(b => {
-            const bv = new Float32Array(b.mesh.v), gv = new Float32Array(b.mesh.glass);
-            return { count: bv.length / STRUCT_FLOATS, glassCount: gv.length / STRUCT_FLOATS,
-                buf: bv.length ? makeBuffer(d, bv.byteLength, GPUBufferUsage.VERTEX, bv) : null,
-                glass: gv.length ? makeBuffer(d, gv.byteLength, GPUBufferUsage.VERTEX, gv) : null };
-        });
+        // the objects drawn in their own frames (busData, BUS_UNIFORM bytes each): each extension's frames(world) of
+        // them from its frameBase; written each frame up to what they used (useFrames)
+        let slots = 0;
+        for (const x of this.extensions) { x.frameBase = slots; slots += x.frames?.(world) || 0; }
         this.busUBuf?.destroy();
-        // (and after the buses' slots, MAX_ORIGINS for the buildings drawn: their Origins about the camera, FrameWriter)
-        this.originSlot0 = world.buses.length;
-        this.busData = new Float32Array((world.buses.length + MAX_ORIGINS) * BUS_UNIFORM / 4);
+        this.busData = new Float32Array(Math.max(slots, 1) * BUS_UNIFORM / 4);
         this.busUBuf = d.createBuffer({ size: this.busData.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
-        this.busGroup = d.createBindGroup({ label: 'bus', layout: this.busLayout, entries: [{ binding: 0, resource: { buffer: this.busUBuf, size: 208 } }] });
-        this.busDraws = [];
-        this.worldGroup = this.worldSet.group({
+        this.busGroup = d.createBindGroup({ label: 'object frames', layout: this.busLayout, entries: [{ binding: 0, resource: { buffer: this.busUBuf, size: 208 } }] });
+        this.framesUsed = 0;
+        for (const x of this.extensions) x.setWorld?.(world);
+        const res = {
             F: this.frameBuf, shapeTex: this.noise.shapeView, detailTex: this.noise.detailView, weatherTex: this.weatherPass.weatherView,
             shadowTex: this.weatherPass.shadowView, heightTex: this.heightView, landTex: this.landMap.createView(), smoothTex: this.smoothMap.createView(), canopyTex: this.canopyMap.createView(), repSamp: this.repSamp,
             clampSamp: this.clampSamp, cells: this.cellBuf, ground: this.groundPass.buffer, bolts: this.boltBuf, anvilTex: this.weatherPass.anvilView,
-            layerTex: this.weatherPass.layerView, styleTex: this.weatherPass.styleView, occ: this.weatherPass.occ, buildings: this.buildingBuf,
-        }, 'world');
-        for (const x of this.extensions) x.setWorld?.(world);
+            layerTex: this.weatherPass.layerView, styleTex: this.weatherPass.styleView, occ: this.weatherPass.occ, buildings: this.noBuildings,
+        };
+        for (const x of this.extensions) x.bindings?.(res);
+        this.worldGroup = this.worldSet.group(res, 'world');
     }
+
+    // an extension used its frames up to its count-th this frame (written to the GPU with the frame)
+    useFrames(x, count) { if (count) this.framesUsed = Math.max(this.framesUsed, x.frameBase + count); }
 
     // the terrain's nodes for this frame's eye (TerrainLod.select), written to terrainNodes: [quadrant (0 the whole
     // patch, q + 1 its quarter q), first instance, instances]
@@ -302,34 +193,8 @@ class Renderer {
         return L.draws;
     }
 
-    // the bulk tiles in view this frame, neighbouring ones merged: [[first index, count], ...]. A tile's box reaches down by
-    // as much as the outdoors drawn curved lowers it at its far side (curveToRender), so no tile is culled where it shows
-    bulkDraws() {
-        const F = this.frame.data, o = this.frame.offsets, planes = frustumPlanes(F.subarray(o.viewProj, o.viewProj + 16), { reversed: true });
-        const cam = [F[o.cam], F[o.cam + 1], F[o.cam + 2]], R = F[o.curve + 3] || 6371000, out = [];
-        this.bulkSeen = 0;
-        for (const t of this.bulkTiles) {
-            const b = t.box, far = Math.hypot(Math.max(Math.abs(cam[0] - b[0]), Math.abs(cam[0] - b[3])), Math.max(Math.abs(cam[2] - b[2]), Math.abs(cam[2] - b[5])));
-            const lo = [b[0], b[1] - far * far / (2 * R), b[2]], hi = [b[3], b[4], b[5]];
-            if (planes.some(p => p[0] * (p[0] > 0 ? hi[0] : lo[0]) + p[1] * (p[1] > 0 ? hi[1] : lo[1]) + p[2] * (p[2] > 0 ? hi[2] : lo[2]) + p[3] < 0)) continue;
-            const last = out[out.length - 1];
-            if (last && last[0] + last[1] === t.first) last[1] += t.count; else out.push([t.first, t.count]);
-            this.bulkSeen++;
-        }
-        return out;
-    }
-
     // a depth-stencil attachment's stencil ops (none on a depth-only target)
     stencilOps(load) { return this.stencilBits ? { stencilLoadOp: load, stencilStoreOp: 'store', stencilClearValue: 0 } : {}; }
-
-    // the door leaves as they stand now (Doors.mesh, same size every time)
-    writeDoors(mesh) { if (this.doorV.buf) this.device.queue.writeBuffer(this.doorV.buf, 0, new Float32Array(mesh)); }
-
-    // the buildings' records again (their doors moved: the light through them, WGSL_BUILDING)
-    writeBuildings(B) {
-        B.list.forEach((b, i) => this.buildingRec.set(B.record(b), i * BUILDING_FLOATS));
-        this.device.queue.writeBuffer(this.buildingBuf, 0, this.buildingRec, 0, B.list.length * BUILDING_FLOATS);
-    }
 
     resize(scale) {
         const [w, h] = this.fx.size();
@@ -449,18 +314,15 @@ class Renderer {
     }
 
     render(enc, probeTexel, particles, bolts, interleave, shadowSlices, froxels, volumetrics = true, tiles = true, bloom = true) {
-        const q = this.device.queue, prof = this.profiler;
+        const q = this.device.queue, prof = this.profiler, X = this.extensions;
         q.writeBuffer(this.frameBuf, 0, this.frame.data);
         q.writeBuffer(this.cellBuf, 0, this.cellData);
-        if (this.busDraws.length || this.originCount) q.writeBuffer(this.busUBuf, 0, this.busData, 0, (this.originSlot0 + this.originCount) * BUS_UNIFORM / 4);
-        if (this.boxCount) q.writeBuffer(this.boxBuf, 0, this.boxData, 0, this.boxCount * BOX_FLOATS);
-        // the world-space GUIs' uniforms (the fallback: their targets, when their models changed), lit as the lamps
-        // are, the eye adapted
-        const Fd = this.frame.data, fo = this.frame.offsets;
-        this.gui.prepare(enc, this.panelDraws, Fd.subarray(fo.viewProj, fo.viewProj + 16), 0.9 / Math.max(Fd[fo.sunCol + 3], 0.2));
+        if (this.framesUsed) q.writeBuffer(this.busUBuf, 0, this.busData, 0, this.framesUsed * BUS_UNIFORM / 4);
+        this.framesUsed = 0;
+        for (const x of X) x.prepare?.(enc);
         this.weatherPass.encode(enc, probeTexel, prof, shadowSlices);
         this.groundPass.encode(enc, prof);
-        for (const x of this.extensions) x.encode?.(enc, prof);
+        for (const x of X) x.encode?.(enc, prof);
 
         const a = enc.beginRenderPass({
             label: 'scene', timestampWrites: prof.writes('scene'),
@@ -468,86 +330,33 @@ class Renderer {
             depthStencilAttachment: { view: this.depthView, depthLoadOp: 'clear', depthStoreOp: 'store', depthClearValue: 0, ...this.stencilOps('clear') },
         });
         a.setBindGroup(0, this.worldGroup);
-        // the outdoors (FrameWriter: the building kit's RoomVis.outdoors): from inside, only within the screen rectangle of
-        // the portals the traversal passed out to it, or not at all; the interiors after it over the whole screen
+        // the outdoors (a feature's portal traversal, this.outdoors): from inside, only within the screen rectangle of the
+        // portals it passed out to it, or not at all; what is inside after it over the whole screen
         const od = this.outdoors || { seen: true, rect: null }, W = this.width, H = this.height;
         const outdoor = on => { if (od.rect) on ? a.setScissorRect(od.rect[0], od.rect[1], od.rect[2] - od.rect[0], od.rect[3] - od.rect[1]) : a.setScissorRect(0, 0, W, H); };
         if (od.seen) {
-        outdoor(true);
-        a.setPipeline(this.pSky);
-        a.draw(3);
-        a.setPipeline(this.pTerrain);
-        a.setIndexBuffer(this.terrainIndex, 'uint32');
-        a.setVertexBuffer(0, this.terrainNodes);
-        const tDraws = this.terrainDraws();
-        const drawPatches = () => {
-            for (const [q, first, n] of tDraws) {
-                if (q) a.drawIndexed(this.terrainQuarter, n, (q - 1) * this.terrainQuarter, 0, first);
-                else a.drawIndexed(this.terrainQuarter * 4, n, 0, 0, first);
-            }
-        };
-        drawPatches();
-        if (this.structCount) {
-            a.setPipeline(this.pStruct);
-            a.setVertexBuffer(0, this.structBuf);
-            a.draw(this.structCount);
+            outdoor(true);
+            a.setPipeline(this.pSky);
+            a.draw(3);
+            a.setPipeline(this.pTerrain);
+            a.setIndexBuffer(this.terrainIndex, 'uint32');
+            a.setVertexBuffer(0, this.terrainNodes);
+            const tDraws = this.terrainDraws();
+            const drawPatches = () => {
+                for (const [q, first, n] of tDraws) {
+                    if (q) a.drawIndexed(this.terrainQuarter, n, (q - 1) * this.terrainQuarter, 0, first);
+                    else a.drawIndexed(this.terrainQuarter * 4, n, 0, 0, first);
+                }
+            };
+            drawPatches();
+            for (const x of X) x.outdoor?.(a, { drawPatches });
+            outdoor(false);
         }
-        if (this.bulkV) {
-            a.setPipeline(this.pBulk);
-            a.setVertexBuffer(0, this.bulkV);
-            a.setIndexBuffer(this.bulkI, 'uint32');
-            for (const [first, count] of this.bulkDraws()) a.drawIndexed(count, 1, first);
-        }
-        for (const x of this.extensions) x.outdoor?.(a, { drawPatches });
-        if (this.busDraws.length) {
-            a.setPipeline(this.pBus);
-            for (const k of this.busDraws) {
-                const m = this.busMeshes[k];
-                if (!m.count) continue;
-                a.setBindGroup(1, this.busGroup, [k * BUS_UNIFORM]);
-                a.setVertexBuffer(0, m.buf);
-                a.draw(m.count);
-            }
-        }
-        outdoor(false);
-        }
-        // buildings: interiors within INTERIOR_DRAW (vertex ranges, nearest first), door leaves, and the panes of the
-        // windows further off (fsPane drops those of the near ones)
-        // (a storey many share is drawn instanced: [first, count, storeys, how many storeys up the first is])
-        // (each in its building's Origin frame: the slot FrameWriter gave it)
-        if (this.interiorDraws.length) {
-            a.setPipeline(this.pInterior);
-            a.setVertexBuffer(0, this.interior.buf);
-            let slot = -1;
-            for (const [first, count, inst, base, , k] of this.interiorDraws) {
-                if (k !== slot) { a.setBindGroup(1, this.busGroup, [k * BUS_UNIFORM]); slot = k; }
-                a.draw(count, inst, first, base);
-            }
-        }
-        if (this.boxCount) {
-            a.setPipeline(this.pBox);
-            a.setVertexBuffer(0, this.cube.buf);
-            a.setVertexBuffer(1, this.boxBuf);
-            for (const g of this.boxGroups) { a.setBindGroup(1, this.busGroup, [g.slot * BUS_UNIFORM]); a.draw(this.cube.n, g.count, 0, g.first); }
-        }
-        if (this.panelDraws.length) { this.gui.draw(a); a.setBindGroup(0, this.worldGroup); }
+        for (const x of X) x.indoor?.(a);
         if (od.seen) {
-        outdoor(true);
-        if (this.doorV.n) { a.setPipeline(this.pDoor); a.setVertexBuffer(0, this.doorV.buf); a.draw(this.doorV.n); }
-        if (this.paneV.n) { a.setPipeline(this.pPane); a.setVertexBuffer(0, this.paneV.buf); a.draw(this.paneV.n); }
-        if (this.poleCount) {
-            a.setPipeline(this.pFarPole);
-            a.setVertexBuffer(0, this.poleMesh.buf);
-            a.setVertexBuffer(1, this.poleBuf);
-            a.draw(this.poleMesh.n, this.poleCount);
-        }
-        if (this.farCount) {
-            a.setVertexBuffer(0, this.farBuf);
-            if (this.realFar[1]) { a.setPipeline(this.pFarPool); a.draw(6, this.realFar[1], 0, this.realFar[0]); }
-            a.setPipeline(this.pFar);
-            a.draw(6, this.farCount);
-        }
-        outdoor(false);
+            outdoor(true);
+            for (const x of X) x.late?.(a);
+            outdoor(false);
         }
         a.end();
 
@@ -567,20 +376,7 @@ class Renderer {
         b.setPipeline(this.pComposite);
         b.draw(3);
         if (particles) { b.setPipeline(this.pPrecip); b.draw(6, particles); }
-        // the buildings' window glass after the rain (fsWindow drops the panes of buildings beyond INTERIOR_DRAW); then
-        // the buses' windows after the rain outside them (seen from inside, the drops on the glass are in front of it),
-        // furthest first
-        if (this.glassV.n && this.interiorDraws.length) { b.setPipeline(this.pWindow); b.setVertexBuffer(0, this.glassV.buf); b.draw(this.glassV.n); }
-        if (this.busDraws.length) {
-            b.setPipeline(this.pGlass);
-            for (let i = this.busDraws.length - 1; i >= 0; i--) {
-                const k = this.busDraws[i], m = this.busMeshes[k];
-                if (!m.glassCount) continue;
-                b.setBindGroup(2, this.busGroup, [k * BUS_UNIFORM]);
-                b.setVertexBuffer(0, m.glass);
-                b.draw(m.glassCount);
-            }
-        }
+        for (const x of X) x.final?.(b);
         if (bolts) { b.setPipeline(this.pBolt); b.draw(6, bolts); }
         this.lineLayer.draw(b);
         b.end();

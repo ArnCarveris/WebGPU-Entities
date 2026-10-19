@@ -1,13 +1,14 @@
 'use strict';
-// Walking: collision against the terrain and the structures, and the walker's motion. A walker walks in a host's
+// Walking: collision against the terrain and whatever stands on it, and the walker's motion. A walker walks in a host's
 // world (host: { world, camera (a FirstPersonView: yaw, pitch, basis(), pos) }; world: { field (surface(x, z): the
-// ground as drawn), structures (Structures: solids, lifts, ladders, innerDoors), buses (to board and ride), water(x, z)
-// (open water there: no wading in; optional) }).
+// ground as drawn), extensions (WorldExtensions: colliders(p, out) the boxes near feet p that stop or carry it (Solids.add's
+// shape), carrierAt(p) the moving floor it stands in or on (a lift car: toWorld / toLocal of its frame)), buses (vehicles to
+// board and ride: toLocal, toWorld, yaw, colliders(), body (hl, hw, floor), mesh.seats), water(x, z) (open water there:
+// no wading in; optional) }). On a ladder (walker.ladder: { l, y, of }: of.hang(l, y) where the feet are on it at y).
 
-Features.kit('settlement', (engine, kit) => {
+Features.kit('atmosphere', (engine, kit) => {
 const { Common } = engine;
 const { clamp } = Common;
-const { BUS } = engine.kits.transit;
 
 // body radius, highest step, eye height (m), speeds (m/s), climbing a ladder (m/s)
 const WALK = { radius: 0.2, step: 0.5, head: 1.75, eye: 1.62, speed: 1.5, run: 4.5, climb: 0.9, climbFast: 1.8 };
@@ -80,19 +81,18 @@ class Walker {
         this.active = true;
         this.bus = bus;
         this.seat = s;
-        this.feet = [s.x, BUS.floor, s.z];
+        this.feet = [s.x, bus.body.floor, s.z];
         this.lag = 0;
         app.camera.yaw = bus.yaw;
         app.camera.pitch = -0.08;
         this.busYaw = bus.yaw;
     }
 
-    // world: the terrain or the highest box top under the feet (within a step); the walls and floors of buses and lift
-    // cars near it too, and the landing doors that are shut
+    // world: the terrain or the highest box top under the feet (within a step): the world's (its extensions' colliders: a
+    // structure's boxes, lift cars, shut doors); the walls and floors of the buses near it too
     floorAt(app, p, below) {
-        const w = app.world, boxes = w.structures.solids.near(p[0], p[2], 2, p[1]);
-        for (const b of w.structures.lifts.colliders(p)) boxes.push(b);
-        for (const b of w.structures.innerDoors.colliders(p)) boxes.push(b);
+        const w = app.world, boxes = [];
+        for (const x of w.extensions) x.colliders?.(p, boxes);
         for (const bus of w.buses) {
             if (Math.hypot(p[0] - bus.pose.x, p[2] - bus.pose.z) > 10) continue;
             for (const b of bus.colliders()) {
@@ -115,8 +115,9 @@ class Walker {
         const pressed = io.pressed.includes('KeyE');
         if (this.seat) {
             if (pressed) {                                          // stand up into the aisle beside the seat
-                this.feet = [this.seat.x + 0.3, BUS.floor, 0];
-                this.lag = this.seat.eye[1] - BUS.floor - WALK.eye;
+                const floor = this.bus.body.floor;
+                this.feet = [this.seat.x + 0.3, floor, 0];
+                this.lag = this.seat.eye[1] - floor - WALK.eye;
                 this.seat = null;
             } else { this.prompt = `seated: ${this.seat.name} · E stand up`; this.eye(app); return; }
         }
@@ -135,7 +136,7 @@ class Walker {
             p[0] += d[0]; p[2] += d[2];
             const g = collideWalker(p, this.bus.colliders(), -Infinity);
             this.settle(g, y0, dt);
-            if (Math.abs(p[0]) > BUS.hl || Math.abs(p[2]) > BUS.hw) {
+            if (Math.abs(p[0]) > this.bus.body.hl || Math.abs(p[2]) > this.bus.body.hw) {
                 this.feet = this.bus.toWorld(p);
                 this.bus = null;
             }
@@ -143,8 +144,7 @@ class Walker {
             // on a ladder: W climbs, S goes down (Shift faster); off it at its foot, or out at a landing (LiftControl)
             const L = this.ladder, l = L.l, sp = (k.has('ShiftLeft') || k.has('ShiftRight') ? WALK.climbFast : WALK.climb) * dt;
             L.y += ((k.has('KeyW') ? 1 : 0) - (k.has('KeyS') ? 1 : 0)) * sp;
-            const lift = app.world.structures.ladders;
-            this.feet = lift.hang(l, L.y);
+            this.feet = L.of.hang(l, L.y);
             L.y = this.feet[1];
             this.vy = 0;
             if (k.has('KeyS') && L.y <= l.y0 + 1e-3) { this.ladder = null; this.feet[1] = this.floorAt(app, this.feet, -Infinity); }
@@ -153,7 +153,6 @@ class Walker {
             return;
         } else {
             // standing in a lift car (or on its roof): carried in its frame, so it moves with the car this frame
-            const L = app.world.structures.lifts;
             if (this.car) this.feet = this.car.toWorld(this.carLocal);
             const p = this.feet, y0 = p[1], was = [p[0], p[2]], f0 = app.world.field;
             p[0] += mx; p[2] += mz;
@@ -164,15 +163,16 @@ class Walker {
                 g = this.floorAt(app, p, -Infinity);
             }
             this.settle(g, y0, dt);
-            this.car = L.carAt(p, 0.3) || L.roofAt(p);
+            this.car = null;
+            for (const x of app.world.extensions) if ((this.car = x.carrierAt?.(p) || null)) break;
             this.carLocal = this.car ? this.car.toLocal(p) : null;
             // stepped into a bus (through a door): ride along in its frame
             for (const bus of app.world.buses) {
-                const q = bus.toLocal(p);
-                if (Math.abs(q[0]) < BUS.hl - 0.05 && Math.abs(q[2]) < BUS.hw - 0.05 && q[1] > BUS.floor - 0.4) {
+                const q = bus.toLocal(p), B = bus.body;
+                if (Math.abs(q[0]) < B.hl - 0.05 && Math.abs(q[2]) < B.hw - 0.05 && q[1] > B.floor - 0.4) {
                     this.bus = bus;
                     this.busYaw = bus.yaw;
-                    this.feet = [q[0], Math.max(q[1], BUS.floor), q[2]];
+                    this.feet = [q[0], Math.max(q[1], B.floor), q[2]];
                     break;
                 }
             }
@@ -221,5 +221,26 @@ class Walker {
     }
 }
 
-return { WALK, Walker, collideWalker };
+// A footstep every 0.75 m walked (1.1 m running), for the scenario's sound cues (sound.cue: step { wet, run }); host: {
+// walker, camera, input (keys held), near (what falls on the camera: rain), indoors, inBus, fx.emit }
+class Footsteps {
+    constructor(app) {
+        this.app = app;
+        this.stepPos = null;
+        this.stepDist = 0;
+    }
+
+    update() {
+        const a = this.app, cam = a.camera.pos, wk = a.walker;
+        if (wk.active && !wk.bus && this.stepPos) {
+            const keys = a.input.keys, run = keys.has('ShiftLeft') || keys.has('ShiftRight');
+            const dx = Math.hypot(cam[0] - this.stepPos[0], cam[2] - this.stepPos[2]);
+            this.stepDist += dx < 5 ? dx : 0;
+            if (this.stepDist > (run ? 1.1 : 0.75)) { this.stepDist = 0; a.fx.emit('step', { wet: a.near.rain > 0.05 && !(a.indoors || a.inBus), run }); }
+        }
+        this.stepPos = [...cam];
+    }
+}
+
+return { WALK, Walker, collideWalker, Footsteps };
 });

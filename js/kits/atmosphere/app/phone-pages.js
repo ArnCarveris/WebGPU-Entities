@@ -23,7 +23,7 @@ function phonePages(a) {
             ...wx.sections,
         ] },
         { id: 'view', title: 'View', sub: `${a.walker.active ? 'walking' : 'flying'} · ${a.lightName}`, icon: [[255, 149, 0], 'V'], sections: [
-            { cells: [...m.lighting.cells('Lighting'), a.world.buses.length && { toggle: 'Buses ×10', on: a.busFast, set: v => { a.busFast = v; } }, ...vw.cells] },
+            { cells: [...m.lighting.cells('Lighting'), ...vw.cells] },
             { cells: [
                 { toggle: 'Flashlight', on: a.flashlight, set: key('KeyL') },
                 { toggle: 'Radar', on: a.radar, set: v => { a.radar = v; } },

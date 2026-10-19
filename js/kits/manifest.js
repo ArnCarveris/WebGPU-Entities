@@ -244,8 +244,7 @@ const Kits = (() => {
             uses: ['noise', 'mesh', 'interior', 'transit', 'building'],
             parts: [
                 'settlements', 'structures/limits', 'structures/palette', 'structures/solids', 'structures/shelter-boxes', 'structures/doors',
-                'structures/buildings', 'structures/fixtures', 'structures/structures', 'structures/meshes', 'structures/walker',
-                'structures/door-control', 'structures/sound-events',
+                'structures/buildings', 'structures/fixtures', 'structures/structures', 'structures/meshes', 'structures/door-control',
             ],
             types: {
                 settlementTypes: {
@@ -347,18 +346,27 @@ const Kits = (() => {
         },
         atmosphere: {
             about: 'the volumetric atmosphere (clouds, precipitation, haze, lightning) over a terrain and its structures: its renderer and what it writes each frame, the World under it (WorldExtensions), its App (AppExtensions) and the engine adapter (AtmosphereWorld)',
-            uses: ['noise', 'view', 'world', 'gpu', 'gui', 'mesh', 'interior', 'transit', 'building', 'settlement', 'terrain', 'weather'],
+            uses: ['noise', 'view', 'world', 'gpu', 'terrain', 'weather'],
             parts: [
                 'limits', 'quality', 'bindings', 'shaders/common', 'shaders/shelter', 'shaders/occupancy', 'shaders/noise', 'shaders/weather',
-                'shaders/volumetrics', 'shaders/scene', 'shaders/forest', 'shaders/final', 'shaders/library', 'passes', 'renderer', 'far-lights', 'surroundings', 'light-writer',
-                'frame-writer', 'world', 'app/hud', 'app/menus', 'app/controls', 'app/key-commands', 'app/app', 'app/phone-pages', 'app/feature',
+                'shaders/volumetrics', 'shaders/scene', 'shaders/forest', 'shaders/final', 'shaders/library', 'passes', 'renderer', 'surroundings', 'light-writer',
+                'frame-writer', 'world', 'walker', 'app/hud', 'app/menus', 'app/controls', 'app/key-commands', 'app/app', 'app/phone-pages', 'app/feature',
             ],
             data: { render: 'render settings' },
             features: {
                 curvature: { about: 'the outdoors drawn on a round planet', uses: ['curvature'], parts: ['curvature'], when: { data: ['curvature'] } },
+                structures: {
+                    about: 'what the entities build: buildings with interiors, lifts and doors, villages, stations, roads; their lamps, the distant lights, their sun and rain shadows',
+                    uses: ['mesh', 'interior', 'transit', 'building', 'settlement'], parts: ['shaders', 'far-lights', 'renderer', 'structures'],
+                    when: { needs: ['structures'], data: ['buildings', 'plans', 'streetLights'] },
+                },
                 vegetation: {
                     about: 'plants scattered about the eye: meshes near, octahedral imposters further, the canopy carpet beyond',
                     uses: ['imposter'], parts: ['shaders', 'pass', 'vegetation'], when: { data: ['terrain.vegetation'] },
+                },
+                buses: {
+                    about: 'bus lines and their fleets: drawn, boarded, ridden and driven, their lights and sounds',
+                    uses: ['transit'], requires: ['structures'], parts: ['shaders', 'renderer', 'buses'], when: { types: ['bus'] },
                 },
             },
             worlds: {

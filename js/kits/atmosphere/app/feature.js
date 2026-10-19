@@ -44,19 +44,20 @@ class AtmosphereWorld extends FeatureWorld {
     // the terrain as drawn, or a floor of a structure or a bus within a step of p
     ground(p) { const a = this.app; return a.world ? a.walker.floorAt(a, [...p], -Infinity) : null; }
 
-    // its buildings' and buses' interiors shelter what is in them (the InteriorIndex, O(1))
-    sheltered(p) { return this.app.world?.structures.interiors.sheltered(p) || null; }
+    // what its world's extensions say shelters p (the structures feature's: its buildings' and buses' interiors, the
+    // InteriorIndex, O(1))
+    sheltered(p) {
+        for (const x of this.app.world?.extensions || []) { const s = x.sheltered?.(p); if (s) return s; }
+        return null;
+    }
 
-    // what the sound beds, HUD panels and links read (and what the extensions add)
+    // what the sound beds, HUD panels and links read (and what the extensions add: the buses' busDist, busSpeed...)
     stats() {
         const a = this.app, w = a.world, c = w.weather.cur, cam = a.camera.pos;
-        const { bus, dist: bd } = a.nearBus || { bus: null, dist: Infinity };     // Surroundings, from the InteriorIndex
         const out = {
             name: w.scenario.name, fps: a.fps, paused: a.paused, time: a.time, weather: w.weather.target, light: a.lightName,
             rain: a.near.rain, snow: a.near.snow, inside: !!a.indoors || !!a.inBus || !!a.forceIndoors, sheltered: !!a.sheltered, inBus: !!a.inBus,
             walking: a.walker.active, wind: Math.hypot(c.wind[0], c.wind[1]), agl: cam[1] - w.field.surface(cam[0], cam[2]),
-            busDist: bd, busSpeed: bus ? Math.abs(bus.v) : 0, riding: !!a.inBus && a.rideBus === bus,
-            busLoad: bus?.load ?? 0, busBraking: !!bus?.braking && Math.abs(bus.v) > 0.5, driving: !!a.drive?.active,
             temperature: c.temperature, coverage: c.coverage, flashes: w.flashCount, veil: a.flashVeil,
         };
         for (const x of a.extensions) x.stats?.(out);

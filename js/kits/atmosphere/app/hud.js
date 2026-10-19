@@ -1,6 +1,7 @@
 'use strict';
-// The HUD: in-world labels and the readout. An app extension adds to the readout's air line (air(): text) and styles
-// the labels of the entities that are its own (label(e, d): null if not, { skip } or { color, text }).
+// The HUD: in-world labels and the readout. An app extension adds to the readout's air line (air(): text), lines of its
+// own (lines(): [html]) and styles the labels of the entities that are its own (label(e, d): null if not, { skip } or
+// { color, text }).
 
 Features.kit('atmosphere', (engine, kit) => {
 const { Common, kits } = engine;
@@ -31,7 +32,7 @@ class Hud extends kits.world.WorldHud {
             `sky     ${fx(c.base)}-${fx(c.top)} km · ${w.clouds.active(c).map(([n, v]) => `${n} ${pc(v)}`).join(' · ') || 'clear'}`,
             `air     ${c.temperature.toFixed(0)} °C · freezing ${fx(wx.freezingLevel)} km · wind ${wind.toFixed(0)} m/s ${from} · ${[...app.extensions.map(x => x.air?.()).filter(Boolean), `${w.flashCount} flashes`].join(', ')}`,
             `here    ${here}${app.sheltered || app.indoors ? ` <span class="w">${app.inBus ? 'in the bus' : app.indoors ? `indoors, storey ${Math.min(app.indoors.n, 1 + Math.floor((app.camera.pos[1] - app.indoors.floor) / app.indoors.H))} of ${app.indoors.n}` : 'sheltered'}</span>` : ''} · alt ${fx(app.camera.pos[1], 2)} km · snow ${app.frameWriter.groundSnowHint}`,
-            ...(app.rideBus ? [`bus     ${app.rideBus.label} ${app.rideBus.describe()}${app.walker.active ? ` · <span class="w">${app.walker.seat ? 'seated' : app.walker.bus ? 'aboard' : 'on foot'}</span>` : ''}${w.busBoost > 1 ? ' <span class="w">×10</span>' : ''}`] : []),
+            ...app.extensions.flatMap(x => x.lines?.() || []),
         ];
         if (app.renderer.lastError) lines.push(`<span class="off">${app.renderer.lastError.slice(0, 90)}</span>`);
         this.lines = lines;
@@ -52,7 +53,7 @@ class Hud extends kits.world.WorldHud {
             g.beginPath(); g.arc(W / 2, H / 2, (wk.aim ? 3 : 2) * dpr, 0, 2 * Math.PI); g.fill();
         }
         // what E (on foot) or F (by a bus) would do
-        const prompt = (wk.active && wk.prompt) || app.drive?.prompt;
+        const prompt = (wk.active && wk.prompt) || app.extensions.map(x => x.prompt).find(Boolean);
         if (prompt) {
             g.font = `${13 * dpr}px 'Share Tech Mono', monospace`;
             g.textAlign = 'center';

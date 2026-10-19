@@ -3,7 +3,6 @@
 
 Features.kit('atmosphere', (engine, kit) => {
 const { SPLASH_RADIUS, SPLASH_GRID, SPLASH_PIECES, SPLASH_MIST, SPLASH_FADE } = kit;
-const { INTERIOR_DRAW, BLD_ID } = engine.kits.settlement;
 
 const WGSL_FINAL = /* wgsl */`
 @group(1) @binding(0) var cloudTex: texture_2d<f32>;
@@ -123,56 +122,6 @@ fn lineQuad(a: vec4f, b: vec4f, widthPx: f32, corner: u32, o: ptr<function, Line
     (*o).uv = vec2f(e, sd);
 }
 
-// rain running off roof edges near the camera (F.dripEdges): drop k of the drip particles leaves a point on an edge and
-// falls freely to the ground. The drops gather at spouts along the edge, where the water runs together.
-fn drip(k: u32, vi: u32, o: ptr<function, LineOut>) {
-    let rain = F.near.x - F.near.y;
-    let pick = rnd(k * 7u + 11u);
-    if (rain <= 0.02 || rnd(k * 7u + 12u) > sat(rain * 1.6)) { return; }
-    var e = 0;
-    for (var j = 0; j < i32(F.drips.x) - 1; j++) { if (pick > F.dripEdges[j * 3 + 2].x) { e = j + 1; } }
-    let A = F.dripEdges[e * 3];
-    let B = F.dripEdges[e * 3 + 1];
-    let alongX = F.dripEdges[e * 3 + 2].y > 0.5;
-    if (rnd(k * 7u + 19u) > F.dripEdges[e * 3 + 2].z) { return; }
-    // a side of the rectangle (by length; only the two along local x for eaves), and a point on it within 30 m of the
-    // camera's place along it, so the drops gather where they can be seen. They run off at spouts every 0.35 m, some
-    // harder than others
-    let side = select(u32(rnd(k * 7u + 13u) * 4.0), u32(rnd(k * 7u + 13u) * 2.0) * 2u, alongX);
-    let onX = side % 2u == 0u;
-    let half = select(A.w, A.z, onX);
-    let r = F.cam.xz - A.xy;
-    let cl = vec2f(r.x * B.x + r.y * B.y, -r.x * B.y + r.y * B.x);
-    let span = min(30.0, half);
-    let mid = clamp(select(cl.y, cl.x, onX), -half + span, half - span);
-    if (!alongX && rnd(k * 7u + 17u) > half / max(A.z, A.w)) { return; }      // short sides get fewer drops
-    let spout = floor((mid + (rnd(k * 7u + 14u) - 0.5) * 2.0 * span + half) / 0.35);
-    if (rnd(u32(spout) * 3u + side * 100003u + u32(e) * 7919u) < 0.3) { return; }
-    let t = (spout + 0.5 + (rnd(k * 7u + 18u) - 0.5) * 0.3) * 0.35 - half;
-    let sg = select(-1.0, 1.0, side >= 2u);
-    let lp = select(vec2f(sg * (A.z + 0.04), t), vec2f(t, sg * (A.w + 0.04)), onX);
-    let top = vec3f(A.x + lp.x * B.x - lp.y * B.y, B.z, A.y + lp.x * B.y + lp.y * B.x);
-    // free fall over the drop B.w: the phase cycles through it, so the stream keeps running
-    let tFall = sqrt(2.0 * B.w / 9.81);
-    let ph = fract(F.cam.w / tFall + rnd(k * 7u + 15u));
-    let ts = ph * tFall;
-    // the wind picks the drops up as they fall, so the stream leans downwind in a straight line
-    let wind = vec3f(F.wind.x, 0.0, F.wind.y) * 0.08;
-    let p = top + (wind - vec3f(0.0, 4.9, 0.0)) * ts * ts;
-    let vel = (wind * 2.0 - vec3f(0.0, 9.81, 0.0)) * ts - vec3f(0.0, 0.4, 0.0);
-    let dist = distance(p, F.cam.xyz);
-    if (dist > 120.0 || inCabin(p)) { return; }
-    let a = F.viewProj * vec4f(p, 1.0);
-    let b = F.viewProj * vec4f(p - vel * 0.05, 1.0);
-    if (a.w < 0.5 || b.w < 0.5) { return; }
-    let focal = F.screen.y * 0.5 / length(F.up.xyz);
-    lineQuad(a, b, clamp(0.005 * focal / a.w, 1.0, 4.0), vi, o);
-    let lightc = F.ambient.rgb * 0.9 + F.sunCol.rgb * 0.05 + lampsOnDrop(p);
-    let fade = sat(dist / 1.5) * sat(1.0 - dist / 120.0) * smoothstep(0.0, 0.05, ph) * (1.0 - smoothstep(0.9, 1.0, ph));
-    (*o).col = vec4f(lightc * 1.3, (0.25 + 0.25 * rnd(k * 7u + 16u)) * fade * sat(rain * 2.0));
-    (*o).uv.x = 0.0;
-}
-
 // rain hitting the ground, roofs and decks near the camera. The splashes sit on a world grid of SPLASH_GRID^2 cells
 // around the camera, snapped to the cells, so they stay put as the view turns: each cell takes a drop every life
 // seconds at a hashed spot, and piece k of the splash particles is one of the SPLASH_PIECES droplets it throws up, or
@@ -203,19 +152,7 @@ fn splash(k: u32, vi: u32, o: ptr<function, LineOut>) {
     let xz = (cell + vec2f(rnd(id), rnd(id + 1u))) * cs;
     if (distance(xz, F.cam.xz) > ${SPLASH_RADIUS}.0) { return; }
     var p = vec3f(xz.x, meshHeight(xz), xz.y);
-    if (nearStructures(p)) {
-        let top = vec3f(p.x, F.blocks.z + 1.0, p.z);
-        let m = blockCell(p);
-        for (var w = 0u; w < 4u; w++) {
-            var bits = m[w];
-            while (bits != 0u) {
-                let b = i32(w * 32u + countTrailingZeros(bits));
-                bits &= bits - 1u;
-                let s = blockerSpan(b, top, vec3f(0.0, -1.0, 0.0));
-                if (s.x <= s.y && s.y > 0.0) { p.y = max(p.y, top.y - max(s.x, 0.0)); }
-            }
-        }
-    }
+    p.y = structureTop(p);                                              // (on a roof or deck there: WGSL_BLOCKERS)
     // the surface seen along the line to it (which does not turn with the view)
     let c0 = F.viewProj * vec4f(p, 1.0);
     if (c0.w < 0.3) { return; }
@@ -309,18 +246,7 @@ fn splash(k: u32, vi: u32, o: ptr<function, LineOut>) {
     // none inside the bus
     if (inCabin(wp)) { return o; }
     // none under roofs and decks or in the lee of walls: the path back up against this drop's fall meets a structure
-    if (nearStructures(wp)) {
-        let back = normalize(-vel);
-        let m = blockCell(wp);
-        for (var w = 0u; w < 4u; w++) {
-            var bits = m[w];
-            while (bits != 0u) {
-                let k = i32(w * 32u + countTrailingZeros(bits));
-                if (blockerRain(k, wp, back)) { return o; }
-                bits &= bits - 1u;
-            }
-        }
-    }
+    if (rainBlocked(wp, normalize(-vel))) { return o; }
     let dist = length(rel);
     let a = F.viewProj * vec4f(wp, 1.0);
     if (a.w < 0.5) { return o; }
@@ -358,122 +284,6 @@ fn splash(k: u32, vi: u32, o: ptr<function, LineOut>) {
         a = i.col.w * max(exp(-i.uv.y * i.uv.y * 3.0) - 0.05, 0.0) * (1.0 - h) * (1.0 - h) * smoothstep(0.0, 0.35, gap);
     }
     return vec4f(tonemap(i.col.rgb), a);
-}
-
-// the bus's windows, drawn over the composite (they write no depth, so the march and the particles see through them):
-// a faint grey tint, the sky reflected at grazing angles, and rain drops on them while it rains, which the wind of the
-// bus's speed streaks back along the side windows. O(1) per pixel: one hash per 2.5 cm cell
-struct GlassOut { @builtin(position) pos: vec4f, @location(0) world: vec3f, @location(1) n: vec3f, @location(2) local: vec3f, @location(3) kind: f32 };
-
-@vertex fn vsGlass(@location(0) p: vec3f, @location(1) n: vec3f, @location(2) c: vec4f) -> GlassOut {
-    let q = busVertex(p, c.a);
-    var o: GlassOut;
-    o.world = (busU.model * vec4f(q, 1.0)).xyz;
-    o.n = (busU.model * vec4f(n, 0.0)).xyz;
-    o.local = q;
-    o.kind = f32(u32(c.a + 0.5) & 7u);
-    o.pos = curveClip(busU.mvp * vec4f(q, 1.0), o.world);
-    return o;
-}
-
-@fragment fn fsGlass(i: GlassOut) -> @location(0) vec4f {
-    let p = i.world;
-    let v = normalize(F.cam.xyz - p);
-    var n = normalize(i.n);
-    if (dot(n, v) < 0.0) { n = -n; }
-    let sh = shadowAt(p);
-    let s = F.sunDir.xyz;
-    let r = reflect(-v, n);
-    let fres = 0.04 + 0.96 * pow(1.0 - abs(dot(n, v)), 5.0);
-    let spec = skyColor(r) * sh.y + F.sunCol.rgb * sh.x * pow(max(dot(r, s), 0.0), 600.0) * 6.0 + lampsAt(p + n * 0.02, n, v, 900.0, 0u).s;
-    // drops: a hashed 2 cm cell holds one or not (more of them the harder it rains), 2-5 mm across; they come and go.
-    // On the side windows the wind of the bus's speed draws them out backwards into thin streaks (cells up to 8 times
-    // longer along the bus, the drop as long), and sweeps some away
-    let rain = sat(F.near.x * 1.5);
-    var drop = 0.0;
-    var rim = 0.0;
-    if (rain > 0.01) {
-        let side = i.kind < 0.5;
-        let u = select(i.local.z, i.local.x, side);
-        let k = select(0.0, sat(busU.info.x / 15.0), side);
-        let stretch = 1.0 + 7.0 * k;
-        let g = vec2f(u / (0.02 * stretch), i.local.y / 0.02 + u * 3.0 * k);    // streaks run back and a little down
-        let cell = floor(g);
-        let cx = u32(cell.x + 100000.0);
-        let cy = u32(cell.y + 1000.0);
-        let life = floor(F.cam.w * mix(0.4, 1.5, k) + rnd(cx * 7919u + cy));
-        let h = rnd((cx * 73856093u) ^ (cy * 19349663u) ^ (u32(life) * 83492791u));
-        if (h < rain * mix(0.35, 0.2, k)) {
-            let c = vec2f(rnd(u32(h * 1e6)), rnd(u32(h * 1e6) + 7u)) * 0.5 + 0.25;
-            let d = length(fract(g) - c) / (0.12 + 0.12 * fract(h * 13.0));
-            drop = 1.0 - smoothstep(0.6, 1.0, d);
-            rim = smoothstep(0.25, 0.85, d);
-        }
-    }
-    // a drop is a little lens: the dark ground below shows in its middle, the bright sky above in its rim
-    let sky = F.ambient.rgb * sh.y;
-    let dropCol = mix(sky * 0.25, sky * 2.2 + F.sunCol.rgb * sh.x * 0.05, rim);
-    let a = sat(0.06 + fres * 0.85 + drop * 0.6);
-    let col = (spec * fres * (1.0 - drop) + vec3f(0.02, 0.025, 0.03) * F.ambient.rgb + dropCol * drop * 0.6) / a;
-    return vec4f(tonemap(col), a);
-}
-
-// a building's window glass (Buildings.add), drawn over the composite like the bus's: a faint tint, the sky
-// reflected at grazing angles, rain drops on it where the rain reaches its outer side (one test per vertex). Towards
-// INTERIOR_DRAW from the building it turns into the opaque pane fsPane draws beyond it, so the switch does not show
-struct PaneOut { @builtin(position) pos: vec4f, @location(0) world: vec3f, @location(1) n: vec3f, @location(2) @interpolate(flat) id: u32, @location(3) wet: f32 };
-
-@vertex fn vsWindow(@location(0) p: vec3f, @location(1) n: vec3f, @location(2) c: vec4f) -> PaneOut {
-    var o: PaneOut;
-    o.world = p;
-    o.n = n;                                                            // outward
-    o.id = u32(c.a + 0.5) / ${BLD_ID}u;
-    o.wet = rainReaches(p + n * 0.2);
-    o.pos = F.viewProj * vec4f(curveToRender(p), 1.0);
-    return o;
-}
-
-@fragment fn fsWindow(i: PaneOut) -> @location(0) vec4f {
-    let b = bld(i.id);
-    let dc = bldStoreyDist(b, i.world.y);
-    if (dc >= ${INTERIOR_DRAW}.0) { discard; }
-    let p = i.world;
-    let v = normalize(F.cam.xyz - p);
-    let out = normalize(i.n);
-    let n = select(-out, out, dot(out, v) >= 0.0);
-    let sh = shadowAt(p);
-    let s = F.sunDir.xyz;
-    let r = reflect(-v, n);
-    let fres = 0.04 + 0.96 * pow(1.0 - abs(dot(n, v)), 5.0);
-    let spec = skyColor(r) * sh.y + F.sunCol.rgb * sh.x * pow(max(dot(r, s), 0.0), 600.0) * 6.0 + lampsAt(p + n * 0.02, n, v, 900.0, 0u).s;
-    // drops as on the bus's windows, but still: a hashed 2 cm cell holds one or not, and they come and go slowly
-    let rain = sat(F.near.x * 1.5) * sat(i.wet);
-    var drop = 0.0;
-    var rim = 0.0;
-    if (rain > 0.01) {
-        let g = vec2f(dot(p.xz, vec2f(-out.z, out.x)), p.y) / 0.02;
-        let cell = floor(g);
-        let cx = u32(i32(cell.x) + 1000000);
-        let cy = u32(i32(cell.y) + 1000000);
-        let life = floor(F.cam.w * 0.25 + rnd(cx * 7919u + cy));
-        let h = rnd((cx * 73856093u) ^ (cy * 19349663u) ^ (u32(life) * 83492791u));
-        if (h < rain * 0.3) {
-            let c = vec2f(rnd(u32(h * 1e6)), rnd(u32(h * 1e6) + 7u)) * 0.5 + 0.25;
-            let d = length(fract(g) - c) / (0.12 + 0.12 * fract(h * 13.0));
-            drop = 1.0 - smoothstep(0.6, 1.0, d);
-            rim = smoothstep(0.25, 0.85, d);
-        }
-    }
-    let sky = F.ambient.rgb * sh.y;
-    let dropCol = mix(sky * 0.25, sky * 2.2 + F.sunCol.rgb * sh.x * 0.05, rim);
-    var a = sat(0.06 + fres * 0.85 + drop * 0.6);
-    var c = spec * fres * (1.0 - drop) + vec3f(0.02, 0.025, 0.03) * F.ambient.rgb + dropCol * drop * 0.6;
-    // the opaque pane it becomes (shadeStruct's window, mat 5, and the glow of a lit room)
-    let far = smoothstep(${INTERIOR_DRAW - 40}.0, ${INTERIOR_DRAW}.0, dc);
-    let pane = vec3f(0.06, 0.08, 0.10) * (F.ambient.rgb * sh.y * 0.55 + F.sunCol.rgb * max(dot(n, s), 0.0) * sh.x) + spec * fres * 0.8 + windowGlow(i.id, b, p.y);
-    c = mix(c, pane, far);
-    a = mix(a, 1.0, far);
-    return vec4f(tonemap(c / a), a);
 }
 
 // lightning bolts: segment k = (bolts[2k] start + brightness, bolts[2k + 1] end + width in m)

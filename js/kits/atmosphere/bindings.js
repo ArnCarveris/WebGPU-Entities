@@ -6,10 +6,10 @@ const { Common } = engine;
 const { bindLayoutEntry, bindResource } = Common;
 const { MAX_LAYERS, MAX_FLASHES, MAX_RAIN_ZONES } = engine.kits.weather;
 const { MAX_MOTHERSHIPS, MAX_SHELVES, MAX_LIGHTS, LIGHT_GRID, MAX_GLOWS } = kit;
-const { MAX_BLOCKERS, BLOCK_GRID, MAX_DRIPS } = engine.kits.settlement;
 
 // GPU layout shared by JS and WGSL
-// Per-frame uniform block. The WGSL struct is generated from this list, so offsets can never drift apart.
+// Per-frame uniform block: the core's fields, then those of the features on in the world (RendererExtension.frame, the
+// same [name, type] pairs). The WGSL struct is generated from the list, so offsets can never drift apart.
 const FRAME_LAYOUT = [
     ['viewProj', 'mat4x4f'],
     ['prevViewProj', 'mat4x4f'],
@@ -50,16 +50,11 @@ const FRAME_LAYOUT = [
     ['post', 'vec4f'],      // cloud blur radius (volumetric texels), cloud tile pre-pass on, radar top (fraction of the screen height), bolt bloom gain
     ['look', 'vec4f'],      // smooth clouds (0 .. 1: broad soft billows, no detail erosion, powder), cloud drift since the last frame x, z (m), steady resolve (the fresh march's weight scale, 0 off)
     ['bloom', 'vec4f'],     // strength (0 off), threshold, soft knee (exposed radiance), levels in the chain
-    ['blocks', 'vec4f'],    // structure boxes: count, lowest bottom, highest top (m), -
-    ['blockBox', 'vec4f'],  // their bounds x0, z0, x1, z1, padded for the shadows and rain shadows they cast
     ['rain', 'vec4f'],      // drop size (0 drizzle .. 1 downpour), rain fall speed (m/s), genus layer precipitation scale, rain particles
     ['zoneInfo', 'vec4f'],  // rain zones in rainZones, their fade (0 .. 1), their radius (m), a clear stretch's opening along the route (m)
     ['rainZones', `array<vec4f, ${MAX_RAIN_ZONES}>`], // points along the bus route (mixed rain): x, z, genus layer cover scale, precipitation scale
     ['zoneDirs', `array<vec4f, ${MAX_RAIN_ZONES / 2}>`], // the route's direction at them, two per vec4: x, z
     ['drips', 'vec4f'],     // roof edges in dripEdges, first splash particle (after the rain and drip ones), -, -
-    ['dripEdges', `array<vec4f, ${MAX_DRIPS * 3}>`], // [x, z, half x, half z] [cos yaw, sin yaw, edge height, drop to the ground] [share of drops up to this edge, edges (0 all four, 1 along local x), share of its drops kept, -]
-    ['blockers', `array<vec4f, ${MAX_BLOCKERS * 3}>`], // [x, z, half x, half z] [cos yaw, sin yaw, bottom, top] [sky occlusion, slope, moving, enclosed]
-    ['blockGrid', `array<vec4u, ${BLOCK_GRID * BLOCK_GRID}>`], // per cell of blockBox: bit k set if box k can shade a point in it
     // the bus nearest the camera, or the one ridden (BusLine): world to its frame (each bus is drawn with its own, wgslBus)
     ['busInv', 'mat4x4f'],
     ['lightInfo', 'vec4f'], // lights in lights, lamps on (night), the distance their fade ends (m, farLampReal), the air's scattering for their halos and beams (1/m)
@@ -75,16 +70,22 @@ const FRAME_LAYOUT = [
 ];
 
 class FrameBlock {
-    constructor() {
+    // more: the features' fields, after the core's
+    constructor(more = []) {
         const size = t => t === 'mat4x4f' ? 16 : t === 'vec4f' ? 4 : 4 * parseInt(t.match(/(\d+)>$/)[1]);
+        this.layout = [...FRAME_LAYOUT, ...more];
         this.offsets = {};
         let o = 0;
-        for (const [name, type] of FRAME_LAYOUT) { this.offsets[name] = o; o += size(type); }
+        for (const [name, type] of this.layout) {
+            if (name in this.offsets) throw new Error(`frame field "${name}" twice`);
+            this.offsets[name] = o;
+            o += size(type);
+        }
         this.data = new Float32Array(o);
     }
     set(name, values, at = 0) { this.data.set(values, this.offsets[name] + at); }
     setBits(name, words) { new Uint32Array(this.data.buffer, this.offsets[name] * 4, words.length).set(words); }
-    static wgsl() { return `struct Frame {\n${FRAME_LAYOUT.map(([n, t]) => `    ${n}: ${t},`).join('\n')}\n};\n`; }
+    wgsl() { return `struct Frame {\n${this.layout.map(([n, t]) => `    ${n}: ${t},`).join('\n')}\n};\n`; }
 }
 
 // Shared resources. A shader asks for the subset it uses by name; binding numbers are the table index, so a module's

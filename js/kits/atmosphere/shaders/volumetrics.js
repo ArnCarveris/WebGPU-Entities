@@ -527,7 +527,7 @@ fn march(@builtin(global_invocation_id) gid: vec3u) {
         if (tiles && doClouds) { tm = tileMask(px); }
         let rainPhase = mix(hg(mu, 0.75), hg(mu, 0.0), 0.45);
         // rays through the structures' bounds: no rain under their roofs and decks
-        let sheltered = F.blocks.x > 0.5 && rayBoxC(ro, dir, vec3f(F.blockBox.x, F.blocks.y, F.blockBox.y), vec3f(F.blockBox.z, F.blocks.z, F.blockBox.w), t0, t1);
+        let sheltered = structuresOnRay(ro, dir, t0, t1);              // (WGSL_SHELTERED_RAY)
         // (cab: the stretch of the ray inside the cabin, when it is seen from outside: no rain, snow or haze in there)
         let snowPhase = mix(hg(mu, 0.45), hg(mu, 0.0), 0.6);
         let hazeG = hazePhase(mu);

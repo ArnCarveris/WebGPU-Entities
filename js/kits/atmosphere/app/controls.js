@@ -7,7 +7,7 @@ const { Common } = engine;
 const { DEG, clamp } = Common;
 const { QUALITY, RENDER_MODES } = kit;
 const { RAIN_VARIANTS } = engine.kits.weather;
-const { WALK } = engine.kits.settlement;
+const { WALK } = kit;
 
 class Controls {
     constructor(app) { this.app = app; }
@@ -98,17 +98,6 @@ class Controls {
         a.bloom = !a.bloom;
         a.hud.toast(`Bloom: ${a.bloom ? 'on' : 'off'}`);
         a.menus.sync();
-    }
-
-    // to bus i (B): at its door (Bus.board)
-    toBus(i) {
-        const a = this.app, bus = a.world.buses[i];
-        if (!bus) return;
-        a.busPick = i;
-        a.walker.active = false;
-        bus.board(a, 'door');
-        a.reset = true;
-        a.hud.toast(`${bus.label}: ${bus.describe()}`);
     }
 
     setWeather(name) {
