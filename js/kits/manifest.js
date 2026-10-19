@@ -16,6 +16,8 @@
 //             data types map onto its native layout (ScenarioFormat); implicit: how it joins a scenario that has none of
 //             it but entities only it takes (an entity of any kit works in any scenario): { root (fields of its root when
 //             it joins other worlds: a sky's layer role), entities (what it has unless the scenario says: a ground) }.
+//             A world may have features of its own (features, as a kit's below: parts under its folder's features/<name>/,
+//             registered as Features.feature('<kit>/<world>/<name>', fn), over the world's exports).
 //     features: what its worlds are made of beyond their core, each built only when a world's data asks for it:
 //             <name>: { about, uses, parts, when, requires }. parts: js/kits/<kit>/features/<name>/<part>.js
 //             (Features.feature('<kit>/<name>', fn)), loaded with the kits it uses. when: { types (any of these entity
@@ -153,12 +155,19 @@ const Kits = (() => {
                     about: 'a GPU shallow-water river simulation with surface-wave cascades and debris',
                     uses: ['noise', 'view', 'world', 'terrain'],
                     parts: [
-                        'config', 'terrain/heightfield', 'shaders/flow', 'shaders/waves', 'shaders/debris', 'shaders/render',
-                        'gpu/helpers', 'entities/types', 'world', 'sim/flow', 'sim/waves',
-                        'sim/debris', 'renderer', 'tools', 'hud', 'app', 'phone-pages', 'feature',
+                        'config', 'terrain/heightfield', 'shaders/flow', 'shaders/render', 'gpu/helpers', 'entities/types', 'world',
+                        'sim/flow', 'renderer', 'tools', 'hud', 'app', 'phone-pages', 'feature',
                     ],
                     bases: ['terrain'],
                     provides: ['water'],
+                    // (its own, over its parts' exports: js/kits/hydrology/worlds/water/features/)
+                    features: {
+                        waves: {
+                            about: 'surface waves: wave maps in cascades that follow the camera, carried by the flow, with foam',
+                            parts: ['shaders', 'cascade', 'waves'], when: { data: ['waves'] },
+                        },
+                        debris: { about: 'floating debris: logs on the GPU, carried by the flow', parts: ['shaders', 'system', 'debris'], when: { types: ['debris'] } },
+                    },
                     schema: {
                         config: ['terrain', 'sim', 'waves', 'water', 'lighting'],
                         rename: { water: 'waterShading' },
@@ -447,8 +456,23 @@ const Kits = (() => {
 
     // The features of a world of type `world` its data asks for, in the manifest's order (each after those it requires):
     // native its native data, types its entities' types, overrides { <name>: bool } (its root's `features`)
+    // a world's features: its kit's, then its own (names unique between them)
+    const featuresIn = world => {
+        const k = KITS[WORLDS[world].kit].features || {}, w = WORLDS[world].features || {};
+        for (const n of Object.keys(w)) if (n in k) throw new Error(`world "${world}": feature "${n}" is its kit's too`);
+        return { ...k, ...w };
+    };
+
+    // where a world's feature is: { spec, kit, world (the world type for one of its own, else null) }
+    const featureOf = (world, name) => {
+        const W = WORLDS[world], own = W.features?.[name];
+        const spec = own || KITS[W.kit].features?.[name];
+        if (!spec) throw new Error(`world "${world}" has no feature "${name}"`);
+        return { spec, kit: W.kit, world: own ? world : null };
+    };
+
     function featuresOf(world, native, types, overrides = {}) {
-        const all = KITS[WORLDS[world].kit].features || {};
+        const all = featuresIn(world);
         const get = (o, path) => path.split('.').reduce((a, k) => (a == null ? undefined : a[k]), o);
         const set = (v => (v !== undefined && v !== null && v !== false && !(Array.isArray(v) && !v.length) && !(typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).length)));
         const needs = new Set(types.flatMap(t => implsIn(world, t).flatMap(i => i.needs)));
@@ -468,7 +492,7 @@ const Kits = (() => {
         return Object.keys(all).filter(n => on.has(n));
     }
 
-    return { ENGINE, KITS, WORLDS, IMPLS, DATA, implsIn, kitsFor, featuresOf, has, isEngine };
+    return { ENGINE, KITS, WORLDS, IMPLS, DATA, implsIn, kitsFor, featuresOf, featureOf, has, isEngine };
 })();
 
 if (typeof module !== 'undefined') module.exports = Kits;

@@ -67,20 +67,20 @@ const Features = {
         })());
     },
 
-    // A kit's feature (KITS[kit].features[name]), once per page: the kits it uses, the features it requires, then its
-    // parts (js/kits/<kit>/features/<name>/), over its kit's exports and the required features' (feature parts register
-    // with Features.feature('<kit>/<name>', fn))
-    loadFeature(kit, name, engine) {
-        const key = `${kit}/${name}`;
+    // A feature of world type `type` (its kit's, KITS[kit].features[name], or the world's own, its features[name]), once
+    // per page: the kits it uses, the features it requires, then its parts (js/kits/<kit>/features/<name>/, registered
+    // with Features.feature('<kit>/<name>', fn); a world's own under js/kits/<kit>/worlds/<type>/features/<name>/, as
+    // '<kit>/<type>/<name>'), over its kit's exports (a world's own: the world's) and the required features'
+    loadFeature(type, name, engine) {
+        const { spec, kit, world } = Kits.featureOf(type, name);
+        const key = world ? `${kit}/${world}/${name}` : `${kit}/${name}`;
         return (this.featureModules[key] ??= (async () => {
-            const spec = this.KITS[kit]?.features?.[name];
-            if (!spec) throw new Error(`kit "${kit}" has no feature "${name}"`);
-            const base = await this.loadKit(kit, engine);
+            const base = world ? await this.load(world, engine) : await this.loadKit(kit, engine);
             for (const k of spec.uses ?? []) await this.loadKit(k, engine);
             const under = Object.create(base);
-            for (const r of spec.requires ?? []) Object.assign(under, await this.loadFeature(kit, r, engine));
-            const srcs = spec.parts.map(p => `js/kits/${kit}/features/${name}/${p}.js`);
-            return this.assemble(`feature "${key}"`, srcs, () => this.featureParts[key], engine, Object.create(under));
+            for (const r of spec.requires ?? []) Object.assign(under, await this.loadFeature(type, r, engine));
+            const dir = world ? `js/kits/${kit}/worlds/${world}/features/${name}` : `js/kits/${kit}/features/${name}`;
+            return this.assemble(`feature "${key}"`, spec.parts.map(p => `${dir}/${p}.js`), () => this.featureParts[key], engine, Object.create(under));
         })());
     },
 

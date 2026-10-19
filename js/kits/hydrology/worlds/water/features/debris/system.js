@@ -1,7 +1,7 @@
 'use strict';
 // Floating debris on the GPU.
 
-Features.world('water', (engine, kit) => {
+Features.feature('hydrology/water/debris', (engine, kit) => {
 const { Common, kits } = engine;
 const { makeBuffer, bindLayout, bindGroup } = Common;
 const { mulberry32 } = kits.noise;

@@ -1,7 +1,7 @@
 'use strict';
 // WGSL: one surface-wave cascade layer.
 
-Features.world('water', (engine, kit) => {
+Features.feature('hydrology/water/waves', (engine, kit) => {
 const { kits } = engine;
 const { NoiseWGSL } = kits.noise;
 // One cascade layer: a res x res wave map (height, previous height, foam) centred on the camera.
@@ -90,5 +90,33 @@ fn waveDisplay(@builtin(global_invocation_id) gid: vec3u) {
 }
 `;
 
-return { WGSL_WAVES };
+// the surface's waves (fsWater): the cascades' displacement maps (disp0..3), summed
+const WGSL_WAVE_SAMPLE = /* wgsl */`
+fn dispSample(i: i32, uv: vec2f, slot: i32) -> vec4f {
+    if (i == 0) { return textureSampleLevel(disp0, linSamp, uv, slot, 0.0); }
+    if (i == 1) { return textureSampleLevel(disp1, linSamp, uv, slot, 0.0); }
+    if (i == 2) { return textureSampleLevel(disp2, linSamp, uv, slot, 0.0); }
+    return textureSampleLevel(disp3, linSamp, uv, slot, 0.0);
+}
+// sum of the wave cascades: (height, d/dx, d/dz, foam); each layer fades out towards its border
+fn waves(xz: vec2f) -> vec4f {
+    var acc = vec4f(0.0);
+    for (var i = 0; i < 4; i++) {
+        if (f32(i) >= F.misc.x) { break; }
+        let L = F.layers[i];
+        let B = F.layersB[i];
+        let uvC = (xz - L.xy) / L.z;
+        let e = min(min(uvC.x, 1.0 - uvC.x), min(uvC.y, 1.0 - uvC.y));
+        let w = smoothstep(0.0, 0.12, e);
+        if (w <= 0.0) { continue; }
+        let slot = i32(B.z);
+        let a = dispSample(i, uvC, slot);
+        let b = dispSample(i, (xz - B.xy) / L.z, 1 - slot);
+        acc += mix(b, a, L.w) * w;
+    }
+    return acc;
+}
+`;
+
+return { WGSL_WAVES, WGSL_WAVE_SAMPLE };
 });

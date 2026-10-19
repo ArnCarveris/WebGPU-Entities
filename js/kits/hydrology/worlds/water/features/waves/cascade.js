@@ -1,7 +1,7 @@
 'use strict';
 // Surface waves: wave layers and the cascade that follows the camera.
 
-Features.world('water', (engine, kit) => {
+Features.feature('hydrology/water/waves', (engine, kit) => {
 const { Common } = engine;
 const { clamp, makeBuffer, bindLayout, bindGroup } = Common;
 const { MAX_LAYERS, WAVE_DEFAULTS, WGSL_WAVES, TU, BU, makeTex } = kit;

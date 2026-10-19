@@ -1,7 +1,7 @@
 'use strict';
 // WGSL: floating debris drifting with the current.
 
-Features.world('water', (engine, kit) => {
+Features.feature('hydrology/water/debris', (engine, kit) => {
 const WGSL_DEBRIS_SIM = /* wgsl */`
 struct Deb { dt: f32, time: f32, count: u32, n: i32, mapOrigin: vec2f, cell: f32, minDepth: f32 }
 struct Particle { p: vec4f, q: vec4f }     // p: position, age; q: heading, dry time, emitter, seed
@@ -83,5 +83,38 @@ fn updateDebris(@builtin(global_invocation_id) gid: vec3u) {
 }
 `;
 
-return { WGSL_DEBRIS_SIM };
+// the logs drawn (vsDebris / fsDebris): a box per particle, its emitter's colour and size
+const WGSL_DEBRIS = /* wgsl */`
+struct DOut { @builtin(position) pos: vec4f, @location(0) world: vec3f, @location(1) n: vec3f, @location(2) col: vec3f }
+@vertex fn vsDebris(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> DOut {
+    let pt = particles[ii];
+    let e = emitters[u32(pt.q.z)];
+    let face = vi / 6u;
+    let k = vi % 6u;
+    let uv = array<vec2f, 6>(vec2f(0.0, 0.0), vec2f(1.0, 0.0), vec2f(1.0, 1.0), vec2f(0.0, 0.0), vec2f(1.0, 1.0), vec2f(0.0, 1.0))[k] - 0.5;
+    let axis = face / 2u;
+    let sgn = select(1.0, -1.0, (face & 1u) == 1u);
+    var N = vec3f(0.0); var T = vec3f(0.0); var Bt = vec3f(0.0);
+    if (axis == 0u) { N = vec3f(sgn, 0.0, 0.0); T = select(vec3f(0.0, 0.0, 1.0), vec3f(0.0, 1.0, 0.0), sgn > 0.0); }
+    if (axis == 1u) { N = vec3f(0.0, sgn, 0.0); T = select(vec3f(1.0, 0.0, 0.0), vec3f(0.0, 0.0, 1.0), sgn > 0.0); }
+    if (axis == 2u) { N = vec3f(0.0, 0.0, sgn); T = select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), sgn > 0.0); }
+    Bt = cross(N, T);
+    let local = N * 0.5 + T * uv.x + Bt * uv.y;
+    let s = e.b.w * (0.6 + 0.8 * pt.q.w);
+    let scaled = local * vec3f(s, s * 0.28, s * 0.3);
+    let ch = cos(pt.q.x);
+    let sh = sin(pt.q.x);
+    let rot = vec3f(ch * scaled.x - sh * scaled.z, scaled.y, sh * scaled.x + ch * scaled.z);
+    let rn = vec3f(ch * N.x - sh * N.z, N.y, sh * N.x + ch * N.z);
+    let world = pt.p.xyz + rot;
+    return DOut(F.viewProj * vec4f(world, 1.0), world, rn, e.b.rgb * (0.75 + 0.5 * fract(pt.q.w * 7.0)));
+}
+@fragment fn fsDebris(in: DOut) -> @location(0) vec4f {
+    let n = normalize(in.n);
+    let c = in.col * (F.sunColor.rgb * F.sunDir.w * max(dot(n, F.sunDir.xyz), 0.0) + ambient(n));
+    return vec4f(tonemap(applyFog(c, in.world)), 1.0);
+}
+`;
+
+return { WGSL_DEBRIS_SIM, WGSL_DEBRIS };
 });

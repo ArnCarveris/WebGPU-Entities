@@ -179,8 +179,8 @@ class Host {
             // the kits its entities are of (only those the scenario has), then the world's own parts
             for (const k of ScenarioFormat.kitsOf(scenario, root)) await Features.loadKit(k, engine);
             // the features of its kit its data asks for (what it is made of beyond its core: Kits.featuresOf)
-            const kit = Features.kitOf(root.feature), features = {};
-            for (const name of ScenarioFormat.featuresOf(scenario, root)) features[name] = await Features.loadFeature(kit, name, engine);
+            const features = {};
+            for (const name of ScenarioFormat.featuresOf(scenario, root)) features[name] = await Features.loadFeature(root.feature, name, engine);
             const module = await Features.load(root.feature, engine);
             const inst = this.createInstance(root, scenario, module, features);
             this.instances.push(inst);

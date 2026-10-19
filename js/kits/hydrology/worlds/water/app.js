@@ -7,12 +7,22 @@ const { DEG, clamp, v3, m4, PointerInput } = Common;
 const { FirstPersonView } = kits.view;
 const SLOW_ALT = { keys: ['AltLeft'], factor: 0.2 };       // Alt held: a fifth of the speed
 const {
-    NEAR, RENDER_MODES, WATER_DEFAULTS, Dam, World, FlowSim, WaveCascade, DebrisSystem, Renderer, TOOL_TYPES, Hud,
+    NEAR, RENDER_MODES, WATER_DEFAULTS, Dam, World, FlowSim, Renderer, TOOL_TYPES, Hud,
 } = kit;
 
+// What a river without the waves or debris features has in their place (AppExtension.load puts theirs): no wave layers,
+// no logs
+const NO_WAVES = { layers: [], encode() {}, splash() {}, reset() {} };
+const NO_DEBRIS = { count: 0, particles: null, emitters: null, encode() {} };
+
+// The app. What the features on in its world add are its extensions (AppExtension, new E(app), kept as app.ext[E.key]);
+// each hook optional: load(scenario) (a new world: the waves feature's cascade as app.waves, the debris feature's logs as
+// app.debris, over the stand-ins)
 class App {
     constructor(fx) {
         this.fx = fx;
+        this.ext = {};
+        this.extensions = engine.kits.gpu.extensionsOf(fx.features, 'app').map(E => (this.ext[E.key] = new E(this)));
         this.canvas = fx.canvas;
         this.renderer = new Renderer(fx);
         this.input = new PointerInput(fx.io);
@@ -34,10 +44,9 @@ class App {
         const d = this.renderer.device;
         const world = new World(scenario);
         const flow = new FlowSim(d, world);
-        const waves = new WaveCascade(d, flow, scenario.waves);
-        const debris = new DebrisSystem(d, flow, world);
-        Object.assign(this, { world, flow, waves, debris, scenario });
-        this.renderer.setSim(world, flow, waves, debris);
+        Object.assign(this, { world, flow, waves: NO_WAVES, debris: NO_DEBRIS, scenario });
+        for (const x of this.extensions) x.load?.(scenario);
+        this.renderer.setSim(world, flow, this.waves, this.debris);
         this.stepsPerFrame = flow.cfg.stepsPerFrame;
         this.water = { ...WATER_DEFAULTS, ...(scenario.water || {}) };
         this.tools = (scenario.tools || []).filter(t => TOOL_TYPES[t.type]).map(t => TOOL_TYPES[t.type](t));

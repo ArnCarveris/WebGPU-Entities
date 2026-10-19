@@ -1,5 +1,5 @@
 'use strict';
-// WGSL: the render passes: sky and terrain, then the water surface and debris.
+// WGSL: the render passes: sky and terrain, then the water surface (the waves and the debris are its features').
 
 Features.world('water', (engine, kit) => {
 const { kits } = engine;
@@ -192,30 +192,6 @@ const WGSL_SURFACE = /* wgsl */`
     return vec4f(tonemap(textureLoad(sceneTex, vec2i(pos.xy), 0).rgb), 1.0);
 }
 
-fn dispSample(i: i32, uv: vec2f, slot: i32) -> vec4f {
-    if (i == 0) { return textureSampleLevel(disp0, linSamp, uv, slot, 0.0); }
-    if (i == 1) { return textureSampleLevel(disp1, linSamp, uv, slot, 0.0); }
-    if (i == 2) { return textureSampleLevel(disp2, linSamp, uv, slot, 0.0); }
-    return textureSampleLevel(disp3, linSamp, uv, slot, 0.0);
-}
-// sum of the wave cascades: (height, d/dx, d/dz, foam); each layer fades out towards its border
-fn waves(xz: vec2f) -> vec4f {
-    var acc = vec4f(0.0);
-    for (var i = 0; i < 4; i++) {
-        if (f32(i) >= F.misc.x) { break; }
-        let L = F.layers[i];
-        let B = F.layersB[i];
-        let uvC = (xz - L.xy) / L.z;
-        let e = min(min(uvC.x, 1.0 - uvC.x), min(uvC.y, 1.0 - uvC.y));
-        let w = smoothstep(0.0, 0.12, e);
-        if (w <= 0.0) { continue; }
-        let slot = i32(B.z);
-        let a = dispSample(i, uvC, slot);
-        let b = dispSample(i, (xz - B.xy) / L.z, 1 - slot);
-        acc += mix(b, a, L.w) * w;
-    }
-    return acc;
-}
 fn ripples(p: vec2f) -> vec2f {
     return noised(p * 0.16).yz * 0.16 * 0.45 + noised(p * 0.37 + 11.0).yz * 0.37 * 0.2 + noised(p * 0.83 + 23.0).yz * 0.83 * 0.08;
 }
@@ -319,37 +295,22 @@ fn surfOr(p: vec2i, fallback: f32) -> f32 {
     if (mode > 0) { return vec4f(pow(clamp(col, vec3f(0.0), vec3f(1.0)), vec3f(1.0 / 2.2)), 1.0); }
     return vec4f(tonemap(col), 1.0);
 }
-
-struct DOut { @builtin(position) pos: vec4f, @location(0) world: vec3f, @location(1) n: vec3f, @location(2) col: vec3f }
-@vertex fn vsDebris(@builtin(vertex_index) vi: u32, @builtin(instance_index) ii: u32) -> DOut {
-    let pt = particles[ii];
-    let e = emitters[u32(pt.q.z)];
-    let face = vi / 6u;
-    let k = vi % 6u;
-    let uv = array<vec2f, 6>(vec2f(0.0, 0.0), vec2f(1.0, 0.0), vec2f(1.0, 1.0), vec2f(0.0, 0.0), vec2f(1.0, 1.0), vec2f(0.0, 1.0))[k] - 0.5;
-    let axis = face / 2u;
-    let sgn = select(1.0, -1.0, (face & 1u) == 1u);
-    var N = vec3f(0.0); var T = vec3f(0.0); var Bt = vec3f(0.0);
-    if (axis == 0u) { N = vec3f(sgn, 0.0, 0.0); T = select(vec3f(0.0, 0.0, 1.0), vec3f(0.0, 1.0, 0.0), sgn > 0.0); }
-    if (axis == 1u) { N = vec3f(0.0, sgn, 0.0); T = select(vec3f(1.0, 0.0, 0.0), vec3f(0.0, 0.0, 1.0), sgn > 0.0); }
-    if (axis == 2u) { N = vec3f(0.0, 0.0, sgn); T = select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), sgn > 0.0); }
-    Bt = cross(N, T);
-    let local = N * 0.5 + T * uv.x + Bt * uv.y;
-    let s = e.b.w * (0.6 + 0.8 * pt.q.w);
-    let scaled = local * vec3f(s, s * 0.28, s * 0.3);
-    let ch = cos(pt.q.x);
-    let sh = sin(pt.q.x);
-    let rot = vec3f(ch * scaled.x - sh * scaled.z, scaled.y, sh * scaled.x + ch * scaled.z);
-    let rn = vec3f(ch * N.x - sh * N.z, N.y, sh * N.x + ch * N.z);
-    let world = pt.p.xyz + rot;
-    return DOut(F.viewProj * vec4f(world, 1.0), world, rn, e.b.rgb * (0.75 + 0.5 * fract(pt.q.w * 7.0)));
-}
-@fragment fn fsDebris(in: DOut) -> @location(0) vec4f {
-    let n = normalize(in.n);
-    let c = in.col * (F.sunColor.rgb * F.sunDir.w * max(dot(n, F.sunDir.xyz), 0.0) + ambient(n));
-    return vec4f(tonemap(applyFog(c, in.world)), 1.0);
-}
 `;
 
-return { WGSL_COMMON, WGSL_SCENE, WGSL_SURFACE };
+// No surface waves (the waves feature's WGSL_WAVE_SAMPLE in its place): a calm surface
+const NO_WAVES = /* wgsl */`
+fn waves(xz: vec2f) -> vec4f { return vec4f(0.0); }
+`;
+
+// the core's library (a new one per renderer: the features on in its world change it)
+function waterWgsl() {
+    const { WgslLibrary } = kits.gpu, L = new WgslLibrary();
+    L.define('COMMON', WGSL_COMMON);
+    L.define('SCENE', WGSL_SCENE);
+    L.define('WAVES', NO_WAVES);
+    L.define('SURFACE', WGSL_SURFACE, { needs: ['WAVES'] });
+    return L;
+}
+
+return { WGSL_COMMON, WGSL_SCENE, WGSL_SURFACE, waterWgsl };
 });
