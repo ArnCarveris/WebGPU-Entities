@@ -363,7 +363,7 @@ function sectorTypes(Base) {
             P.locked = !!e.locked;
             P.autoDoor = !!e.auto && !P.locked;
             this.portal = P;
-            P.door = this;                  // its opening lets light through (world/light-transport.js)
+            P.door = this;                  // its opening lets light through (the portal's lightTransport feature)
             this.lift = e.lift || 0;
             this.slide = e.slide || 'right';
             this.pocket = e.pocket ?? !this.lift;
@@ -434,7 +434,7 @@ function sectorTypes(Base) {
 
         plan() {
             const w = this.world, from = w.areaAt(this.pos);
-            const path = w.nav.findPath(from, this.target);
+            const path = w.nav?.findPath(from, this.target);     // (no graph, the portal's drones feature off: it stays)
             if (!path) return false;
             this.queue = [{ pos: w.areas[from].hub }];
             for (const step of path) this.queue.push({ pos: step.portal.navPoint(), gate: step.portal }, { pos: w.areas[step.area].hub });
@@ -451,7 +451,7 @@ function sectorTypes(Base) {
     }
 
     // A security camera (kits.entities securityCamera: pos, target, sweep, speed, phase, name, loc, offline): a viewpoint the
-    // gui kit's CctvSystem renders through (game/media.js). It has no geometry; its housing is a prop of its own. Unlabelled
+    // gui kit's CctvSystem renders through (the portal's media feature). It has no geometry; its housing is a prop of its own. Unlabelled
     // cameras are numbered CAM-01, CAM-02...
     class SecurityCamera extends securityCamera(Base) {
         constructor(def, world) {

@@ -1,9 +1,8 @@
 'use strict';
-// WGSL: drawing imposters (and their shadows) from the atlas.
+// WGSL: drawing imposters from the atlas (their shadows: the shadows feature's).
 
 Features.world('imposter', (engine, kit) => {
 const { imposterWGSL } = engine.kits.imposter;
-const { WGSL_COMMON } = kit;
 
 // Imposter: a quad facing the view that covers the bounding sphere. The vertex stage picks the three atlas
 // frames around the view direction (in the instance's own space) and their weights; the fragment stage
@@ -11,7 +10,7 @@ const { WGSL_COMMON } = kit;
 // (parallax), samples and blends (the imposter kit's impCorner / impFrames / impReconstruct). fs lights the result
 // and writes the reconstructed depth; fsShadow (from a cascade's orthographic light view) writes only that depth, so
 // imposters cast their real shape.
-const WGSL_IMPOSTER = WGSL_COMMON + imposterWGSL({ group: 1 }) + /* wgsl */`
+const WGSL_IMPOSTER = imposterWGSL({ group: 1 }) + /* wgsl */`
 @group(2) @binding(0) var<storage, read> insts: array<Inst>;
 
 struct VOut {
@@ -86,22 +85,6 @@ struct FOut { @location(0) color: vec4f, @builtin(frag_depth) depth: f32 };
         out.depth = clamp(cp.z / cp.w, 0.0, 1.0);
     }
     return out;
-}
-
-// far-cascade caster: the nearest frame's coverage only, depth of the quad (no depth output keeps early-z)
-@fragment fn fsShadowCheap(v: VOut) {
-    let iq = qconj(v.rot);
-    if (impCoverage(qrot(iq, v.wp - v.center) / v.cellsB.w, qrot(iq, V.dir.xyz), v.cellsA.xy) < 0.5) { discard; }
-}
-
-// shadow caster: the reconstructed surface's depth in the cascade
-@fragment fn fsShadow(v: VOut) -> @builtin(frag_depth) f32 {
-    let ray = viewRay(v);
-    let R = impReconstruct(ray.o, ray.d, frames(v), G.flags.y > 0.5, false);
-    let a = R.albedo.a;
-    if (a < 0.5) { discard; }
-    let cp = V.viewProj * vec4f(v.center + qrot(v.rot, R.hit / a * v.cellsB.w), 1.0);
-    return clamp(cp.z / cp.w, 0.0, 1.0);
 }
 `;
 

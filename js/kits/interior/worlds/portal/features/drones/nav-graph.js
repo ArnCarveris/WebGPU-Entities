@@ -1,7 +1,7 @@
 'use strict';
 // The navigation graph drones fly.
 
-Features.world('portal', (engine, kit) => {
+Features.feature('interior/portal/drones', (engine, kit) => {
 const { Common } = engine;
 const { v3 } = Common;
 

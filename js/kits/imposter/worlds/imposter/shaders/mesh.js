@@ -1,11 +1,10 @@
 'use strict';
-// WGSL: instanced meshes and their shadow casters.
+// WGSL: instanced meshes (their shadow casters: the shadows feature's).
 
 Features.world('imposter', (engine, kit) => {
-const { WGSL_COMMON } = kit;
 
 // Meshes: instanced from the culled mesh list; extra.x is the LOD fade (1 = fully mesh)
-const WGSL_MESH = WGSL_COMMON + /* wgsl */`
+const WGSL_MESH = /* wgsl */`
 // params: alpha cutoff, wrap, uv scale, flip backface normals; surf: specular, gloss; emissive: linear, x strength
 struct Mat { color: vec4f, params: vec4f, surf: vec4f, emissive: vec4f };
 @group(0) @binding(1) var repSampler: sampler;
@@ -47,10 +46,6 @@ struct VOut {
     var c = shade(Surface(t.rgb * v.col * M.color.rgb, n, v.ao, M.surf.x, M.surf.y, M.params.y, M.emissive.rgb), v.wp);
     if (G.flags.w > 0.5) { c = mix(c, vec3f(0.15, 0.9, 0.25) * (0.3 + dot(c, vec3f(0.5))), 0.55); }
     return vec4f(finish(c, v.wp), clamp(cover, 0.0, 1.0));
-}
-// shadow caster: depth only, alpha-tested
-@fragment fn fsShadow(v: VOut) {
-    if (textureSample(tex, repSampler, v.uv).a * M.color.a < M.params.x) { discard; }
 }
 `;
 

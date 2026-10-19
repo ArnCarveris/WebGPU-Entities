@@ -3,7 +3,7 @@
 
 Features.world('portal', (engine, kit) => {
 // InputSystem: held keys, pointer-lock mouse look and key presses routed to the game. Presses on the GUI screen under the
-// cursor (Game.interaction.focus) go to it, and don't take the mouse for looking.
+// cursor (Game.interaction.focus: the screens feature's) go to it, and don't take the mouse for looking.
 
 class InputSystem {
     constructor(game, io) {
@@ -23,12 +23,12 @@ class InputSystem {
         io.listen(canvas, 'pointerdown', e => {
             track(e);
             this.guiPress = false;
-            if (e.button !== 0 || !g.interaction.focus) return;
+            if (e.button !== 0 || !g.interaction?.focus) return;
             this.guiPress = true;
             g.interaction.pointerDown();
         });
-        io.listen(window, 'pointerup', () => g.interaction.pointerUp());
-        io.listen(canvas, 'wheel', e => { if (g.interaction.wheel(e.deltaY)) e.preventDefault(); });
+        io.listen(window, 'pointerup', () => g.interaction?.pointerUp());
+        io.listen(canvas, 'wheel', e => { if (g.interaction?.wheel(e.deltaY)) e.preventDefault(); });
         io.listen(canvas, 'click', () => { if (this.guiPress) this.guiPress = false; else canvas.requestPointerLock?.(); });
         io.listen(document, 'mousemove', e => {
             const p = this.game.player;

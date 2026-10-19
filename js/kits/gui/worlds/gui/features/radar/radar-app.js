@@ -1,7 +1,7 @@
 'use strict';
-// The phone's radar app.
+// The phone's radar app (the radar feature's).
 
-Features.world('gui', (engine, kit) => {
+Features.feature('gui/gui/radar', (engine, kit) => {
 const { clamp, rad, col, pad3, bearingOf, IOS, PHONE_NAV_H, PhoneApp } = engine.kits.gui;
 const { ENTITY_TYPES } = kit;
 

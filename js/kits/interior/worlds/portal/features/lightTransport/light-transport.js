@@ -1,10 +1,10 @@
 'use strict';
 // Light through portals: what of the neighbouring areas' lights and of the sun shines into each area.
 
-Features.world('portal', (engine, kit) => {
+Features.feature('interior/portal/lightTransport', (engine, kit) => {
 const { Common } = engine;
 const { v3 } = Common;
-const { MAX_THROUGH, LIGHT_DEPTH, SUN_SOFT, SUN_FAR } = kit;
+const { MAX_THROUGH, LIGHT_DEPTH, SUN_SOFT, SUN_FAR, WGSL_THROUGH } = kit;
 
 // An area is lit by its own lights (Area.lights, the dynamic ones in it) and, through each open portal, by those of the
 // areas behind it, up to LIGHT_DEPTH portals away; an indoor area gets the sun the same way through portals out to the
@@ -53,7 +53,11 @@ function beam(a, s, b) {
     return x1 >= -rl && x0 <= rl && y1 >= -ul && y0 <= ul;
 }
 
+// The world's extension (world.ext.lightTransport): World.lightingTable asks it for each area's `through` and writes them
+// with it; and the renderer's (a portal render extension): the scene shader's throughLight, over the core's stand-in
 class LightTransport {
+    static key = 'lightTransport';
+
     constructor(world) {
         this.world = world;
     }
@@ -111,6 +115,8 @@ class LightTransport {
 
     // a light's record in the lighting table (THROUGH_FLOATS at o): pos radius (radius 0: the sun), colour intensity,
     // then each aperture's centre, right and up half extents; [o + 8].w = the emitter's size, [o + 12].w = how many
+    write(data, o, x) { LightTransport.write(data, o, x); }
+
     static write(data, o, x) {
         const L = x.L, c = L ? L.color : [1, 1, 1];
         data.set(L ? [L.pos[0], L.pos[1], L.pos[2], L.radius] : [0, 0, 0, 0], o);
@@ -129,5 +135,7 @@ function pass(aps) {
     return aps.reduce((s, x) => [s[0] * x.pass[0], s[1] * x.pass[1], s[2] * x.pass[2]], [1, 1, 1]);
 }
 
-return { LightTransport };
+const LightTransportShader = () => ({ name: 'lightTransport', wgsl(lib) { lib.replace('THROUGH', WGSL_THROUGH); } });
+
+return { LightTransport, extensions: { world: LightTransport, portal: LightTransportShader } };
 });

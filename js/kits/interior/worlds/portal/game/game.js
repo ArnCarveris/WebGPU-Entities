@@ -5,7 +5,7 @@ Features.world('portal', (engine, kit) => {
 const { Common } = engine;
 const { v3 } = Common;
 const {
-    m4, Renderer, FrameBuilder, PortalVis, World, PlayerController, InputSystem, Hud, PortalMedia,
+    m4, Renderer, FrameBuilder, PortalVis, World, PlayerController, InputSystem, Hud,
 } = kit;
 const { VisInspector } = engine.kits.interior;
 
@@ -13,14 +13,19 @@ const { VisInspector } = engine.kits.interior;
 //
 // Frame order:
 //   world update (vehicles first, so riders use this frame's pose) -> player -> portal traversal
-//   (or the frozen one) -> FrameBuilder command list -> GUI screens (cursor, the drawn ones rebuilt) -> the media
-//   systems' views (CCTV, the phone's camera: renderView, each its own traversal and frame) -> debug lines -> render
-//   -> HUD. The floor map, the traversal readout and the frames are the interior kit's VisInspector (this.inspector)
+//   (or the frozen one) -> FrameBuilder command list -> the features' frames (the GUI screens: cursor, the drawn ones
+//   rebuilt; the media systems' views: CCTV, the phone's camera: renderView, each its own traversal and frame) -> debug
+//   lines -> render -> HUD. The floor map, the traversal readout and the frames are the interior kit's VisInspector
+//   (this.inspector)
+//
+// What the features on in its world add to it are its extensions (AppExtension, new E(game), kept as game.ext[E.key]);
+// each hook optional: start() (the renderer is up), load(scn, world) (a new world), frame(now, view) (after the
+// frame's commands are built; view { eye, fwd, viewProj, height }), view(stamp, now) (a view target's frame was built:
+// renderView), mapUnder(c, draw) / mapOver(c, draw) (layers of the inspector's map under / over its areas)
 
 const NO_LINES = new Float32Array(0);
 
 const MASK_MODES = ['stencil', 'scissor', 'none'];
-const VIEW_EVERY = 4;           // frames between rebuilds of a screen only a view target (not the main view) sees
 
 class Game {
     constructor(fx) {
@@ -41,24 +46,22 @@ class Game {
         this.frameMode = 'stencil';
         this.running = false;
         this.lastT = performance.now();
-        // the GUI screens' cursor (the gui kit): the view ray, the crosshair while the mouse looks, else the mouse
-        this.interaction = new engine.kits.gui.InteractionSystem(() => this.world?.screenGuis || [], () => this.screenRay);
-        this.screenRay = null;
-        this.media = new PortalMedia(this);
+        this.interaction = null;        // the GUI screens' cursor (the screens feature's)
+        this.ext = {};
+        this.extensions = engine.kits.gpu.extensionsOf(fx.features, 'app').map(E => (this.ext[E.key] = new E(this)));
     }
 
     get cam() { return this.player && this.player.cam; }
 
     async start() {
         await this.renderer.init();
-        this.dc = new engine.kits.gui.DeviceContext(this.renderer.ext.gui.atlas);
-        this.schedule = new engine.kits.gui.GuiSchedule();
+        for (const x of this.extensions) await x.start?.();
         this.input.attach();
     }
 
     // build a world from scenario data and make it current (throws on errors in the data)
     load(scn) {
-        const world = new World(scn);
+        const world = new World(scn, this.fx.features);
         this.world = world;
         this.vis = new PortalVis(world);
         this.frameBuilder = new FrameBuilder(world, this.renderer);
@@ -68,10 +71,7 @@ class Game {
         this.opts.freeze = false;
         this.inspector = this.createInspector(world);
         this.player = new PlayerController(this, scn.camera, scn.player);
-        this.interaction.reset();
-        world.screenGuis = world.screens.map(s => s.gui);
-        for (const g of world.screenGuis) g.attachTo(this);
-        this.media.load(scn, world);
+        for (const x of this.extensions) x.load?.(scn, world);
         if (world.warnings.length) this.hud.toast(`${world.warnings.length} scenario warning(s), see console`);
         else this.hud.toast(`Loaded "${scn.name || 'scenario'}": ${world.areas.length - 1} areas, ${world.portals.length} portals`);
     }
@@ -112,21 +112,14 @@ class Game {
                         path([[p[0] + d[0] * F, p[1] + d[1] * F], [p[0] + d[0] * F + n[0] * F, p[1] + d[1] * F + n[1] * F], [p[0] - d[0] * F + n[0] * F, p[1] - d[1] * F + n[1] * F], [p[0] - d[0] * F, p[1] - d[1] * F]]);
                         c.fillStyle = 'rgba(40,110,150,0.35)'; c.fill();
                     }
-                    for (const veh of w.vehicles) {
-                        c.setLineDash([3, 4]); c.strokeStyle = 'rgba(160,200,230,0.35)'; c.lineWidth = 1;
-                        path(veh.route.samples.map(sm => sm.p)); c.stroke();
-                        c.setLineDash([]);
-                    }
+                    for (const x of g.extensions) x.mapUnder?.(c, { X, Y, path });
                     for (const h of w.hulls) {
                         const veh = h.vehicle;
                         path(veh ? h.outline.map(q => { const r = veh.toWorld([q[0], h.deck, q[1]]); return [r[0], r[2]]; }) : h.outline);
                         c.fillStyle = 'rgba(150,50,35,0.45)'; c.fill();
                     }
                 },
-                over: (c, { X, Y }) => {
-                    c.fillStyle = '#ff5a40';
-                    for (const d of w.drones) { c.beginPath(); c.arc(X(d.pos[0]), Y(d.pos[2]), 3.5, 0, Math.PI * 2); c.fill(); }
-                },
+                over: (c, draw) => { for (const x of g.extensions) x.mapOver?.(c, draw); },
             },
             options: () => [
                 { choice: 'Masking (3)', options: MASK_MODES, index: MASK_MODES.indexOf(g.opts.mode), pick: i => { g.opts.mode = MASK_MODES[i]; } },
@@ -206,8 +199,7 @@ class Game {
         stats.objs = fr.objs.length;
         this.frameStats = fr.stats;
         this.frameMode = mode;
-        this.updateScreens(now, eye, fwd, viewProj, H);
-        this.media.frame(now);
+        for (const x of this.extensions) x.frame?.(now, { eye, fwd, viewProj, height: H });
 
         const lines = I.lines();
         R.render({ globals: this.globals(viewProj, eye, t, W, H, mode === 'stencil'), areas: w.lightingTable(t, eye), draws: fr.draws, cmds: fr.cmds, polys: fr.polys, stencil: mode === 'stencil', lines: lines.data, lineDepthCount: lines.depthCount });
@@ -224,61 +216,11 @@ class Game {
         if (!o.occluders) vis.occluders = [];
         const mode = o.culling ? o.mode : 'none';
         const fr = this.viewBuilder.build(vis, mode, W, H);
-        this.buildViewScreens(this.viewBuilder.stamp, this.frameNow);
+        for (const x of this.extensions) x.view?.(this.viewBuilder.stamp, this.frameNow);
         this.renderer.render({
             globals: this.globals(viewProj, s.eye, t, W, H, mode === 'stencil'), areas: w.lightingTable(t, s.eye), draws: fr.draws, cmds: fr.cmds,
             polys: fr.polys, stencil: mode === 'stencil', lines: NO_LINES, lineDepthCount: 0,
         }, target);
-    }
-
-    // GUI screens (kits.entities sectorTypes Screen, js/kits/entities/sectors.js): the interaction system (the gui kit) gives the nearest screen the view ray
-    // meets the cursor, if within the GUI's range; the screens in this frame's draws rebuild their GUI models when the
-    // gui kit's GuiSchedule says so (the others aren't seen)
-    updateScreens(now, eye, fwd, viewProj, H) {
-        const dt = Math.min(0.1, (now - (this.screenT ?? now)) / 1000), screens = this.world.screens, ia = this.interaction;
-        this.screenT = now;
-        const dir = this.viewRay(eye, fwd, viewProj);
-        this.screenRay = dir && { eye, dir };
-        ia.hover();
-        ia.drag();
-        const free = document.pointerLockElement !== this.canvas;
-        if (free && ia.focus) { this.canvas.style.cursor = 'none'; this.cursorHidden = true; }
-        else if (this.cursorHidden) { this.canvas.style.cursor = ''; this.cursorHidden = false; }
-        for (const s of screens) s.gui.update(dt, now);
-        this.buildScreens(this.frameBuilder.stamp, now, { viewProj, eye, height: H });
-    }
-
-    // the screens the main view draws (this frame's stamp) rebuild their GUI models as the schedule has them due: the one
-    // with the cursor every frame, the others by their size on screen; the others aren't seen and keep theirs
-    buildScreens(stamp, now, cam) {
-        const seen = [];
-        for (const s of this.world.screens) if (s.stamp === stamp) seen.push(s.gui);
-        for (const g of this.schedule.due(seen, cam)) {
-            g.build(this.dc, now);
-            g.builtAt = this.frameNo;
-        }
-    }
-
-    // the screens only a view target (CCTV, the phone's camera) draws: rebuilt every VIEW_EVERY frames, once per frame
-    // however many views see them
-    buildViewScreens(stamp, now) {
-        for (const s of this.world.screens) {
-            const g = s.gui;
-            if (s.stamp !== stamp || this.frameNo - (g.builtAt ?? -Infinity) < VIEW_EVERY) continue;
-            g.build(this.dc, now);
-            g.builtAt = this.frameNo;
-        }
-    }
-
-    // the view ray: forward while the mouse looks (pointer lock), through the mouse while it is over the canvas
-    viewRay(eye, fwd, viewProj) {
-        if (this.fx.cameraLocked) return null;
-        if (document.pointerLockElement === this.canvas) return fwd;
-        const m = this.input.mouse;
-        if (!m.inside) return null;
-        const r = this.canvas.getBoundingClientRect();
-        const q = m4.project(m4.invert(viewProj), [((m.x - r.left) / r.width) * 2 - 1, 1 - ((m.y - r.top) / r.height) * 2, 1, 1]);
-        return v3.norm(v3.sub([q[0] / q[3], q[1] / q[3], q[2] / q[3]], eye));
     }
 
     // Globals uniform: view-projection (+ inverse), eye, sun, sky colours, time, viewport and whether the

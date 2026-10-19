@@ -12,7 +12,8 @@ Features.kit('media', (engine, kit) => {
 //   When it returns, the target holds the picture for every command encoded on `enc` after the call: a world may
 //   encode its passes into enc, or submit its own work first.
 // The materials contract (the world's renderer, mirrored to the handheld's): device, format,
-//   registerMaterial(name, shading, view), setMaterialTexture(name, view); shadings: gui, cctv, video (2d-array).
+//   registerMaterial(name, shading, view), setMaterialTexture(name, view); shadings: gui, cctv, video (2d-array; this kit's
+//   shadings.js)
 
 class ViewTarget {
     constructor(device, format, width, height, { material = null, copySrc = false } = {}) {

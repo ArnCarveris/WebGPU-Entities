@@ -189,7 +189,8 @@ only list of kits, entity types, data types and worlds, and everything else is l
   returns `{ create: fx => new FeatureWorld(fx, spec) }`, the spec its HUD, its app and whichever of the host's hooks it
   has (depth, stats, views, ground, sheltered, set...) over the defaults.
 - **A feature** is what a world is made of beyond its core, built only when the world's data asks for it (`when`: an
-  entity of a type, an entity whose implementation needs something, a data path, another feature; `requires`), its
+  entity of a type, an entity whose implementation needs something, a data path, through a list in any of its items
+  (`entities.screen`), another feature; `requires`), its
   parts under `features/<name>/` of its kit (or of its world, over the world's own exports). The root entity's
   `features: { <name>: true | false }` turns one on or off whatever the data says. A feature plugs into the world's
   parts as extensions (its World, App and Renderer: hooks they call in the features' order):
@@ -202,13 +203,25 @@ only list of kits, entity types, data types and worlds, and everything else is l
   | | `buses` | a `bus` entity: drawn, boarded, ridden and driven, their lights and sounds (requires structures; transit kit) |
   | water | `waves` | the scenario's `waves`: wave cascades following the camera, with foam |
   | | `debris` | `debris` entities: floating logs on the GPU |
+  | portal | `screens` | a prop with a `screen`: world-space GUIs on consoles, generators and the bridge, their pass in the portal renderer, the cursor on them |
+  | | `media` | a `securityCamera`, or the scenario's `cctv`, `media` or `iptv`: CCTV, the phone camera, IPTV (requires screens; media kit) |
+  | | `vehicles` | the scenario's `vehicles`: the freighter on its route, boarded and steered, its route on the map |
+  | | `lightTransport` | the scenario's `portals`: lamps of neighbouring areas and the sun shining in through doors, windows and hatches |
+  | | `drones` | a `drone` entity: the navigation graph over areas and portals they fly, the drones on the map |
+  | gui | `paint` | an `easel` entity: paint canvases stamped on the GPU before the frame (paint kit) |
+  | | `radar` | the scenario's `waves` or `radar`: the waves of footsteps, doors, drones and the alarm, the phone's radar app |
+  | | `media` | a `securityCamera`, or the scenario's `cctv`, `media` or `iptv`: CCTV, the phone camera and gallery, IPTV (media kit) |
+  | imposter | `shadows` | the scenario's `shadows`: four cascades of sun shadows, meshes and imposters drawn into a depth array, PCF |
 
   A cloud world of terrain and weather alone loads 9 kits; with Oʻahu's buildings, roads, buses and plants, 16.
 - **Shaders are composed too.** A renderer builds every module from a library of named WGSL chunks (the gpu kit's
   `WgslLibrary`): its core defines its own and, for what a feature brings, a neutral stub of the functions the core
-  calls (`structureLight`, `lightSeen`, `rainReaches`, `curveToRender`, `waves`...); a feature on in the world
+  calls (`structureLight`, `lightSeen`, `rainReaches`, `curveToRender`, `waves`, the portal's `throughLight`, the
+  imposter's `shadowAt` and `castShadows`...); a feature on in the world
   replaces the stubs with its code and adds the chunks that draw it, so a world compiles only the code of what it has.
-  The atmosphere's frame uniform is composed the same way (a feature's fields after the core's).
+  The atmosphere's frame uniform is composed the same way (a feature's fields after the core's). A GUI renderer's
+  shadings come from the kits that use them (`GuiShadings`: the media kit's CCTV and video), built when a material of
+  theirs first registers there, the handheld's included.
 
 ## Composition
 
@@ -277,7 +290,7 @@ js/kits/<kit>/              a kit's parts (Features.kit); its exports are engine
                             factory) adds to every renderer of that kind what it draws besides its own (stencil
                             slots, resources, pipelines, commands) without touching it, and for(kind, features) adds
                             those of the features on in a world (extensionsOf: a feature's extensions[role]):
-                            portal's renderer takes them (its GUI screens pass is one: render/gui-pass.js).
+                            portal's renderer takes them (its GUI screens pass is one: the screens feature's gui-pass.js).
                             WgslLibrary: shaders as named chunks with their needs, a feature's over the core's stubs.
                             Half floats (toHalf / fromHalf) and GpuProfiler (GPU time per pass from timestamp queries)
     imposter/               octahedral imposters for any renderer: ImposterBaker bakes a source (any mesh it can

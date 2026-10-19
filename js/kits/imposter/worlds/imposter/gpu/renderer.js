@@ -1,19 +1,26 @@
 'use strict';
-// The renderer: culling, shadows, meshes, imposters and the overlay.
+// The renderer: culling, meshes, imposters and the overlay (the sun's shadows: the shadows feature's).
 
 Features.world('imposter', (engine, kit) => {
 const { Common, kits } = engine;
-const { DEG, clamp, lerp, v3, frustumPlanes } = Common;
+const { v3, frustumPlanes } = Common;
 const { ImposterGpu, MESH_BUFFERS, drawImposters } = kits.imposter;
 const {
-    MSAA, DEPTH_FORMAT, CASCADES, SHADOW_FLOATS, LISTS, CHEAP_CASCADE, GLOBAL_FLOATS, LOD_MODES, ATLAS_VIEWS, m4,
-    TextureFactory, uploadImage, WGSL_SKY, WGSL_MESH, WGSL_CULL, WGSL_IMPOSTER, WGSL_OVERLAY,
+    MSAA, DEPTH_FORMAT, LISTS, GLOBAL_FLOATS, LOD_MODES, ATLAS_VIEWS, m4, TextureFactory, uploadImage, imposterWgsl, IMPOSTER_MODULES,
 } = kit;
 
+// Renderer. What the features on in its world add to it are its extensions (RendererExtension, new E(renderer), kept as
+// renderer.ext[E.key]); each hook optional: wgsl(library, modules) (its chunks over the core's stand-ins; modules: each
+// module's chunk names), globals() (its entries of bind group 0: { layout, resources }), init(ctx) (its resources and
+// pipelines; ctx: the modules, layouts, vertex layout), frame(cam, env, st, aspect, casterTop) (its uniforms, before the
+// frame's cull), passes(enc, archs, st, cam) (its passes after the cull, before the main one), gpuTimes(t, ms) (its share
+// of the timestamp readout)
 class Renderer {
     // fx: the feature context (the host's device, canvas size, target; see js/engine/host.js)
     constructor(fx) {
         this.fx = fx;
+        this.ext = {};
+        this.extensions = kits.gpu.extensionsOf(fx.features, 'renderer').map(E => (this.ext[E.key] = new E(this)));
         this.onError = msg => console.error(msg);
         this.globals = new Float32Array(GLOBAL_FLOATS);
         this.patterns = new Map();
@@ -33,7 +40,7 @@ class Renderer {
             this.querySet = device.createQuerySet({ type: 'timestamp', count: 12 });
             this.queryBuf = device.createBuffer({ size: 96, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC });
             this.queryRead = device.createBuffer({ size: 96, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
-            this.gpuTimes = null;               // { cull, shadow: [4], main } in ms
+            this.gpuTimes = null;               // { cull, main, and the extensions' (shadow: [4]) } in ms
         }
         this.format = this.fx.format;
         this.width = this.height = 0;
@@ -51,33 +58,30 @@ class Renderer {
 
         const tex = (binding, visibility = S.FRAGMENT) => ({ binding, visibility, texture: {} });
         const smp = binding => ({ binding, visibility: S.FRAGMENT, sampler: {} });
+        this.globalsExt = this.extensions.map(x => x.globals?.()).filter(Boolean);
         this.bgl0 = device.createBindGroupLayout({ entries: [
             { binding: 0, visibility: S.VERTEX | S.FRAGMENT | S.COMPUTE, buffer: { type: 'uniform' } }, smp(1),
-            { binding: 3, visibility: S.VERTEX | S.FRAGMENT | S.COMPUTE, buffer: { type: 'uniform' } },
-            { binding: 4, visibility: S.FRAGMENT, texture: { sampleType: 'depth', viewDimension: '2d-array' } },
-            { binding: 5, visibility: S.FRAGMENT, sampler: { type: 'comparison' } },
+            ...this.globalsExt.flatMap(g => g.layout),
         ] });
         this.viewBgl = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: S.VERTEX | S.FRAGMENT, buffer: { type: 'uniform', hasDynamicOffset: true, minBindingSize: 96 } }] });
         this.matBgl = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: S.VERTEX | S.FRAGMENT, buffer: { type: 'uniform' } }, tex(1)] });
         this.ovBgl = device.createBindGroupLayout({ entries: [{ binding: 0, visibility: S.VERTEX | S.FRAGMENT, buffer: { type: 'uniform' } }, smp(1), tex(2), tex(3), tex(4), tex(5)] });
-        this.shadowBuf = device.createBuffer({ size: SHADOW_FLOATS * 4, usage: U.UNIFORM | U.COPY_DST });
-        this.shadowData = new Float32Array(SHADOW_FLOATS);
         this.viewBuf = device.createBuffer({ size: LISTS * 256, usage: U.UNIFORM | U.COPY_DST });
         this.viewData = new Float32Array(LISTS * 64);
         this.viewBG = device.createBindGroup({ layout: this.viewBgl, entries: [{ binding: 0, resource: { buffer: this.viewBuf, size: 96 } }] });
-        this.shadowSampler = device.createSampler({ compare: 'less', magFilter: 'linear', minFilter: 'linear' });
-        // shadow passes bind this 1-layer stand-in: the real map is their render target
-        this.dummyShadow = device.createTexture({ size: [1, 1, 1], format: 'depth32float', usage: GPUTextureUsage.TEXTURE_BINDING });
-        this.shadowPassBG = this.makeGlobalBG(this.dummyShadow);
-        this.ensureShadowMap(2048);
+        this.globalBG = this.makeGlobalBG();
 
         const layout = (...bgls) => device.createPipelineLayout({ bindGroupLayouts: bgls });
-        const mod = code => device.createShaderModule({ code });
+        // its shaders: the core's chunks, the extensions' over them, each module the chunks it names
+        this.wgsl = imposterWgsl();
+        const modules = Object.fromEntries(Object.entries(IMPOSTER_MODULES).map(([k, v]) => [k, [...v]]));
+        for (const x of this.extensions) x.wgsl?.(this.wgsl, modules);
+        const M = Object.fromEntries(Object.entries(modules).map(([k, names]) => [k, device.createShaderModule({ code: this.wgsl.code(...names) })]));
         const vertexLayout = MESH_BUFFERS;          // the imposter kit's standard mesh: + per-vertex AO
         const mainDepth = (write, compare) => ({ format: DEPTH_FORMAT, depthWriteEnabled: write, depthCompare: compare });
         const target = [{ format: this.format }], ms = { count: MSAA }, a2c = { count: MSAA, alphaToCoverageEnabled: true };
 
-        const meshMod = mod(WGSL_MESH), meshLayout = layout(this.bgl0, this.matBgl, imp.instanceLayout, this.viewBgl);
+        const meshMod = M.mesh, meshLayout = layout(this.bgl0, this.matBgl, imp.instanceLayout, this.viewBgl);
         const mesh = cullMode => device.createRenderPipeline({
             layout: meshLayout,
             vertex: { module: meshMod, entryPoint: 'vs', buffers: vertexLayout },
@@ -87,37 +91,8 @@ class Renderer {
         });
         this.meshPipe = mesh('back');
         this.meshTwoSided = mesh('none');
-        const shadowDepth = bias => ({ format: 'depth32float', depthWriteEnabled: true, depthCompare: 'less', depthBias: bias, depthBiasSlopeScale: bias ? 2 : 0 });
-        this.shadowMeshPipe = device.createRenderPipeline({
-            layout: meshLayout,
-            vertex: { module: meshMod, entryPoint: 'vs', buffers: vertexLayout },
-            fragment: { module: meshMod, entryPoint: 'fsShadow', targets: [] },
-            primitive: { topology: 'triangle-list', cullMode: 'none' },
-            depthStencil: shadowDepth(2),
-        });
-        // opaque casters (terrain, bark, stone...): no fragment stage, the fast depth-only path
-        this.shadowOpaquePipe = device.createRenderPipeline({
-            layout: meshLayout,
-            vertex: { module: meshMod, entryPoint: 'vs', buffers: vertexLayout },
-            primitive: { topology: 'triangle-list', cullMode: 'none' },
-            depthStencil: shadowDepth(2),
-        });
 
-        const impMod = mod(WGSL_IMPOSTER), impLayout = layout(this.bgl0, imp.atlasLayout, imp.instanceLayout, this.viewBgl);
-        this.shadowImpPipe = device.createRenderPipeline({
-            layout: impLayout,
-            vertex: { module: impMod, entryPoint: 'vs' },
-            fragment: { module: impMod, entryPoint: 'fsShadow', targets: [] },
-            primitive: { topology: 'triangle-list' },
-            depthStencil: shadowDepth(0),
-        });
-        this.shadowImpCheapPipe = device.createRenderPipeline({
-            layout: impLayout,
-            vertex: { module: impMod, entryPoint: 'vs' },
-            fragment: { module: impMod, entryPoint: 'fsShadowCheap', targets: [] },
-            primitive: { topology: 'triangle-list' },
-            depthStencil: shadowDepth(1),
-        });
+        const impMod = M.imposter, impLayout = layout(this.bgl0, imp.atlasLayout, imp.instanceLayout, this.viewBgl);
         this.impPipe = device.createRenderPipeline({
             layout: impLayout,
             vertex: { module: impMod, entryPoint: 'vs' },
@@ -126,90 +101,34 @@ class Renderer {
             depthStencil: mainDepth(true, 'greater'), multisample: a2c,
         });
 
-        const skyMod = mod(WGSL_SKY);
+        const skyMod = M.sky;
         this.skyPipe = device.createRenderPipeline({
             layout: layout(this.bgl0),
             vertex: { module: skyMod, entryPoint: 'vs' }, fragment: { module: skyMod, entryPoint: 'fs', targets: target },
             primitive: { topology: 'triangle-list' }, depthStencil: mainDepth(false, 'always'), multisample: ms,
         });
 
-        const ovMod = mod(WGSL_OVERLAY);
+        const ovMod = M.overlay;
         this.ovPipe = device.createRenderPipeline({
             layout: layout(this.ovBgl),
             vertex: { module: ovMod, entryPoint: 'vs' }, fragment: { module: ovMod, entryPoint: 'fs', targets: target },
             primitive: { topology: 'triangle-list' }, depthStencil: mainDepth(false, 'always'), multisample: ms,
         });
 
-        const cullMod = mod(WGSL_CULL);
+        const cullMod = M.cull;
         this.cullPipe = device.createComputePipeline({ layout: layout(this.bgl0, imp.listsLayout), compute: { module: cullMod, entryPoint: 'cull' } });
+        for (const x of this.extensions) await x.init?.({ modules: M, meshLayout, impLayout, vertexLayout });
 
         this.resize();
     }
 
-    makeGlobalBG(shadowTex) {
+    // bind group 0: the globals, the repeat sampler and the extensions' entries (`extra`: one extension's own, for its
+    // passes: the shadow passes' stand-in map)
+    makeGlobalBG(extra = null) {
         return this.device.createBindGroup({ layout: this.bgl0, entries: [
             { binding: 0, resource: { buffer: this.globalBuf } }, { binding: 1, resource: this.repSampler },
-            { binding: 3, resource: { buffer: this.shadowBuf } }, { binding: 4, resource: shadowTex.createView({ dimension: '2d-array' }) },
-            { binding: 5, resource: this.shadowSampler },
+            ...this.globalsExt.flatMap(g => (extra?.of === g ? extra.resources : g.resources())),
         ] });
-    }
-
-    ensureShadowMap(res) {
-        res = clamp(res, 256, this.device.limits.maxTextureDimension2D);
-        if (this.shadowTex && this.shadowRes === res) return;
-        this.shadowTex?.destroy();
-        this.shadowRes = res;
-        this.shadowTex = this.device.createTexture({ size: [res, res, CASCADES], format: 'depth32float', usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
-        this.shadowLayers = Array.from({ length: CASCADES }, (_, k) => this.shadowTex.createView({ dimension: '2d', baseArrayLayer: k, arrayLayerCount: 1 }));
-        this.globalBG = this.makeGlobalBG(this.shadowTex);
-    }
-
-    // Cascades: split the camera range [near, shadowDistance] (log / uniform mix by lambda); fit each slice's
-    // bounding sphere with an orthographic light box, snapped to whole texels so shadows do not shimmer, and
-    // stretched back toward the sun so casters outside the slice still land in the map. How far back: to the
-    // highest caster (`top`, metres) seen along the sun ray from the slice's lowest point. A low sun throws shadows
-    // kilometres long, so a fixed reach dropped the shadows of distant ridges.
-    writeShadows(cam, env, st, aspect, top) {
-        const S = this.shadowData, res = this.shadowRes, far = st.shadowDistance, near = 0.5, lambda = st.shadowLambda;
-        const { fwd, right, up } = cam.basis();
-        const th = Math.tan(cam.fov / 2), tw = th * aspect, L = env.sunDir;
-        const sinSun = Math.max(L[1], 0.02);
-        const LV = m4.lookAt(L, [0, 0, 0], Math.abs(L[1]) > 0.99 ? [0, 0, 1] : [0, 1, 0]);
-        let prev = near;
-        for (let c = 0; c < CASCADES; c++) {
-            const t = (c + 1) / CASCADES, split = lerp(near + (far - near) * t, near * Math.pow(far / near, t), lambda);
-            let center = [0, 0, 0];
-            const corners = [];
-            for (const dd of [prev, split]) for (const sx of [-1, 1]) for (const sy of [-1, 1]) {
-                const p = v3.add(v3.add(v3.madd(cam.pos, fwd, dd), v3.mul(right, sx * tw * dd)), v3.mul(up, sy * th * dd));
-                corners.push(p);
-                center = v3.add(center, v3.mul(p, 1 / 8));
-            }
-            const radius = Math.ceil(Math.max(...corners.map(p => v3.len(v3.sub(p, center)))) * 2) / 2;
-            const texel = 2 * radius / res;
-            const cl = [0, 1, 2].map(k => LV[k] * center[0] + LV[4 + k] * center[1] + LV[8 + k] * center[2] + LV[12 + k]);
-            const x = Math.floor(cl[0] / texel) * texel, y = Math.floor(cl[1] / texel) * texel;
-            const reach = Math.max(800, (top - (center[1] - radius)) / sinSun);
-            const n = -cl[2] - radius - reach, f = -cl[2] + radius;
-            const P = new Float64Array(16);
-            P[0] = 1 / radius; P[5] = 1 / radius; P[10] = -1 / (f - n); P[12] = -x / radius; P[13] = -y / radius; P[14] = -n / (f - n); P[15] = 1;
-            const M = m4.mul(P, LV);
-            S.set(M, c * 16);
-            S[64 + c] = split;
-            S[68 + c] = texel;
-            const row = r => [M[r], M[4 + r], M[8 + r], M[12 + r]];
-            const r0 = row(0), r1 = row(1), r2 = row(2), r3 = row(3), comb = (a, b, k) => a.map((q, i) => q + k * b[i]);
-            this.cascadePlanes[c] = [comb(r3, r0, 1), comb(r3, r0, -1), comb(r3, r1, 1), comb(r3, r1, -1), r2, comb(r3, r2, -1)].map((pl, k) => {
-                const l = Math.hypot(pl[0], pl[1], pl[2]) || 1, n = pl.map(q => q / l);
-                S.set(n, 72 + (c * 6 + k) * 4);
-                return n;
-            });
-            this.viewData.set(M, (c + 1) * 64);
-            this.viewData.set([0, 0, 0, 0, -L[0], -L[1], -L[2], c >= CHEAP_CASCADE ? 1 : 0], (c + 1) * 64 + 16);
-            prev = split;
-        }
-        S.set([CASCADES, res, st.cascadeTint ? 1 : 0, st.shadows ? 1 : 0], 168);
-        this.device.queue.writeBuffer(this.shadowBuf, 0, S);
     }
 
     patternTexture(def) {
@@ -313,7 +232,7 @@ class Renderer {
         this.resize();
         const d = this.device, archs = world ? world.list : [];
         this.writeGlobals(cam, env, st, time);
-        this.writeShadows(cam, env, st, this.width / this.height, world?.casterTop ?? 0);
+        for (const x of this.extensions) x.frame?.(cam, env, st, this.width / this.height, world?.casterTop ?? 0);
         for (let k = 0; k < LISTS; k++) d.queue.writeBuffer(this.viewBuf, k * 256, this.viewData, k * 64, 24);
         const enc = d.createCommandEncoder();
         for (const a of archs) a.upload(this);
@@ -337,14 +256,7 @@ class Renderer {
             archs.forEach((a, i) => { if (!a.static) enc.copyBufferToBuffer(a.lists.args, 0, this.readBuf, offsets[i], a.lists.setStride * LISTS); });
         }
 
-        if (st.shadows && archs.length) for (let c = 0; c < CASCADES; c++) {
-            const pass = enc.beginRenderPass({ colorAttachments: [], timestampWrites: this.stamps(2 + c * 2),
-                depthStencilAttachment: { view: this.shadowLayers[c], depthClearValue: 1, depthLoadOp: 'clear', depthStoreOp: 'store' } });
-            pass.setBindGroup(0, this.shadowPassBG);
-            pass.setBindGroup(3, this.viewBG, [(c + 1) * 256]);
-            this.drawLists(pass, archs, c + 1, m => (m.alphaCutoff > 0 ? this.shadowMeshPipe : this.shadowOpaquePipe), c >= CHEAP_CASCADE ? this.shadowImpCheapPipe : this.shadowImpPipe, true, st, cam);
-            pass.end();
-        }
+        for (const x of this.extensions) x.passes?.(enc, archs, st, cam);
 
         const pass = enc.beginRenderPass({
             timestampWrites: this.stamps(10),
@@ -379,10 +291,11 @@ class Renderer {
         d.queue.submit([enc.finish()]);
         if (doTime) {
             this.queryPending = true;
-            const shadowsOn = st.shadows && archs.length > 0;
+            const parts = this.extensions.filter(x => x.gpuTimes).map(x => [x, x.timed?.(st, archs)]);
             this.queryRead.mapAsync(GPUMapMode.READ).then(() => {
                 const t = new BigUint64Array(this.queryRead.getMappedRange()), ms = k => Math.max(0, Number(t[k + 1] - t[k])) / 1e6;
-                this.gpuTimes = { cull: ms(0), shadow: shadowsOn ? [0, 1, 2, 3].map(c => ms(2 + c * 2)) : null, main: ms(10) };
+                this.gpuTimes = { cull: ms(0), shadow: null, main: ms(10) };
+                for (const [x, on] of parts) Object.assign(this.gpuTimes, x.gpuTimes(on, ms));
                 this.queryRead.unmap();
                 this.queryPending = false;
             }).catch(() => { this.queryPending = false; });

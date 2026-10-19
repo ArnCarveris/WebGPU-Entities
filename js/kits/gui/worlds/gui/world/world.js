@@ -3,31 +3,15 @@
 
 Features.world('gui', (engine, kit) => {
 const { kits } = engine;
-const { clamp, MeshBuilder, MAX_LIGHTS } = engine.kits.gui;
+const { MeshBuilder, MAX_LIGHTS } = engine.kits.gui;
 const { ENTITY_TYPES, TerminalGUI } = kit;
 
-// The facility: entities built from scenario data, shared facility state and actions.
+// The facility: entities built from scenario data, shared facility state and actions. What the features on in its world
+// add to it are its extensions (WorldExtension, new E(world) before its entities, kept as world.ext[E.key]): the radar
+// feature's waves (world.waves).
 
-// Expanding rings for the phone radar (footsteps, drone pings, alarm, doors)
-class SoundWaves {
-    constructor(kinds) {
-        this.kinds = kinds;         // kind -> { speed, life, color }
-        this.list = [];
-    }
-
-    emit(kind, x, z, strength = 1) {
-        const k = this.kinds[kind];
-        this.list.push({
-            kind, x, z, t0: performance.now() / 1000, life: k.life, color: k.color,
-            speed: k.speed * (kind === 'step' ? strength : 1),
-            alpha: kind === 'step' ? clamp(0.5 + strength * 0.35, 0, 1) : 0.8
-        });
-    }
-
-    prune(t) {
-        this.list = this.list.filter((w) => t - w.t0 < w.life);
-    }
-}
+// What a facility without the radar feature has for its waves (footsteps, doors, drones and the alarm emit them): none
+const NO_WAVES = { list: [], emit() {}, prune() {} };
 
 class World {
     constructor(game, scenario) {
@@ -38,7 +22,9 @@ class World {
         this.alarmPulse = 0;
         this.lampScale = 1;
         this.log = [...scenario.facility.log];
-        this.waves = new SoundWaves(scenario.waves);
+        this.waves = NO_WAVES;
+        this.ext = {};
+        this.extensions = kits.gpu.extensionsOf(game.fx.features, 'world').map(E => (this.ext[E.key] = new E(this)));
         this.entities = [];
         this.byId = new Map();
         this.modelMeshes = new Map();    // model name -> its renderer mesh (mesh())

@@ -28,10 +28,11 @@ function phonePages(g) {
                 { toggle: 'Pixel depth offset', on: st.depthOffset, set: set('depthOffset') },
                 { toggle: 'LOD tint + billboards', on: st.tint, set: set('tint') },
                 { choice: 'Atlas view', options: ATLAS_VIEWS, index: ATLAS_VIEWS.indexOf(st.atlasView), pick: i => g.set('atlasView', ATLAS_VIEWS[i]) }] },
-            { header: 'SHADOWS', cells: [
+            // (with the shadows feature)
+            ...(g.renderer.ext.shadows ? [{ header: 'SHADOWS', cells: [
                 { toggle: `${CASCADES} cascades`, key: 'shadows', on: st.shadows, set: set('shadows') },
                 { slider: 'Distance', value: st.shadowDistance, min: 40, max: 2500, fmt: v => `${v.toFixed(0)} m`, set: v => g.set('shadowDistance', Math.round(v / 10) * 10) },
-                { toggle: 'Tint by cascade', on: st.cascadeTint, set: set('cascadeTint') }] },
+                { toggle: 'Tint by cascade', on: st.cascadeTint, set: set('cascadeTint') }] }] : []),
         ] },
         { id: 'lighting', title: 'Lighting', sub: `${L.name} · never rebakes`, icon: [[255, 149, 0], 'L'], sections: [
             { cells: [

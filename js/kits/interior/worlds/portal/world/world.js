@@ -8,8 +8,7 @@ const { GridHash, AreaSet } = kits.interior;
 const { tiltAxes, worldBounds } = kits.mesh;
 const {
     MAX_LIGHTS, THROUGH_FLOATS, AREA_FLOATS, AXES, IDENTITY, g2, GeometryPool, MeshBuilder, splitMesh, MaterialTable, BVHTree, QuadTree,
-    pushSeg, CollisionSet, Area, Portal, Occluder, LightTransport, Architecture, Outdoors, NavGraph, Vehicle, PowerGrid, SCREEN_GUIS,
-    ENTITY_TYPES,
+    pushSeg, CollisionSet, Area, Portal, Occluder, Architecture, Outdoors, PowerGrid, ENTITY_TYPES,
 } = kit;
 
 // World: built entirely from the scenario data; its areas, portals and occluders are an AreaSet (kits.interior: areaAt,
@@ -18,9 +17,17 @@ const {
 // Build order: materials -> areas -> portals -> occluders -> generated architecture -> outdoors
 // (terrain, scatter, seabed) -> entities -> vehicles (claim what is inside their hulls) -> link entities
 // -> object trees -> collision -> sea surface.
+//
+// What the features on in its world add to it are its extensions (WorldExtension, new E(world) before anything is
+// built, kept as world.ext[E.key]); each hook optional: vehicles() (its vehicles: the vehicles feature's freighter),
+// actors() (positions the entities see besides the player's: the drones feature's drones), and the light transport
+// feature's gather(on, t, eye) / write(data, o, x) (what shines into each area through its portals: lightingTable).
+// Constructing one may set what the world's entities ask of it: guiKinds (the screens feature's GUI kinds), nav (the
+// drones feature's navigation graph).
 
 class World extends AreaSet {
-    constructor(scn) {
+    // features: the features on in its world (fx.features)
+    constructor(scn, features = {}) {
         super();
         // the planned buildings (`structures`: placements of the floor plans in its `plans`) built into its own areas,
         // portals, models and entities first (the building kit)
@@ -37,7 +44,9 @@ class World extends AreaSet {
         this.screens = [];              // GUI screens (entities.js Screen)
         this.cameras = [];              // security cameras (entities.js SecurityCamera)
         this.maxLights = MAX_LIGHTS;    // per area
-        this.guiKinds = SCREEN_GUIS;    // the GUI screens' kinds (gui/screens.js)
+        this.guiKinds = {};             // the GUI screens' kinds (the screens feature's)
+        this.ext = {};
+        this.extensions = kits.gpu.extensionsOf(features, 'world').map(E => (this.ext[E.key] = new E(this)));
         // the common mesh interface (kits.mesh): builders resolve material names and scenario models; static geometry
         // goes into the area trees (addStatic: opts { name, owners, lightArea, vehicle, dockedOnly, solid, climbable }),
         // parts are pool chunks drawn with their own matrix
@@ -50,7 +59,6 @@ class World extends AreaSet {
         };
         this.power = new PowerGrid(this);
         this.materials = new MaterialTable(scn.materials, this.warnings);
-        this.nav = new NavGraph(this);
         this.buildAreas();
         this.buildPortals();
         this.occluders = (scn.occluders || []).map((d, i) => new Occluder(d, i, this));
@@ -60,7 +68,7 @@ class World extends AreaSet {
         this.water = this.outdoors.water;
         this.outdoors.build();
         this.spawnEntities();
-        this.vehicles = (scn.vehicles || []).map(d => new Vehicle(this, d));
+        this.vehicles = this.extensions.flatMap(x => x.vehicles?.() || []);
         for (const veh of this.vehicles) veh.claim();
         this.indexAreas();
         // the vehicles in a GridHash by their bounding spheres (re-bucketed as they cross cells, Vehicle.update): point
@@ -71,7 +79,6 @@ class World extends AreaSet {
         this.buildTrees();
         this.buildCollision();
         this.water?.update(this.hulls);
-        this.lightTransport = new LightTransport(this);
         this.totalTris = this.objects.reduce((s, o) => s + o.chunk.count / 3, 0);
         for (const w of this.warnings) console.warn('[scenario]', w);
     }
@@ -274,7 +281,7 @@ class World extends AreaSet {
         this.time = t;
         for (const veh of this.vehicles) veh.update(dt, t);
         this.power.update(dt, t);
-        const all = actors.concat(this.drones.map(d => d.pos));
+        const all = actors.concat(this.extensions.flatMap(x => x.actors?.() || []));
         for (const e of this.dynamic) e.update(dt, t, all);
         for (const list of this.dynamicByArea) list.length = 0;
         for (const e of this.dynamic) for (const o of e.owners) this.dynamicByArea[o].push(e);
@@ -282,18 +289,19 @@ class World extends AreaSet {
     }
 
     // per-area lighting table: its own lights (static + dynamic ones of the frame; an area without power keeps its
-    // emergency beacons only), then those that shine in through its portals (LightTransport, ranked for the view from eye)
+    // emergency beacons only), then those that shine in through its portals (the light transport feature's, ranked for
+    // the view from eye; none without it)
     lightingTable(t, eye) {
         const data = new Float32Array(this.areas.length * AREA_FLOATS);
         const on = this.areas.map(() => []);
         for (const e of this.dynamic) if (e.light && e.lightOn) on[e.lightArea].push(e.light);
         this.areas.forEach((a, i) => on[i].push(...(this.power.powered(i) ? a.lights : a.lights.filter(L => L.signal === 'pulse'))));
-        const through = this.lightTransport.gather(on, t, eye);
+        const lt = this.ext.lightTransport, through = lt ? lt.gather(on, t, eye) : this.areas.map(() => []);
         this.areas.forEach((a, i) => {
             const o = i * AREA_FLOATS, lights = on[i].slice(0, MAX_LIGHTS), into = through[i];
             data.set([a.ambient[0], a.ambient[1], a.ambient[2], 0, a.fog[0], a.fog[1], a.fog[2], a.fog[3], a.sun, lights.length, into.length, 0], o);
             lights.forEach((L, k) => data.set([L.pos[0], L.pos[1], L.pos[2], L.radius, L.color[0], L.color[1], L.color[2], L.intensityAt(t)], o + 12 + k * 8));
-            into.forEach((x, k) => LightTransport.write(data, o + 12 + MAX_LIGHTS * 8 + k * THROUGH_FLOATS, x));
+            into.forEach((x, k) => lt.write(data, o + 12 + MAX_LIGHTS * 8 + k * THROUGH_FLOATS, x));
         });
         return data;
     }

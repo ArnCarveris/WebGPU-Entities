@@ -2,7 +2,7 @@
 // The renderer: device, pipelines, instances, GUI materials, views and scene passes.
 
 Features.kit('gui', (engine, kit) => {
-const { MeshBuilder, GuiSurface, GuiMode, M4, sceneShader, VIDEO_SHADER } = kit;
+const { MeshBuilder, GuiSurface, GuiMode, M4, guiWgsl } = kit;
 const { StencilLayout, buildPipelines } = engine.kits.gpu;
 
 // WebGPU renderer: device, pipelines, instance data, GUI materials and views (view targets: views.js).
@@ -38,6 +38,13 @@ const ALPHA_BLEND = {
     color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' },
     alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' }
 };
+
+// GUI shadings beyond the core's (gui: the atlas and plain textures; surface: the target mode's), by name: a kit whose
+// GUI materials shade their own way registers theirs (the media kit: cctv, video), and a renderer builds one when a
+// material of it first registers there (a world's renderer, the handheld's it lends its materials to). Each:
+// { layout ('2d' | '2d-array'), chunks: { NAME: [code, needs] } (into the renderer's library, over its SCENE),
+//   module (chunk names of the module of both stages; default: the scene's), fsModule (of its fragment stage alone), fs }
+const GuiShadings = new Map();
 
 async function checkShaderModule(module) {
     const info = await module.getCompilationInfo();
@@ -166,10 +173,9 @@ class Renderer {
     // ---- pipelines: a table (js/kits/gpu/pipelines.js) over the resolved stencil layout ----
     async createPipelines() {
         const device = this.device;
-        const module = device.createShaderModule({ code: sceneShader() });
-        const videoModule = device.createShaderModule({ code: VIDEO_SHADER });
+        this.wgsl = guiWgsl();
+        const module = device.createShaderModule({ code: this.wgsl.code('SCENE') });
         await checkShaderModule(module);
-        await checkShaderModule(videoModule);
 
         const layoutEntries = (viewDimension) => [
             { binding: 0, visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, buffer: { type: 'uniform' } },
@@ -182,9 +188,9 @@ class Renderer {
             '2d': device.createBindGroupLayout({ entries: layoutEntries('2d') }),
             '2d-array': device.createBindGroupLayout({ entries: layoutEntries('2d-array') })
         };
-        const ctx = {
+        const ctx = this.pipelineContext = {
             device, format: this.format, depthFormat: DEPTH_FORMAT, samples: 1, stencil: this.stencil.resolve(),
-            modules: { scene: module, video: videoModule },
+            modules: { scene: module },
             layouts: {
                 '2d': device.createPipelineLayout({ bindGroupLayouts: [this.groupLayouts['2d']] }),
                 '2d-array': device.createPipelineLayout({ bindGroupLayouts: [this.groupLayouts['2d-array']] })
@@ -193,16 +199,6 @@ class Renderer {
             blends: { alpha: ALPHA_BLEND }
         };
         const surface = this.surfaceSlot ? ['gui.surface'] : null;
-        // GUI model shading, one pipeline per mode: stencil (depth ALWAYS, masked by the surface's value), bias (depth-tested,
-        // pulled toward the eye) and offset (depth-tested; the quads are placed off the surface)
-        const gui = (fs, extra = {}) => ({
-            layout: '2d', module: 'scene', vs: 'vs_gui', fs, buffers: 'gui', blend: 'alpha', ...extra,
-            variants: {
-                stencil: { depth: { compare: 'always' }, stencil: surface && { test: surface } },
-                bias: { depth: { compare: 'less-equal', bias: GUI_BIAS } },
-                offset: { depth: { compare: 'less-equal' } },
-            }
-        });
         const P = buildPipelines(ctx, {
             scene: { layout: '2d', module: 'scene', vs: 'vs_main', fs: 'fs_scene', buffers: 'world', depth: { write: true, compare: 'less' } },
             // the stencil mode's surface: writes its value wherever it survives the depth test
@@ -212,17 +208,42 @@ class Renderer {
             },
             // the target mode's surface: its GUI's texture (the surface itself is the world's, so no depth write)
             surface: { layout: '2d', module: 'scene', vs: 'vs_main', fs: 'fs_surface', buffers: 'world', depth: { write: false, compare: 'less-equal' } },
-            gui: gui('fs_gui'),
-            cctv: gui('fs_cctv'),
-            video: gui('fs_video', { layout: '2d-array', fsModule: 'video' })
+            gui: this.guiPipeline('fs_gui'),
         });
         this.pipelines = { scene: P.scene, anchor: P.anchor };
         this.shadings = {
             gui: { layout: '2d', pipes: P.gui },
-            cctv: { layout: '2d', pipes: P.cctv },
-            video: { layout: '2d-array', pipes: P.video },
             surface: { layout: '2d', pipes: { surface: P.surface } },
         };
+    }
+
+    // GUI model shading, one pipeline per mode: stencil (depth ALWAYS, masked by the surface's value), bias (depth-tested,
+    // pulled toward the eye) and offset (depth-tested; the quads are placed off the surface)
+    guiPipeline(fs, extra = {}) {
+        const surface = this.surfaceSlot ? ['gui.surface'] : null;
+        return {
+            layout: '2d', module: 'scene', vs: 'vs_gui', fs, buffers: 'gui', blend: 'alpha', ...extra,
+            variants: {
+                stencil: { depth: { compare: 'always' }, stencil: surface && { test: surface } },
+                bias: { depth: { compare: 'less-equal', bias: GUI_BIAS } },
+                offset: { depth: { compare: 'less-equal' } },
+            }
+        };
+    }
+
+    // a shading by name: the core's, or a registered one (GuiShadings) built now: its chunks, modules and pipelines
+    shading(name) {
+        if (this.shadings[name]) return this.shadings[name];
+        const spec = GuiShadings.get(name);
+        if (!spec) throw new Error(`Unknown shading "${name}"`);
+        const ctx = this.pipelineContext, lib = this.wgsl;
+        for (const [chunk, [code, needs]] of Object.entries(spec.chunks || {})) if (!lib.has(chunk)) lib.define(chunk, code, { needs });
+        const mod = (key, names) => { ctx.modules[key] = this.device.createShaderModule({ code: lib.code(...names) }); return key; };
+        const extra = { layout: spec.layout };
+        if (spec.module) extra.module = mod(`shading:${name}`, spec.module);
+        if (spec.fsModule) extra.fsModule = mod(`shading:${name}:fs`, spec.fsModule);
+        const P = buildPipelines(ctx, { pipes: this.guiPipeline(spec.fs, extra) });
+        return (this.shadings[name] = { layout: spec.layout, pipes: P.pipes });
     }
 
     // ---- World materials: the scenario's material table, indexed by the mesh vertices' material id ----
@@ -234,7 +255,7 @@ class Renderer {
 
     // ---- GUI materials: a named texture + a shading ----
     registerMaterial(name, shading, textureView) {
-        if (!this.shadings[shading]) throw new Error(`Unknown shading "${shading}"`);
+        this.shading(shading);
         this.materials.set(name, { shading, view: textureView, version: 0 });
         if (shading !== 'video') this.targets?.registerMaterial(name, textureView);   // (a frame pool can't be a 2d target texture)
         if (this.mirror && name !== 'atlas') this.mirror.registerMaterial(name, shading, textureView);
@@ -400,5 +421,5 @@ class ScenePass {
     }
 }
 
-return { UNIFORM_FLOATS, MAX_LIGHTS, INSTANCE_FLOATS, GUI_STRIDE, DEPTH_FORMAT, CLEAR_COLOR, WORLD_VERTEX_LAYOUT, GUI_VERTEX_LAYOUT, ALPHA_BLEND, checkShaderModule, Renderer, RenderView, ScenePass };
+return { GuiShadings, UNIFORM_FLOATS, MAX_LIGHTS, INSTANCE_FLOATS, GUI_STRIDE, DEPTH_FORMAT, CLEAR_COLOR, WORLD_VERTEX_LAYOUT, GUI_VERTEX_LAYOUT, ALPHA_BLEND, checkShaderModule, Renderer, RenderView, ScenePass };
 });

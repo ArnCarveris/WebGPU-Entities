@@ -2,17 +2,20 @@
 // The media kit's systems on the island: CCTV, the phone's camera and photos, IPTV (the kit loads with a security camera or
 // the scenario's cctv, media or iptv).
 
-Features.world('portal', (engine, kit) => {
+Features.feature('interior/portal/media', (engine, kit) => {
 const { M4 } = engine.kits.gui;
 const media = () => engine.kits.media;
 
 // What the scenario asks for: CCTV over its security cameras (securityCamera entities; portal.cctv tunes it), the
 // phone's camera and photo library (portal.media), IPTV (portal.iptv). This is their `game` (js/kits/media/views.js):
-// the GUI materials of the renderer's GUI pass (render/gui-pass.js), the island as their scene (Game.renderView), the
+// the GUI materials of the renderer's GUI pass (the screens feature's gui-pass.js), the island as their scene (Game.renderView), the
 // engine's handheld, whose Camera, Photos and IPTV pages it lends. A scenario loaded later replaces the systems; the handheld keeps the apps it was
 // lent, which read them from here.
 
+// The game's extension (app.ext.media: the CCTV screen reads its feed from it)
 class PortalMedia {
+    static key = 'media';
+
     constructor(app) {
         this.app = app;
         this.renderer = app.renderer.ext.gui;        // the materials contract
@@ -79,5 +82,5 @@ class PortalMedia {
     }
 }
 
-return { PortalMedia };
+return { PortalMedia, extensions: { app: PortalMedia } };
 });

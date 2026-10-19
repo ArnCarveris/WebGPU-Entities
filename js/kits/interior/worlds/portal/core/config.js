@@ -3,7 +3,7 @@
 
 Features.world('portal', (engine, kit) => {
 const MAX_LIGHTS = 12;                 // point lights per area
-const MAX_THROUGH = 16;                // lights per area that shine in through portals (world/light-transport.js)
+const MAX_THROUGH = 16;                // lights per area that shine in through portals (features/lightTransport/light-transport.js)
 const THROUGH_FLOATS = 32;             // light (pos radius, colour) + two portal apertures (centre, right, up)
 const LIGHT_DEPTH = 2;                 // portals a light passes on its way into an area
 const SUN_SOFT = 0.01;                 // the sun's penumbra (m) per metre from the aperture

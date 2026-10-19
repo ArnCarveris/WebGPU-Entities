@@ -4,7 +4,7 @@
 Features.world('portal', (engine, kit) => {
 const {
     AREA_FLOATS, MAX_DRAWS, DRAW_STRIDE, MAX_FOG_PORTALS, DRAW_FLOATS, MAX_LINE_VERTS, MAX_POLY_VERTS, POLY_FLOATS,
-    DEPTH_FORMAT, STENCIL, WGSL_WORLD, WGSL_SKY, WGSL_POLY, WGSL_LINES,
+    DEPTH_FORMAT, STENCIL, portalWgsl, PORTAL_MODULES,
 } = kit;
 const { StencilLayout, buildPipelines, RenderExtensions } = engine.kits.gpu;
 
@@ -18,8 +18,12 @@ const { StencilLayout, buildPipelines, RenderExtensions } = engine.kits.gpu;
 // (js/kits/gpu/pipelines.js) that names those slots; no stencil value or mask is written here.
 //
 // Everything else it draws comes from render extensions (js/kits/gpu/extensions.js), registered for 'portal' by any
-// kit or part, or added with extend() before init(): the GUI screens are one (render/gui-pass.js). Besides name,
-// stencil, init and pipelines, a portal extension may have
+// kit or part, those of the features on in its world (fx.features: extensions.portal), or added with extend() before
+// init(): the GUI screens are one (features/screens/gui-pass.js). Besides name, stencil, init and pipelines, a portal
+// extension may have
+//   wgsl(lib, modules)  its WGSL: chunks of the renderer's library (render/shaders.js portalWgsl) defined, or replacing
+//                     the core's stand-ins (the light through portals' throughLight); modules: { name: chunk names }, the
+//                     modules made from it (world, sky, poly, lines: add one, or chunks to one)
 //   overlay(o)        a command ({ op, ... }) for a visible object, emitted by FrameBuilder after its entry's objects
 //                     (it gets chunk, slot, ref and rect: the object's geometry, draw slot, region and scissor)
 //   info(o)           the object's draw slot info.z (a number), when the extension's shader reads it
@@ -40,7 +44,7 @@ class Renderer {
         this.ext = {};                  // render extensions by name
         this.exts = [];
         this.handlers = new Map();      // command op -> its extension
-        for (const make of RenderExtensions.for('portal')) this.extend(make(this));
+        for (const make of RenderExtensions.for('portal', fx.features)) this.extend(make(this));
     }
 
     // a render extension (see above), before init()
@@ -82,10 +86,14 @@ class Renderer {
         ] });
         this.drawBG = device.createBindGroup({ layout: this.bgl1, entries: [{ binding: 0, resource: { buffer: this.drawBuf, size: DRAW_FLOATS * 4 } }] });
 
-        const mod = code => device.createShaderModule({ code });
+        // its shaders: the core's chunks, the extensions' over them, each module the chunks it names
+        this.wgsl = portalWgsl();
+        const modules = Object.fromEntries(Object.entries(PORTAL_MODULES).map(([k, v]) => [k, [...v]]));
+        for (const x of this.exts) x.wgsl?.(this.wgsl, modules);
+        const mod = names => device.createShaderModule({ code: this.wgsl.code(...names) });
         const ctx = {
             device, format: this.format, depthFormat: DEPTH_FORMAT, samples: 4, stencil: this.stencil,
-            modules: { world: mod(WGSL_WORLD), sky: mod(WGSL_SKY), poly: mod(WGSL_POLY), lines: mod(WGSL_LINES) },
+            modules: Object.fromEntries(Object.entries(modules).map(([k, names]) => [k, mod(names)])),
             layouts: {
                 world: device.createPipelineLayout({ bindGroupLayouts: [this.bgl0, this.bgl1] }),
                 base: device.createPipelineLayout({ bindGroupLayouts: [this.bgl0] }),

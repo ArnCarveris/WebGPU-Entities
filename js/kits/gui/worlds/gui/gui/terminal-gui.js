@@ -40,7 +40,7 @@ class TerminalGUI extends EntityGUI {
 
     attach(game) {
         super.attach(game);
-        game.cctv.onSelect.push((i) => this.revealCamera(i));
+        game.cctv?.onSelect.push((i) => this.revealCamera(i));
     }
 
     get cctv() { return this.game.cctv; }

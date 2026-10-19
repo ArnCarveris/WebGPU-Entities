@@ -2,7 +2,7 @@
 // The GUI screens of the bunker and the freighter: world-space EntityGUIs (the gui kit, js/kits/gui/) on the consoles,
 // generators and bridge (the Screen entity, js/kits/entities/sectors.js, draws them).
 
-Features.world('portal', (engine, kit) => {
+Features.feature('interior/portal/screens', (engine, kit) => {
 const { clamp, col, deg, wrapIndex, pad3, cardinal, timeText, fitRect, EntityGUI } = engine.kits.gui;
 const { g2, RATED_RPM } = kit;
 const { m4 } = engine.Common;
@@ -629,11 +629,11 @@ class HelmGUI extends ShipGUI {
     }
 }
 
-// The island's security cameras (game/media.js: the gui kit's CctvSystem over the SecurityCamera entities). The feed
+// The island's security cameras (the media feature, features/media/media.js: the media kit's CctvSystem over the SecurityCamera entities). The feed
 // renders only while this screen is drawn (request() from drawBody, which runs only when the screen is seen).
 class CctvGUI extends ScreenGUI {
     get title() { return this.def.title || 'SECURITY // CCTV'; }
-    get cctv() { return this.app?.media?.cctv || null; }
+    get cctv() { return this.app?.ext.media?.cctv || null; }
 
     drawBody(dc, t, now) {
         const W = this.vw, H = this.vh, cctv = this.cctv, cams = cctv ? cctv.cameras : [];

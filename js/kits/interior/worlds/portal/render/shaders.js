@@ -1,10 +1,11 @@
 'use strict';
-// WGSL: the world, GUI screens, sky, portal polygons and debug lines.
+// WGSL: the world, sky, portal polygons and debug lines, as a library of chunks (the features add theirs: the GUI screens',
+// the light through portals).
 
 Features.world('portal', (engine, kit) => {
 const { kits } = engine;
 const { NoiseWGSL } = kits.noise;
-const { MAX_LIGHTS, MAX_THROUGH, MAX_FOG_PORTALS, SUN_FAR } = kit;
+const { MAX_LIGHTS, MAX_THROUGH, MAX_FOG_PORTALS } = kit;
 
 // WGSL sources. The scene shader indexes the per-area lighting table and the material table (storage
 // buffers) with the draw's area and each vertex's material id.
@@ -15,7 +16,7 @@ struct Globals {
     skyTop: vec4f, skyHorizon: vec4f, params: vec4f,
 };
 struct Light { posRad: vec4f, color: vec4f };
-// a light shining in through portals (world/light-transport.js): posRad.w = 0 is the sun; ap = up to two apertures
+// a light shining in through portals (features/lightTransport/light-transport.js): posRad.w = 0 is the sun; ap = up to two apertures
 // (centre, right and up half extents) it must pass, ap[0].w = the emitter's size, ap[1].w = how many apertures
 struct Through { posRad: vec4f, color: vec4f, ap: array<vec4f, 6> };
 // info: x = sun amount, y = own lights, z = lights through portals
@@ -79,7 +80,7 @@ fn applyFog(c: vec3f, wpos: vec3f, own: vec4f) -> vec3f {
 
 `;
 
-const WGSL_WORLD = WGSL_COMMON + WGSL_DRAW + /* wgsl */`
+const WGSL_WORLD = /* wgsl */`
 struct VOut {
     @builtin(position) pos: vec4f,
     @location(0) wpos: vec3f,
@@ -159,21 +160,6 @@ fn surface(m: Material, lp: vec3f, n: vec3f) -> vec4f {
     return vec4f(col, em);
 }
 
-// how much of a light at L reaches p through a portal aperture (centre c, half extents r, u): the segment from p to L
-// must cross it. Its edges cast a penumbra as wide as an emitter of that size at L makes it at p
-fn aperture(p: vec3f, L: vec3f, c: vec3f, r: vec3f, u: vec3f, size: f32) -> f32 {
-    let n = normalize(cross(r, u));
-    let sp = dot(p - c, n);
-    let sl = dot(L - c, n);
-    if (sp * sl > 0.0 || abs(sp - sl) < 1e-5) { return 0.0; }
-    let h = p + (L - p) * (sp / (sp - sl)) - c;
-    let rl = max(length(r), 1e-4);
-    let ul = max(length(u), 1e-4);
-    let edge = min(rl - abs(dot(h, r)) / rl, ul - abs(dot(h, u)) / ul);
-    let w = size * abs(sp) / max(abs(sl), 1e-3) + 0.01;
-    return smoothstep(-w, w, edge);
-}
-
 @fragment fn fs(i: VOut) -> @location(0) vec4f {
     let m = mats[i.mat];
     let ai = u32(D.info.x);
@@ -201,78 +187,13 @@ fn aperture(p: vec3f, L: vec3f, c: vec3f, r: vec3f, u: vec3f, size: f32) -> f32 
         let H = normalize(L + V);
         col += (albedo + vec3f(pow(max(dot(N, H), 0.0), 32.0) * m.params.y)) * ndl * lc.rgb * lc.w * att;
     }
-    // lights of the areas behind the portals, and the sun through them: only along rays through their apertures
-    let through = u32(areas[ai].info.z);
-    for (var k = 0u; k < through; k++) {
-        let T = areas[ai].through[k];
-        var lc = T.color.rgb * T.color.w;
-        var L = normalize(G.sunDir.xyz);
-        var lp = i.wpos + L * ${SUN_FAR}.0;
-        var att = 1.0;
-        var shine = 48.0;
-        if (T.posRad.w > 0.0) {
-            lp = T.posRad.xyz;
-            let dv = lp - i.wpos;
-            let dist = length(dv);
-            L = dv / max(dist, 1e-4);
-            att = pow(clamp(1.0 - dist / T.posRad.w, 0.0, 1.0), 2.0);
-            shine = 32.0;
-        } else {
-            lc *= G.sunColor.rgb;
-        }
-        let ndl = max(dot(N, L), 0.0);
-        if (ndl * att <= 0.0) { continue; }
-        var vis = aperture(i.wpos, lp, T.ap[0].xyz, T.ap[1].xyz, T.ap[2].xyz, T.ap[0].w);
-        if (T.ap[1].w > 1.5) { vis *= aperture(i.wpos, lp, T.ap[3].xyz, T.ap[4].xyz, T.ap[5].xyz, T.ap[0].w); }
-        let H = normalize(L + V);
-        col += (albedo + vec3f(pow(max(dot(N, H), 0.0), shine) * m.params.y)) * ndl * lc * att * vis;
-    }
+    col = throughLight(col, ai, i.wpos, N, V, albedo, m.params.y);
     col += m.emissive.rgb * m.emissive.w * s.a;
     return vec4f(tonemap(applyFog(col, i.wpos, areas[ai].fog)), 1.0);
 }
 `;
 
-// World-space GUI screens (Doom 3 style, the gui kit: js/kits/gui/): a GuiModel's quads (x y in the GUI's virtual screen, y
-// down) drawn in the screen's draw slot, whose model matrix maps virtual units onto the screen surface (y up). They draw
-// right after the screen's own surface, depth-tested just in front of it and masked by its portal entry's stencil ref.
-// The GUI's colours are display values: taken back through the tone curve, they are fogged like the world around them.
-const WGSL_GUI = WGSL_COMMON + WGSL_DRAW + /* wgsl */`
-@group(2) @binding(0) var guiSampler: sampler;
-@group(2) @binding(1) var guiAtlas: texture_2d<f32>;
-
-struct GOut {
-    @builtin(position) pos: vec4f,
-    @location(0) wpos: vec3f,
-    @location(1) uv: vec2f,
-    @location(2) color: vec4f,
-    @location(3) gpos: vec2f,
-};
-
-@vertex fn vs(@location(0) p: vec2f, @location(1) uv: vec2f, @location(2) c: vec4f) -> GOut {
-    var o: GOut;
-    let w = D.model * vec4f(p.x, D.info.z - p.y, 0.003, 1.0);
-    o.pos = G.viewProj * w;
-    o.wpos = w.xyz;
-    o.uv = uv;
-    o.color = c;
-    o.gpos = p;
-    return o;
-}
-
-fn untonemap(c: vec3f) -> vec3f { return -log(vec3f(1.0) - pow(min(c, vec3f(0.995)), vec3f(2.2))) / 1.15; }
-
-@fragment fn fs(i: GOut) -> @location(0) vec4f {
-    // a page overflowing its screen (text past its panel) is not drawn: the stencil used to cut it
-    if (i.gpos.x < 0.0 || i.gpos.y < 0.0 || i.gpos.x > D.info.w || i.gpos.y > D.info.z) { discard; }
-    let c = textureSample(guiAtlas, guiSampler, i.uv) * i.color;
-    if (c.a < 0.004) { discard; }
-    let scan = 0.93 + 0.07 * sin(i.gpos.y * 2.0944 - G.params.x * 3.0);
-    let lin = untonemap(c.rgb * scan) * 1.15;
-    return vec4f(tonemap(applyFog(lin, i.wpos, areas[u32(D.info.x)].fog)), c.a);
-}
-`;
-
-const WGSL_SKY = WGSL_COMMON + /* wgsl */`
+const WGSL_SKY = /* wgsl */`
 struct SOut { @builtin(position) pos: vec4f, @location(0) ndc: vec2f };
 @vertex fn vs(@builtin(vertex_index) i: u32) -> SOut {
     var o: SOut;
@@ -288,7 +209,7 @@ struct SOut { @builtin(position) pos: vec4f, @location(0) ndc: vec2f };
 `;
 
 // portal polygons (stencil marks) and glass panes share one vertex layout: pos3 normal3 color4
-const WGSL_POLY = WGSL_COMMON + /* wgsl */`
+const WGSL_POLY = /* wgsl */`
 struct POut { @builtin(position) pos: vec4f, @location(0) wpos: vec3f, @location(1) nrm: vec3f, @location(2) col: vec4f, @location(3) @interpolate(flat) area: f32 };
 @vertex fn vs(@location(0) p: vec3f, @location(1) n: vec3f, @location(2) c: vec4f, @location(3) a: f32) -> POut {
     var o: POut;
@@ -354,7 +275,7 @@ fn waveH(q: vec2f, t: f32) -> f32 {
 }
 `;
 
-const WGSL_LINES = WGSL_COMMON + /* wgsl */`
+const WGSL_LINES = /* wgsl */`
 struct LOut { @builtin(position) pos: vec4f, @location(0) col: vec4f };
 @vertex fn vs(@location(0) p: vec3f, @location(1) c: vec4f) -> LOut {
     var o: LOut;
@@ -365,5 +286,24 @@ struct LOut { @builtin(position) pos: vec4f, @location(0) col: vec4f };
 @fragment fn fs(i: LOut) -> @location(0) vec4f { return i.col; }
 `;
 
-return { WGSL_WORLD, WGSL_GUI, WGSL_SKY, WGSL_POLY, WGSL_LINES };
+// No light through portals (the lightTransport feature's WGSL_THROUGH in its place): an area is lit by its own lights
+const NO_THROUGH = /* wgsl */`
+fn throughLight(col: vec3f, ai: u32, wpos: vec3f, N: vec3f, V: vec3f, albedo: vec3f, spec: f32) -> vec3f { return col; }
+`;
+
+// the core's library (a new one per renderer: the features on in its world change it) and its modules' chunks
+function portalWgsl() {
+    const L = new kits.gpu.WgslLibrary();
+    L.define('COMMON', WGSL_COMMON);
+    L.define('DRAW', WGSL_DRAW, { needs: ['COMMON'] });
+    L.define('THROUGH', NO_THROUGH, { needs: ['COMMON'] });
+    L.define('WORLD', WGSL_WORLD, { needs: ['COMMON', 'DRAW', 'THROUGH'] });
+    L.define('SKY', WGSL_SKY, { needs: ['COMMON'] });
+    L.define('POLY', WGSL_POLY, { needs: ['COMMON'] });
+    L.define('LINES', WGSL_LINES, { needs: ['COMMON'] });
+    return L;
+}
+const PORTAL_MODULES = { world: ['WORLD'], sky: ['SKY'], poly: ['POLY'], lines: ['LINES'] };
+
+return { portalWgsl, PORTAL_MODULES };
 });

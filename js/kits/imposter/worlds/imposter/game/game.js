@@ -59,7 +59,7 @@ class Game {
         });
         const sh = sc.shadows || {};
         Object.assign(st, { shadows: sh.enabled ?? true, shadowDistance: sh.distance ?? 1200, shadowLambda: sh.lambda ?? 0.85 });
-        this.renderer.ensureShadowMap(sh.resolution ?? 2048);
+        this.renderer.ext.shadows?.ensureShadowMap(sh.resolution ?? 2048);
     }
 
     // build a world from scenario data and make it current; `fromData` = a scenario (not a model drop)

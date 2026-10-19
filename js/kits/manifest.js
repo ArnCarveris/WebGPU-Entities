@@ -22,7 +22,8 @@
 //             <name>: { about, uses, parts, when, requires }. parts: js/kits/<kit>/features/<name>/<part>.js
 //             (Features.feature('<kit>/<name>', fn)), loaded with the kits it uses. when: { types (any of these entity
 //             types), needs (an entity whose implementation needs one of these), data (any of these paths of the
-//             world's native data is set), features (any of these features is on) }; requires: features it builds on
+//             world's native data is set; through a list, in any of its items: entities.screen), features (any of these
+//             features is on) }; requires: features it builds on
 //             (on with it). A root entity's `features: { <name>: true | false }` turns one on or off whatever its data.
 //   }
 //
@@ -214,12 +215,29 @@ const Kits = (() => {
                     uses: ['noise', 'view', 'world', 'entities', 'transit', 'building', 'gpu', 'gui'],
                     parts: [
                         'core/config', 'core/math', 'core/geometry2d', 'core/frustum', 'render/mesh', 'render/materials',
-                        'render/shaders', 'render/renderer', 'render/gui-pass', 'render/frame-builder', 'vis/object-trees',
-                        'vis/portal-vis', 'world/collision', 'world/area', 'world/portal', 'world/light-transport', 'world/architecture', 'world/outdoors',
-                        'world/nav-graph', 'world/vehicle', 'world/power', 'gui/screens', 'world/entities', 'world/world', 'game/player', 'game/input',
-                        'game/hud', 'game/media', 'game/game', 'phone-pages', 'feature',
+                        'render/shaders', 'render/renderer', 'render/frame-builder', 'vis/object-trees',
+                        'vis/portal-vis', 'world/collision', 'world/area', 'world/portal', 'world/architecture', 'world/outdoors',
+                        'world/power', 'world/entities', 'world/world', 'game/player', 'game/input',
+                        'game/hud', 'game/game', 'phone-pages', 'feature',
                     ],
                     bases: ['sector'],
+                    // (its own, over its parts' exports: js/kits/interior/worlds/portal/features/)
+                    features: {
+                        screens: {
+                            about: 'world-space GUI screens on the props (consoles, generators, the bridge): their GUIs, drawn in the portal pass, the cursor on them',
+                            parts: ['screens', 'gui-pass', 'feature'], when: { data: ['entities.screen'] },
+                        },
+                        media: {
+                            about: 'CCTV over the security cameras, the phone camera and IPTV, on the screens and the handheld',
+                            uses: ['media'], requires: ['screens'], parts: ['media'], when: { types: ['securityCamera'], data: ['cctv', 'media', 'iptv'] },
+                        },
+                        vehicles: { about: 'vehicles on routes (the freighter): sailed, boarded and steered, their routes on the map', parts: ['vehicles'], when: { data: ['vehicles'] } },
+                        lightTransport: {
+                            about: "light through portals: the neighbouring areas' lamps and the sun shining in through doors, windows and hatches",
+                            parts: ['shaders', 'light-transport'], when: { data: ['portals'] },
+                        },
+                        drones: { about: 'drones flying the areas: their navigation graph over areas and portals, on the map', parts: ['nav-graph', 'drones'], when: { types: ['drone'] } },
+                    },
                     schema: {
                         config: ['camera', 'player', 'minimap', 'outdoor', 'cctv', 'media', 'iptv'],
                         maps: { materials: { type: 'material' }, models: { type: 'model' }, buildings: { type: 'building' }, ...plans() },
@@ -304,10 +322,17 @@ const Kits = (() => {
                     parts: [
                         'core/config', 'core/util', 'core/math', 'assets/textures',
                         'assets/materials', 'assets/geometry', 'gpu/mesh', 'assets/models', 'assets/loaders', 'shaders/common',
-                        'shaders/mesh', 'shaders/cull', 'shaders/imposter', 'shaders/overlay', 'gpu/renderer', 'world/lighting', 'world/archetype', 'world/entities', 'world/world',
-                        'game/camera', 'game/hud', 'game/game', 'phone-pages', 'feature',
+                        'shaders/mesh', 'shaders/cull', 'shaders/imposter', 'shaders/overlay', 'shaders/library', 'gpu/renderer', 'world/lighting', 'world/archetype',
+                        'world/entities', 'world/world', 'game/camera', 'game/hud', 'game/game', 'phone-pages', 'feature',
                     ],
                     bases: ['ground'],
+                    // (its own: js/kits/imposter/worlds/imposter/features/)
+                    features: {
+                        shadows: {
+                            about: 'cascaded sun shadows: caster lists per cascade, meshes and imposters drawn into a depth array, sampled with PCF',
+                            parts: ['shaders', 'shadows'], when: { data: ['shadows'] },
+                        },
+                    },
                     schema: {
                         config: ['camera', 'environment', 'lod', 'shadows', 'imposter', 'drop'],
                         rename: { imposter: 'imposterAtlas' },
@@ -339,10 +364,19 @@ const Kits = (() => {
                     about: 'a facility of world-space GUIs (terminals, CCTV, easels) walked by a player',
                     uses: ['view', 'world', 'entities', 'interior'],
                     parts: [
-                        'core/audio', 'gui/terminal-gui', 'world/entities', 'gui/apps/radar', 'world/world', 'game/player',
+                        'core/audio', 'gui/terminal-gui', 'world/entities', 'world/world', 'game/player',
                         'game/input', 'game/bindings', 'game/game', 'feature',
                     ],
                     bases: ['fixture'],
+                    // (its own: js/kits/gui/worlds/gui/features/)
+                    features: {
+                        paint: { about: "easels: their paint canvases, stamped on the GPU before the frame's passes", uses: ['paint'], parts: ['paint'], when: { types: ['easel'] } },
+                        radar: { about: 'the phone radar: the waves of footsteps, doors, drones and the alarm, and its app', parts: ['radar-app', 'radar'], when: { data: ['waves', 'radar'] } },
+                        media: {
+                            about: 'CCTV over the security cameras, the phone camera and its gallery, IPTV: their views and phone apps',
+                            uses: ['media'], parts: ['media'], when: { types: ['securityCamera'], data: ['cctv', 'media', 'iptv'] },
+                        },
+                    },
                     schema: {
                         config: ['player', 'facility', 'cctv', 'media', 'iptv', 'waves', 'radar', 'places', 'phone'],
                         maps: { materials: { type: 'material' }, models: { type: 'model', value: 'parts' } },
@@ -357,7 +391,7 @@ const Kits = (() => {
         media: {
             about: 'views into a world, CCTV, the phone camera and its gallery, IPTV, and their phone apps',
             uses: ['gui'],
-            parts: ['views', 'media', 'cctv', 'phone-camera', 'iptv', 'apps/camera', 'apps/gallery', 'apps/viewer', 'apps/tv', 'media-phone'],
+            parts: ['shadings', 'views', 'media', 'cctv', 'phone-camera', 'iptv', 'apps/camera', 'apps/gallery', 'apps/viewer', 'apps/tv', 'media-phone'],
             data: { cctv: 'CCTV feeds', media: 'phone camera and gallery', iptv: 'IPTV channels' },
         },
         // paintable surfaces: an easel's GUI and its paint canvas (stamped on the GPU)
@@ -473,8 +507,9 @@ const Kits = (() => {
 
     function featuresOf(world, native, types, overrides = {}) {
         const all = featuresIn(world);
-        const get = (o, path) => path.split('.').reduce((a, k) => (a == null ? undefined : a[k]), o);
         const set = (v => (v !== undefined && v !== null && v !== false && !(Array.isArray(v) && !v.length) && !(typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).length)));
+        // a path through a list is what its items have there (entities.screen: its entities' screens), set if any is
+        const get = (o, path) => path.split('.').reduce((a, k) => (a == null ? undefined : Array.isArray(a) && !/^\d+$/.test(k) ? a.map(x => x?.[k]).filter(set) : a[k]), o);
         const needs = new Set(types.flatMap(t => implsIn(world, t).flatMap(i => i.needs)));
         const on = new Set();
         for (let changed = true; changed;) {

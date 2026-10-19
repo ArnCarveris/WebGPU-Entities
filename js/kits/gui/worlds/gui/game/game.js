@@ -5,17 +5,22 @@ Features.world('gui', (engine, kit) => {
 const {
     M4, MaterialTable, Renderer, GuiAtlas, DeviceContext, DEPTH_FORMAT, InteractionSystem, GuiSchedule,
 } = engine.kits.gui;
-const { AudioSystem, Easel, SecurityCamera, RadarApp, World, PlayerController, InputSystem, Bindings } = kit;
+const { AudioSystem, SecurityCamera, World, PlayerController, InputSystem, Bindings } = kit;
 
 // Game: builds every system from the scenario and runs the frame.
 //
 // Frame order:
 //   simulate (player, world) -> route the cursor -> update GUIs, rebuild the models that are due (GuiSchedule)
-//   -> decide which views are needed -> write instances -> encode passes:
-//      paint canvases, CCTV, phone camera, player view -> submit
-// The CCTV, the phone's camera and IPTV are the media kit's (js/kits/media/): this game is their scene (renderView),
-// its security cameras their cameras.
+//   -> decide which views are needed (the features' prepare) -> write instances -> encode passes: the features'
+//      (paint canvases, CCTV, phone camera), the GUIs' targets, the player view -> submit
+// The CCTV, the phone's camera and IPTV are the media kit's (js/kits/media/, the media feature's): this game is their
+// scene (renderView), its security cameras their cameras.
 // (the phone itself is the engine's handheld, drawn over the finished frame)
+//
+// What the features on in its world add to it are its extensions (AppExtension, new E(game), kept as game.ext[E.key]);
+// each hook optional: start(renderer) (before the world's instances are final), apps(phone) (phone apps it lends the
+// handheld), prepare() (what renders this frame), passes(renderer, now) (its passes, first of the frame's), and the
+// media's fullscreen / hidden() (the handheld's)
 
 class FrameStats {
     constructor() {
@@ -50,7 +55,14 @@ class Game {
         this.input = new InputSystem(this, fx.io);
         this.stats = new FrameStats();
         this.lastTime = performance.now();
+        this.ext = {};
+        this.extensions = engine.kits.gpu.extensionsOf(fx.features, 'app').map(E => (this.ext[E.key] = new E(this)));
     }
+
+    // the media feature's systems, if on
+    get cctv() { return this.ext.media?.cctv || null; }
+    get camera() { return this.ext.media?.camera || null; }
+    get iptv() { return this.ext.media?.iptv || null; }
 
     async start() {
         const r = this.renderer, s = this.scenario;
@@ -69,11 +81,6 @@ class Game {
         this.player = new PlayerController(this, s.player);
         this.scene = this;
         this.views = new Map();         // view target -> its depth and view uniforms
-        // the media kit's systems, as the scenario asks for them (the kit loads with a security camera or its cctv, media or iptv)
-        const M = engine.kits.media;
-        this.cctv = M && (s.cctv || this.cameras().length) ? new M.CctvSystem(this, s.cctv) : null;
-        this.camera = M && s.media ? new M.PhoneCamera(this, s.media) : null;
-        this.iptv = M && s.iptv ? new M.IptvPlayer(this, s.iptv) : null;
         this.handheld = this.fx.host.handheld;
         // the view ray through the mouse, unless it looks around or the handheld has the cursor
         this.interaction = new InteractionSystem(() => this.world.guis, () => {
@@ -83,7 +90,7 @@ class Game {
         });
         this.bindings = new Bindings(this);
 
-        for (const m of [this.cctv, this.camera, this.iptv]) m?.init(r);
+        for (const x of this.extensions) x.start?.(r);
         this.world.init(r);
         r.finalizeInstances();
         this.mainView = r.createView();
@@ -99,10 +106,10 @@ class Game {
             id: fx.id,
             pages: this.scenario.phone.pages,
             bindings: this.bindings,
-            apps: (phone) => ({ radar: new RadarApp(phone, this), ...(engine.kits.media ? engine.kits.media.mediaApps(this)(phone) : {}) }),
+            apps: (phone) => Object.assign({}, ...this.extensions.map(x => x.apps?.(phone))),
             renderer: r,
-            fullscreen: () => !!this.iptv?.fullscreen,
-            hidden: () => { if (this.iptv) this.iptv.fullscreen = false; },
+            fullscreen: () => !!this.ext.media?.fullscreen,
+            hidden: () => this.ext.media?.hidden(),
             // while this world's player is the camera: its stride sways the phone, its lights light it (in eye space)
             motion: () => (fx.cameraLocked ? null : { moving: player.moving, stepPhase: player.stepPhase }),
             lighting: (t) => {
@@ -173,27 +180,19 @@ class Game {
     }
 
     render(now, dt, t) {
-        const { renderer: r, world, player, handheld: phone } = this;
+        const { renderer: r, world, player } = this;
         r.resize();
         // Views and render targets for this frame
         const frame = this.frameState = world.frameState(t);
         const view = player.viewMatrix();
         this.mainView.update(M4.multiply(M4.perspective(player.fovy, r.aspect, 0.02, this.far), view), player.eye, frame);
-        const tv = this.iptv;
-        if (tv) {
-            if (!phone.visible) tv.fullscreen = false;
-            tv.update(phone.visible && (tv.fullscreen || phone.gui.pagesVisible().includes('tv')));
-        }
-        this.cctv?.prepare();
-        this.camera?.prepare();
+        for (const x of this.extensions) x.prepare?.();
 
         world.writeInstances(r);
 
         // Passes
         r.beginFrame();
-        for (const easel of world.ofType(Easel)) easel.canvas.flush(r);
-        this.cctv?.render(r.encoder);
-        this.camera?.render(r.encoder, now);
+        for (const x of this.extensions) x.passes?.(r, now);
         r.updateGuiTargets(r.encoder, world.guis);
         const pass = r.beginScenePass(r.swapView, r.depthView, this.mainView);
         world.render(pass, { showAvatar: false });

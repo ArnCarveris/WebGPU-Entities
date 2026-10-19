@@ -1,15 +1,53 @@
 'use strict';
-// The GUI screens' pass: a render extension of the portal renderer.
+// The GUI screens' pass: a render extension of the portal renderer, with its WGSL.
 
-Features.world('portal', (engine, kit) => {
-const { RenderExtensions } = engine.kits.gpu;
+Features.feature('interior/portal/screens', (engine, kit) => {
 const { GuiAtlas, GUI_VERTEX_LAYOUT, GuiTargets, GuiMode } = engine.kits.gui;
-const { WGSL_GUI, WGSL_WORLD } = kit;
+
+// World-space GUI screens (Doom 3 style, the gui kit: js/kits/gui/): a GuiModel's quads (x y in the GUI's virtual screen, y
+// down) drawn in the screen's draw slot, whose model matrix maps virtual units onto the screen surface (y up). They draw
+// right after the screen's own surface, depth-tested just in front of it and masked by its portal entry's stencil ref.
+// The GUI's colours are display values: taken back through the tone curve, they are fogged like the world around them.
+const WGSL_GUI = /* wgsl */`
+@group(2) @binding(0) var guiSampler: sampler;
+@group(2) @binding(1) var guiAtlas: texture_2d<f32>;
+
+struct GOut {
+    @builtin(position) pos: vec4f,
+    @location(0) wpos: vec3f,
+    @location(1) uv: vec2f,
+    @location(2) color: vec4f,
+    @location(3) gpos: vec2f,
+};
+
+@vertex fn vs(@location(0) p: vec2f, @location(1) uv: vec2f, @location(2) c: vec4f) -> GOut {
+    var o: GOut;
+    let w = D.model * vec4f(p.x, D.info.z - p.y, 0.003, 1.0);
+    o.pos = G.viewProj * w;
+    o.wpos = w.xyz;
+    o.uv = uv;
+    o.color = c;
+    o.gpos = p;
+    return o;
+}
+
+fn untonemap(c: vec3f) -> vec3f { return -log(vec3f(1.0) - pow(min(c, vec3f(0.995)), vec3f(2.2))) / 1.15; }
+
+@fragment fn fs(i: GOut) -> @location(0) vec4f {
+    // a page overflowing its screen (text past its panel) is not drawn: the stencil used to cut it
+    if (i.gpos.x < 0.0 || i.gpos.y < 0.0 || i.gpos.x > D.info.w || i.gpos.y > D.info.z) { discard; }
+    let c = textureSample(guiAtlas, guiSampler, i.uv) * i.color;
+    if (c.a < 0.004) { discard; }
+    let scan = 0.93 + 0.07 * sin(i.gpos.y * 2.0944 - G.params.x * 3.0);
+    let lin = untonemap(c.rgb * scan) * 1.15;
+    return vec4f(tonemap(applyFog(lin, i.wpos, areas[u32(D.info.x)].fog)), c.a);
+}
+`;
 
 // the fallback's screen: the glass showing its GUI's render target (the gui kit's GuiTargets): the world shader's own
 // vertex stage (the same module code and entry, so exactly the glass's depth) with a fragment stage that maps the
-// glass's local position (virtual units) to the target and shades it like the quads
-const WGSL_SCREEN = WGSL_WORLD + /* wgsl */`
+// glass's local position (virtual units) to the target and shades it like the quads: chunks after the world's
+const WGSL_SCREEN = /* wgsl */`
 @group(2) @binding(0) var screenSampler: sampler;
 @group(2) @binding(1) var screenTex: texture_2d<f32>;
 fn untonemapScreen(c: vec3f) -> vec3f { return -log(vec3f(1.0) - pow(min(c, vec3f(0.995)), vec3f(2.2))) / 1.15; }
@@ -28,7 +66,7 @@ fn untonemapScreen(c: vec3f) -> vec3f { return -log(vec3f(1.0) - pow(min(c, vec3
 const RT_MAX = 1024;            // a fallback target's longest side, in texels
 const GUI_BIAS = { constant: -4, slopeScale: -2, clamp: 0 };     // the bias mode: the quads pulled toward the eye
 
-// World-space GUI screens (kits.entities sectorTypes Screen, js/kits/entities/sectors.js; gui/screens.js) drawn in the portal render pass, as a render
+// World-space GUI screens (kits.entities sectorTypes Screen, js/kits/entities/sectors.js; screens.js) drawn in the portal render pass, as a render
 // extension (render/renderer.js): a 'gui' overlay command for every visible object with a GUI, right after its entry's
 // objects, in its draw slot (the screen's model matrix and fog chain; info.z = the GUI's virtual height).
 //
@@ -56,6 +94,14 @@ class GuiPass {
     }
 
     get device() { return this.renderer.device; }
+
+    // its modules: the quads (gui) and the fallback's glass (screen: the world module and its fragment stage)
+    wgsl(lib, modules) {
+        lib.define('GUI', WGSL_GUI, { needs: ['COMMON', 'DRAW'] });
+        lib.define('SCREEN', WGSL_SCREEN, { needs: ['WORLD'] });
+        modules.gui = ['GUI'];
+        modules.screen = ['WORLD', 'SCREEN'];
+    }
     get format() { return this.renderer.format; }
 
     async init(r, ctx) {
@@ -69,10 +115,9 @@ class GuiPass {
         await GuiAtlas.loadFonts();
         this.atlas = new GuiAtlas();
         this.registerMaterial('atlas', 'gui', this.atlas.upload(r));
-        ctx.modules.gui = device.createShaderModule({ code: WGSL_GUI });
         ctx.layouts.gui = device.createPipelineLayout({ bindGroupLayouts: [ctx.bgl0, ctx.bgl1, this.bgl] });
         ctx.buffers.gui = [GUI_VERTEX_LAYOUT];
-        await this.initFallback(r, ctx);
+        this.flat = new GuiTargets(r.device, r.format, { max: RT_MAX, layout: this.bgl });
     }
 
     // the mode this frame draws with: the GuiMode choice, else stencil where the screens have a value and targets where
@@ -81,11 +126,6 @@ class GuiPass {
         let m = GuiMode.of(this.surface.capacity > 0 ? 'stencil' : 'target');
         if (m === 'stencil' && this.surface.capacity === 0) m = 'target';
         return m === 'offset' ? 'bias' : m;
-    }
-
-    async initFallback(r, ctx) {
-        this.flat = new GuiTargets(r.device, r.format, { max: RT_MAX, layout: this.bgl });
-        ctx.modules.screen = r.device.createShaderModule({ code: WGSL_SCREEN });
     }
 
     pipelines(ctx) {
@@ -193,7 +233,5 @@ class GuiPass {
     }
 }
 
-RenderExtensions.register('portal', r => new GuiPass(r));
-
-return { GuiPass };
+return { GuiPass, WGSL_GUI };
 });

@@ -1,5 +1,5 @@
 'use strict';
-// WGSL: the scene / GUI, video and blit shaders.
+// WGSL: the scene / GUI shader as a library of chunks (its shadings' chunks join it: GuiShadings), and the blit shader.
 
 Features.kit('gui', (engine, kit) => {
 const { clamp, col } = kit;
@@ -249,43 +249,6 @@ const sceneShader = () => /* wgsl */`
         let c = textureSample(guiTex, guiSampler, i.uv) * i.color;
         return vec4f(mix(c.rgb, crt(c.rgb, i.gpos, c.a), i.fx), c.a);
     }
-
-    // Security-camera look. color.r = signal strength (0 = static).
-    @fragment
-    fn fs_cctv(i : GuiOut) -> @location(0) vec4f {
-        if (clipped(i)) { discard; }
-        let t = U.params.x;
-        let uv = i.uv;
-        let tear = (hash(vec2f(floor(uv.y * 120.0), floor(t * 24.0))) - 0.5) * 0.004;
-        let s = textureSample(guiTex, guiSampler, vec2f(uv.x + tear, uv.y));
-        let noise = hash(uv * vec2f(391.0, 283.0) + fract(t * 7.3) * vec2f(17.0, 29.0));
-        var v = dot(s.rgb, vec3f(0.3, 0.59, 0.11)) * 1.35 + (noise - 0.5) * 0.1;
-        v = v * (0.9 + 0.1 * sin(uv.y * 5.0 - t * 1.7)) * (0.85 + 0.15 * sin(uv.y * 384.0 * 3.14159));
-        let d = uv - vec2f(0.5);
-        v = v * (1.0 - dot(d, d) * 1.3);
-        let feed = vec3f(v * 0.72, v, v * 0.8);
-        let rgb = mix(vec3f(noise * 0.75), feed, clamp(i.color.r, 0.0, 1.0));
-        return vec4f(crt(rgb, i.gpos, 1.0), 1.0);
-    }
-`;
-
-// Texture-array GUI material (video frames). Same vertex stage (vs_gui); color.r carries the layer.
-const VIDEO_SHADER = /* wgsl */`
-    struct GuiOut {
-        @builtin(position) pos : vec4f,
-        @location(0) uv    : vec2f,
-        @location(1) color : vec4f,
-        @location(2) gpos  : vec2f,
-        @location(3) @interpolate(flat) fx : f32,
-    };
-    @group(0) @binding(2) var guiSampler : sampler;
-    @group(0) @binding(3) var frames : texture_2d_array<f32>;
-
-    @fragment
-    fn fs_video(i : GuiOut) -> @location(0) vec4f {
-        let c = textureSample(frames, guiSampler, i.uv, i32(i.color.r + 0.5));
-        return vec4f(c.rgb, i.color.a);
-    }
 `;
 
 // Full-screen triangle copying a texture into a (smaller) target
@@ -309,5 +272,12 @@ const BLIT_SHADER = /* wgsl */`
     }
 `;
 
-return { sceneShader, VIDEO_SHADER, BLIT_SHADER };
+// a renderer's library (a new one per renderer: the shadings it builds add theirs): SCENE, the world and GUI models
+function guiWgsl() {
+    const L = new engine.kits.gpu.WgslLibrary();
+    L.define('SCENE', () => sceneShader());
+    return L;
+}
+
+return { sceneShader, guiWgsl, BLIT_SHADER };
 });
