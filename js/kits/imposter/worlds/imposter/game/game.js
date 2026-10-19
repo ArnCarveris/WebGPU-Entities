@@ -152,6 +152,7 @@ class AppExtension {
         }
     }
 
+    // the commands, named by the key codes they once had: the handheld's pages run them (the keyboard has none)
     onKey(code) {
         const st = this.settings, toggle = (k, label) => { this.set(k, !st[k]); this.toast(`${label} ${st[k] ? 'ON' : 'OFF'}`, 900); this.fx.emit('toggle', { on: st[k] }); };
         switch (code) {

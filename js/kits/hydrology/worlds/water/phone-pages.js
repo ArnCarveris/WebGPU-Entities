@@ -16,7 +16,7 @@ function phonePages(a) {
         Pages.status('Flow sim, water, waves, debris', [[0, 122, 255], 'W'], a.hud),
         { id: 'options', title: 'Options', sub: `${a.tool ? a.tool.name : 'no tool'} · ${RENDER_MODES[a.mode]} · ${a.lightName}`, icon: [[48, 176, 199], 'O'], sections: [
             { header: 'TOOL', cells: [
-                a.tools.length && { choice: 'Tool', options: a.tools.map(t => ({ label: t.name, sub: `key ${t.key}` })), index: a.tools.indexOf(a.tool),
+                a.tools.length && { choice: 'Tool', options: a.tools.map(t => t.name), index: a.tools.indexOf(a.tool),
                     pick: i => a.handleKeys([`Digit${a.tools[i].key}`]) },
                 { slider: 'Brush', value: a.brush, min: 4, max: 200, fmt: v => `${v.toFixed(0)} m`, set: v => { a.brush = v; } }],
                 footer: 'Right drag (or Ctrl + drag) on the terrain uses the tool; [ ] sizes the brush.' },

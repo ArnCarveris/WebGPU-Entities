@@ -28,7 +28,7 @@ p_origin = R^T (p - T) / s
   `(cell, local, axes, tint)` and are never rewritten on a rebase. The vertex shader computes
   `(cell - originCell) * CELL + (local - originLocal)`. The integer subtraction is exact, so geometry
   near the origin keeps full f32 precision at any distance from world 0. The cost doesn't depend on
-  the instance count: press `O` to rebase every frame, or `[ ]` to change the density, and the cost
+  the instance count: rebase every frame, or change the density (both on the handheld), and the cost
   stays at 80 B.
 - **T (translation):** the origin snaps to the camera once the camera is `origin.distance` units away.
 - **R (rotation):** near a body, origin +Y follows the local vertical (shortest-arc turn, so no
@@ -51,11 +51,9 @@ step is about 524 km (shown in the HUD), so the outpost collapses.
 |---|---|
 | drag / WASD / Space, C / Q, E | look / move / up, down along origin +Y / roll |
 | Shift, Ctrl, wheel | ×10, ×0.1, speed |
-| 1–7 | bookmarks from the scenario |
-| T R G | translation / rotation / scale rebasing on or off |
-| O | rebase every frame |
-| [ ] | halve / double field density (rebuilds instances) |
-| L, P, H | labels, pause, help |
+| Tab | the handheld (bookmarks are its views; rebasing, density, labels, pause) |
+
+Every other option (weather, lighting, render modes, views, toggles, loading files...) is on the engine's handheld (`Tab`); there are no other hotkeys. The keys there are show in a toast when the scenario starts (and on walk / fly).
 
 ## Scenario (`<script id="scenario">`)
 

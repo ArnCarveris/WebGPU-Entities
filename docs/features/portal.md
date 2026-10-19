@@ -12,7 +12,7 @@ world is built from a scenario `.json` file in `scenarios/`.
 
 Open `index.html` in a WebGPU browser (Brave, Chrome, Edge), straight from disk or served over HTTP.
 It loads `scenarios/bunker-compound.json` by default. To load another scenario from disk, click
-**Load scenario…** (bottom right), press `L`, or drop a `.json` onto the page. Served over HTTP,
+**Load scenario…** (bottom right), or drop a `.json` onto the page. Served over HTTP,
 `?scenario=<url>` picks the scenario to start with.
 
 Browsers block `fetch()` on pages opened from disk, so there the default scenario comes from
@@ -55,7 +55,7 @@ tools/              embed-scenarios.mjs: regenerate the script copies
 |---|---|
 | `name`, `camera` | title; start `pos`, `yaw`, `pitch` (degrees) and `fov` |
 | `player` | walker tuning: `eyeHeight`, `radius`, `walkSpeed`, `runSpeed`, `stepHeight`, `jumpSpeed`, `gravity`, `climbSpeed`, `swim`, `fly`, `turnSpeed`, `mouseSensitivity`, `helm` rates. All optional |
-| `minimap` | `near` / `far` spans in metres (key `N`) |
+| `minimap` | `near` / `far` spans in metres (the handheld's minimap span) |
 | `materials` | `albedo`, `pattern` (`flat`, `tiles`, `panels`, `noise`, `grass`, `hazard`, `planks`, `bricks`, `screen`, `rust`), `scale`, `spec`, `emissive` [r, g, b, strength] |
 | `models` | lists of `box` [x, y, z, sx, sy, sz], `cyl` / `cone` [x, y, z, r, h] parts with `mat` and `seg` |
 | `outdoor` | the implicit outdoor area: lighting, sky, `terrain`, `water`, `scatter` |
@@ -165,7 +165,7 @@ the cargo hold under an open hatch fade into the fog exactly like the walls arou
 are then fogged only for their own distance. The scissor and none modes draw objects once for all
 entries, so there a fog veil over each open portal (and the glass pane) approximates it.
 
-Key `3` cycles the masking mode: stencil, scissor rects, or none.
+The handheld's masking choice picks the mode: stencil, scissor rects, or none.
 
 ## Architecture from data
 
@@ -247,7 +247,7 @@ half astern to full ahead, `A`/`D` turn the wheel (the rudder self-centres), `X`
 - **Autopilot:** when you let go, it steers back onto the route by pure pursuit, backing off if it
   bumps into something. Once back on the line it resumes the cruise and docking cycle.
 
-### Walking (default, `V` toggles fly)
+### Walking (default; the handheld switches to fly)
 
 - **Collision:** built from the scene triangles. Floors (upward-facing triangles) and walls (XZ
   segments with a height range) are hashed on a 2 m grid, and each vehicle has its own set in
@@ -271,22 +271,11 @@ area's `sun` factor is unshadowed sun on top of that, for roofless areas.
 
 ## Controls
 
-Click for mouse look. `WASD` move, `Space` jump, `Shift` run, `W/S` on ladders. `V` switches to fly
-mode, where `E/Q` move up and down. `F` shows door status (all doors are automatic), `R` resets.
-The minimap is centred on you. Click it to teleport; clicking the ship lands you on its deck. `F` at
-the ship's wheel takes the helm.
+Click for mouse look. `WASD` move, `Space` jump, `Shift` run, `W/S` on ladders. Flying (the handheld's walk / fly),
+`Space/E` and `Q/Ctrl` move up and down. `F` uses the door at hand (all doors are automatic) or, at the ship's wheel,
+takes the helm: then `W/S` throttle, `A/D` rudder, `X` stops, `Space` centres the rudder, `F` leaves it.
+The minimap is centred on you. Click it to teleport; clicking the ship lands you on its deck.
 
-| Key | Toggle |
-|---|---|
-| `1` | portal culling |
-| `2` | freeze visibility (fly out and inspect the frustums) |
-| `3` | masking mode: stencil / scissor / none |
-| `4` | portal lines |
-| `5` | area volumes |
-| `6` | occluders |
-| `M` | minimap |
-| `N` | minimap span: near (110 m) / island (420 m), always centred on you |
-| `L` | load a scenario `.json` from disk |
-| `H` | help |
+Every other option (portal culling, freezing the visibility, masking, portal lines, area volumes, occluders, the minimap and its span, reset, loading a scenario) is on the engine's handheld (`Tab`); there are no other hotkeys. The keys there are show in a toast when the scenario starts (and on walk / fly).
 
 `window.portalDemo` exposes `world`, `vis`, `cam` and `opts` for debugging.

@@ -100,16 +100,9 @@ loading.
 | drag / WASD / Space, C | look / move / up, down |
 | Shift, Alt, wheel | ×5, ×0.2, speed |
 | right drag (or Ctrl + drag) | use the current tool where the cursor meets the terrain |
-| 1–5 | tools from the scenario: pour, splash, raise, dig, drain |
-| [ ] | brush radius |
-| B | boost springs (×8) |
-| R | rain on/off |
-| X | breach / rebuild the dam |
-| N | reset the water to its initial state |
-| M | render mode: shaded, depth, velocity, foam / turbulence, wave cascades |
-| V, G | next camera view / next lighting preset |
-| , . | sim steps per frame −8 / +8 |
-| L, P, H | labels, pause, help |
+| Tab | the handheld (tools, brush, springs, rain, dams, reset, render mode, views, lighting, sim steps) |
+
+Every other option (weather, lighting, render modes, views, toggles, loading files...) is on the engine's handheld (`Tab`); there are no other hotkeys. The keys there are show in a toast when the scenario starts (and on walk / fly).
 
 ## Scenario (`<script id="scenario">`)
 

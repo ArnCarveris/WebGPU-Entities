@@ -68,7 +68,7 @@ class WorldExtension {
         for (const x of world.extensions) x.created?.();
         this.flashCount = 0;
         this.buses = [];                 // the vehicles to board and ride (the buses feature's: every bus of every BusLine)
-        this.busBoost = 1;               // their time runs this many times as fast (hold Z)
+        this.busBoost = 1;               // their time runs this many times as fast (the bus menu's ×10)
         for (const def of scenario.entities || []) world.add(def, { spawn: false });
         for (const e of this.world.entities) { e.stamp(this.field); this.field.updateRange(); }
         for (const x of this.world.extensions) x.build?.();

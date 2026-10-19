@@ -47,7 +47,6 @@ class InputSystem {
         io.listen(c, 'wheel', e => { e.preventDefault(); cam().zoomSpeed(Math.sign(e.deltaY)); this.game.toast(`Speed ${cam().speed.toFixed(1)} m/s`, 700); }, { passive: false });
         io.listen(window, 'keydown', e => {
             if (e.target.closest && e.target.closest('input, select, textarea')) return;
-            if (!this.keys.has(e.code)) this.game.onKey(e.code);
             this.keys.add(e.code);
             if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
         });

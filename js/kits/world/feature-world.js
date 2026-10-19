@@ -44,6 +44,11 @@ class FeatureWorld {
     get move() { return this.app?.camera?.mode || 'fly'; }
     setMove(mode) { this.app.camera.setMode(mode); }
 
+    // the keys there are in it, for the engine's toast (Host.keyHelp): [keys, what they do]. Only what has no other way
+    // has a key (moving, looking, using what is at hand); every other option is the handheld's. By default its app's
+    // camera's, a FirstPersonView, flying or walking
+    get keys() { return this.move === 'walk' ? FeatureWorld.WALK_KEYS : FeatureWorld.FLY_KEYS; }
+
     // the viewpoints this world offers (the engine's View list, Host.viewList): [{ name, sub (a live line), go() }], from
     // its scenario's view entities; a view that follows an entity with `each` is one per member of it (Entity.members).
     // By default its native `views` ({ name, pos, look, fov (degrees) } in its frame), each moving the camera there.
@@ -70,6 +75,10 @@ FeatureWorld.lookFrom = v => {
     const up = v3.cross(v3.norm(v3.cross(fwd, [0, 1, 0])), fwd);
     return v.fov ? { pos, fwd, up, fov: v.fov * Math.PI / 180 } : { pos, fwd, up };
 };
+
+// a FirstPersonView's keys (kits.view), flying and walking
+FeatureWorld.FLY_KEYS = [['drag', 'look'], ['WASD', 'move'], ['Space / C', 'up / down'], ['Shift', 'fast'], ['wheel', 'speed']];
+FeatureWorld.WALK_KEYS = [['drag', 'look'], ['WASD', 'walk'], ['Shift', 'run']];
 
 // the HUD elements a world can ask for in its hudHtml: in-world labels (LabelLayer), toasts (Toast), a crosshair
 FeatureWorld.HUD = {

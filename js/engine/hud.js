@@ -2,7 +2,7 @@
 // EngineHud: what the engine shows on the screen, which is next to nothing: a corner chip that takes the handheld out
 // (every option, readout and page lives on the handheld, js/engine/handheld.js) and toasts.
 //
-//   hud.toast  { text, ms, delay }: shown once the scenario starts
+//   hud.toast  { text, ms, delay }: shown once the scenario starts; then the keys there are (Host.keyHelp)
 //   side panels  a world's live readout it keeps on the screen (side(key, lines)): the portal traversal tree of a world
 //                of areas (kits.interior VisInspector, its "Tree on HUD" option)
 //
@@ -71,8 +71,15 @@ class EngineHud {
         }
     }
 
-    toast(msg, ms = 2400) {
-        this.toastEl.textContent = msg;
+    // when the scenario's own toasts are done (ms after the start), for one to follow them
+    toastsEnd(entities) {
+        return entities.filter(e => e.type === 'hud.toast').reduce((t, e) => Math.max(t, (e.delay || 600) + (e.ms || 3000)), 600);
+    }
+
+    // msg (or msg(), then) for ms, after delay ms (a later toast takes its place)
+    toast(msg, ms = 2400, delay = 0) {
+        if (delay > 0) { setTimeout(() => this.toast(msg, ms), delay); return; }
+        this.toastEl.textContent = typeof msg === 'function' ? msg() : msg;
         this.toastEl.style.display = 'block';
         clearTimeout(this.tid);
         this.tid = setTimeout(() => { this.toastEl.style.display = 'none'; }, ms);

@@ -251,13 +251,8 @@ class Host {
         const focus = this.instances.find(i => i.layer.focus) || this.cameraOwner || this.instances[0];
         this.focusInstance(focus);
         this.router.onFocus = () => this.refreshHuds();
-        // the composition's engine keys
-        window.addEventListener('keydown', e => {
-            if (e.target instanceof Element && e.target.closest('.engine-ui')) return;
-            this.audio.start();
-            if (e.code === 'Backquote' && this.instances.length > 1) this.cycleFocus();
-            else if (e.code === 'KeyH' && !e.repeat) this.setMove(this.move === 'walk' ? 'fly' : 'walk');
-        });
+        // (no keys of the engine's own: focus and walk / fly are the handheld's; a key only starts the sound)
+        window.addEventListener('keydown', () => this.audio.start());
         window.addEventListener('pointerdown', () => this.audio.start());
         // links between worlds
         for (const e of ents.filter(e => e.type === 'link')) {
@@ -267,6 +262,7 @@ class Host {
             this.links.push({ inst, param: param.join('.'), value: Expr.compile(e.value), last: undefined });
         }
         this.hud.configure(ents);
+        this.hud.toast(() => this.keyHelp(), 7000, this.hud.toastsEnd(ents));
         this.handheld.rebuild();
         this.audio.configure(ents);
         if (this.composed) this.compositor = new Compositor(this.device, this.format);
@@ -283,7 +279,7 @@ class Host {
     }
 
     // ------------------------------------------------------------------------------------------- walk / fly
-    // The camera's mode, the engine's to switch (H, the handheld, camera.mode): the engine's camera walks on every shown
+    // The camera's mode, the engine's to switch (the handheld, camera.mode): the engine's camera walks on every shown
     // world's ground; a world with the camera walks its own way (FeatureWorld.moves / move / setMove), on fx.floor
     get moves() { return this.fly ? ['fly', 'walk'] : this.cameraOwner?.world.moves || ['fly']; }
     get move() { return this.fly ? this.fly.eye.mode : this.cameraOwner?.world.move || 'fly'; }
@@ -293,7 +289,15 @@ class Host {
         if (mode === this.move) return;     // already (a fly-only world's camera has no setMode)
         if (this.fly) this.fly.eye.setMode(mode);
         else this.cameraOwner.world.setMove(mode);
-        if (say) this.hud.toast(mode === 'walk' ? 'Walking' : 'Flying', 1200);
+        if (say) this.hud.toast(`${mode === 'walk' ? 'Walking' : 'Flying'}: ${this.keyHelp()}`, 4000);
+    }
+
+    // the keys there are, as a line for a toast: the camera world's (FeatureWorld.keys: [keys, what it does]) or the
+    // engine fly camera's, and the handheld's, which holds everything else
+    keyHelp() {
+        const { FeatureWorld } = Features.kits.world;
+        const keys = this.fly ? (this.fly.eye.mode === 'walk' ? FeatureWorld.WALK_KEYS : FeatureWorld.FLY_KEYS) : this.cameraOwner?.world.keys || [];
+        return [...keys, ['Tab', 'handheld (every option)']].map(([k, what]) => `${k} ${what}`).join(' · ');
     }
 
     // the floor at composition-space point (x, y, z): the highest thing to stand on at or below y over every shown
@@ -340,15 +344,6 @@ class Host {
             else if (v) this.setView(inst, v);
         }
         this.refreshHuds();
-    }
-
-    cycleFocus() {
-        const list = this.instances.filter(i => i.visible);
-        if (!list.length) return;
-        const k = list.findIndex(i => i.id === this.router.focus);
-        const next = list[(k + 1) % list.length];
-        this.focusInstance(next);
-        this.hud.toast(`Keys → ${next.label}${this.cameraOwner === next ? ' (camera)' : ''}`, 1500);
     }
 
     setVisible(inst, on) {

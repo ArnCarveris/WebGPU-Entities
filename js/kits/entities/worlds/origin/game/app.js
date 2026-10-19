@@ -60,6 +60,7 @@ class AppExtension {
         this.fx.emit('jump', { name: b.name });
     }
 
+    // the commands, named by the key codes they once had: the handheld's pages run them (the keyboard has none)
     handleKeys(pressed) {
         const f = this.floating;
         for (const code of pressed) {
@@ -116,7 +117,6 @@ class AppExtension {
             if (dt > 0) this.fps = this.fps * 0.95 + (1 / dt) * 0.05;
             if (!this.paused) this.time += dt;
             const io = this.input.consume();
-            this.handleKeys(io.pressed);
             const near = w.proximity(this.camera.pos);
             if (!this.fx.cameraLocked) this.controller.update(dt, io, f.origin, near, this.minAlt, f.scale ? 6 : f.cfg.maxScaleExp);
             if (this.controller.atEdge) { this.controller.atEdge = false; this.hud.toast('Edge of the world: ±2^30 cells'); }

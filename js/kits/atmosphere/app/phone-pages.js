@@ -28,7 +28,7 @@ function phonePages(a) {
                 { toggle: 'Flashlight', on: a.flashlight, set: key('KeyL') },
                 { toggle: 'Radar', on: a.radar, set: v => { a.radar = v; } },
                 Pages.labels(a.hud)],
-              footer: 'The arrow keys move the sun. Views (and the buses) are on the engine\'s View.' },
+              footer: 'Views (and the buses) are on the engine\'s View.' },
             ...vw.sections,
         ] },
         { id: 'graphics', title: 'Graphics', sub: `${m.quality.summary} · ${m.gpu.summary}`, icon: [[142, 142, 147], 'G'], sections: [

@@ -236,7 +236,7 @@ offers them.
   evaluated only every other step until one is hit. Nothing is sampled below the lowest cloud or above the highest
   cloud top of this frame. The grid costs about 0.2 ms and saves 0.6–1.3 ms of march. A bound on the shape noise in
   the grid was tried too: it skipped little more and cost as much as it saved.
-- **Cloud tiles** (`G` switches them off): the march evaluates clouds only in the distance bins the tile pre-pass found
+- **Cloud tiles** (the handheld's gpu menu switches them off): the march evaluates clouds only in the distance bins the tile pre-pass found
   cloud in, over the pixel's tile and its eight neighbours, widened by one bin each way. The pre-pass costs 0.4 ms at
   medium and 0.7 ms at high and takes 1.0–2.2 ms off the march. It ignores the scene depth (a tile can straddle the
   horizon) and evaluates every mothership and shelf line. Two samples per bin cost twice as much and skipped no more.
@@ -261,36 +261,26 @@ and from 25–28 ms to 10–12 ms at high.
 | drag / WASD / Space, C | look / move / up, down |
 | Shift, Alt, wheel | ×5, ×0.2, speed |
 | right click (or Ctrl + click) | grow a storm cell where the cursor meets the ground |
-| N | rain variants: drizzle, light rain, medium rain, downpour, mixed rain (see **Rain variants**) |
-| 1–9 | weather states: clear, fair cumulus, mackerel sky, warm front, stratus deck, showers, thunderstorm, snow squalls, overcast rain (they blend over `transition` seconds). A 10th, severe storms, is reached by auto-cycle and by the shelf and mothership views |
-| 0 | auto-cycle the weather states |
-| menu bar (top right, above the radar) | first row: **weather** (pick one state, plus an **auto cycle** check), **rain** (pick one rain variant), **time** (the weather time scale), **clouds** (check any of the persistent clouds to show them), **tornado** and **hurricane** (pick off or a category). Second row: **view** (jump to one), **move** (fly or walk), **bus** (go to one, plus a latched **buses ×10** check), **lighting** (the scenario's presets), **quality**, **render** mode, and **gpu** (froxel lighting, the cloud tile pre-pass and bloom as checks, with the GPU timings per pass). Pick-one menus close on a pick; menus of checks stay open. Esc or a click elsewhere closes a menu; the keys below do the same as the menus and the menus follow them |
-| K | lightning from the nearest raining cell |
-| J | hide / show the persistent cloud last picked in the **clouds** menu: the scenario's supercells (motherships), squall lines and pinned or held cells. They start hidden; a view that follows one (Mothership, Shelf cloud) shows it. A hidden cloud drops out of the weather map, the analytic structures, lightning and the labels; it keeps evolving, so it comes back where it would be |
-| tornado menu | next to the clouds menu (only with a supercell in the scenario): **off** (the default) or a tornado of category **F1-F5** under the wall cloud of the supercell showing (it shows the scenario's first supercell if none is). F1 is a leaning rope whose funnel only condenses part way down, over a small debris whirl; up the scale the funnel widens into a cone and, at F4-F5, a wedge with subvortices and a broad debris cloud. It touches down over a few seconds and is marched on its own, so even a rope a few tens of metres across stays solid at a distance |
-| hurricane menu | **off** (the default) or a hurricane of category **Cat 1-5** (Saffir-Simpson), its eye at the scenario's `hurricane.pos`. It is drawn into the weather map: a tall eyewall ring with torrential rain, spiral rain bands wound in towards it, a central dense overcast spreading from the eyewall top, and a clear eye with only a scatter of low cloud on its floor. The eye widens with height, so the eyewall leans outwards (the stadium effect). Stronger storms have a smaller, rounder, clearer eye, taller walls and more bands; it organises over a few seconds as the eye contracts, and turns with weather time. The radar shows the spiral. Views *Hurricane eye* and *Hurricane from above* pick Cat 4 |
-| , . | weather time scale (×1 … ×160) |
-| T, arrows | next lighting preset; move the sun (azimuth, elevation) |
-| R | radar inset |
-| F | froxel lighting on / off |
-| G | cloud tile pre-pass on / off |
-| O | bloom on / off |
-| M | render mode: shaded, no volumetrics (skips the volumetric passes), clouds only, precipitation only |
-| Q | quality: low / medium / high / ultra (volumetric resolution, steps, light steps, interleave, detail distance, cloud blur) |
-| V, I, P, H | next view, labels, pause weather, help |
-| L | flashlight on / off: a torch along the view (in hand on foot), day or night (see **Lights by night**) |
-| X | walk (from the ground below the camera) / fly |
-| B | go to the next bus of the line (each press another): outside its front door while it stands at a stop, else aboard in the aisle |
-| E | open or shut the door you look at (within 2.4 m); aboard: sit in the seat you look at, or stand up |
-| hold Z | the buses run ten times as fast |
+| E | open or shut the door you look at (within 2.4 m), call or use a lift, climb a shaft's ladder; aboard: sit in the seat you look at, or stand up |
+| F | take or leave the wheel of the bus you stand by |
+| Tab | the handheld |
+
+Every other option (weather, lighting, render modes, views, toggles, loading files...) is on the engine's handheld (`Tab`); there are no other hotkeys. The keys there are show in a toast when the scenario starts (and on walk / fly).
 
 On foot, WASD walks (Shift runs, Alt creeps) and dragging looks around; Space and C do nothing.
+
+| Handheld menu | Contents |
+|---|---|
+| menu bar (top right, above the radar) | first row: **weather** (pick one state, plus an **auto cycle** check), **rain** (pick one rain variant), **time** (the weather time scale), **clouds** (check any of the persistent clouds to show them), **tornado** and **hurricane** (pick off or a category). Second row: **view** (jump to one), **move** (fly or walk), **bus** (go to one, plus a latched **buses ×10** check), **lighting** (the scenario's presets), **quality**, **render** mode, and **gpu** (froxel lighting, the cloud tile pre-pass and bloom as checks, with the GPU timings per pass). Pick-one menus close on a pick; menus of checks stay open. Esc or a click elsewhere closes a menu |
+| clouds menu | its hide / show: the persistent cloud last picked in the **clouds** menu: the scenario's supercells (motherships), squall lines and pinned or held cells. They start hidden; a view that follows one (Mothership, Shelf cloud) shows it. A hidden cloud drops out of the weather map, the analytic structures, lightning and the labels; it keeps evolving, so it comes back where it would be |
+| tornado menu | next to the clouds menu (only with a supercell in the scenario): **off** (the default) or a tornado of category **F1-F5** under the wall cloud of the supercell showing (it shows the scenario's first supercell if none is). F1 is a leaning rope whose funnel only condenses part way down, over a small debris whirl; up the scale the funnel widens into a cone and, at F4-F5, a wedge with subvortices and a broad debris cloud. It touches down over a few seconds and is marched on its own, so even a rope a few tens of metres across stays solid at a distance |
+| hurricane menu | **off** (the default) or a hurricane of category **Cat 1-5** (Saffir-Simpson), its eye at the scenario's `hurricane.pos`. It is drawn into the weather map: a tall eyewall ring with torrential rain, spiral rain bands wound in towards it, a central dense overcast spreading from the eyewall top, and a clear eye with only a scatter of low cloud on its floor. The eye widens with height, so the eyewall leans outwards (the stadium effect). Stronger storms have a smaller, rounder, clearer eye, taller walls and more bands; it organises over a few seconds as the eye contracts, and turns with weather time. The radar shows the spiral. Views *Hurricane eye* and *Hurricane from above* pick Cat 4 |
 
 ### Rain variants
 
 Four weather states give steady rain from a stratus or nimbostratus deck at four strengths, in light winds (3–7 m/s),
-so the rain falls at no more than about 40° and a roof keeps it off what stands under it. `N` steps through them
-and then **mixed rain**; the scenario's bus station views start in medium rain, a downpour and light rain, and the
+so the rain falls at no more than about 40° and a roof keeps it off what stands under it. The handheld's rain menu
+steps through them and **mixed rain**; the scenario's bus station views start in medium rain, a downpour and light rain, and the
 bus route views (village bus stop, on foot at the bus station, riding the bus) in mixed rain.
 
 **Mixed rain** has all four at once along the bus route (`RainZones`), with two dry stretches under clear sky. Its
@@ -452,7 +442,7 @@ A `bus` entity (`BusLine`) runs a fleet of buses (`Bus`) between the bus station
   the station and round the loop, and takes bends at 1.3 m/s² sideways. It brakes at 1 m/s² ahead of slower stretches
   and stops, and pulls away at 1.1 m/s². It stops at the platform and by the village's shelter, on whichever pass has
   the shelter on its right, with the front door at the shelter. At each stop it waits `dwell` seconds with the doors
-  open; they close 3 s before it leaves. A one-way trip takes about 11 minutes; hold `Z` to speed it up.
+  open; they close 3 s before it leaves. A one-way trip takes about 11 minutes; the bus menu's ×10 speeds it up.
 - **The bus**: 12 m long, built in its own frame (`buildBus`; `BUS` holds its sizes). It has a low floor, eight window
   bays a side with pillars between them, and two glazed doors on the right (front and middle) whose leaves slide apart
   outside the body. There are 41 forward-facing seats (raised over the wheel arches), a back bench, poles and rails, a
@@ -501,7 +491,7 @@ spot light (`LAMPS` holds their colours, intensities, reach and cones):
   their shapes. Its own room is lit by its lamps as before, and its light does not scatter in the air or on the drops.
 - **Buses**: two headlight beams ahead and a little down, a red tail light (brighter while braking), and the cabin's
   lamps, which shine out through the windows onto the road beside the bus.
-- **Flashlight** (`L`, day or night): a narrow beam along the view, from the hand on foot.
+- **Flashlight** (the handheld's View page, day or night): a narrow beam along the view, from the hand on foot.
 
 Each frame `App.writeLights` puts the flashlight and the lights nearest the camera (by the distance to the edge of their
 reach, within 700 m) into the frame, at most 64 (`lights`). They fade out toward the furthest one taken, so none pops.

@@ -67,6 +67,12 @@ const waterWorld = {
     // the readout and every option, on the engine's handheld (js/engine/handheld.js)
     handheld() { return phonePages(this.app); },
 
+    // the keys there are (FeatureWorld.keys; every option is on the handheld)
+    get keys() {
+        const keys = [...(this.move === 'walk' ? FeatureWorld.WALK_KEYS : FeatureWorld.FLY_KEYS), ['Alt', 'slow']];
+        if (this.app.tools?.length) keys.push(['right-drag', 'use the tool']);
+        return keys;
+    },
 
     set(key, v) {
         const a = this.app, w = a.world;

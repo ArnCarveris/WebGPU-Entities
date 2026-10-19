@@ -44,6 +44,14 @@ const portalWorld = {
     // its player walks (collision, stairs, ladders, swimming) or flies through walls; the engine switches it
     get moves() { return ['fly', 'walk']; },
     get move() { return this.app.opts.walk ? 'walk' : 'fly'; },
+
+    // the keys there are (FeatureWorld.keys; every option is on the handheld): walking, flying through walls, at the helm
+    get keys() {
+        const P = this.app.player, look = ['click', 'look (Esc frees the mouse)'];
+        if (P?.driving) return [look, ['W / S', 'throttle'], ['A / D', 'rudder'], ['X', 'stop'], ['Space', 'rudder centre'], ['F', 'leave the helm']];
+        if (this.move === 'fly') return [look, ['WASD', 'move'], ['Space / E', 'up'], ['Q / Ctrl', 'down'], ['Shift', 'fast'], ['F', 'door / helm']];
+        return [look, ['WASD', 'walk'], ['Shift', 'run'], ['Space', 'jump'], ['F', 'door / helm']];
+    },
     setMove(mode) {
         const g = this.app, P = g.player;
         if (P?.driving) g.hud.toast(P.toggleHelm());

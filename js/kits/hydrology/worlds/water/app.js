@@ -80,6 +80,7 @@ class AppExtension {
         this.hud.toast(v.name);
     }
 
+    // the commands, named by the key codes they once had: the handheld's pages run them (the keyboard has none)
     handleKeys(pressed) {
         const w = this.world;
         for (const code of pressed) {
@@ -155,7 +156,6 @@ class AppExtension {
             if (dt > 0) this.fps = this.fps * 0.95 + (1 / dt) * 0.05;
             if (!this.paused) this.time += dt;
             const io = this.input.consume();
-            this.handleKeys(io.pressed);
             if (!this.fx.cameraLocked) this.camera.control(dt, io, this.input.keys, this.fx.floor);
 
             // cursor ray -> terrain, tools

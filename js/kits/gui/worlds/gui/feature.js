@@ -36,6 +36,7 @@ const guiWorld = {
     // its player walks the facility, always
     get moves() { return ['walk']; },
     get move() { return 'walk'; },
+    get keys() { return [['drag', 'look'], ['WASD', 'walk'], ['Shift', 'run'], ['click', 'screens']]; },
     setMove(mode) {},
 
     // the facility is a building (kits.interior): the room within the player's bounds and the corridor beyond the

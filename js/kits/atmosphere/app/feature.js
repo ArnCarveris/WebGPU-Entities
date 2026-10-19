@@ -26,6 +26,14 @@ const atmosphereWorld = type => ({
     get move() { return this.app.walker.active ? 'walk' : 'fly'; },
     setMove(mode) { this.app.controls.setWalk(mode === 'walk'); },
 
+    // the keys there are (FeatureWorld.keys): moving, on foot or flying; E at a door, lift or seat, F at a bus's wheel
+    get keys() {
+        const a = this.app, keys = a.walker.active ? [['drag', 'look'], ['WASD', 'walk'], ['Shift', 'run'], ['Alt', 'slow']]
+            : [...FeatureWorld.FLY_KEYS, ['Alt', 'slow']];
+        if (a.doors || a.liftControl) keys.push(['E', 'use']);
+        if (a.drive) keys.push(['F', 'drive a bus']);
+        return keys;
+    },
 
     // its scenario's views (`view` entities): one each, or, following an entity with `each`, one per member of it (a bus line's
     // buses), named by `name` with {label} the member's, its sub line what the member is doing

@@ -78,6 +78,7 @@ class AppExtension {
         else this.hud.toast(`Loaded "${scn.name || 'scenario'}": ${world.areas.length - 1} areas, ${world.portals.length} portals`);
     }
 
+    // the commands, named by the key codes they once had: the handheld's pages run them, the keyboard only F (input.js)
     onKey(code) {
         const o = this.opts, P = this.player, hud = this.hud;
         switch (code) {
@@ -99,7 +100,7 @@ class AppExtension {
     createInspector(w) {
         const g = this.app;
         return new VisInspector({
-            set: w, opts: this.opts, keys: { culling: '1', freeze: '2', portals: '4', volumes: '5', map: 'M', wide: 'N' },
+            set: w, opts: this.opts,
             map: {
                 spans: w.scn.minimap,
                 teleport: (x, z) => {
@@ -124,8 +125,8 @@ class AppExtension {
                 over: (c, draw) => { for (const x of g.extensions) x.mapOver?.(c, draw); },
             },
             options: () => [
-                { choice: 'Masking (3)', options: MASK_MODES, index: MASK_MODES.indexOf(g.opts.mode), pick: i => { g.opts.mode = MASK_MODES[i]; } },
-                { toggle: 'Occluders (6)', on: g.opts.occluders, set: () => g.onKey('Digit6') }],
+                { choice: 'Masking', options: MASK_MODES, index: MASK_MODES.indexOf(g.opts.mode), pick: i => { g.opts.mode = MASK_MODES[i]; } },
+                { toggle: 'Occluders', on: g.opts.occluders, set: () => g.onKey('Digit6') }],
         });
     }
 

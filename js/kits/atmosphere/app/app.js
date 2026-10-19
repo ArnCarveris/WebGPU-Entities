@@ -105,15 +105,14 @@ class AppExtension {
         if (update) {
             if (dt > 0) this.fps = this.fps * 0.95 + (1 / dt) * 0.05;
             const io = this.input.consume();
-            this.keys.handle(io.pressed);
+            this.keys.keyboard(io.pressed);
             this.keys.clicks(io.clicks);
             const before = this.lastCam || [...this.camera.pos];
             if (!this.walker.active && !locked) this.camera.control(dt, io, this.input.keys, this.fx.floor);
-            this.keys.sun(dt);
 
             const wdt = this.wdt = this.paused ? 0 : dt * this.timeScale;
             if (!this.paused) { this.time += dt; this.weatherTime += wdt; }
-            w.busBoost = this.busFast || this.input.keys.has('KeyZ') ? 10 : 1;     // hold Z (or the bus menu): the buses run ten times as fast
+            w.busBoost = this.busFast ? 10 : 1;     // the bus menu's ×10: the buses run ten times as fast
             w.update(this.paused ? 0 : dt, wdt, this.time);
             for (const x of this.app.extensions) x.update?.(dt, io);
             // on foot after the bus has moved, so a rider's eye is where the bus is this frame

@@ -69,15 +69,20 @@ const originWorld = {
         return out;
     },
 
-    // its bookmarks (origin.bookmark), the number keys' places
+    // its bookmarks (origin.bookmark)
     views() {
         const a = this.app;
-        return (a.bookmarks || []).map(b => ({ name: b.name, sub: b.key ? `key ${b.key}` : undefined, go: () => a.jump(b) }));
+        return (a.bookmarks || []).map(b => ({ name: b.name, go: () => a.jump(b) }));
     },
 
     // the readout and every option, on the engine's handheld (js/engine/handheld.js)
     handheld() { return phonePages(this.app); },
 
+    // the keys there are (FeatureWorld.keys; every option is on the handheld)
+    get keys() {
+        return [['drag', 'look'], ['WASD', 'move'], ['Space / C', 'up / down'], ['Q / E', 'roll'], ['Shift', 'fast'], ['Ctrl', 'slow'],
+            ['wheel', 'speed']];
+    },
 
     set(key, v) {
         const a = this.app, f = a.floating;

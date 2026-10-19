@@ -65,6 +65,11 @@ const imposterWorld = {
     // the readout and every control, on the engine's handheld (js/engine/handheld.js)
     handheld() { return phonePages(this.app); },
 
+    // the keys there are (FeatureWorld.keys; every option is on the handheld)
+    get keys() {
+        if (this.move === 'walk') return FeatureWorld.WALK_KEYS;
+        return [['drag', 'look'], ['WASD', 'move'], ['E / Space', 'up'], ['Q / C', 'down'], ['Shift', 'fast'], ['wheel', 'speed']];
+    },
 
     set(key, v) {
         const g = this.app;

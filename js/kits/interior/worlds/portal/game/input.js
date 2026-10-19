@@ -39,7 +39,7 @@ class InputSystem {
         });
         io.listen(document, 'keydown', e => {
             this.keys.add(e.code);
-            if (this.game.world) this.game.onKey(e.code);
+            if (this.game.world && e.code === 'KeyF') this.game.onKey(e.code);     // the door at hand, the helm: the one command key
         });
         io.listen(document, 'keyup', e => this.keys.delete(e.code));
         io.listen(window, 'blur', () => this.keys.clear());

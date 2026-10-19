@@ -207,14 +207,11 @@ In WebGPU Entities the class goes into a kit: add it to the entities kit's `grou
 
 | Input | Action |
 |---|---|
-| drag / WASD / Q E / Shift / wheel | look / move / down, up / fast / speed |
-| `1` `2` `3` | LOD auto / all mesh / all imposter |
-| `[` `]` | LOD distance |
-| `B` `P` `O` `T` | frame blending, depth parallax, pixel depth offset, LOD tint + billboard outlines |
-| `G` | shadows on / off |
-| `K` | next lighting scenario (animated; never rebakes) |
-| `V` `N` | atlas overlay (albedo / normal / depth / ao / surface / emissive, the three frames in use outlined), next model |
-| `R` `L` `H` | reset camera, load a file, hide the UI |
+| drag / WASD / E, Space / Q, C / Shift / wheel | look / move / up / down / fast / speed |
+| drop a file | load a model (`.glb`, `.gltf`, `.obj`) or a scenario `.json` |
+| Tab | the handheld |
+
+Every other option (weather, lighting, render modes, views, toggles, loading files...) is on the engine's handheld (`Tab`); there are no other hotkeys. The keys there are show in a toast when the scenario starts (and on walk / fly).
 
 The panel's **Shadows** section toggles shadows, sets their distance and tints the image by cascade.
 Its **Lighting** section switches scenarios and moves the sun and the emission scale live.

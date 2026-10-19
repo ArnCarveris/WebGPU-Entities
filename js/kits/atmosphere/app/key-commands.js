@@ -1,16 +1,23 @@
 'use strict';
-// The app's keys and clicks: what each key does (through Controls), right clicks on the ground, and the arrow keys
-// moving the sun. An app extension gets each key first (key(code): true if it took it) and each right click on the
-// ground (click(hit): true if it took it).
+// The app's commands and clicks: what each command does (through Controls; named by the key codes they once had, the
+// handheld's pages run them: handle), the keyboard's (only what has no other way: keyboard), and right clicks on the
+// ground. An app extension gets each command first (key(code): true if it took it) and each right click on the ground
+// (click(hit): true if it took it).
 
 Features.kit('atmosphere', (engine, kit) => {
 const { Common } = engine;
-const { DEG, clamp } = Common;
+const { clamp } = Common;
 const { RENDER_MODES, QUALITY } = kit;
 const { TIME_SCALES, RAIN_VARIANTS } = engine.kits.weather;
 
 class KeyCommands {
     constructor(app) { this.app = app; }
+
+    // the keyboard: F at the wheel of a bus (the buses feature's); E, the doors, lifts and seats, is theirs (DoorControl,
+    // LiftControl, Walker); everything else is on the handheld
+    keyboard(pressed) {
+        for (const code of pressed) if (code === 'KeyF') this.app.extensions.some(x => x.key?.(code));
+    }
 
     handle(pressed) {
         const a = this.app, c = a.controls, w = a.world, wx = w.weather;
@@ -62,15 +69,6 @@ class KeyCommands {
             if (!hit) { a.hud.toast('Click on the ground'); continue; }
             a.extensions.some(x => x.click?.(hit));
         }
-    }
-
-    // the arrow keys move the sun
-    sun(dt) {
-        const k = this.app.input.keys, s = this.app.sun;
-        if (k.has('ArrowLeft')) s.azimuth -= dt * 0.5;
-        if (k.has('ArrowRight')) s.azimuth += dt * 0.5;
-        if (k.has('ArrowUp')) s.elevation = Math.min(s.elevation + dt * 0.25, 85 * DEG);
-        if (k.has('ArrowDown')) s.elevation = Math.max(s.elevation - dt * 0.25, 2 * DEG);
     }
 }
 
