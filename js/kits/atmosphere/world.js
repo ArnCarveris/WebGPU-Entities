@@ -18,7 +18,7 @@
 //   features(out)       the GPU's analytic structures: out { ms, shelves, tornado } (the entities' are in already)
 //   hurricane(maxTop)   a hurricane for the GPU (12 floats: the weather pass, hurricaneKeep) or null; the first one's
 //   colliders(p, out)   what a walker at feet p walks on and into (Walker); carrierAt(p): the moving floor it stands on
-//   sheltered(p)        the interior that shelters p from the weather, or null (AtmosphereWorld.sheltered)
+//   sheltered(p)        the interior that shelters p from the weather, or null (atmosphereWorld: sheltered)
 
 Features.kit('atmosphere', (engine, kit) => {
 const { kits } = engine;

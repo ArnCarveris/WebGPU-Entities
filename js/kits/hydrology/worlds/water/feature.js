@@ -27,28 +27,28 @@ const { FeatureWorld } = kits.world, { HUD } = FeatureWorld;
 const { NEAR, RENDER_MODES, Dam, App, phonePages } = kit;
 
 // This demo as one world of the engine (js/engine/host.js calls these; view / setView: its camera's).
-class WaterWorld extends FeatureWorld {
-    constructor(fx) { super(fx, HUD.labels + HUD.toast); }
+const waterWorld = {
+    hud: HUD.labels + HUD.toast,
 
-    createApp(fx) { return new App(fx); }
+    app: fx => new App(fx),
 
     // reversed-Z, infinite far plane, metres
     depth() {
         const r = this.app.renderer;
         return r.depthView && { view: r.depthCView || r.depthView, kind: 'reversed', near: NEAR };
-    }
+    },
 
     // its scenario's views (water.view)
     views() {
         const a = this.app;
         return (a.views || []).map((v, i) => ({ name: v.name, go: () => { a.viewIndex = i; a.jump(v); } }));
-    }
+    },
 
     // the terrain, on the map
     ground(p) {
         const f = this.app.world?.field;
         return f && Math.max(Math.abs(p[0]), Math.abs(p[2])) <= f.size / 2 ? f.sample(p[0], p[2]) : null;
-    }
+    },
 
     stats() {
         const a = this.app, w = a.world, f = w.field, st = a.flow.stats, cam = a.camera.pos;
@@ -61,10 +61,10 @@ class WaterWorld extends FeatureWorld {
             light: a.lightName, mode: RENDER_MODES[a.mode], tool: a.tool ? a.tool.name : '', acting: a.acting,
             height: cam[1] - Math.max(ground, w.seaLevel ?? -1e4), debris: a.debris.count, steps: a.stepsPerFrame,
         };
-    }
+    },
 
     // the readout and every option, on the engine's handheld (js/engine/handheld.js)
-    handheld() { return phonePages(this.app); }
+    handheld() { return phonePages(this.app); },
 
     set(key, v) {
         const a = this.app, w = a.world;
@@ -73,8 +73,8 @@ class WaterWorld extends FeatureWorld {
         else if (key === 'paused') a.paused = !!v;
         else if (key === 'light' && a.lightNames.includes(v)) a.setLight(v);
         else if (key === 'breach') for (const d of w.entities) if (d instanceof Dam && !!d.target !== !!v) d.toggle();
-    }
-}
+    },
+};
 
-return { create: ctx => new WaterWorld(ctx) };
+return { create: fx => new FeatureWorld(fx, waterWorld) };
 });

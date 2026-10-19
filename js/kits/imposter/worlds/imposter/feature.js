@@ -30,25 +30,25 @@ const { MSAA, CASCADES, LOD_MODES, ATLAS_VIEWS, GRID_CHOICES, RES_CHOICES, Game,
 // This demo as one world of the engine (js/engine/host.js calls these; view / setView: its camera's).
 const FILE_INPUT = `<input data-hud="file" type="file" multiple accept=".glb,.gltf,.bin,.obj,.mtl,.json,.png,.jpg,.jpeg,.webp" hidden>`;
 
-class ImposterWorld extends FeatureWorld {
-    constructor(fx) { super(fx, HUD.toast + FILE_INPUT); }
+const imposterWorld = {
+    hud: HUD.toast + FILE_INPUT,
 
-    createApp(fx) { return new Game(fx); }
+    app: fx => new Game(fx),
 
     // dropped models (the engine keeps scenario .json drops)
-    drop(files) { this.app.loadFiles(files); }
+    drop(files) { this.app.loadFiles(files); },
 
     // reversed-Z, infinite far plane, 4x MSAA, metres
     depth() {
         const r = this.app.renderer;
         return r.depthView && { view: r.depthView, kind: 'reversed', near: 0.1, samples: MSAA };
-    }
+    },
 
     // the terrain, within its square
     ground(p) {
         const t = this.app.world?.terrain;
         return t && Math.max(Math.abs(p[0]), Math.abs(p[2])) <= t.size / 2 ? t.height(p[0], p[2]) : null;
-    }
+    },
 
     stats() {
         const g = this.app, st = g.settings, w = g.world, cam = g.camera.pos;
@@ -59,10 +59,10 @@ class ImposterWorld extends FeatureWorld {
             lod: st.lodMode, lodDistance: st.lodDistance, shadows: st.shadows, light: g.lighting.name,
             instances: inst, meshes, imposters, height: w ? cam[1] - w.heightAt(cam[0], cam[2]) : 0,
         };
-    }
+    },
 
     // the readout and every control, on the engine's handheld (js/engine/handheld.js)
-    handheld() { return phonePages(this.app); }
+    handheld() { return phonePages(this.app); },
 
     set(key, v) {
         const g = this.app;
@@ -75,8 +75,8 @@ class ImposterWorld extends FeatureWorld {
             g.lighting.tweak('azimuth', az);
             g.lighting.tweak('elevation', Math.max(el, 2));
         }
-    }
-}
+    },
+};
 
-return { create: ctx => new ImposterWorld(ctx) };
+return { create: fx => new FeatureWorld(fx, imposterWorld) };
 });

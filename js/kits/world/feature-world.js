@@ -1,20 +1,30 @@
 'use strict';
-// The base of every feature's adapter to the host (FeatureWorld, js/engine/host.js).
+// Every world's adapter to the host (FeatureWorld, js/engine/host.js): defaults, composed with the world's own hooks.
 
 Features.kit('world', (engine, kit) => {
 const { v3 } = engine.Common;
-// One world of a feature, as the host runs it. A feature extends this with createApp() (its engine: an App or Game with
-// start(), frame(now, dt, opts), and load(native) when it takes its scenario after starting) and what else the host
-// asks of it: depth(), stats(), handheld(), set(key, v), anchor(id), drop(files), ground(p), sheltered(p), views(). The host reads and moves the
-// camera through view / setView, and walks or flies it through moves / move / setMove; all go to the app's camera (a
-// FirstPersonView: kits.view) unless the feature overrides them.
+// One world, as the host runs it: composed, not derived. A world part makes it from a spec (`new FeatureWorld(fx, spec)`,
+// its { create }): { hud (the HUD elements it asks for: FeatureWorld.HUD), app(fx) (its engine: an App or Game with
+// start(), frame(now, dt, opts), and load(native) when it takes its scenario after starting) } and whichever hooks the
+// host asks of it it has: depth(), stats(), handheld(), set(key, v), anchor(id), drop(files), ground(p), sheltered(p),
+// views(), inspector; view / setView, moves / move / setMove. Its hooks (methods and getters, `this` the world: this.app,
+// this.fx) go over the defaults here, which read and move the camera through the app's (a FirstPersonView: kits.view).
 class FeatureWorld {
-    constructor(fx, hudHtml = '') {
+    constructor(fx, spec = {}) {
         this.fx = fx;
-        this.hudHtml = hudHtml;
+        this.hudHtml = spec.hud || '';
+        this.makeApp = spec.app;
+        // (as descriptors: its getters stay getters, read when the host asks)
+        const hooks = Object.getOwnPropertyDescriptors(spec);
+        delete hooks.hud;
+        delete hooks.app;
+        Object.defineProperties(this, hooks);
     }
 
-    createApp(fx) { throw new Error(`${this.constructor.name}: no createApp()`); }
+    createApp(fx) {
+        if (!this.makeApp) throw new Error('a world with no app');
+        return this.makeApp(fx);
+    }
 
     async init() {
         const app = this.app = this.createApp(this.fx);

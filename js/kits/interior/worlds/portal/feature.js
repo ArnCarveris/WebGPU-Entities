@@ -13,42 +13,42 @@ const { FeatureWorld } = kits.world, { HUD } = FeatureWorld;
 const { MASK_MODES, Game, phonePages } = kit;
 
 // This demo as one world of the engine (js/engine/host.js calls these).
-class PortalWorld extends FeatureWorld {
-    constructor(fx) { super(fx, HUD.crosshair + HUD.toast); }
+const portalWorld = {
+    hud: HUD.crosshair + HUD.toast,
 
-    createApp(fx) {
+    app(fx) {
         const g = new Game(fx);
         g.onError = fx.fail;
         return g;
-    }
+    },
 
     // classic 0..1 depth, near 0.05, far 400; 4x MSAA depth-stencil (the depth aspect)
     depth() {
         const r = this.app.renderer;
         return r.depthSample && { view: r.depthSample, kind: 'standard', near: 0.05, far: 400, samples: 4 };
-    }
+    },
 
     get view() {
         const P = this.app.player, { fwd, up } = P.basis();
         return { pos: [...P.cam.pos], fwd, up, fov: P.cam.fov };
-    }
+    },
 
     setView(v) {
         const P = this.app.player, c = P.cam;
         c.setView(v);
         P.driving = null;
         P.reset(c.pos);
-    }
+    },
 
     // its player walks (collision, stairs, ladders, swimming) or flies through walls; the engine switches it
-    get moves() { return ['fly', 'walk']; }
-    get move() { return this.app.opts.walk ? 'walk' : 'fly'; }
+    get moves() { return ['fly', 'walk']; },
+    get move() { return this.app.opts.walk ? 'walk' : 'fly'; },
     setMove(mode) {
         const g = this.app, P = g.player;
         if (P?.driving) g.hud.toast(P.toggleHelm());
         g.opts.walk = mode === 'walk';
         if (g.opts.walk && P) P.reset(P.cam.pos);
-    }
+    },
 
     // floors, terrain (not indoors), the ship's decks, closed hatches
     ground(p) {
@@ -56,10 +56,10 @@ class PortalWorld extends FeatureWorld {
         if (!w) return null;
         const g = w.groundAt(p, 0).y;
         return g === -Infinity ? null : g;
-    }
+    },
 
     // its areas but the outdoors are weather shelters (Area.shelter)
-    sheltered(p) { return this.app.world?.shelterAt(p) || null; }
+    sheltered(p) { return this.app.world?.shelterAt(p) || null; },
 
     stats() {
         const g = this.app, w = g.world, P = g.player, s = g.stats, cam = P.cam.pos;
@@ -70,19 +70,19 @@ class PortalWorld extends FeatureWorld {
             shipSpeed: ship ? ship.v : 0, shipDist: ship ? Math.hypot(ship.M[12] - cam[0], ship.M[14] - cam[2]) : 1e9,
             drones: w.drones.length,
         };
-    }
+    },
 
     // the readout, the minimap and every option, on the engine's handheld (js/engine/handheld.js)
-    handheld() { return phonePages(this.app); }
+    handheld() { return phonePages(this.app); },
 
     // its portal visibility (the interior kit's VisInspector): floor map, traversal, frames on the handheld
-    get inspector() { return this.app?.inspector || null; }
+    get inspector() { return this.app?.inspector || null; },
 
     set(key, v) {
         const o = this.app.opts;
         if (key in o && typeof o[key] === typeof v) o[key] = v;
-    }
-}
+    },
+};
 
-return { create: ctx => new PortalWorld(ctx) };
+return { create: fx => new FeatureWorld(fx, portalWorld) };
 });

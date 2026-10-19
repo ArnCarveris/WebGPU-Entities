@@ -17,23 +17,25 @@ const { Game } = kit;
 
 // This demo as one world of the engine (js/engine/host.js calls these). All of its UI is in the 3D scene (and on the
 // engine's handheld).
-class GuiWorld extends FeatureWorld {
-    createApp(fx) { return new Game(fx); }
+const guiWorld = {
+    hud: '',
+
+    app: fx => new Game(fx),
 
     // classic 0..1 depth, near 0.02, far 100 or the scenario's player.far (depth-stencil, the depth aspect)
     depth() {
         const r = this.app.renderer;
         return r.depthSample && { view: r.depthSample, kind: 'standard', near: 0.02, far: this.app.far };
-    }
+    },
 
     // the player's view
-    get view() { return this.app.player.view; }
-    setView(v) { this.app.player.setView(v); }
+    get view() { return this.app.player.view; },
+    setView(v) { this.app.player.setView(v); },
 
     // its player walks the facility, always
-    get moves() { return ['walk']; }
-    get move() { return 'walk'; }
-    setMove(mode) {}
+    get moves() { return ['walk']; },
+    get move() { return 'walk'; },
+    setMove(mode) {},
 
     // the facility is a building (kits.interior): the room within the player's bounds and the corridor beyond the
     // doorway, joined by the hatch (a door portal), both weather shelters
@@ -47,7 +49,7 @@ class GuiWorld extends FeatureWorld {
             if (d) ix.add(new Interior({ owner: this, origin: at, lo: [d.x[0] - 0.3, -0.5, d.minZ - 0.3], hi: [d.x[1] + 0.3, top, b.z[0]], portals: [{ ...hatch, n: [0, 0, 1] }] }));
         }
         return this.interiors.sheltered(p);
-    }
+    },
 
     stats() {
         const g = this.app, w = g.world, P = g.player;
@@ -55,15 +57,15 @@ class GuiWorld extends FeatureWorld {
             fps: Number(g.stats.fps) || 0, lightsOn: w.lightsOn, alarm: w.alarm, phone: g.handheld.visible, moving: P.moving, running: P.running,
             noise: P.noise, gui: g.interaction.focus ? g.interaction.focus.name || 'gui' : '', sound: g.audio.enabled,
         };
-    }
+    },
 
     set(key, v) {
         const w = this.app.world;
         if (key === 'lights' && !!v !== w.lightsOn) w.setLights(!!v);
         else if (key === 'alarm' && !!v !== w.alarm) w.setAlarm(!!v);
         else if (key === 'phone') this.app.handheld.setShown(!!v);
-    }
-}
+    },
+};
 
-return { create: ctx => new GuiWorld(ctx) };
+return { create: fx => new FeatureWorld(fx, guiWorld) };
 });

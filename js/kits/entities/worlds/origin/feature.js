@@ -26,22 +26,22 @@ const { SAMPLES, NEAR, quat, App, phonePages } = kit;
 
 // This demo as one world of the engine (js/engine/host.js calls these; view / setView: its camera's, in metres from
 // world 0).
-class OriginWorld extends FeatureWorld {
-    constructor(fx) { super(fx, HUD.labels + HUD.toast); }
+const originWorld = {
+    hud: HUD.labels + HUD.toast,
 
-    createApp(fx) { return new App(fx); }
+    app: fx => new App(fx),
 
     // reversed-Z, infinite far plane, 4x MSAA; depth is in origin units: s metres each
     depth() {
         const r = this.app.renderer;
         return r.depthView && { view: r.depthView, kind: 'reversed', near: NEAR, samples: SAMPLES, scale: this.app.floating.origin.scale };
-    }
+    },
 
     // where an entity is (other worlds can ride on it: layer.transform.anchor)
     anchor(id) {
         const e = this.app.world?.byId.get(id);
         return e && e.frame ? { pos: e.frame.pos.metres(), q: e.frame.q } : null;
-    }
+    },
 
     stats() {
         const a = this.app, f = a.floating, cam = a.camera, prox = a.prox || {};
@@ -54,7 +54,7 @@ class OriginWorld extends FeatureWorld {
             instances: a.world.instanceCount, draws: a.renderer.draws, density: a.density,
             sunAt: this.sunProbes(),
         };
-    }
+    },
 
     // the direction to the sun in the frame of every entity marked `sunProbe` (worlds riding on it light by it, through a
     // link: { to: "valley.sunDir", value: "sol.sunAt['site']" })
@@ -66,16 +66,16 @@ class OriginWorld extends FeatureWorld {
             out[e.id] = quat.rotate(quat.conj(e.frame.q), d);
         }
         return out;
-    }
+    },
 
     // its bookmarks (origin.bookmark), the number keys' places
     views() {
         const a = this.app;
         return (a.bookmarks || []).map(b => ({ name: b.name, sub: b.key ? `key ${b.key}` : undefined, go: () => a.jump(b) }));
-    }
+    },
 
     // the readout and every option, on the engine's handheld (js/engine/handheld.js)
-    handheld() { return phonePages(this.app); }
+    handheld() { return phonePages(this.app); },
 
     set(key, v) {
         const a = this.app, f = a.floating;
@@ -83,8 +83,8 @@ class OriginWorld extends FeatureWorld {
         else if (key === 'translate' || key === 'rotate' || key === 'scale') f[key] = !!v;
         else if (key === 'everyFrame') f.everyFrame = !!v;
         else if (key === 'labels') a.hud.showLabels = !!v;
-    }
-}
+    },
+};
 
-return { create: ctx => new OriginWorld(ctx) };
+return { create: fx => new FeatureWorld(fx, originWorld) };
 });
