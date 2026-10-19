@@ -99,9 +99,22 @@ Each frame runs these passes. All distances are metres and heights are above sea
      one, its height sizing the plants and the far canopy, else the land use's woods) or a few on open ground and in town, none on
      roads, buildings or water; the kind from the shore (palms), town (street trees and palms), the forest and the dry
      lowland (kiawe, shrubs). It frustum-culls them and counts them into indirect draws, one per species and lod: full
-     meshes within 250 m, low-poly beyond, dithering out from 1150 m as the terrain raises the forest canopy
-     (`canopyLift`, by 3D distance, so from high up the canopy alone). Mid-range imposters will replace the low-poly
-     meshes once the imposter pipeline is a shared kit.
+     meshes within 250 m, octahedral imposters beyond (the imposter kit, [docs/imposter.md](../imposter.md): each
+     species' near mesh baked at load into an 8 x 8 x 64 px atlas, about 4 MB each; low-poly meshes stand in until
+     then), dithering out from 1150 m to 1500 m (by 3D distance) into the **canopy carpet** (`vsCanopy` /
+     `fsCanopy`): a shell over the terrain's patches at 1.25 x the canopy's height, where each pixel marches its view
+     ray down through the crowns' band (0.4..0.95 of the height) testing the four nearest lattice cells' crowns,
+     chosen exactly as `vegScatter` chooses its plants (`vegSeed`, `vegSite`, the canopy's cover and height), each an
+     ellipsoid shaped like its mesh, in its hue, lit by the same `vegLight`. So the far forest is the same trees, and
+     the carpet takes the pixels the plants' dither leaves: no seam. Far off, where a step (growing with distance)
+     outgrows a crown, each step takes the crowns it passes as a share instead (the canopy's cover over a crown's
+     breadth, Beer-Lambert), so the far forest keeps its density; what the ray gathered is lit once and blended over
+     the ground by its coverage (premultiplied; the target's alpha, the rain surface code, untouched). It writes no
+     depth and culls the shell's back faces; patches within the plants' reach (in 3D) are dropped in its vertex stage.
+     `renderer.carpet = false` turns it off. The ground under it takes the forest floor's shade only under a closed
+     canopy where crowns are a few pixels across, and the whole cover where they are smaller than a pixel. An imposter reads only its nearest view and its coverage first, and writes no depth
+     of its own (its quad faces the eye through the plant's centre), so the early depth test still culls the
+     overlapping crowns: with all that it costs no more than the low-poly meshes did, and less near the ground.
    - Then the **structures** (`vsStruct` / `fsStruct`): houses, a bus shelter, bridges, roads and the river's water in a
      village, and a town's central bus station, as flat-shaded triangles built on the CPU. Every building has an
      interior, glass windows and doors that open (see **Buildings**). They stand on `LandField.surface`, the same surface the

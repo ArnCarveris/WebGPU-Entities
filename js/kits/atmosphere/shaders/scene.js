@@ -231,21 +231,27 @@ fn stars(d: vec3f) -> vec3f {
 // The terrain: a CDLOD node per instance (TerrainLod: x0, z0, size, lod), each the same patch of ${TERRAIN_PATCH}^2 cells.
 // Over the last 25% of its lod's range (F.geo.z * 2^lod) a vertex slides onto the next lod's grid (the odd rows and
 // columns onto the even ones), by its distance from the eye, so neighbouring lods meet without cracks or popping. The
-// surface's gradient (terrainSurface) goes with each vertex, for the normal: no surface evaluated per pixel. Far off,
-// the forest canopy is raised over it where the plants fade out (canopyLift)
+// surface's gradient (terrainSurface) goes with each vertex, for the normal: no surface evaluated per pixel. The far
+// forest's canopy is drawn over it on the same patches (vsCanopy: the canopy carpet)
 struct TerrOut { @builtin(position) pos: vec4f, @location(0) world: vec3f, @location(1) grad: vec2f };
 
-@vertex fn vsTerrain(@builtin(vertex_index) vi: u32, @location(0) node: vec4f) -> TerrOut {
+// vertex vi of a node's patch: where it stands (x, z) and the surface there (height, gradient)
+struct TerrVert { xz: vec2f, s: vec3f };
+fn terrainVertex(vi: u32, node: vec4f) -> TerrVert {
     let P = ${TERRAIN_PATCH}.0;
     let g = vec2f(f32(vi % ${TERRAIN_PATCH + 1}u), f32(vi / ${TERRAIN_PATCH + 1}u));
     let xz0 = node.xy + g / P * node.z;
     let r = F.geo.z * exp2(node.w);
     let k = sat((distance(F.cam.xyz, vec3f(xz0.x, terrainHeight(xz0).x, xz0.y)) - 0.75 * r) / (0.2 * r));
     let xz = node.xy + (g - fract(g * 0.5) * 2.0 * k) / P * node.z;
+    return TerrVert(xz, terrainSurface(xz, node.z / P * (1.0 + k)));
+}
+
+@vertex fn vsTerrain(@builtin(vertex_index) vi: u32, @location(0) node: vec4f) -> TerrOut {
+    let t = terrainVertex(vi, node);
     var o: TerrOut;
-    let ts = terrainSurface(xz, node.z / P * (1.0 + k));
-    o.world = vec3f(xz.x, ts.x + canopyLift(xz, distance(vec3f(xz.x, ts.x, xz.y), F.cam.xyz)), xz.y);
-    o.grad = ts.yz;
+    o.world = vec3f(t.xz.x, t.s.x, t.xz.y);
+    o.grad = t.s.yz;
     o.pos = F.viewProj * vec4f(curveToRender(o.world), 1.0);
     return o;
 }
@@ -419,7 +425,10 @@ fn streetGlow(p: vec3f, n: vec3f, v: vec3f, shin: f32, px: f32, share: f32) -> L
     alb = mix(alb, select(townColor(p.xz, px), urbanColor(p.xz, px), natural), sat(land.x * (0.6 + 0.8 * vnoise2(p.xz / 700.0)) * 1.4 - 0.2));
     // a natural shore: sand just over the water's edge
     alb = mix(alb, vec3f(0.62, 0.56, 0.44) * (0.9 + 0.2 * vnoise2(p.xz / 7.0)), select(0.0, (1.0 - smoothstep(1.5, 4.0, p.y - F.misc.z)) * (1.0 - land.x) * smoothstep(0.82, 0.95, n.y), natural));
-    let forest = forestCover(p.xz, land.y);
+    // the forest floor: where crowns are a few pixels or more (plants, carpet), only under a canopy closed enough to
+    // shade it; where they are smaller than a pixel, the canopy's whole cover (the crowns' colour, seen together)
+    let fc = forestCover(p.xz, land.y);
+    let forest = mix(sat((fc - 0.35) * 1.6), fc, smoothstep(0.8, 3.0, px));
     alb = mix(alb, vec3f(0.07, 0.11, 0.06) * (0.8 + 0.4 * vnoise2(p.xz / 40.0)), forest);
     // mountains: conifers, then rock above the tree line and on steep slopes
     let wild = smoothstep(150.0, 700.0, p.y - F.misc.z);

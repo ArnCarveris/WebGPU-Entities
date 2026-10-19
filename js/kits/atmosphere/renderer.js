@@ -10,8 +10,9 @@ const {
     MAX_CELLS, CELL_FLOATS, FAR_FLOATS, MAX_FAR_DYN, FAR_LAMP_H, FAR_LAMP_REACH, MAX_POLES, BLOOM_LEVELS,
     FrameBlock, WORLD_BINDINGS, BindingSet, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_SHADOW_SAMPLE, WGSL_SHELTER,
     WGSL_BUILDING, BUS_UNIFORM, wgslBus, WGSL_TERRAIN, WGSL_SCENE, WGSL_FINAL, WGSL_BLOOM, NoiseVolumes, shaderSource,
-    WeatherPass, GroundPass, FroxelPass, CloudPass, VegetationPass, WGSL_FOREST, WGSL_VEG,
+    WeatherPass, GroundPass, FroxelPass, CloudPass, VegetationPass, WGSL_FOREST, WGSL_VEG, WGSL_VEG_ALBEDO, WGSL_VEG_IMP, WGSL_VEG_CARPET,
 } = kit;
+const { imposterWGSL } = kits.imposter;
 const { MAX_BOLT_SEGS } = kits.weather;
 const { STRUCT_FLOATS, BUILDING_FLOATS, STRUCT_COLORS, Structures } = kits.settlement;
 const { TiledMesh } = kits.mesh;
@@ -96,7 +97,7 @@ class Renderer {
     createPipelines() {
         const d = this.device;
         this.screenLayout = bindLayout(d, GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, ['tex', 'tex', 'depth', 'tex']);
-        const scene = this.sceneModule = d.createShaderModule({ label: 'scene', code: shaderSource(this.worldSet, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_SHADOW_SAMPLE, WGSL_SHELTER, WGSL_BUILDING, WGSL_TERRAIN, WGSL_FOREST, wgslBus(1), WGSL_SCENE, WGSL_VEG) });
+        const scene = this.sceneModule = d.createShaderModule({ label: 'scene', code: shaderSource(this.worldSet, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_SHADOW_SAMPLE, WGSL_SHELTER, WGSL_BUILDING, WGSL_TERRAIN, WGSL_FOREST, wgslBus(1), WGSL_SCENE, WGSL_VEG_ALBEDO, WGSL_VEG, imposterWGSL({ group: 3 }), WGSL_VEG_IMP, WGSL_VEG_CARPET) });
         const final = d.createShaderModule({ label: 'final', code: shaderSource(this.worldSet, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_SHADOW_SAMPLE, WGSL_SHELTER, WGSL_BUILDING, WGSL_TERRAIN, wgslBus(2), WGSL_FINAL) });
         const layoutA = d.createPipelineLayout({ bindGroupLayouts: [this.worldSet.layout] });
         const layoutB = d.createPipelineLayout({ bindGroupLayouts: [this.worldSet.layout, this.screenLayout] });
@@ -118,6 +119,18 @@ class Renderer {
         // the terrain patch: vertex index -> patch corner; a node (x0, z0, size, lod) per instance
         this.pTerrain = pipe(layoutA, scene, 'vsTerrain', 'fsTerrain', 'rgba16float', { write: true, compare: 'greater' }, undefined, [{
             arrayStride: 16, stepMode: 'instance', attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x4' }] }]);
+        // the canopy carpet: the far forest over the same patches (vsCanopy / fsCanopy), tested against the depth, not written
+        this.carpet = true;           // false: no carpet (the far forest is the ground's shade alone)
+        // (its upper side alone: a hillside's shell seen from behind would march for nothing)
+        this.pCanopy = d.createRenderPipeline({
+            label: 'vsCanopy', layout: layoutA,
+            vertex: { module: scene, entryPoint: 'vsCanopy', buffers: [{ arrayStride: 16, stepMode: 'instance', attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x4' }] }] },
+            // premultiplied by its coverage; the target's alpha (the rain surface code) is left as the ground wrote it
+            fragment: { module: scene, entryPoint: 'fsCanopy', targets: [{ format: 'rgba16float', blend: {
+                color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' }, alpha: { srcFactor: 'zero', dstFactor: 'one' } } }] },
+            primitive: { topology: 'triangle-list', cullMode: 'back', frontFace: 'ccw' },
+            depthStencil: { format: this.depthFormat, depthWriteEnabled: false, depthCompare: 'greater' },
+        });
         const structVerts = [{
             arrayStride: STRUCT_FLOATS * 4, attributes: [
                 { shaderLocation: 0, offset: 0, format: 'float32x3' }, { shaderLocation: 1, offset: 12, format: 'float32x3' },
@@ -272,7 +285,7 @@ class Renderer {
         // the plants (the scenario's terrain says vegetation: true), scattered each frame about the eye
         this.vegetation?.destroy();
         this.vegetation = world.terrain.vegetation ? new VegetationPass(this) : null;
-        if (this.vegetation) this.pVeg = this.vegetation.pipeline(this.sceneModule, [this.worldSet.layout, this.busLayout], 'rgba16float', this.depthFormat);
+        if (this.vegetation) this.pVeg = this.vegetation.pipelines(this.sceneModule, [this.worldSet.layout, this.busLayout], 'rgba16float', this.depthFormat);
     }
 
     // the terrain's nodes for this frame's eye (TerrainLod.select), written to terrainNodes: [quadrant (0 the whole
@@ -461,10 +474,14 @@ class Renderer {
         a.setPipeline(this.pTerrain);
         a.setIndexBuffer(this.terrainIndex, 'uint32');
         a.setVertexBuffer(0, this.terrainNodes);
-        for (const [q, first, n] of this.terrainDraws()) {
-            if (q) a.drawIndexed(this.terrainQuarter, n, (q - 1) * this.terrainQuarter, 0, first);
-            else a.drawIndexed(this.terrainQuarter * 4, n, 0, 0, first);
-        }
+        const tDraws = this.terrainDraws();
+        const drawPatches = () => {
+            for (const [q, first, n] of tDraws) {
+                if (q) a.drawIndexed(this.terrainQuarter, n, (q - 1) * this.terrainQuarter, 0, first);
+                else a.drawIndexed(this.terrainQuarter * 4, n, 0, 0, first);
+            }
+        };
+        drawPatches();
         if (this.structCount) {
             a.setPipeline(this.pStruct);
             a.setVertexBuffer(0, this.structBuf);
@@ -476,7 +493,15 @@ class Renderer {
             a.setIndexBuffer(this.bulkI, 'uint32');
             for (const [first, count] of this.bulkDraws()) a.drawIndexed(count, 1, first);
         }
-        if (this.vegetation) this.vegetation.draw(a, this.pVeg, this.busGroup);
+        if (this.vegetation) {
+            this.vegetation.draw(a, this.pVeg, this.busGroup);
+            if (this.carpet) {
+                a.setPipeline(this.pCanopy);
+                a.setIndexBuffer(this.terrainIndex, 'uint32');
+                a.setVertexBuffer(0, this.terrainNodes);
+                drawPatches();
+            }
+        }
         if (this.busDraws.length) {
             a.setPipeline(this.pBus);
             for (const k of this.busDraws) {

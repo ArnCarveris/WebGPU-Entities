@@ -1,18 +1,25 @@
 'use strict';
 // The vegetation: the plants' meshes (built here, low-poly and flat-shaded like the world's structures) and the pass that
-// scatters them each frame about the eye and draws them (shaders/vegetation.js). Mid-range plants are low-poly meshes for
-// now; octahedral imposters will take over there once the imposter pipeline is a shared kit.
+// scatters them each frame about the eye and draws them (shaders/vegetation.js): full meshes near, octahedral imposters
+// (the imposter kit: each species' near mesh baked once into an atlas) from VEG_NEAR out, the low-poly meshes there until
+// the atlases are baked.
 
 Features.kit('atmosphere', (engine, kit) => {
 const { Common } = engine;
 const { makeBuffer, bindLayout, bindGroup } = Common;
 const { mulberry32 } = engine.kits.noise;
+const { ImposterGpu, ImposterBaker, WGSL_BAKE_FRAME, IMPOSTER_VERTICES } = engine.kits.imposter;
 const {
-    VEG_N, VEG_SPECIES, VEG_CAP, VEG_SLOT, WGSL_FOREST, WGSL_VEG_SCATTER, shaderSource,
+    VEG_N, VEG_SPECIES, VEG_CAP, VEG_SLOT, WGSL_FOREST, WGSL_VEG_SCATTER, WGSL_VEG_ALBEDO, WGSL_VEG_BAKE, shaderSource,
     WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_SHADOW_SAMPLE, WGSL_SHELTER, WGSL_BUILDING, WGSL_TERRAIN,
 } = kit;
 
 const VEG_FLOATS = 10;      // a mesh vertex: position, normal, part (0 wood, 1 foliage), ambient occlusion, slot, 0
+const VEG_ATLAS = { grid: 8, res: 64, full: false };       // the imposter atlases: frames a side, px a frame (a plant past
+                                                            // VEG_NEAR is a few dozen px tall), upper hemisphere
+const VEG_BUFFERS = [{ arrayStride: VEG_FLOATS * 4, attributes: [
+    { shaderLocation: 0, offset: 0, format: 'float32x3' }, { shaderLocation: 1, offset: 12, format: 'float32x3' },
+    { shaderLocation: 2, offset: 24, format: 'float32x4' }] }];
 
 // A plant's mesh: triangles in its own frame (base at the origin, y up, metres), flat normals
 class PlantMesh {
@@ -140,6 +147,8 @@ class VegetationPass {
             first += n;
         });
         this.triangles = meshes.map(m => m.v.length / VEG_FLOATS / 3);
+        this.ranges = meshes.map((m, s) => [this.args[s * 4 + 2], this.args[s * 4]]);
+        this.meshes = meshes;
         this.vertexBuf = makeBuffer(d, verts.byteLength, GPUBufferUsage.VERTEX, verts);
         this.instBuf = d.createBuffer({ label: 'veg-instances', size: VEG_SPECIES * VEG_SLOT * 32, usage: GPUBufferUsage.STORAGE });
         this.argsBuf = d.createBuffer({ label: 'veg-args', size: this.args.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC });
@@ -154,19 +163,48 @@ class VegetationPass {
         // the draw: the instances, read in the vertex stage (group 2 of the scene pass)
         this.drawLayout = d.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.VERTEX, buffer: { type: 'read-only-storage' } }] });
         this.drawGroup = d.createBindGroup({ label: 'veg-draw', layout: this.drawLayout, entries: [{ binding: 0, resource: { buffer: this.instBuf } }] });
+        // a species' far slot alone (the imposters index it from 0)
+        this.farGroups = Array.from({ length: VEG_SPECIES }, (_, sp) => d.createBindGroup({ label: `veg-far-${sp}`, layout: this.drawLayout,
+            entries: [{ binding: 0, resource: { buffer: this.instBuf, offset: (sp * VEG_SLOT + VEG_CAP[0]) * 32, size: VEG_CAP[1] * 32 } }] }));
+        this.atlases = null;
+        this.bakeAtlases().catch(e => console.warn('vegetation: imposter bake failed, low-poly far plants', e));
     }
 
-    // the pipeline drawing the plants: the scene module's vsVeg / fsVeg (layouts: the world's, the bus's, the instances')
-    pipeline(module, layouts, format, depthFormat) {
-        return this.r.device.createRenderPipeline({
-            label: 'vegetation', layout: this.r.device.createPipelineLayout({ bindGroupLayouts: [...layouts, this.drawLayout] }),
-            vertex: { module, entryPoint: 'vsVeg', buffers: [{ arrayStride: VEG_FLOATS * 4, attributes: [
-                { shaderLocation: 0, offset: 0, format: 'float32x3' }, { shaderLocation: 1, offset: 12, format: 'float32x3' },
-                { shaderLocation: 2, offset: 24, format: 'float32x4' }] }] },
-            fragment: { module, entryPoint: 'fsVeg', targets: [{ format }] },
+    // each species' near mesh baked into an imposter atlas; then the far slots draw as imposters (their args: a quad each)
+    async bakeAtlases() {
+        const d = this.r.device, gpu = ImposterGpu.of(d), baker = new ImposterBaker(d), t0 = performance.now();
+        const pipe = gpu.bakePipeline({ key: 'veg-plant', module: gpu.module(WGSL_BAKE_FRAME + WGSL_VEG_ALBEDO + WGSL_VEG_BAKE), buffers: VEG_BUFFERS, cullMode: 'none' });
+        const atlases = [];
+        for (let sp = 0; sp < VEG_SPECIES; sp++) {
+            const v = this.meshes[sp * 2].v, lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+            for (let k = 0; k < v.length; k += VEG_FLOATS) for (let a = 0; a < 3; a++) { lo[a] = Math.min(lo[a], v[k + a]); hi[a] = Math.max(hi[a], v[k + a]); }
+            const center = lo.map((x, a) => (x + hi[a]) / 2);
+            let radius = 0;
+            for (let k = 0; k < v.length; k += VEG_FLOATS) radius = Math.max(radius, Math.hypot(v[k] - center[0], v[k + 1] - center[1], v[k + 2] - center[2]));
+            const [first, count] = this.ranges[sp * 2];
+            atlases.push(await baker.bake({ center, radius, emissive: false, draw: pass => {
+                pass.setPipeline(pipe);
+                pass.setVertexBuffer(0, this.vertexBuf);
+                pass.draw(count, 1, first, 0);
+            } }, VEG_ATLAS));
+        }
+        if (this.destroyed) { atlases.forEach(a => a.destroy()); return; }
+        this.atlases = atlases;
+        for (let sp = 0; sp < VEG_SPECIES; sp++) this.args.set([IMPOSTER_VERTICES, 0, 0, 0], (sp * 2 + 1) * 4);
+        console.info(`vegetation: ${VEG_SPECIES} imposter atlases (${VEG_ATLAS.grid}^2 x ${atlases[0].res} px, ${(atlases.reduce((n, a) => n + a.bytes, 0) / 1048576).toFixed(0)} MB) in ${(performance.now() - t0).toFixed(0)} ms`);
+    }
+
+    // the pipelines drawing the plants from the scene module (layouts: the world's, the bus's): the meshes (vsVeg / fsVeg,
+    // group 2 the instances) and the imposters (vsVegImp / fsVegImp, group 3 a species' atlas)
+    pipelines(module, layouts, format, depthFormat) {
+        const d = this.r.device, gpu = ImposterGpu.of(d);
+        const make = (label, vs, fs, buffers, extra = []) => d.createRenderPipeline({
+            label, layout: d.createPipelineLayout({ bindGroupLayouts: [...layouts, this.drawLayout, ...extra] }),
+            vertex: { module, entryPoint: vs, buffers }, fragment: { module, entryPoint: fs, targets: [{ format }] },
             primitive: { topology: 'triangle-list', cullMode: 'none' },
             depthStencil: { format: depthFormat, depthWriteEnabled: true, depthCompare: 'greater' },
         });
+        return { mesh: make('vegetation', 'vsVeg', 'fsVeg', VEG_BUFFERS), imposter: make('vegetation-imposters', 'vsVegImp', 'fsVegImp', [], [gpu.atlasLayout]) };
     }
 
     encode(enc, prof) {
@@ -181,15 +219,26 @@ class VegetationPass {
         pass.end();
     }
 
-    draw(a, pipe, busGroup) {
-        a.setPipeline(pipe);
+    draw(a, pipes, busGroup) {
+        a.setPipeline(pipes.mesh);
         a.setBindGroup(1, busGroup, [0]);
         a.setBindGroup(2, this.drawGroup);
         a.setVertexBuffer(0, this.vertexBuf);
-        for (let s = 0; s < VEG_SPECIES * 2; s++) a.drawIndirect(this.argsBuf, s * 16);
+        for (let s = 0; s < VEG_SPECIES * 2; s++) if (!(this.atlases && s % 2)) a.drawIndirect(this.argsBuf, s * 16);
+        if (!this.atlases) return;
+        a.setPipeline(pipes.imposter);
+        for (let sp = 0; sp < VEG_SPECIES; sp++) {
+            a.setBindGroup(2, this.farGroups[sp]);
+            a.setBindGroup(3, this.atlases[sp].bg);
+            a.drawIndirect(this.argsBuf, (sp * 2 + 1) * 16);
+        }
     }
 
-    destroy() { for (const b of [this.vertexBuf, this.instBuf, this.argsBuf]) b.destroy(); }
+    destroy() {
+        this.destroyed = true;
+        for (const b of [this.vertexBuf, this.instBuf, this.argsBuf]) b.destroy();
+        this.atlases?.forEach(at => at.destroy());
+    }
 }
 
 return { VegetationPass, plantMeshes };

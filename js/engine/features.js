@@ -61,7 +61,7 @@ const Features = {
         // and what it writes each frame, the World under it (WorldExtensions compose a world type in), its App (with
         // AppExtensions) and the engine adapter (AtmosphereWorld)
         atmosphere: {
-            uses: ['noise', 'view', 'world', 'gpu', 'gui', 'mesh', 'interior', 'transit', 'building', 'settlement', 'terrain', 'weather', 'curvature'],
+            uses: ['noise', 'view', 'world', 'gpu', 'gui', 'mesh', 'interior', 'transit', 'building', 'settlement', 'terrain', 'weather', 'curvature', 'imposter'],
             parts: [
                 'limits', 'quality', 'bindings', 'shaders/common', 'shaders/shelter', 'shaders/occupancy', 'shaders/noise', 'shaders/weather',
                 'shaders/volumetrics', 'shaders/scene', 'shaders/vegetation', 'shaders/final', 'passes', 'vegetation', 'renderer', 'far-lights', 'surroundings', 'light-writer',
