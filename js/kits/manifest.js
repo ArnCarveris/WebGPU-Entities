@@ -347,15 +347,19 @@ const Kits = (() => {
         },
         atmosphere: {
             about: 'the volumetric atmosphere (clouds, precipitation, haze, lightning) over a terrain and its structures: its renderer and what it writes each frame, the World under it (WorldExtensions), its App (AppExtensions) and the engine adapter (AtmosphereWorld)',
-            uses: ['noise', 'view', 'world', 'gpu', 'gui', 'mesh', 'interior', 'transit', 'building', 'settlement', 'terrain', 'weather', 'imposter'],
+            uses: ['noise', 'view', 'world', 'gpu', 'gui', 'mesh', 'interior', 'transit', 'building', 'settlement', 'terrain', 'weather'],
             parts: [
                 'limits', 'quality', 'bindings', 'shaders/common', 'shaders/shelter', 'shaders/occupancy', 'shaders/noise', 'shaders/weather',
-                'shaders/volumetrics', 'shaders/scene', 'shaders/vegetation', 'shaders/final', 'shaders/library', 'passes', 'vegetation', 'renderer', 'far-lights', 'surroundings', 'light-writer',
+                'shaders/volumetrics', 'shaders/scene', 'shaders/forest', 'shaders/final', 'shaders/library', 'passes', 'renderer', 'far-lights', 'surroundings', 'light-writer',
                 'frame-writer', 'world', 'app/hud', 'app/menus', 'app/controls', 'app/key-commands', 'app/app', 'app/phone-pages', 'app/feature',
             ],
             data: { render: 'render settings' },
             features: {
                 curvature: { about: 'the outdoors drawn on a round planet', uses: ['curvature'], parts: ['curvature'], when: { data: ['curvature'] } },
+                vegetation: {
+                    about: 'plants scattered about the eye: meshes near, octahedral imposters further, the canopy carpet beyond',
+                    uses: ['imposter'], parts: ['shaders', 'pass', 'vegetation'], when: { data: ['terrain.vegetation'] },
+                },
             },
             worlds: {
                 // its entity types, its World extension (Storms: cells, hurricane, tornado) and App extension (Clouds: the

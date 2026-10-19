@@ -4,7 +4,7 @@
 // and beyond them the canopy carpet (vsCanopy / fsCanopy): the same lattice's crowns ray-marched in a thin layer over
 // the terrain, so the far forest is the same trees, handed over by a complementary dither.
 
-Features.kit('atmosphere', (engine, kit) => {
+Features.feature('atmosphere/vegetation', (engine, kit) => {
 const { TERRAIN_PATCH } = engine.kits.terrain;
 
 const VEG_CELL = 6;                 // m: the lattice; at most one plant a cell
@@ -18,44 +18,8 @@ const VEG_SLOT = VEG_CAP[0] + VEG_CAP[1];
 const CANOPY = 11;                  // m: a forest's canopy height without a canopy map (the land use's woods)
 const CARPET_STEPS = 40;            // the carpet's march: steps along a ray, before it takes the canopy as closed
 
-// the forest cover the ground is shaded with (fsTerrain), the plants scattered by and the canopy raised over (0..1): the
-// canopy map's where there is one (F.tdetail.w 2: geoCanopy), else the land use's woods, broken up a little
-const WGSL_FOREST = /* wgsl */`
-// the canopy map at xz: cover (0..1), mean height (m)
-fn canopyAt(xz: vec2f) -> vec2f {
-    let c = textureSampleLevel(canopyTex, clampSamp, (xz - F.tdomain.xy) / F.tdomain.z, 0.0).xy;
-    return vec2f(c.x, c.y * 255.0);
-}
-
-// the canopy map's cover at xz as the ground is shaded by it: a cubic B-spline over its texels (four bilinear taps), so
-// the 18 m cells round off into blobs instead of bilinear squares and diamonds
-fn canopySmooth(xz: vec2f) -> f32 {
-    let sz = vec2f(textureDimensions(canopyTex));
-    let c = (xz - F.tdomain.xy) / F.tdomain.z * sz - 0.5;
-    let f = fract(c);
-    let i = c - f;
-    let f2 = f * f;
-    let f3 = f2 * f;
-    let w0 = (1.0 - 3.0 * f + 3.0 * f2 - f3) / 6.0;
-    let w1 = (4.0 - 6.0 * f2 + 3.0 * f3) / 6.0;
-    let w2 = (1.0 + 3.0 * f + 3.0 * f2 - 3.0 * f3) / 6.0;
-    let w3 = f3 / 6.0;
-    let g0 = w0 + w1;
-    let g1 = w2 + w3;
-    let h0 = (i - 0.5 + w1 / g0) / sz;
-    let h1 = (i + 1.5 + w3 / g1) / sz;
-    let a = textureSampleLevel(canopyTex, clampSamp, h0, 0.0).x;
-    let b = textureSampleLevel(canopyTex, clampSamp, vec2f(h1.x, h0.y), 0.0).x;
-    let d = textureSampleLevel(canopyTex, clampSamp, vec2f(h0.x, h1.y), 0.0).x;
-    let e = textureSampleLevel(canopyTex, clampSamp, h1, 0.0).x;
-    return g0.y * (g0.x * a + g1.x * b) + g1.y * (g0.x * d + g1.x * e);
-}
-
-fn forestCover(xz: vec2f, woods: f32) -> f32 {
-    if (F.tdetail.w > 1.5) { return sat(canopyAt(xz).x * 1.15); }
-    return sat(woods * (0.4 + vnoise2(xz / 300.0)) * 1.3);
-}
-
+// where the plants grow, as they see it: the canopy field, a lattice cell's seed and site (the core's forest cover over it)
+const WGSL_VEG_SITE = /* wgsl */`
 // the canopy at xz as the plants see it: cover (0..1), height (m); the canopy map's, else the woods' at a forest's
 // height. None off the map, on water, roads and buildings
 fn canopyField(xz: vec2f) -> vec2f {
@@ -439,5 +403,5 @@ struct CanopyOut { @builtin(position) pos: vec4f, @location(0) world: vec3f, @lo
 }
 `;
 
-return { VEG_CELL, VEG_NEAR, VEG_FADE, VEG_FAR, VEG_N, VEG_SPECIES, VEG_CAP, VEG_SLOT, WGSL_FOREST, WGSL_VEG_SCATTER, WGSL_VEG_ALBEDO, WGSL_VEG, WGSL_VEG_BAKE, WGSL_VEG_IMP, WGSL_VEG_CARPET };
+return { VEG_CELL, VEG_NEAR, VEG_FADE, VEG_FAR, VEG_N, VEG_SPECIES, VEG_CAP, VEG_SLOT, WGSL_VEG_SITE, WGSL_VEG_SCATTER, WGSL_VEG_ALBEDO, WGSL_VEG, WGSL_VEG_BAKE, WGSL_VEG_IMP, WGSL_VEG_CARPET };
 });

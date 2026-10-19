@@ -29,10 +29,9 @@ function atmosphereWgsl() {
     L.define('SKY', k.WGSL_SKY, { needs: ['CURVE'] });
     for (const name of ['WEATHER_SAMPLE', 'DENSITY', 'SHADOW_SAMPLE', 'SHELTER', 'BUILDING', 'TERRAIN', 'SCENE', 'FINAL', 'BLOOM', 'OCCUPANCY',
         'WEATHER', 'SHADOW', 'GROUND', 'FROXEL', 'SKIP_SAMPLE', 'TILES', 'HAZE', 'HAZE_INTEGRATE', 'MARCH', 'RESOLVE', 'HISTORY_COPY',
-        'FOREST', 'VEG_SCATTER', 'VEG_ALBEDO', 'VEG', 'VEG_IMP', 'VEG_CARPET']) L.define(name, k[`WGSL_${name}`]);
+        'FOREST']) L.define(name, k[`WGSL_${name}`]);
     L.define('BUS1', k.wgslBus(1));
     L.define('BUS2', k.wgslBus(2));
-    L.define('IMPOSTER', () => engine.kits.imposter.imposterWGSL({ group: 3 }));
     return L;
 }
 

@@ -4,7 +4,7 @@
 // (the imposter kit: each species' near mesh baked once into an atlas) from VEG_NEAR out, the low-poly meshes there until
 // the atlases are baked.
 
-Features.kit('atmosphere', (engine, kit) => {
+Features.feature('atmosphere/vegetation', (engine, kit) => {
 const { Common } = engine;
 const { makeBuffer, bindLayout, bindGroup } = Common;
 const { mulberry32 } = engine.kits.noise;

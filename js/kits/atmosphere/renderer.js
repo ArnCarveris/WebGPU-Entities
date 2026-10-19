@@ -9,7 +9,7 @@ const { StencilLayout } = kits.gpu;
 const {
     MAX_CELLS, CELL_FLOATS, FAR_FLOATS, MAX_FAR_DYN, FAR_LAMP_H, FAR_LAMP_REACH, MAX_POLES, BLOOM_LEVELS,
     FrameBlock, WORLD_BINDINGS, BindingSet, BUS_UNIFORM, NoiseVolumes, shaderSource, atmosphereWgsl,
-    WeatherPass, GroundPass, FroxelPass, CloudPass, VegetationPass,
+    WeatherPass, GroundPass, FroxelPass, CloudPass,
 } = kit;
 const { MAX_BOLT_SEGS } = kits.weather;
 const { STRUCT_FLOATS, BUILDING_FLOATS, STRUCT_COLORS, Structures } = kits.settlement;
@@ -23,8 +23,16 @@ const MAX_ORIGINS = 96;          // buildings whose interiors (and lifts) are dr
 const MAX_PANELS = 16;           // world-space GUIs drawn a frame (the GUI pass's default; render.gui.max)
 
 // Renderer. What the features on in its world add to it are its extensions (RendererExtension: a class built with the
-// renderer, new E(renderer); each hook optional: wgsl(library) (its shader chunks over the core's stubs, before any
-// module is made))
+// renderer, new E(renderer)), in the features' order; each hook optional:
+//   wgsl(library, modules)   its shader chunks, over the core's stubs, before any module is made; modules: the chunk
+//                            names of the scene and final modules ({ scene, final }), to add its own to
+//   pipelines(ctx)           its pipelines, after the core's: ctx { scene, final (modules), layoutA (world), layoutB
+//                            (+ screen), layoutBus (+ object frame), layoutGlass, pipe(layout, module, vs, fs, format,
+//                            depth, blend, buffers), structVerts }
+//   setWorld(world)          its buffers for a new world
+//   encode(enc, prof)        its compute passes, before the scene pass
+//   outdoor(pass, ctx)       its draws of the outdoors in the scene pass (after the terrain; scissored to the portals
+//                            the outdoors is seen through): ctx { drawPatches() (the terrain's patches again) }
 class Renderer {
     // fx: the world context (the host's device, canvas size, target, the features on in its world (fx.features), and in
     // a composition the other worlds to put under the clouds: fx.inject; see js/engine/host.js)
@@ -35,9 +43,13 @@ class Renderer {
 
     async init() {
         this.device = this.fx.device;
-        // the shaders: the core's chunks, the features' over them
+        // the shaders: the core's chunks, the features' over them; the scene and final modules' chunks
         this.wgsl = atmosphereWgsl();
-        for (const x of this.extensions) x.wgsl?.(this.wgsl);
+        this.modules = {
+            scene: ['SKY', 'WEATHER_SAMPLE', 'SHADOW_SAMPLE', 'SHELTER', 'BUILDING', 'TERRAIN', 'FOREST', 'BUS1', 'SCENE'],
+            final: ['SKY', 'WEATHER_SAMPLE', 'SHADOW_SAMPLE', 'SHELTER', 'BUILDING', 'TERRAIN', 'BUS2', 'FINAL'],
+        };
+        for (const x of this.extensions) x.wgsl?.(this.wgsl, this.modules);
         this.profiler = new GpuProfiler(this.device, ['weather', 'ground', 'vegetation', 'scene', 'froxel', 'tiles', 'march', 'resolve', 'bloom', 'final']);
         this.format = this.fx.format;
         // the scene's depth: with a stencil when the device has one to share out (StencilLayout: the world-space GUIs'
@@ -103,8 +115,8 @@ class Renderer {
     createPipelines() {
         const d = this.device;
         this.screenLayout = bindLayout(d, GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, ['tex', 'tex', 'depth', 'tex']);
-        const scene = this.sceneModule = d.createShaderModule({ label: 'scene', code: shaderSource(this.worldSet, this.wgsl.code('SKY', 'WEATHER_SAMPLE', 'SHADOW_SAMPLE', 'SHELTER', 'BUILDING', 'TERRAIN', 'FOREST', 'BUS1', 'SCENE', 'VEG_ALBEDO', 'VEG', 'IMPOSTER', 'VEG_IMP', 'VEG_CARPET')) });
-        const final = d.createShaderModule({ label: 'final', code: shaderSource(this.worldSet, this.wgsl.code('SKY', 'WEATHER_SAMPLE', 'SHADOW_SAMPLE', 'SHELTER', 'BUILDING', 'TERRAIN', 'BUS2', 'FINAL')) });
+        const scene = this.sceneModule = d.createShaderModule({ label: 'scene', code: shaderSource(this.worldSet, this.wgsl.code(...this.modules.scene)) });
+        const final = d.createShaderModule({ label: 'final', code: shaderSource(this.worldSet, this.wgsl.code(...this.modules.final)) });
         const layoutA = d.createPipelineLayout({ bindGroupLayouts: [this.worldSet.layout] });
         const layoutB = d.createPipelineLayout({ bindGroupLayouts: [this.worldSet.layout, this.screenLayout] });
         // one bus's uniforms (wgslBus), at a dynamic offset per bus: group 1 in the scene pass, group 2 in the final one
@@ -125,18 +137,6 @@ class Renderer {
         // the terrain patch: vertex index -> patch corner; a node (x0, z0, size, lod) per instance
         this.pTerrain = pipe(layoutA, scene, 'vsTerrain', 'fsTerrain', 'rgba16float', { write: true, compare: 'greater' }, undefined, [{
             arrayStride: 16, stepMode: 'instance', attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x4' }] }]);
-        // the canopy carpet: the far forest over the same patches (vsCanopy / fsCanopy), tested against the depth, not written
-        this.carpet = true;           // false: no carpet (the far forest is the ground's shade alone)
-        // (its upper side alone: a hillside's shell seen from behind would march for nothing)
-        this.pCanopy = d.createRenderPipeline({
-            label: 'vsCanopy', layout: layoutA,
-            vertex: { module: scene, entryPoint: 'vsCanopy', buffers: [{ arrayStride: 16, stepMode: 'instance', attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x4' }] }] },
-            // premultiplied by its coverage; the target's alpha (the rain surface code) is left as the ground wrote it
-            fragment: { module: scene, entryPoint: 'fsCanopy', targets: [{ format: 'rgba16float', blend: {
-                color: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' }, alpha: { srcFactor: 'zero', dstFactor: 'one' } } }] },
-            primitive: { topology: 'triangle-list', cullMode: 'back', frontFace: 'ccw' },
-            depthStencil: { format: this.depthFormat, depthWriteEnabled: false, depthCompare: 'greater' },
-        });
         const structVerts = [{
             arrayStride: STRUCT_FLOATS * 4, attributes: [
                 { shaderLocation: 0, offset: 0, format: 'float32x3' }, { shaderLocation: 1, offset: 12, format: 'float32x3' },
@@ -206,6 +206,8 @@ class Renderer {
             fragment: { module: final, entryPoint: 'fsBoltGlow', targets: [{ format: 'rgba16float', blend: blendOne }] },
             primitive: { topology: 'triangle-list' },
         });
+        const ctx = { scene, final, layoutA, layoutB, layoutBus, layoutGlass, pipe, structVerts };
+        for (const x of this.extensions) x.pipelines?.(ctx);
     }
 
     setWorld(world) {
@@ -288,10 +290,7 @@ class Renderer {
             clampSamp: this.clampSamp, cells: this.cellBuf, ground: this.groundPass.buffer, bolts: this.boltBuf, anvilTex: this.weatherPass.anvilView,
             layerTex: this.weatherPass.layerView, styleTex: this.weatherPass.styleView, occ: this.weatherPass.occ, buildings: this.buildingBuf,
         }, 'world');
-        // the plants (the scenario's terrain says vegetation: true), scattered each frame about the eye
-        this.vegetation?.destroy();
-        this.vegetation = world.terrain.vegetation ? new VegetationPass(this) : null;
-        if (this.vegetation) this.pVeg = this.vegetation.pipelines(this.sceneModule, [this.worldSet.layout, this.busLayout], 'rgba16float', this.depthFormat);
+        for (const x of this.extensions) x.setWorld?.(world);
     }
 
     // the terrain's nodes for this frame's eye (TerrainLod.select), written to terrainNodes: [quadrant (0 the whole
@@ -461,7 +460,7 @@ class Renderer {
         this.gui.prepare(enc, this.panelDraws, Fd.subarray(fo.viewProj, fo.viewProj + 16), 0.9 / Math.max(Fd[fo.sunCol + 3], 0.2));
         this.weatherPass.encode(enc, probeTexel, prof, shadowSlices);
         this.groundPass.encode(enc, prof);
-        this.vegetation?.encode(enc, prof);
+        for (const x of this.extensions) x.encode?.(enc, prof);
 
         const a = enc.beginRenderPass({
             label: 'scene', timestampWrites: prof.writes('scene'),
@@ -499,15 +498,7 @@ class Renderer {
             a.setIndexBuffer(this.bulkI, 'uint32');
             for (const [first, count] of this.bulkDraws()) a.drawIndexed(count, 1, first);
         }
-        if (this.vegetation) {
-            this.vegetation.draw(a, this.pVeg, this.busGroup);
-            if (this.carpet) {
-                a.setPipeline(this.pCanopy);
-                a.setIndexBuffer(this.terrainIndex, 'uint32');
-                a.setVertexBuffer(0, this.terrainNodes);
-                drawPatches();
-            }
-        }
+        for (const x of this.extensions) x.outdoor?.(a, { drawPatches });
         if (this.busDraws.length) {
             a.setPipeline(this.pBus);
             for (const k of this.busDraws) {
