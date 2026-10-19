@@ -1,5 +1,5 @@
 'use strict';
-// InputRouter: every feature world listens through its own scope (io.listen(target, type, fn, opts), target the
+// InputRouter: every world listens through its own scope (io.listen(target, type, fn, opts), target the
 // canvas, window or document) instead of addEventListener, so several worlds can share one page. Input events go to
 // the focused world (plus "always" owners such as the engine's fly camera); state events (blur, resize, key releases,
 // pointer lock) go to everyone. Events aimed at the engine's own UI (the scenario and GPU pickers...) reach no world.

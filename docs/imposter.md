@@ -3,8 +3,8 @@
 Octahedral imposters for any renderer: bake a mesh once into a G-buffer atlas of N x N views around it, then draw
 its far instances as camera-facing quads that rebuild the surface from the three nearest views. The atlas holds no
 lighting, so any lighting works without a rebake. [`js/kits/imposter/`](../js/kits/imposter/) (`engine.kits.imposter`;
-list `imposter` in a feature's `USES` or a kit's `uses`) is the pipeline the imposter feature
-([docs/features/imposter.md](features/imposter.md), how it works in depth) runs on:
+list `imposter` in a world's, a feature's or a kit's `uses` in js/kits/manifest.js) is the pipeline the imposter
+world ([docs/features/imposter.md](features/imposter.md), how it works in depth) and the cloud world's vegetation run on:
 
 | Part | What |
 |---|---|
@@ -116,7 +116,7 @@ targets, `ImposterGpu.atlasLayout` at the atlas's group.
 
 ## LOD lists
 
-For a renderer that culls its instances on the GPU (the imposter feature does: camera + 4 shadow cascades):
+For a renderer that culls its instances on the GPU (the imposter world does: camera + 4 shadow cascades):
 `new LodLists(device, { count, instanceBytes, submeshes: [{ first, count }], lists })` holds the instances (`src`,
 `srcBG`), `lists` culled lists of meshes and of imposters (`meshBG[list]`, `impBG[list]`) and their indirect args,
 `setStride` bytes a list: the imposter draw (`impArgs(list)`), then a `drawIndexedIndirect` per submesh

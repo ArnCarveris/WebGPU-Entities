@@ -1,6 +1,6 @@
 // Writes the scenario catalog and the embedded copy of every scenario:
 //
-//   scenarios/index.json    [{ id, name, group, description, features }], what the scenario picker lists
+//   scenarios/index.json    [{ id, name, group, description, worlds }], what the scenario picker lists
 //   scenarios/embedded.js   all of scenarios/*.json plus the catalog, for index.html opened from disk (browsers block
 //                           fetch() on file:// pages, but run <script> files)
 //
@@ -35,11 +35,11 @@ for (const file of files) {
         return structuredClone(raw[inc]);
     });
     const roots = ScenarioFormat.roots(full);
-    if (!roots.length) throw new Error(`${file}: no feature world entity`);
+    if (!roots.length) throw new Error(`${file}: no world`);
     for (const r of roots) ScenarioFormat.toNative(full, r);   // and on entities that don't fit their feature
     embedded[`scenarios/${file}`] = s;
     index.push({ id, name: s.name, group: s.group || 'Other', description: s.description || '',
-        features: [...new Set(roots.map(r => r.feature))], order: s.order ?? 100 });
+        worlds: [...new Set(roots.map(r => r.type))], order: s.order ?? 100 });
 }
 const g = x => { const k = GROUPS.indexOf(x); return k < 0 ? GROUPS.length : k; };
 index.sort((a, b) => g(a.group) - g(b.group) || a.order - b.order || a.name.localeCompare(b.name));

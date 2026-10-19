@@ -1,5 +1,5 @@
 'use strict';
-// AudioEngine: sound as entities. Nothing here knows any feature; scenarios say what to play and when.
+// AudioEngine: sound as entities. Nothing here knows any world; scenarios say what to play and when.
 //
 //   sound.master { gain, muted }
 //   sound.bed    a looped source that plays all the time, its level (and filter / pitch) following data each frame:

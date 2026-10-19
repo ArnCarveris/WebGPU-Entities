@@ -4,7 +4,7 @@
     "name": "Storm over Riverlands",
     "group": "Compositions",
     "description": "Entity Water's river simulation set into Entity Cloud's High Plains: the clouds, rain shafts, haze and lightning are drawn over the river world, and rain falling where the camera is turns on the river's rain.",
-    "features": [
+    "worlds": [
       "cloud",
       "water"
     ]
@@ -14,7 +14,7 @@
     "name": "Imposter Valley weather",
     "group": "Compositions",
     "description": "Entity Imposter's valley (15k trees, rocks and homesteads as octahedral imposters) out on Entity Cloud's High Plains: its forests under volumetric clouds, storm shafts and lightning, lit by the plains' sun.",
-    "features": [
+    "worlds": [
       "cloud",
       "imposter"
     ]
@@ -24,7 +24,7 @@
     "name": "Bunker on the Reservoir",
     "group": "Compositions",
     "description": "Entity Portal's bunker compound (portal-room visibility, stencil-masked traversal, a freighter, drones) as an island in Entity Cloud's Reservoir: walk out of the bunker into the plains' weather. Indoors (a portal area that isn't the outdoors) the rain stays outside.",
-    "features": [
+    "worlds": [
       "cloud",
       "portal"
     ]
@@ -34,7 +34,7 @@
     "name": "Planetfall",
     "group": "Compositions",
     "description": "Entity Imposter's valley set on Entity Origin's real-scale Earth: one floating-origin camera flies from the valley floor up to Gateway Station in orbit and on to Neptune, the valley staying exact under it. The valley's sun is the solar system's.",
-    "features": [
+    "worlds": [
       "origin",
       "imposter"
     ]
@@ -44,7 +44,7 @@
     "name": "Sector 07 on the Moon",
     "group": "Compositions",
     "description": "Entity GUI's facility (airlock terminal, CCTV, easel, handheld) stands at Entity Origin's Shackleton Base on the Moon. Fly around it with the floating-origin camera; ` hands the keys and the camera to the facility's player inside, with its world-space GUIs.",
-    "features": [
+    "worlds": [
       "origin",
       "gui"
     ]
@@ -54,7 +54,7 @@
     "name": "Grand tour of the plains",
     "group": "Compositions",
     "description": "Four engines in one world: Entity Cloud's High Plains as the sky over Entity Water's Riverlands, Entity Imposter's valley and Entity Portal's bunker island, flown with the engine's free camera. Untick a world in the bar to see the others without it.",
-    "features": [
+    "worlds": [
       "cloud",
       "water",
       "imposter",
@@ -66,7 +66,7 @@
     "name": "High Plains",
     "group": "Entity Cloud",
     "description": "",
-    "features": [
+    "worlds": [
       "cloud"
     ]
   },
@@ -75,7 +75,7 @@
     "name": "Oʻahu",
     "group": "Entity Cloud",
     "description": "The island of Oʻahu at 1:1: its real ground (AWS Terrain Tiles, 36 m cells, cut to OpenStreetMap's coastline), its 6,800 km of mapped roads with rounded curves, bridges and US markings, and its 97,000 mapped buildings stood up from their footprints, under trade-wind weather. Map data © OpenStreetMap contributors (ODbL); made by tools/geo-import.mjs.",
-    "features": [
+    "worlds": [
       "cloud"
     ]
   },
@@ -84,7 +84,7 @@
     "name": "Riverlands",
     "group": "Entity Water",
     "description": "",
-    "features": [
+    "worlds": [
       "water"
     ]
   },
@@ -93,7 +93,7 @@
     "name": "Sol Transit",
     "group": "Entity Origin",
     "description": "",
-    "features": [
+    "worlds": [
       "origin"
     ]
   },
@@ -102,7 +102,7 @@
     "name": "Imposter Valley",
     "group": "Entity Imposter",
     "description": "",
-    "features": [
+    "worlds": [
       "imposter"
     ]
   },
@@ -111,7 +111,7 @@
     "name": "Bunker compound",
     "group": "Entity Portal",
     "description": "",
-    "features": [
+    "worlds": [
       "portal"
     ]
   },
@@ -120,7 +120,7 @@
     "name": "GUI depth stress",
     "group": "Entity GUI",
     "description": "EntityGUI screens at 2 m to 512 m, one per view: how deep a world-space GUI can be before it breaks.",
-    "features": [
+    "worlds": [
       "gui"
     ]
   },
@@ -129,7 +129,7 @@
     "name": "GUI swarm stress",
     "group": "Entity GUI",
     "description": "296 world-space EntityGUIs at once: a ring of terminals, a 72-panel video wall, 144 hovering panels at every angle, a stack of overlapping screens, giants up to 25 m wide and 24 easels with their own paint targets, on every terminal page, CRT and flat. More GUIs than the 8-bit stencil has values: the rest fall back to the depth test.",
-    "features": [
+    "worlds": [
       "gui"
     ]
   },
@@ -138,7 +138,7 @@
     "name": "Sector 07",
     "group": "Entity GUI",
     "description": "",
-    "features": [
+    "worlds": [
       "gui"
     ]
   }

@@ -2,7 +2,7 @@
 
 The six WebGPU-Entity demos in one page, where everything is an entity and every scenario is data:
 
-| Feature | From | What it renders |
+| World | From | What it renders |
 |---|---|---|
 | **cloud** | [WebGPU-EntityCloud](https://github.com/ArnCarveris/WebGPU-EntityCloud) | volumetric clouds and a weather system: storm cells, rain and snow shafts, lightning, buildings and buses that keep the rain off |
 | **water** | [WebGPU-EntityWater](https://github.com/ArnCarveris/WebGPU-EntityWater) | a GPU shallow-water river simulation with wave cascades, debris and screen-space water |
@@ -12,7 +12,7 @@ The six WebGPU-Entity demos in one page, where everything is an entity and every
 | **gui** | [WebGPU-EntityGUI](https://github.com/ArnCarveris/WebGPU-EntityGUI) | Doom 3-style world-space GUIs: an airlock terminal with CCTV, an easel, a handheld phone |
 
 The scenario picker (top right) lists every original demo's scenario, rendered by its own engine as before, and
-**compositions**: several features in one world, one camera, one picture.
+**compositions**: several worlds, one camera, one picture.
 
 | Scenario | Worlds |
 |---|---|
@@ -56,7 +56,7 @@ python -m http.server 8770
 
 `?scenario=<id>` picks a scenario (the picker reloads the page with it); `?gpu=<id>` the GPU, as in the original demos.
 Drop a scenario `.json` on the page to run it: one in the entity format below, or a native one made for any of the
-original demos (its feature is recognised from its keys). Models (`.glb`, `.gltf`, `.obj`) dropped on the page go to the
+original demos (its world is recognised from its keys). Models (`.glb`, `.gltf`, `.obj`) dropped on the page go to the
 focused world (the imposter baker).
 
 Opened from disk, browsers block `fetch()`, so the page reads the embedded copy of every scenario
@@ -95,36 +95,43 @@ A scenario is one flat list of entities:
 }
 ```
 
-- **A world** is a root entity whose type is a feature (`cloud`, `water`, `origin`, `imposter`, `portal`, `gui`), with an
-  `id` (default: the feature's name), a `label`, and `layer` settings for compositions.
+- **A world** is a root entity of a world type (`cloud`, `water`, `origin`, `imposter`, `portal`, `gui`: the kits'
+  worlds), with an `id` (default: its type), a `label`, `layer` settings for compositions and `features` (below).
 - **Everything that world is made of** is an entity of a plain type: terrain stamps, lakes, storm cells, bodies, props,
   areas and portals, materials, models, lighting presets, views, tools, config blocks (`light`, `building`, `mountain`,
-  `door`...). Types are the kits', not the features': every one is listed in `js/kits/types.js` (`EntityTypes`, with
-  the kit that implements it where the features share the code), and a feature takes the ones its schema names. An
-  entity belongs to the world named by `of`, else to the only world of the scenario that takes its type: in a
-  composition of a sky and a river, `{ "type": "lake", "of": "sky" }` (both take `lake`), but `{ "type": "clearing" }`
-  (only cloud does). An included world's entities get its `of`. `camera` and `view` are the engine's unless they
-  have `of`: `{ "type": "camera", "of": "imposter", "fov": 60 }` is that world's camera block.
+  `door`...). Types are the kits', not the worlds': every one is listed in the kit manifest (`js/kits/manifest.js`)
+  under the kit that implements it (an entity type) or reads it (a data type). A world takes the entity types whose
+  implementation stands on an entity base it has and needs nothing it lacks (cloud: `terrain` entities that may need
+  `structures` or `weather`; water: `terrain` ones that may need `water`; portal: `sector`; gui: `fixture`...), and
+  the data types of its schema. An entity belongs to the world named by `of`, else to the only world of the scenario
+  that takes its type: in a composition of a sky and a river, `{ "type": "lake", "of": "sky" }` (both take `lake`). An
+  included world's entities get its `of`. `camera` and `view` are the engine's unless they have `of`:
+  `{ "type": "camera", "of": "imposter", "fov": 60 }` is that world's camera block.
+- **Any kit's entity works in any scenario.** An entity no world of the scenario takes brings in a world that does,
+  composed with the others as the manifest says it joins (`implicit`): a `storm` in the bunker scenario puts a cloud
+  sky over it (as its atmosphere, on a plain at sea level), a list of `hills` and `spring`s with no root at all is a
+  water world.
 - **The engine's own entities** are plain types: `camera`, `view`, `link`, `include`, `handheld`, `handheld.page`,
   `hud.toast`, `sound.*`.
 
-Each feature's engine still reads its own layout (materials as a map, views as a list...). `js/engine/scenario-format.js`
-holds a schema per feature that maps its entities onto that layout and back, without per-feature code:
+Each world still reads its own layout (materials as a map, views as a list...). Its schema (the manifest's
+`worlds.<type>.schema`) maps its entities onto that layout and back, without per-world code
+(`js/engine/scenario-format.js`):
 
-| Feature | config blocks (one entity each) | maps (one entity per key, the key as `id`) | lists (one entity per item) | own entity classes |
+| World | config blocks (one entity each) | maps (one entity per key, the key as `id`) | lists (one entity per item) | entity bases (its entity types) |
 |---|---|---|---|---|
-| cloud | terrain render weather lighting hurricane streetLights | weatherState light building | cloudLayer view | clearing tilt hills mountain range river lake town forest village busStation bus storm supercell squall spawner |
-| water | terrain sim waves waterShading lighting | light | tool view | tilt hills mountain valley basin coast dam sea lake spring drain rain debris |
-| origin | start camera floatingOrigin lighting | material model | bookmark | body prop field orbiter |
-| imposter | camera environment lod shadows imposterAtlas drop | light material model | | terrain prop compare scatter |
-| portal | camera player minimap outdoor cctv media iptv | material model | area visPortal occluder vehicle | securityCamera prop light stairs hull helm door drone |
-| gui | player facility cctv media iptv waves radar places phone | material model | | static door lamp alarmBeacon light drone securityCamera avatar terminal easel |
+| cloud | terrain render weather lighting hurricane streetLights curvature | weatherState light building + plans | cloudLayer view | terrain + structures, weather: clearing tilt hills mountain range river lake valley basin coast dam town forest village busStation skyscraper structure bus storm supercell squall spawner geo* place |
+| water | terrain sim waves waterShading lighting | light | tool view | terrain + water: tilt hills mountain range river lake valley basin coast dam town forest clearing sea spring drain rain debris |
+| origin | start camera floatingOrigin lighting | material model | bookmark | space: body prop field orbiter |
+| imposter | camera environment lod shadows imposterAtlas drop | light material model | view | ground: terrain prop compare scatter |
+| portal | camera player minimap outdoor cctv media iptv | material model building + plans | area visPortal occluder vehicle view structure | sector: securityCamera prop light stairs hull helm door drone |
+| gui | player facility cctv media iptv waves radar places phone | material model | view | fixture: static door lamp alarmBeacon light drone securityCamera avatar terminal easel |
 
-A block whose native key is taken by a feature's name gets another type (water's `water` block is `waterShading`,
+A block whose native key is taken by a world's name gets another type (water's `water` block is `waterShading`,
 origin's `origin` `floatingOrigin`, imposter's `imposter` `imposterAtlas`, portal's `portals` list `visPortal`); a
-type the catalog does not list is an error, and so is a `<feature>.<kind>` type left from before (it says the type to
+type the manifest does not list is an error, and so is a `<world>.<kind>` type left from before (it says the type to
 write instead). An item's own `type` field is kept under the name
-of its slot (`{ "type": "tool", "tool": "pour" }`). The per-feature references (every key, every entity type, how
+of its slot (`{ "type": "tool", "tool": "pour" }`). The per-world references (every key, every entity type, how
 the engines work) are the original READMEs, in [docs/features](docs/features).
 
 `tools/import-native.mjs` converts a scenario made for one of the original demos (a `.json`, an `index.html` with a
@@ -153,7 +160,7 @@ a digit count, `num` (k / M / G, `num: m³` adds a unit), `dist`, `pct`, `int`, 
 
 **Worlds' stats, parameters and events** (what expressions read, what links set, what cues hear):
 
-| Feature | stats | `link` parameters | events |
+| World | stats | `link` parameters | events |
 |---|---|---|---|
 | cloud | weather light rain snow inside sheltered inBus walking wind agl busDist busSpeed riding temperature coverage cells flashes veil time fps | weather light paused quality timeScale indoors radar | thunder door busDoor step weather |
 | water | volume wet maxSpeed inflow boost rain breached settling light mode tool acting height debris steps fps | rain boost paused light breach | toggle breach reset tool |
@@ -164,6 +171,44 @@ a digit count, `num` (k / M / G, `num: m³` adds a unit), `dist`, `pct`, `int`, 
 
 The sounds the original demos synthesised in code are now data: the weather's beds and thunder (cloud), the GUI's
 beeps and footsteps, plus new ambience for every world.
+
+## Kits, worlds and features
+
+Nothing about a world is hardcoded in the engine: the kit manifest (`js/kits/manifest.js`, one plain script) is the
+only list of kits, entity types, data types and worlds, and everything else is loaded from it on demand.
+
+- **A kit** (`js/kits/<kit>/`) is a folder of parts with one responsibility each, the kits it builds on (`uses`), the
+  entity types it implements (factories over a world's entity base: `terrainTypes(Base)` makes tilt, hills...) and
+  the data types it reads. A kit loads only when something in the scenario needs it: a world built on it, an entity
+  of one of its types, a data type it reads (`cctv` loads the media kit), or an entity type that names it (an
+  `easel`: the paint kit). The engine's own (noise, view, gpu, gui) load at boot for the handheld.
+- **A world** is offered by a kit (`worlds`), parts under `js/kits/<kit>/worlds/<type>/`: the water world is the
+  hydrology kit's, the portal the interior kit's, the gui world the gui kit's, origin the entities kit's, imposter the
+  imposter kit's, cloud the atmosphere kit's. Its entity classes are made from the manifest when first used
+  (`kits.world.entityTypes`), over its bases: no world lists its types. It is composed, not derived: a world part
+  returns `{ create: fx => new FeatureWorld(fx, spec) }`, the spec its HUD, its app and whichever of the host's hooks it
+  has (depth, stats, views, ground, sheltered, set...) over the defaults.
+- **A feature** is what a world is made of beyond its core, built only when the world's data asks for it (`when`: an
+  entity of a type, an entity whose implementation needs something, a data path, another feature; `requires`), its
+  parts under `features/<name>/` of its kit (or of its world, over the world's own exports). The root entity's
+  `features: { <name>: true | false }` turns one on or off whatever the data says. A feature plugs into the world's
+  parts as extensions (its World, App and Renderer: hooks they call in the features' order):
+
+  | World | Feature | On with |
+  |---|---|---|
+  | cloud | `curvature` | a `curvature` entity: the outdoors drawn on a round planet (else flat) |
+  | | `structures` | an entity that builds (village, station, skyscraper, structure, a real place's roads and buildings, a bus line), `building` archetypes, plans or street lights: buildings with interiors, lifts and doors, roads, lamps, distant lights, sun and rain shadows, world-space GUIs (settlement and building kits) |
+  | | `vegetation` | `terrain.vegetation`: plants, meshes near, octahedral imposters further, the canopy carpet (imposter kit) |
+  | | `buses` | a `bus` entity: drawn, boarded, ridden and driven, their lights and sounds (requires structures; transit kit) |
+  | water | `waves` | the scenario's `waves`: wave cascades following the camera, with foam |
+  | | `debris` | `debris` entities: floating logs on the GPU |
+
+  A cloud world of terrain and weather alone loads 9 kits; with Oʻahu's buildings, roads, buses and plants, 16.
+- **Shaders are composed too.** A renderer builds every module from a library of named WGSL chunks (the gpu kit's
+  `WgslLibrary`): its core defines its own and, for what a feature brings, a neutral stub of the functions the core
+  calls (`structureLight`, `lightSeen`, `rainReaches`, `curveToRender`, `waves`...); a feature on in the world
+  replaces the stubs with its code and adds the chunks that draw it, so a world compiles only the code of what it has.
+  The atmosphere's frame uniform is composed the same way (a feature's fields after the core's).
 
 ## Composition
 
@@ -190,16 +235,19 @@ presets match the other worlds' suns to the sky's; links carry state across (`sk
 ## Layout
 
 ```
-index.html                  the page: canvas, the feature HUD root (labels, toasts), the corner chip
-css/entities.css            shell, chip and toasts, what the features still draw on the screen (.fhud[data-feature])
+index.html                  the page: canvas, the worlds' HUD root (labels, toasts), the corner chip
+css/entities.css            shell, chip and toasts, what the worlds still draw on the screen (.fhud[data-world])
 js/engine/
-    host.js                 boot, GPU device, worlds, the frame, links
+    host.js                 boot, GPU device, worlds (each with the kits and features its data asks for), the frame,
+                            links
     common.js               small helpers everything shares (scalars, v3 / quat / m4, frustum planes, polylines,
                             buffers and bind groups, number formats, pointer input)
-    scenario-format.js      schemas, entities <-> each feature's native scenario, includes
+    scenario-format.js      the worlds' schemas (from the manifest), entities <-> each world's native scenario,
+                            routing (worldOf), implicit worlds (complete), the kits and features a world needs
+                            (kitsOf, featuresOf), includes
     scenario-data.js        ScenarioData: binary data an entity names (`data`), loaded as scripts before the worlds
-    features.js             feature and kit registry (Features.PARTS, KITS, USES), on-demand script loading; a world
-                            type a kit offers (KITS[kit].worlds: cloud) needs no feature folder
+    features.js             the loader: kits (Features.kit), worlds (Features.world), features (Features.feature) as
+                            the manifest describes them, on demand, as <script>s
     compositor.js           depth linearize + nearest-wins merge, the atmosphere's inject target
     camera.js               composition transforms, the engine's fly camera
     input.js                input routing between worlds
@@ -209,13 +257,14 @@ js/engine/
     audio.js                sound.* entities (WebAudio synthesis)
     expr.js                 the expression language
     gpu-choice.js           GPU adapter choice
-js/kits/types.js            EntityTypes: every entity type a scenario may use (types are the kits', not the
-                            features'), with the kit implementing it; a plain script the scenario format reads first
-js/kits/<kit>/              generic building blocks, not any one feature's (Features.kit), loaded with the first
-                            feature that lists them in Features.USES or kit that lists them in its `uses` (the
-                            engine's: Features.ENGINE_KITS, at boot); their exports are engine.kits.<kit>
-                            (Features.kits). A kit may offer world types (`worlds`): a scenario root entity of that
-                            type is built from kits alone (the cloud world)
+js/kits/manifest.js         Kits: every kit (its parts, uses, entity types by factory, data types, worlds with their
+                            schemas, features), engine types; implsIn / kitsFor / featuresOf / featureOf. A plain
+                            script the scenario format reads first (and node tools)
+js/kits/<kit>/              a kit's parts (Features.kit); its exports are engine.kits.<kit> (Features.kits).
+    <kit>/worlds/<type>/    a world it offers (Features.world): its parts over the kit's exports; the last,
+                            feature.js, returns { create }. phone-pages.js builds its handheld pages
+    <kit>/features/<name>/  a feature of its worlds (Features.feature('<kit>/<name>')); a world's own under
+                            worlds/<type>/features/<name>/
     noise/                  seeded random (mulberry32, seededRandom, hashes, pcg / pcgRandom as WGSL's), value noise 2D / 3D, fbm with options,
                             ridged multifractal; NoiseWGSL: the shaders' hashes, value noise (± gradient), fbm and
                             tileable Perlin / Worley, each under the name its shader calls it (the gui kit's included)
@@ -226,50 +275,58 @@ js/kits/<kit>/              generic building blocks, not any one feature's (Feat
                             a table of descriptors whose stencil names slots (`{ test, op, write }`), with variants
                             (portal's stencil / plain, gui's stencil / depth). RenderExtensions: register(kind,
                             factory) adds to every renderer of that kind what it draws besides its own (stencil
-                            slots, resources, pipelines, commands) without touching it: portal's renderer takes
-                            them (its GUI screens pass is one: render/gui-pass.js). Half floats (toHalf / fromHalf)
-                            and GpuProfiler (GPU time per pass from timestamp queries)
+                            slots, resources, pipelines, commands) without touching it, and for(kind, features) adds
+                            those of the features on in a world (extensionsOf: a feature's extensions[role]):
+                            portal's renderer takes them (its GUI screens pass is one: render/gui-pass.js).
+                            WgslLibrary: shaders as named chunks with their needs, a feature's over the core's stubs.
+                            Half floats (toHalf / fromHalf) and GpuProfiler (GPU time per pass from timestamp queries)
     imposter/               octahedral imposters for any renderer: ImposterBaker bakes a source (any mesh it can
                             draw; meshSource for the standard mesh, bakeVertexAO) into a light-agnostic G-buffer
                             ImposterAtlas; imposterWGSL (billboard, frame selection, reconstruction with parallax)
                             and drawImposters draw instances from it; LodLists + lodListsWGSL cull instances into
-                            mesh / imposter lists feeding indirect draws (imposter; docs/imposter.md)
+                            mesh / imposter lists feeding indirect draws (docs/imposter.md). worlds/imposter: the
+                            imposter valley
     gui/                    the Doom 3-style GUI toolkit (an engine kit: the handheld uses it): math, world
                             materials, meshes and GUI surfaces, WGSL, the Renderer (views, render targets, scene
                             passes; GUI surfaces reserve its "gui.surface" stencil slot), the font atlas, GuiModel +
                             DeviceContext, EntityGUI, InteractionSystem (aiming at and using EntityGUIs, for any
-                            feature: gui's facility, portal's screens), PhoneGUI + PhoneApp, the paint easel
-                            (EaselGUI over a PaintCanvas), and the media systems: ViewTarget + the scene contract
-                            (a world renders a view of itself: renderView(enc, target, shot)), CctvSystem (security
-                            cameras), PhoneCamera + MediaLibrary (viewfinder, photos, video), IptvPlayer, their phone
-                            apps (camera, photos, viewer, IPTV) and mediaApps / mediaPages for the handheld. gui's
-                            facility and portal's island both implement the scene contract. An EntityGUI only needs a
-                            device from its host; the kit's Renderer draws it with its own stencil value, another
-                            feature's renderer its own way (portal's: a one-value "gui.surface" mask per screen)
+                            world: gui's facility, portal's screens), WorldGuiPass and GuiTargets (world-space GUIs
+                            in another renderer, or their render-target fallback), PhoneGUI + PhoneApp. An EntityGUI
+                            only needs a device from its host; the kit's Renderer draws it with its own stencil
+                            value, another world's renderer its own way (portal's: a one-value "gui.surface" mask
+                            per screen). worlds/gui: the facility (Sector 07)
+    media/                  a world's media, loaded where its data or a security camera asks: ViewTarget + the scene
+                            contract (a world renders a view of itself: renderView(enc, target, shot)), CctvSystem
+                            (security cameras), PhoneCamera + MediaLibrary (viewfinder, photos, video), IptvPlayer,
+                            their phone apps (camera, photos, viewer, IPTV) and mediaApps / mediaPages for the
+                            handheld. gui's facility and portal's island both implement the scene contract
+    paint/                  paint canvases (stamped on the GPU) and the easel GUI over them, loaded with an easel
     view/                   FirstPersonView: a first-person eye with options (turn direction, look sensitivity, pitch
                             limit, keys, boost / slow, wheel speed, ground clearance): the engine's fly camera, the
                             cloud / water / imposter cameras and the portal / gui players' views
-    world/                  what every world has: the Entity base and addEntity (a scenario def -> its feature's
-                            ENTITY_TYPES class, registered and spawned: every world builds its entities with it),
-                            WorldHud (toasts, in-world labels, the readout), Menu and Pages (handheld options and
-                            status), FeatureWorld (the host's interface)
-    entities/               the entity kinds several features have, each with the union of their options, over a
-                            feature's own entity base (securityCamera(Base), door(Base) mixins): security cameras
+    world/                  what every world has: the Entity base, entityTypes (a world's classes from the manifest,
+                            made on first use) and addEntity (a scenario def -> its class, registered and spawned:
+                            every world builds its entities with it), WorldHud (toasts, in-world labels, the
+                            readout), Menu and Pages (handheld options and status), FeatureWorld (the host's
+                            interface: defaults composed with a world's spec)
+    entities/               the entity kinds several worlds have, each with the union of their options, over a
+                            world's own entity base (securityCamera(Base), door(Base) mixins): security cameras
                             (pan sweep / speed / phase; portal, gui), doors (open / target / speed, auto with radius
                             and delay, locked, toggle / setOpen / status; portal, gui), LightSource (signal flicker /
                             pulse, roomLights, door dimming, alarmColor, size; portal's lights, gui's light), spinAngle
                             (prop spin in rpm or deg/s; origin, imposter), drone(Base) (a `center` + `radius` patrol
-                            loop or wandering a route its feature plans, waiting at closed gates; bob, facing, pingEvery,
-                            a riding `light` with ahead / drop; portal, gui). A new option goes here, not in a feature.
-                            The rest of the feature entity classes, as factories over a feature's base, drawn
+                            loop or wandering a route its world plans, waiting at closed gates; bob, facing, pingEvery,
+                            a riding `light` with ahead / drop; portal, gui). A new option goes here, not in a world.
+                            The rest of the worlds' entity classes, as factories over a world's base, drawn
                             through the world's meshes (the mesh kit's interface): spaceTypes (SpaceEntity: bodies, props, fields, orbiters;
                             origin), groundProps (props, comparisons, scatters on a ground; imposter), sectorTypes
                             (SectorEntity: members, props + GUI screens, lamps, stairs, hulls, helms, doors, drones,
                             cameras; portal), fixtureTypes (FixtureEntity: models, sliding doors, swinging lamps,
-                            beacons, lights, drones, cameras, avatar, terminals, easels; gui), spinQuat
+                            beacons, lights, drones, cameras, avatar, terminals, easels; gui), spinQuat.
+                            worlds/origin: Sol Transit, the floating-origin solar system
     mesh/                   the common mesh interface every world offers its entities as `world.meshes` (builder,
                             add, part, bounds, split, instance, rotation, color; material references by name or
-                            { color, kind, ...flags }), each feature implementing it over its own renderer, so no
+                            { color, kind, ...flags }), each world implementing it over its own renderer, so no
                             kit's entity type needs one; MeshBuilder (the reference builder: portal's), splitMesh,
                             worldBounds, g2 (2D polygons), newell, AXES, the structures' PALETTE; TiledMesh (big
                             static geometry as compact indexed tiles, drawn by the tiles in view: Structures.bulk)
@@ -279,9 +336,10 @@ js/kits/<kit>/              generic building blocks, not any one feature's (Feat
     terrain/                Heightfield (grid, sampling, normals, raycast, wet() land use), floodFill, TerrainEntity
                             (every terrain world's entity base, with all their hooks), terrainTypes: the stamps
                             (tilt, hills, mountain, range, lake, clearing), channels (river, valley, basin, coast,
-                            dam) and land use (town, forest) of cloud and water; meshTerrain (imposter's ground);
-                            LandField (a Heightfield with a land-use map and the surface as its mesh draws it; cloud)
-    hydrology/              what adds water to a water simulation: sea, springs and drains, rain, debris (water)
+                            dam) and land use (town, forest); meshTerrain (imposter's ground); LandField (a
+                            Heightfield with a land-use map and the surface as its mesh draws it; cloud)
+    hydrology/              what adds water to a water simulation: sea, springs and drains, rain, debris.
+                            worlds/water: Riverlands, the shallow-water simulation (features: waves, debris)
     weather/                storm cells, supercells (+ tornadoes), squall lines, spawners, HURRICANE / TORNADO; the
                             weather state (WeatherSystem: named states blending, RainZones, CloudLayers, Sky: sun,
                             moon and sky colours), Lightning (flashes and bolts), the defaults and limits (cloud)
@@ -294,24 +352,20 @@ js/kits/<kit>/              generic building blocks, not any one feature's (Feat
                             into at most six wall apertures for culling) + weather shelter; GridHash and InteriorIndex
                             find them in O(1) (at, sheltered) and cull them by range + portals (seen). Cloud's
                             buildings and bus cabins, portal's areas (their areaAt), the gui facility; the host
-                            keeps an atmosphere world's rain off the camera inside any shown world's interior
+                            keeps an atmosphere world's rain off the camera inside any shown world's interior.
+                            worlds/portal: the bunker compound (portal-room visibility, stencil-masked traversal)
     transit/                paths (roundPath, offsetLine, SplineRoute), TransitLine + LineVehicle: vehicles running
                             a closed route (PolylineRoute, SplineRoute) on a timetable with stops, dwell, doors,
                             braking, speed limits and headways: cloud's buses, and portal's ship when on autopilot;
                             a LineVehicle's `cabin` spec is its Interior. busTypes (Bus + BusLine, BUS dimensions,
-                            liveries; cloud) and shipType (the steerable freighter carrying its areas; portal)
-    atmosphere/             the volumetric atmosphere renderer over a terrain and its structures: limits, quality
-                            presets, bindings, the WGSL (weather map, cloud shadow, ground state, froxels, the ray
-                            march, scene, final composite), the passes and the Renderer (cloud)
-    cloud/                  the cloud world, all kits: its entity types (the terrain, settlement, transit and weather
-                            kits' over its TerrainEntity base), World, Walker, the app (controls, keys, doors, lifts,
-                            lights, frame uniform), HUD, handheld pages, and CloudWorld, the world type `cloud`
-                            (KITS.cloud.worlds): a scenario's `{ "type": "cloud" }` root builds one
-js/features/<feature>/      each original engine but cloud (a kit world, above), split into parts with one responsibility each (config, shaders,
-                            entities, world, renderer, HUD, app...), loaded in the order of Features.PARTS
-                            (Features.part, over js/engine/common.js and its kits); only what is that feature's own
-                            lives here (water's dirty rect and brush on the Heightfield, portal's frame builder...). phone-pages.js builds the world's handheld pages, and feature.js extends
-                            FeatureWorld (createApp, depth, stats, set, anchor, handheld)
+                            liveries; cloud), shipType (the steerable freighter carrying its areas; portal), lifts,
+                            DriveControl (at the wheel of a bus)
+    atmosphere/             the volumetric atmosphere over a terrain: its core (limits, quality presets, bindings, the
+                            WGSL library, the weather map, cloud shadow, ground state, froxels, the ray march, scene,
+                            final composite; the passes, the Renderer, World, App, the walker, lights, frame
+                            uniform) with the hooks its features plug into; features/ curvature, structures,
+                            vegetation, buses; worlds/cloud: the cloud world (its entity types over its
+                            TerrainEntity base, Storms, Clouds, atmosphereWorld(cloud))
 scenarios/*.json            the scenarios (index.json and embedded.js are generated)
 scenarios/gui/*.json        each scenario's GUIs (screens, their apps' settings, the handheld's pages), included by it ({ "type": "include", "scenario": "gui/<id>" })
 scenarios/data/<region>/    a real place's data (generated by tools/geo-import.mjs; ScenarioData)

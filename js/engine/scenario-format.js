@@ -77,25 +77,25 @@ const ScenarioFormat = (() => {
 
     // the types a world's entities may take: type -> { kind: config | map | list | entity, key / path }
     const slotCache = new Map();
-    function slotTypes(feature) {
-        if (slotCache.has(feature)) return slotCache.get(feature);
-        const schema = SCHEMAS[feature], m = new Map();
+    function slotTypes(world) {
+        if (slotCache.has(world)) return slotCache.get(world);
+        const schema = SCHEMAS[world], m = new Map();
         for (const k of schema.config) m.set(schema.rename?.[k] || k, { kind: 'config', key: k });
         for (const [path, spec] of Object.entries(schema.maps)) m.set(spec.type, { kind: 'map', path, spec });
         for (const [path, type] of Object.entries(schema.lists)) m.set(type, { kind: 'list', path });
         for (const k of Object.keys(Types.IMPLS)) {
-            if (!Types.implsIn(feature, k).length) continue;
-            if (m.has(k)) throw new Error(`${feature}: entity type "${k}" clashes with a schema slot`);
+            if (!Types.implsIn(world, k).length) continue;
+            if (m.has(k)) throw new Error(`${world}: entity type "${k}" clashes with a schema slot`);
             m.set(k, { kind: 'entity' });
         }
         for (const t of m.keys()) {
-            if (!Types.has(t)) throw new Error(`${feature}: type "${t}" is not in js/kits/manifest.js`);
-            if (SCHEMAS[t]) throw new Error(`${feature}: type "${t}" is a world type`);
+            if (!Types.has(t)) throw new Error(`${world}: type "${t}" is not in js/kits/manifest.js`);
+            if (SCHEMAS[t]) throw new Error(`${world}: type "${t}" is a world type`);
         }
-        slotCache.set(feature, m);
+        slotCache.set(world, m);
         return m;
     }
-    const takes = (feature, type) => slotTypes(feature).has(type);
+    const takes = (world, type) => slotTypes(world).has(type);
 
     // an engine entity: hud.* / sound.* / an engine type of js/kits/manifest.js, but `camera` / `view` only without `of`
     const isEngine = e => typeof e.type === 'string' && (/^(hud|sound)\./.test(e.type) || Types.isEngine(e.type)) &&
@@ -103,9 +103,9 @@ const ScenarioFormat = (() => {
     // an entity that belongs to a world
     const isChild = e => typeof e.type === 'string' && !SCHEMAS[e.type] && !isEngine(e);
 
-    // the world roots of a scenario: [{ feature (its world type), id, def }]
+    // the world roots of a scenario: [{ type (its world type), id, def }]
     function roots(scenario) {
-        return (scenario.entities || []).filter(e => SCHEMAS[e.type]).map(def => ({ feature: def.type, id: def.id || def.type, def }));
+        return (scenario.entities || []).filter(e => SCHEMAS[e.type]).map(def => ({ type: def.type, id: def.id || def.type, def }));
     }
 
     // the world an entity belongs to: its `of`, the only world that takes its type, or the only world
@@ -121,7 +121,7 @@ const ScenarioFormat = (() => {
             if (!r) throw new Error(`${e.type}: no world "${e.of}" (worlds: ${all.map(r => r.id).join(', ')})`);
             return r;
         }
-        const fit = all.filter(r => takes(r.feature, e.type));
+        const fit = all.filter(r => takes(r.type, e.type));
         if (fit.length === 1) return fit[0];
         if (fit.length > 1) throw new Error(`${e.type}: several worlds take it (${fit.map(r => r.id).join(', ')}), say which with "of"`);
         if (all.length === 1) return all[0];
@@ -136,13 +136,13 @@ const ScenarioFormat = (() => {
 
     // a world's entities -> the native scenario object that world reads
     function toNative(scenario, root) {
-        if (!SCHEMAS[root.feature]) throw new Error(`unknown world type "${root.feature}"`);
-        const slots = slotTypes(root.feature);
+        if (!SCHEMAS[root.type]) throw new Error(`unknown world type "${root.type}"`);
+        const slots = slotTypes(root.type);
         const native = { name: root.def.name || scenario.name || root.id };
         const entities = [];
         for (const e of childrenOf(scenario, root)) {
             const type = e.type, slot = slots.get(type);
-            if (!slot) throw new Error(`${root.id}: a ${root.feature} world takes no "${type}"`);
+            if (!slot) throw new Error(`${root.id}: a ${root.type} world takes no "${type}"`);
             if (slot.kind === 'entity') { entities.push({ type, ...strip(e) }); continue; }
             if (slot.kind === 'config') {
                 const body = 'value' in e && Object.keys(strip(e)).length === 1 ? e.value : untag(strip(e), type);
@@ -170,14 +170,14 @@ const ScenarioFormat = (() => {
 
     // the kits a world's entities need (each type's implementation's kit), beyond the world's own
     function kitsOf(scenario, root) {
-        return [...new Set(childrenOf(scenario, root).flatMap(e => Types.kitsFor(root.feature, e.type)))];
+        return [...new Set(childrenOf(scenario, root).flatMap(e => Types.kitsFor(root.type, e.type)))];
     }
 
     // the features of its kit a world's data asks for (Kits.featuresOf: its entities' types, its native data, its root's
     // `features` overrides)
     function featuresOf(scenario, root) {
         const types = [...new Set(childrenOf(scenario, root).map(e => e.type))];
-        return Types.featuresOf(root.feature, toNative(scenario, root), types, root.def.features || {});
+        return Types.featuresOf(root.type, toNative(scenario, root), types, root.def.features || {});
     }
 
     // Implicit roots: the entities that no world of the scenario takes (and name none with `of`) bring in worlds that
@@ -189,7 +189,7 @@ const ScenarioFormat = (() => {
     function complete(scenario) {
         const ents = scenario.entities || [], have = roots(scenario);
         // a data type of no world here goes to the only world, which reads what it wants of it (worldOf), as before
-        let left = ents.filter(e => isChild(e) && !e.of && Types.has(e.type) && !have.some(r => takes(r.feature, e.type)) &&
+        let left = ents.filter(e => isChild(e) && !e.of && Types.has(e.type) && !have.some(r => takes(r.type, e.type)) &&
             !(have.length === 1 && !(e.type in Types.IMPLS)));
         const add = [], via = new Map();
         while (left.length) {
@@ -214,18 +214,18 @@ const ScenarioFormat = (() => {
     }
 
     // a world's native scenario -> entities (the root first); used to import scenarios made for the single demos
-    function fromNative(feature, native, id = feature) {
-        const schema = SCHEMAS[feature];
-        if (!schema) throw new Error(`unknown world type "${feature}"`);
-        const slots = slotTypes(feature);
-        const root = { type: feature };
-        if (id !== feature) root.id = id;
+    function fromNative(world, native, id = world) {
+        const schema = SCHEMAS[world];
+        if (!schema) throw new Error(`unknown world type "${world}"`);
+        const slots = slotTypes(world);
+        const root = { type: world };
+        if (id !== world) root.id = id;
         if (native.name) root.name = native.name;
         const out = [root];
         // `of` when the world is renamed, and on camera / view (else they are the engine's)
-        const ent = (type, body) => ({ type, ...(id !== feature || Types.isEngine(type) ? { of: id } : {}), ...body });
+        const ent = (type, body) => ({ type, ...(id !== world || Types.isEngine(type) ? { of: id } : {}), ...body });
         const known = new Set(['name', 'entities', ...schema.config, ...Object.keys(schema.lists), ...Object.keys(schema.maps).map(p => p.split('.')[0])]);
-        for (const k of Object.keys(native)) if (!known.has(k)) throw new Error(`${feature}: native key "${k}" is not in its schema`);
+        for (const k of Object.keys(native)) if (!known.has(k)) throw new Error(`${world}: native key "${k}" is not in its schema`);
         // config blocks, without the parts that are maps of their own
         for (const k of schema.config) {
             if (!(k in native)) continue;
@@ -254,7 +254,7 @@ const ScenarioFormat = (() => {
         }
         for (const e of native.entities || []) {
             const { type, ...rest } = e;
-            if (slots.get(type)?.kind !== 'entity') throw new Error(`${feature}: native entity type "${type}" is not one it takes`);
+            if (slots.get(type)?.kind !== 'entity') throw new Error(`${world}: native entity type "${type}" is not one it takes`);
             out.push(ent(type, rest));
         }
         return out;

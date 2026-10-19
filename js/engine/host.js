@@ -6,8 +6,8 @@
 //   3. a world per root entity (one a kit offers; entities no world of the scenario takes bring in their own:
 //      ScenarioFormat.complete), each built by its kit's world parts (Features) from its entities
 //      (ScenarioFormat.toNative), the kits of its entities' types and the features its data asks for loaded first
-//      (ScenarioFormat.kitsOf / featuresOf, the world gets them as fx.features), with its own HUD root (in-world labels, toasts) and input scope; its options and
-//      readouts go on the handheld (world.handheld(), see handheld.js)
+//      (ScenarioFormat.kitsOf / featuresOf, the world gets them as fx.features), with its own HUD root (in-world
+//      labels, toasts) and input scope; its options and readouts go on the handheld (world.handheld(), see handheld.js)
 //   4. the frame: the camera's world first, the camera passed to the others, each world renders (into the canvas when
 //      it is alone, else into its layer); the Compositor merges the layers (or hands them to the atmosphere world);
 //      then links and sound read the frame's stats, and the handheld draws over the finished frame
@@ -122,7 +122,7 @@ class Host {
                 const s = ScenarioFormat.SCHEMAS[f], keys = [...s.config, ...Object.keys(s.lists), ...Object.keys(s.maps).map(p => p.split('.')[0])];
                 const score = Object.keys(native).filter(k => keys.includes(k)).length;
                 if (!best || score > best.score) best = { score, f, entities };
-            } catch { /* not this feature */ }
+            } catch { /* not this world */ }
         }
         if (!best || !best.score) throw new Error('not a scenario of entities, nor one made for any of the worlds');
         return { name: native.name || name, group: 'Dropped', entities: best.entities };
@@ -180,8 +180,8 @@ class Host {
             for (const k of ScenarioFormat.kitsOf(scenario, root)) await Features.loadKit(k, engine);
             // the features of its kit its data asks for (what it is made of beyond its core: Kits.featuresOf)
             const features = {};
-            for (const name of ScenarioFormat.featuresOf(scenario, root)) features[name] = await Features.loadFeature(root.feature, name, engine);
-            const module = await Features.load(root.feature, engine);
+            for (const name of ScenarioFormat.featuresOf(scenario, root)) features[name] = await Features.loadFeature(root.type, name, engine);
+            const module = await Features.load(root.type, engine);
             const inst = this.createInstance(root, scenario, module, features);
             this.instances.push(inst);
         }
@@ -191,15 +191,15 @@ class Host {
 
     createInstance(root, scenario, module, features = {}) {
         const def = root.def, layer = def.layer || {};
-        const huds = document.getElementById('feature-huds');
+        const huds = document.getElementById('world-huds');
         const ui = document.createElement('div');
         ui.className = 'fhud';
-        ui.dataset.feature = root.feature;
+        ui.dataset.world = root.type;
         ui.dataset.id = root.id;
         huds.appendChild(ui);
         const inst = {
             id: root.id,
-            feature: root.feature,
+            type: root.type,
             label: def.label || def.name || root.id,
             def, layer,
             visible: layer.visible !== false,
@@ -209,7 +209,7 @@ class Host {
         };
         const native = ScenarioFormat.toNative(scenario, root);
         const ctx = inst.ctx = {
-            id: root.id, feature: root.feature, def, native, layer,
+            id: root.id, type: root.type, def, native, layer,
             features,                      // its kit's features its data asks for: { <name>: their exports }
             host: this,
             device: this.device, format: this.format, adapter: this.adapter,

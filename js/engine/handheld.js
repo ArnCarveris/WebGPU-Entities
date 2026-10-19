@@ -23,7 +23,7 @@
 // A world built of areas and portals also has world.inspector (kits.interior VisInspector): its floor map and portal
 // traversal pages come from it, so every such world shows the same ones.
 //
-// A world can lend it more (the gui feature's facility does): provide({ id, pages, bindings, apps(phone), renderer,
+// A world can lend it more (the gui world's facility does): provide({ id, pages, bindings, apps(phone), renderer,
 // fullscreen(), hidden(), motion(), lighting(t) }): its pages (their root sections go first), named bindings for their
 // cells, PhoneApps, the GUI materials of its renderer (render targets), and, while its player is the camera, the stride
 // that sways the phone and the lights that light it.
