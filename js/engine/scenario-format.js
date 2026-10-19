@@ -183,8 +183,9 @@ const ScenarioFormat = (() => {
     // Implicit roots: the entities that no world of the scenario takes (and name none with `of`) bring in worlds that
     // take them: first the world type that takes the most of them (on a tie one that says how it joins a scenario, its
     // `implicit`, then the manifest's order), then for what is left, and so on. Each new root goes first, id = its type,
-    // and the entities it was brought in for name it (`of`). With other worlds a new one joins them as its `implicit`
-    // says (fields merged into its root: a sky's layer role); alone it is the scenario's world as it is.
+    // and the entities it was brought in for name it (`of`), as do its implicit entities (its defaults: a sky's ground)
+    // of a type the scenario gives it none of. With other worlds a new one joins them as its `implicit.root` says
+    // (fields merged into its root: a sky's layer role); alone it is the scenario's world as it is.
     function complete(scenario) {
         const ents = scenario.entities || [], have = roots(scenario);
         // a data type of no world here goes to the only world, which reads what it wants of it (worldOf), as before
@@ -202,9 +203,14 @@ const ScenarioFormat = (() => {
             left = left.filter(e => !via.has(e));
         }
         if (!add.length) return scenario;
-        const many = have.length + add.length > 1;
-        const rootsAdded = add.map(r => (many ? { ...r, ...(Types.WORLDS[r.type].implicit || {}) } : r));
-        return { ...scenario, entities: [...rootsAdded, ...ents.map(e => (via.has(e) ? { ...e, of: via.get(e) } : e))] };
+        const many = have.length + add.length > 1, out = [];
+        for (const r of add) {
+            const imp = Types.WORLDS[r.type].implicit || {};
+            out.push(many ? { ...r, ...(imp.root || {}) } : r);
+            const given = new Set(ents.filter(e => via.get(e) === r.id).map(e => e.type));
+            for (const e of imp.entities || []) if (!given.has(e.type)) out.push({ ...e, of: r.id });
+        }
+        return { ...scenario, entities: [...out, ...ents.map(e => (via.has(e) ? { ...e, of: via.get(e) } : e))] };
     }
 
     // a world's native scenario -> entities (the root first); used to import scenarios made for the single demos

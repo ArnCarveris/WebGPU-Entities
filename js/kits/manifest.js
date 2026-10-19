@@ -12,8 +12,9 @@
 //     worlds: the world types it offers: <type>: { title, about, uses, parts, bases, provides, schema, implicit }
 //             parts: js/kits/<kit>/worlds/<type>/<part>.js (Features.world); bases: the entity bases it has (names);
 //             provides: what else its entity types may need of it (structures, weather, water...); schema: how its
-//             data types map onto its native layout (ScenarioFormat); implicit: the root entity it gets when a scenario
-//             has none of it but an entity only it takes (an entity of any kit works in any scenario).
+//             data types map onto its native layout (ScenarioFormat); implicit: how it joins a scenario that has none of
+//             it but entities only it takes (an entity of any kit works in any scenario): { root (fields of its root when
+//             it joins other worlds: a sky's layer role), entities (what it has unless the scenario says: a ground) }.
 //     features: what its worlds are made of beyond their core, each built only when a world's data asks for it:
 //             <name>: { about, uses, parts, when, requires }. parts: js/kits/<kit>/features/<name>/<part>.js
 //             (Features.feature('<kit>/<name>', fn)), loaded with the kits it uses. when: { types (any of these entity
@@ -383,8 +384,12 @@ const Kits = (() => {
                         maps: { 'weather.states': { type: 'weatherState' }, 'lighting.presets': { type: 'light' }, buildings: { type: 'building' }, ...plans() },
                         lists: { clouds: 'cloudLayer', views: 'view' },
                     },
-                    // what any scenario gets with a weather entity and no sky: this world over the others
-                    implicit: { layer: { role: 'atmosphere' } },
+                    // what any scenario gets with a weather entity and no sky: this world over the others, on a calm plain at
+                    // sea level (the worlds it joins stand on their own ground)
+                    implicit: {
+                        root: { layer: { role: 'atmosphere' } },
+                        entities: [{ type: 'terrain', base: -2, size: 64000, resolution: 256, style: 'natural', outside: 'sea' }],
+                    },
                 },
             },
         },
