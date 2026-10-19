@@ -8,11 +8,9 @@ const { GuiAtlas, DeviceContext, WorldGuiPass } = kits.gui;
 const { StencilLayout } = kits.gpu;
 const {
     MAX_CELLS, CELL_FLOATS, FAR_FLOATS, MAX_FAR_DYN, FAR_LAMP_H, FAR_LAMP_REACH, MAX_POLES, BLOOM_LEVELS,
-    FrameBlock, WORLD_BINDINGS, BindingSet, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_SHADOW_SAMPLE, WGSL_SHELTER,
-    WGSL_BUILDING, BUS_UNIFORM, wgslBus, WGSL_TERRAIN, WGSL_SCENE, WGSL_FINAL, WGSL_BLOOM, NoiseVolumes, shaderSource,
-    WeatherPass, GroundPass, FroxelPass, CloudPass, VegetationPass, WGSL_FOREST, WGSL_VEG, WGSL_VEG_ALBEDO, WGSL_VEG_IMP, WGSL_VEG_CARPET,
+    FrameBlock, WORLD_BINDINGS, BindingSet, BUS_UNIFORM, NoiseVolumes, shaderSource, atmosphereWgsl,
+    WeatherPass, GroundPass, FroxelPass, CloudPass, VegetationPass,
 } = kit;
-const { imposterWGSL } = kits.imposter;
 const { MAX_BOLT_SEGS } = kits.weather;
 const { STRUCT_FLOATS, BUILDING_FLOATS, STRUCT_COLORS, Structures } = kits.settlement;
 const { TiledMesh } = kits.mesh;
@@ -24,14 +22,22 @@ const MAX_BOXES = 4096;          // lift parts drawn a frame (vsBox)
 const MAX_ORIGINS = 96;          // buildings whose interiors (and lifts) are drawn a frame, each in its Origin's frame (busData slots)
 const MAX_PANELS = 16;           // world-space GUIs drawn a frame (the GUI pass's default; render.gui.max)
 
-// Renderer
+// Renderer. What the features on in its world add to it are its extensions (RendererExtension: a class built with the
+// renderer, new E(renderer); each hook optional: wgsl(library) (its shader chunks over the core's stubs, before any
+// module is made))
 class Renderer {
-    // fx: the world context (the host's device, canvas size, target, and in a composition the other worlds to put
-    // under the clouds: fx.inject; see js/engine/host.js)
-    constructor(fx) { this.fx = fx; }
+    // fx: the world context (the host's device, canvas size, target, the features on in its world (fx.features), and in
+    // a composition the other worlds to put under the clouds: fx.inject; see js/engine/host.js)
+    constructor(fx) {
+        this.fx = fx;
+        this.extensions = kits.gpu.extensionsOf(fx.features, 'renderer').map(E => new E(this));
+    }
 
     async init() {
         this.device = this.fx.device;
+        // the shaders: the core's chunks, the features' over them
+        this.wgsl = atmosphereWgsl();
+        for (const x of this.extensions) x.wgsl?.(this.wgsl);
         this.profiler = new GpuProfiler(this.device, ['weather', 'ground', 'vegetation', 'scene', 'froxel', 'tiles', 'march', 'resolve', 'bloom', 'final']);
         this.format = this.fx.format;
         // the scene's depth: with a stencil when the device has one to share out (StencilLayout: the world-space GUIs'
@@ -97,8 +103,8 @@ class Renderer {
     createPipelines() {
         const d = this.device;
         this.screenLayout = bindLayout(d, GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, ['tex', 'tex', 'depth', 'tex']);
-        const scene = this.sceneModule = d.createShaderModule({ label: 'scene', code: shaderSource(this.worldSet, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_SHADOW_SAMPLE, WGSL_SHELTER, WGSL_BUILDING, WGSL_TERRAIN, WGSL_FOREST, wgslBus(1), WGSL_SCENE, WGSL_VEG_ALBEDO, WGSL_VEG, imposterWGSL({ group: 3 }), WGSL_VEG_IMP, WGSL_VEG_CARPET) });
-        const final = d.createShaderModule({ label: 'final', code: shaderSource(this.worldSet, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_SHADOW_SAMPLE, WGSL_SHELTER, WGSL_BUILDING, WGSL_TERRAIN, wgslBus(2), WGSL_FINAL) });
+        const scene = this.sceneModule = d.createShaderModule({ label: 'scene', code: shaderSource(this.worldSet, this.wgsl.code('SKY', 'WEATHER_SAMPLE', 'SHADOW_SAMPLE', 'SHELTER', 'BUILDING', 'TERRAIN', 'FOREST', 'BUS1', 'SCENE', 'VEG_ALBEDO', 'VEG', 'IMPOSTER', 'VEG_IMP', 'VEG_CARPET')) });
+        const final = d.createShaderModule({ label: 'final', code: shaderSource(this.worldSet, this.wgsl.code('SKY', 'WEATHER_SAMPLE', 'SHADOW_SAMPLE', 'SHELTER', 'BUILDING', 'TERRAIN', 'BUS2', 'FINAL')) });
         const layoutA = d.createPipelineLayout({ bindGroupLayouts: [this.worldSet.layout] });
         const layoutB = d.createPipelineLayout({ bindGroupLayouts: [this.worldSet.layout, this.screenLayout] });
         // one bus's uniforms (wgslBus), at a dynamic offset per bus: group 1 in the scene pass, group 2 in the final one
@@ -181,7 +187,7 @@ class Renderer {
         this.lineLayer = new engine.kits.gpu.LineLayer(d, { format: this.format, depth: { format: this.depthFormat, compare: 'greater' } });
         // bloom (WGSL_BLOOM): fullscreen passes into the levels of this.bloom, no depth
         this.bloomLayout = bindLayout(d, GPUShaderStage.FRAGMENT, ['tex', 'tex']);
-        const bloom = d.createShaderModule({ label: 'bloom', code: shaderSource(this.worldSet, WGSL_BLOOM) });
+        const bloom = d.createShaderModule({ label: 'bloom', code: shaderSource(this.worldSet, this.wgsl.code('BLOOM')) });
         const layoutBloom = d.createPipelineLayout({ bindGroupLayouts: [this.worldSet.layout, this.bloomLayout] });
         const bloomPipe = (fs, blend) => d.createRenderPipeline({
             label: fs, layout: layoutBloom,

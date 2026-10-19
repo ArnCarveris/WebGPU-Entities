@@ -7,7 +7,8 @@
 // AppExtension: a class built with the app (new E(app)), kept as app.ext[E.key]; each hook optional: load(world) (a
 // new world), update(dt, io) (each frame, after the world's update), key(code) / click(hit) (KeyCommands), beforeJump /
 // afterJump(v, e) (Controls.jump), syncMenus() (AppMenus), page(id) (phonePages), air() / label(e, d) (Hud), stats(out)
-// and set(key, v) (the host's, through AtmosphereWorld).
+// and set(key, v) (the host's, through AtmosphereWorld). The features on in the world add theirs (extensions.app), before
+// the world type's; and their WorldExtensions (extensions.world) go to the world it makes.
 
 Features.kit('atmosphere', (engine, kit) => {
 const { GpuChoice, Common, kits } = engine;
@@ -57,7 +58,8 @@ class App {
         // its parts
         this.menus = new AppMenus(this);
         this.ext = {};
-        this.extensions = extensions.map(E => (this.ext[E.key] = new E(this)));
+        this.worldExtensions = kits.gpu.extensionsOf(fx.features, 'world');
+        this.extensions = [...kits.gpu.extensionsOf(fx.features, 'app'), ...extensions].map(E => (this.ext[E.key] = new E(this)));
         this.controls = new Controls(this);
         this.keys = new KeyCommands(this);
         this.doors = new DoorControl(this, { moved: () => { this.renderer.writeDoors(this.world.structures.doors.mesh()); this.renderer.writeBuildings(this.world.structures.buildings); } });
@@ -82,7 +84,7 @@ class App {
     }
 
     load(scenario) {
-        const world = this.createWorld(scenario);
+        const world = this.createWorld(scenario, this.worldExtensions);
         this.world = world;
         // thunder from each flash, timed by its distance from the camera then
         world.lightning.onStrike = f => { const [lo, hi] = world.lightning.reach(f, this.camera.pos); this.fx.emit('thunder', { near: lo, far: hi, bolt: !!f.bolt }); };

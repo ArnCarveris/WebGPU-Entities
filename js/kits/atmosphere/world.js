@@ -4,8 +4,10 @@
 // state, the cloud layers and lightning (the weather kit's), the distant lights by night (FarLights). The Renderer and
 // FrameWriter draw it. What a world type adds is composed in as extensions, never by subclassing.
 //
-// WorldExtension: a class built with the world (new E(world), before its entities), kept as world.ext[E.key]; each hook
-// optional, called in order:
+// WorldExtension: a class built with the world (new E(world), before its entities), kept as world.ext[E.key]: the
+// world type's and the features' on in it (their extensions.world); each hook optional, called in order:
+//   created()           after the core's systems (terrain, curvature, weather, clouds, lightning), before the entities:
+//                       a feature puts its own in their place (the curvature feature's Curvature)
 //   centre()            [x, z]: where what the scenario does not place goes (the lit town); the first one's
 //   spawned()           after the entities spawned
 //   advance(dt, wdt)    each frame, before the entities (dt real s, wdt weather s)
@@ -18,7 +20,26 @@ const { MAX_CELLS, MAX_MOTHERSHIPS, MAX_SHELVES, FarLights } = kit;
 const { LandField } = kits.terrain;
 const { LAMPS, Structures, cloudMeshes } = kits.settlement;
 const { WeatherSystem, RainZones, CloudLayers, Lightning } = kits.weather;
-const { Curvature } = kits.curvature;
+
+// The outdoors drawn flat, what a world without a `curvature` entity has (the curvature feature's Curvature in its place):
+// what the frame, the HUD and the culling ask of one (as the curvature kit's Curvature does when off)
+class FlatCurvature {
+    constructor(reference = 0) {
+        this.on = false;
+        this.radius = 6371000;
+        this.reference = reference;
+        this.setEye([0, reference, 0]);
+    }
+
+    setEye(eye) { this.eye = [eye[0], eye[1], eye[2]]; this.K = this.radius + Math.max(eye[1] - this.reference, -0.5 * this.radius); }
+    horizon() { return 260000; }
+    horizonDip() { return 0; }
+    offset() { return [0, 0, 0]; }
+    toRender(p) { return [p[0], p[1], p[2]]; }
+    toWorld(r) { return [r[0], r[1], r[2]]; }
+    bounds(lo, hi, outLo = [0, 0, 0], outHi = [0, 0, 0]) { for (let k = 0; k < 3; k++) { outLo[k] = lo[k]; outHi[k] = hi[k]; } return [outLo, outHi]; }
+    gpu() { return [this.K, 0, this.horizon() * 1.1, this.radius]; }
+}
 
 class World {
     // types: the entity classes by type name; town: the class the lit town (scenario streetLights) is painted with (a
@@ -33,11 +54,12 @@ class World {
         const t = { size: 64000, resolution: 512, base: 1500, fieldSize: 800, pivots: 0.2, ...(scenario.terrain || {}) };
         this.terrain = t;
         this.field = new LandField(t.size, t.resolution, t.base, { rough: t.rough || 0 });
-        // the outdoors drawn on a round planet (the scenario's optional `curvature` entity; off without one)
-        this.curvature = new Curvature(scenario.curvature, t.base);
+        // the outdoors drawn flat (a `curvature` entity turns the curvature feature on: a round planet in its place)
+        this.curvature = new FlatCurvature(t.base);
         this.weather = new WeatherSystem(scenario.weather);
         this.clouds = new CloudLayers(scenario.clouds);
         this.lightning = new Lightning();
+        for (const x of this.extensions) x.created?.();
         this.entities = [];
         this.byId = new Map();
         this.flashCount = 0;
@@ -112,5 +134,5 @@ class World {
     }
 }
 
-return { World };
+return { World, FlatCurvature };
 });

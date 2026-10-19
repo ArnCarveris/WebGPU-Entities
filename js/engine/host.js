@@ -5,7 +5,8 @@
 //   2. one GPU device for everything (GpuChoice adapter), one canvas
 //   3. a world per root entity (one a kit offers; entities no world of the scenario takes bring in their own:
 //      ScenarioFormat.complete), each built by its kit's world parts (Features) from its entities
-//      (ScenarioFormat.toNative), the kits of its entities' types loaded first, with its own HUD root (in-world labels, toasts) and input scope; its options and
+//      (ScenarioFormat.toNative), the kits of its entities' types and the features its data asks for loaded first
+//      (ScenarioFormat.kitsOf / featuresOf, the world gets them as fx.features), with its own HUD root (in-world labels, toasts) and input scope; its options and
 //      readouts go on the handheld (world.handheld(), see handheld.js)
 //   4. the frame: the camera's world first, the camera passed to the others, each world renders (into the canvas when
 //      it is alone, else into its layer); the Compositor merges the layers (or hands them to the atmosphere world);
@@ -177,15 +178,18 @@ class Host {
         for (const root of roots) {
             // the kits its entities are of (only those the scenario has), then the world's own parts
             for (const k of ScenarioFormat.kitsOf(scenario, root)) await Features.loadKit(k, engine);
+            // the features of its kit its data asks for (what it is made of beyond its core: Kits.featuresOf)
+            const kit = Features.kitOf(root.feature), features = {};
+            for (const name of ScenarioFormat.featuresOf(scenario, root)) features[name] = await Features.loadFeature(kit, name, engine);
             const module = await Features.load(root.feature, engine);
-            const inst = this.createInstance(root, scenario, module);
+            const inst = this.createInstance(root, scenario, module, features);
             this.instances.push(inst);
         }
         // atmosphere worlds render last, over the merged others
         for (const inst of this.instances) await inst.world.init();
     }
 
-    createInstance(root, scenario, module) {
+    createInstance(root, scenario, module, features = {}) {
         const def = root.def, layer = def.layer || {};
         const huds = document.getElementById('feature-huds');
         const ui = document.createElement('div');
@@ -206,6 +210,7 @@ class Host {
         const native = ScenarioFormat.toNative(scenario, root);
         const ctx = inst.ctx = {
             id: root.id, feature: root.feature, def, native, layer,
+            features,                      // its kit's features its data asks for: { <name>: their exports }
             host: this,
             device: this.device, format: this.format, adapter: this.adapter,
             canvas: this.canvas,

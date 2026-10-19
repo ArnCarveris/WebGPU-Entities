@@ -10,7 +10,8 @@ const { World, AtmosphereWorld, ENTITY_TYPES, Town, Storms, Clouds } = kit;
 
 const cloud = {
     title: 'ENTITY CLOUD',
-    world: scenario => new World(scenario, { types: ENTITY_TYPES, town: Town, extensions: [Storms] }),
+    // (the features' WorldExtensions first)
+    world: (scenario, features = []) => new World(scenario, { types: ENTITY_TYPES, town: Town, extensions: [...features, Storms] }),
     extensions: [Clouds],
 };
 

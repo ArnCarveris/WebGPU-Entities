@@ -5,7 +5,6 @@ Features.kit('atmosphere', (engine, kit) => {
 const { kits } = engine;
 const { NoiseWGSL } = kits.noise;
 const { MAX_LAYERS, MAX_FLASHES } = kits.weather;
-const { CurvatureWGSL } = kits.curvature;
 
 // WGSL
 
@@ -36,7 +35,6 @@ fn aces(x: vec3f) -> vec3f {
 // needs F. The outdoors may be drawn curved (F.curve, the curvature kit's): a view ray's samples are curveToWorld of its
 // points, a vertex's clip position curveClip of its world position; the world, its maps and its lighting stay flat
 const WGSL_SKY = /* wgsl */`
-${CurvatureWGSL('F')}
 fn rayDir(ndc: vec2f) -> vec3f { return normalize(F.fwd.xyz + F.right.xyz * ndc.x + F.up.xyz * ndc.y); }
 
 // interleaved march (F.lod.x): 1 every pixel; 2 a checkerboard, alternating; 4 one pixel of each 2x2 block, cycling

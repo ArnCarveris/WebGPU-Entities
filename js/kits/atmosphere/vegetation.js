@@ -10,8 +10,7 @@ const { makeBuffer, bindLayout, bindGroup } = Common;
 const { mulberry32 } = engine.kits.noise;
 const { ImposterGpu, ImposterBaker, WGSL_BAKE_FRAME, IMPOSTER_VERTICES } = engine.kits.imposter;
 const {
-    VEG_N, VEG_SPECIES, VEG_CAP, VEG_SLOT, WGSL_FOREST, WGSL_VEG_SCATTER, WGSL_VEG_ALBEDO, WGSL_VEG_BAKE, shaderSource,
-    WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_SHADOW_SAMPLE, WGSL_SHELTER, WGSL_BUILDING, WGSL_TERRAIN,
+    VEG_N, VEG_SPECIES, VEG_CAP, VEG_SLOT, WGSL_VEG_ALBEDO, WGSL_VEG_BAKE, shaderSource,
 } = kit;
 
 const VEG_FLOATS = 10;      // a mesh vertex: position, normal, part (0 wood, 1 foliage), ambient occlusion, slot, 0
@@ -154,7 +153,7 @@ class VegetationPass {
         this.argsBuf = d.createBuffer({ label: 'veg-args', size: this.args.byteLength, usage: GPUBufferUsage.STORAGE | GPUBufferUsage.INDIRECT | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC });
         // the scatter: the world's bindings (as the scene pass), its output
         const out = bindLayout(d, GPUShaderStage.COMPUTE, ['storage', 'storage']);
-        const code = shaderSource(r.worldSet, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_SHADOW_SAMPLE, WGSL_SHELTER, WGSL_BUILDING, WGSL_TERRAIN, WGSL_FOREST, WGSL_VEG_SCATTER);
+        const code = shaderSource(r.worldSet, r.wgsl.code('SKY', 'WEATHER_SAMPLE', 'SHADOW_SAMPLE', 'SHELTER', 'BUILDING', 'TERRAIN', 'FOREST', 'VEG_SCATTER'));
         const module = d.createShaderModule({ label: 'vegetation', code });
         const layout = d.createPipelineLayout({ bindGroupLayouts: [r.worldSet.layout, out] });
         this.scatter = d.createComputePipeline({ label: 'veg-scatter', layout, compute: { module, entryPoint: 'vegScatter' } });

@@ -173,6 +173,13 @@ const ScenarioFormat = (() => {
         return [...new Set(childrenOf(scenario, root).flatMap(e => Types.kitsFor(root.feature, e.type)))];
     }
 
+    // the features of its kit a world's data asks for (Kits.featuresOf: its entities' types, its native data, its root's
+    // `features` overrides)
+    function featuresOf(scenario, root) {
+        const types = [...new Set(childrenOf(scenario, root).map(e => e.type))];
+        return Types.featuresOf(root.feature, toNative(scenario, root), types, root.def.features || {});
+    }
+
     // Implicit roots: the entities that no world of the scenario takes (and name none with `of`) bring in worlds that
     // take them: first the world type that takes the most of them (on a tie one that says how it joins a scenario, its
     // `implicit`, then the manifest's order), then for what is left, and so on. Each new root goes first, id = its type,
@@ -284,7 +291,7 @@ const ScenarioFormat = (() => {
         return depth ? done : complete(done);
     }
 
-    return { SCHEMAS, roots, childrenOf, worldOf, isEngine, takes, kitsOf, complete, toNative, fromNative, resolveIncludes, isObj };
+    return { SCHEMAS, roots, childrenOf, worldOf, isEngine, takes, kitsOf, featuresOf, complete, toNative, fromNative, resolveIncludes, isObj };
 })();
 
 if (typeof module !== 'undefined') module.exports = ScenarioFormat;

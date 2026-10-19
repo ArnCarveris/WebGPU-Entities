@@ -6,10 +6,7 @@ const { Common } = engine;
 const { smoothstep, makeBuffer, bindLayout, bindGroup } = Common;
 const {
     NOISE_SHAPE, NOISE_DETAIL, SHAPE_MIPS, OCC_RES, CLOUD_TILE, WEATHER_RES, SHADOW_RES, GROUND_RES, FROXEL,
-    FrameBlock, BindingSet, WGSL_MATH, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_DENSITY, WGSL_SHADOW_SAMPLE, WGSL_SHELTER,
-    WGSL_BUILDING, WGSL_OCCUPANCY, WGSL_NOISE, WGSL_NOISE_DOWN, WGSL_WEATHER, WGSL_SHADOW, WGSL_GROUND, WGSL_FROXEL,
-    WGSL_SKIP_SAMPLE, WGSL_TILES, WGSL_HAZE, WGSL_HAZE_INTEGRATE, WGSL_HISTORY_COPY, WGSL_MARCH, WGSL_RESOLVE,
-    WGSL_TERRAIN,
+    FrameBlock, BindingSet, WGSL_MATH, WGSL_NOISE, WGSL_NOISE_DOWN,
 } = kit;
 const { fromHalf } = engine.kits.gpu;
 
@@ -49,7 +46,7 @@ class NoiseVolumes {
     }
 }
 
-// shader source for a pass: frame struct, helpers, bindings
+// shader source for a pass: frame struct, helpers, bindings, then its chunks (the renderer's library: r.wgsl.code(...))
 const shaderSource = (set, ...parts) => FrameBlock.wgsl() + WGSL_MATH + set.wgsl + parts.join('\n');
 
 function computePipeline(device, label, layouts, code, entryPoint) {
@@ -77,13 +74,13 @@ class WeatherPass {
 
         const wSet = new BindingSet(d, ['F', 'cells']);
         const wOut = bindLayout(d, C, ['write:rgba16float', 'write:rgba16float', 'write:rgba16float', 'write:rgba16float']);
-        this.pWeather = computePipeline(d, 'weather', [wSet.layout, wOut], shaderSource(wSet, WGSL_WEATHER), 'weather');
+        this.pWeather = computePipeline(d, 'weather', [wSet.layout, wOut], shaderSource(wSet, r.wgsl.code('WEATHER')), 'weather');
         this.wGroup = wSet.group({ F: r.frameBuf, cells: r.cellBuf }, 'weather-in');
         this.wOutGroup = bindGroup(d, wOut, [this.weatherView, this.anvilView, this.layerView, this.styleView], 'weather-out');
 
         const sSet = new BindingSet(d, ['F', 'shapeTex', 'detailTex', 'weatherTex', 'anvilTex', 'layerTex', 'styleTex', 'repSamp', 'clampSamp']);
         const sOut = bindLayout(d, C, ['write:rgba16float']);
-        this.pShadow = computePipeline(d, 'shadow', [sSet.layout, sOut], shaderSource(sSet, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_DENSITY, WGSL_SHADOW), 'shadow');
+        this.pShadow = computePipeline(d, 'shadow', [sSet.layout, sOut], shaderSource(sSet, r.wgsl.code('SKY', 'WEATHER_SAMPLE', 'DENSITY', 'SHADOW')), 'shadow');
         this.sGroup = sSet.group({ F: r.frameBuf, shapeTex: r.noise.shapeView, detailTex: r.noise.detailView, weatherTex: this.weatherView, anvilTex: this.anvilView, layerTex: this.layerView, styleTex: this.styleView, repSamp: r.repSamp, clampSamp: r.clampSamp }, 'shadow-in');
         this.sOutGroup = bindGroup(d, sOut, [this.shadowView], 'shadow-out');
 
@@ -91,7 +88,7 @@ class WeatherPass {
         this.occ = makeBuffer(d, OCC_RES * OCC_RES * 4, GPUBufferUsage.STORAGE);
         const oSet = new BindingSet(d, ['F', 'weatherTex', 'anvilTex', 'layerTex', 'styleTex']);
         const oOut = bindLayout(d, C, ['storage']);
-        this.pOcc = computePipeline(d, 'occupancy', [oSet.layout, oOut], shaderSource(oSet, WGSL_OCCUPANCY), 'occupancy');
+        this.pOcc = computePipeline(d, 'occupancy', [oSet.layout, oOut], shaderSource(oSet, r.wgsl.code('OCCUPANCY')), 'occupancy');
         this.oGroup = oSet.group({ F: r.frameBuf, weatherTex: this.weatherView, anvilTex: this.anvilView, layerTex: this.layerView, styleTex: this.styleView }, 'occupancy-in');
         this.oOutGroup = bindGroup(d, oOut, [this.occ], 'occupancy-out');
 
@@ -155,7 +152,7 @@ class GroundPass {
         this.buffer = makeBuffer(d, init.byteLength, GPUBufferUsage.STORAGE, init);
         const set = new BindingSet(d, ['F', 'weatherTex', 'shadowTex', 'heightTex', 'clampSamp']);
         const out = bindLayout(d, GPUShaderStage.COMPUTE, ['storage']);
-        this.pipeline = computePipeline(d, 'ground', [set.layout, out], shaderSource(set, WGSL_WEATHER_SAMPLE, WGSL_SHADOW_SAMPLE, WGSL_GROUND), 'groundUpdate');
+        this.pipeline = computePipeline(d, 'ground', [set.layout, out], shaderSource(set, r.wgsl.code('WEATHER_SAMPLE', 'SHADOW_SAMPLE', 'GROUND')), 'groundUpdate');
         this.group = set.group({ F: r.frameBuf, weatherTex: r.weatherPass.weatherView, shadowTex: r.weatherPass.shadowView, heightTex: r.heightView, clampSamp: r.clampSamp }, 'ground-in');
         this.outGroup = bindGroup(d, out, [this.buffer], 'ground-out');
     }
@@ -181,14 +178,14 @@ class FroxelPass {
         this.view = this.tex.createView({ dimension: '3d' });
         const out = bindLayout(d, GPUShaderStage.COMPUTE, ['write3d:rgba16float']);
         this.pipeline = computePipeline(d, 'froxel', [r.worldSet.layout, out],
-            shaderSource(r.worldSet, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_DENSITY, WGSL_SHADOW_SAMPLE, WGSL_FROXEL), 'inject');
+            shaderSource(r.worldSet, r.wgsl.code('SKY', 'WEATHER_SAMPLE', 'DENSITY', 'SHADOW_SAMPLE', 'FROXEL')), 'inject');
         this.group = bindGroup(d, out, [this.view], 'froxel-out');
         // the haze integrated along each froxel column (WGSL_HAZE_INTEGRATE), for the march
         this.haze = d.createTexture({ size: FROXEL, dimension: '3d', format: 'rgba16float', usage: U.TEXTURE_BINDING | U.STORAGE_BINDING });
         this.hazeView = this.haze.createView({ dimension: '3d' });
         const hazeIO = bindLayout(d, GPUShaderStage.COMPUTE, ['tex3d', 'write3d:rgba16float']);
         this.pHaze = computePipeline(d, 'haze', [r.worldSet.layout, hazeIO],
-            shaderSource(r.worldSet, WGSL_SKY, WGSL_HAZE, WGSL_HAZE_INTEGRATE), 'hazeIntegrate');
+            shaderSource(r.worldSet, r.wgsl.code('SKY', 'HAZE', 'HAZE_INTEGRATE')), 'hazeIntegrate');
         this.hazeGroup = bindGroup(d, hazeIO, [this.view, this.hazeView], 'haze-io');
     }
 
@@ -214,15 +211,15 @@ class CloudPass {
         this.resolveIO = bindLayout(d, C, ['tex', 'tex:unfilterable-float', 'tex', 'write:rgba16float']);
         const rSet = new BindingSet(d, ['F', 'clampSamp']);
         this.pMarch = computePipeline(d, 'march', [r.worldSet.layout, this.marchOut],
-            shaderSource(r.worldSet, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_DENSITY, WGSL_SHADOW_SAMPLE, WGSL_SKIP_SAMPLE, WGSL_SHELTER, WGSL_BUILDING, WGSL_TERRAIN, WGSL_HAZE, WGSL_MARCH), 'march');
+            shaderSource(r.worldSet, r.wgsl.code('SKY', 'WEATHER_SAMPLE', 'DENSITY', 'SHADOW_SAMPLE', 'SKIP_SAMPLE', 'SHELTER', 'BUILDING', 'TERRAIN', 'HAZE', 'MARCH')), 'march');
         this.tileOut = bindLayout(d, C, ['write:rg32uint']);
         this.pTiles = computePipeline(d, 'tiles', [r.worldSet.layout, this.tileOut],
-            shaderSource(r.worldSet, WGSL_SKY, WGSL_WEATHER_SAMPLE, WGSL_DENSITY, WGSL_SKIP_SAMPLE, WGSL_TILES), 'tiles');
-        this.pResolve = computePipeline(d, 'resolve', [rSet.layout, this.resolveIO], shaderSource(rSet, WGSL_SKY, WGSL_RESOLVE), 'resolve');
+            shaderSource(r.worldSet, r.wgsl.code('SKY', 'WEATHER_SAMPLE', 'DENSITY', 'SKIP_SAMPLE', 'TILES')), 'tiles');
+        this.pResolve = computePipeline(d, 'resolve', [rSet.layout, this.resolveIO], shaderSource(rSet, r.wgsl.code('SKY', 'RESOLVE')), 'resolve');
         // a resize resamples the history into the new size (screen-space, so it stays valid): no restart of the
         // temporal accumulation when the volumetric resolution changes (Renderer.resize, the dynamic resolution)
         this.copyIO = bindLayout(d, C, ['tex', 'write:rgba16float']);
-        this.pCopy = computePipeline(d, 'history-copy', [rSet.layout, this.copyIO], shaderSource(rSet, WGSL_HISTORY_COPY), 'copyHistory');
+        this.pCopy = computePipeline(d, 'history-copy', [rSet.layout, this.copyIO], shaderSource(rSet, r.wgsl.code('HISTORY_COPY')), 'copyHistory');
         this.rGroup = rSet.group({ F: r.frameBuf, clampSamp: r.clampSamp }, 'resolve-in');
         this.cur = 0;
     }

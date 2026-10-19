@@ -14,6 +14,12 @@
 //             provides: what else its entity types may need of it (structures, weather, water...); schema: how its
 //             data types map onto its native layout (ScenarioFormat); implicit: the root entity it gets when a scenario
 //             has none of it but an entity only it takes (an entity of any kit works in any scenario).
+//     features: what its worlds are made of beyond their core, each built only when a world's data asks for it:
+//             <name>: { about, uses, parts, when, requires }. parts: js/kits/<kit>/features/<name>/<part>.js
+//             (Features.feature('<kit>/<name>', fn)), loaded with the kits it uses. when: { types (any of these entity
+//             types), needs (an entity whose implementation needs one of these), data (any of these paths of the
+//             world's native data is set), features (any of these features is on) }; requires: features it builds on
+//             (on with it). A root entity's `features: { <name>: true | false }` turns one on or off whatever its data.
 //   }
 //
 // ENGINE: the engine's own entity types (js/engine). Plain script, not a kit part: the scenario format reads it before
@@ -305,7 +311,10 @@ const Kits = (() => {
                 },
             },
         },
-        gpu: { about: 'stencil layouts, pipeline tables, render extensions, lines, half floats, profiling, dynamic scale', parts: ['stencil', 'pipelines', 'extensions', 'lines', 'half', 'profiler', 'dynamic-scale'] },
+        gpu: {
+            about: 'stencil layouts, pipeline tables, render extensions, WGSL libraries, lines, half floats, profiling, dynamic scale',
+            parts: ['stencil', 'pipelines', 'extensions', 'wgsl-library', 'lines', 'half', 'profiler', 'dynamic-scale'],
+        },
         gui: {
             about: 'EntityGUI: world-space GUIs, the phone, media (CCTV, camera, gallery, IPTV)',
             uses: ['noise', 'gpu'],
@@ -338,13 +347,16 @@ const Kits = (() => {
         },
         atmosphere: {
             about: 'the volumetric atmosphere (clouds, precipitation, haze, lightning) over a terrain and its structures: its renderer and what it writes each frame, the World under it (WorldExtensions), its App (AppExtensions) and the engine adapter (AtmosphereWorld)',
-            uses: ['noise', 'view', 'world', 'gpu', 'gui', 'mesh', 'interior', 'transit', 'building', 'settlement', 'terrain', 'weather', 'curvature', 'imposter'],
+            uses: ['noise', 'view', 'world', 'gpu', 'gui', 'mesh', 'interior', 'transit', 'building', 'settlement', 'terrain', 'weather', 'imposter'],
             parts: [
                 'limits', 'quality', 'bindings', 'shaders/common', 'shaders/shelter', 'shaders/occupancy', 'shaders/noise', 'shaders/weather',
-                'shaders/volumetrics', 'shaders/scene', 'shaders/vegetation', 'shaders/final', 'passes', 'vegetation', 'renderer', 'far-lights', 'surroundings', 'light-writer',
+                'shaders/volumetrics', 'shaders/scene', 'shaders/vegetation', 'shaders/final', 'shaders/library', 'passes', 'vegetation', 'renderer', 'far-lights', 'surroundings', 'light-writer',
                 'frame-writer', 'world', 'app/hud', 'app/menus', 'app/controls', 'app/key-commands', 'app/app', 'app/phone-pages', 'app/feature',
             ],
             data: { render: 'render settings' },
+            features: {
+                curvature: { about: 'the outdoors drawn on a round planet', uses: ['curvature'], parts: ['curvature'], when: { data: ['curvature'] } },
+            },
             worlds: {
                 // its entity types, its World extension (Storms: cells, hurricane, tornado) and App extension (Clouds: the
                 // cloud picker, storm keys, menus, readout), composed onto this kit's World, App and adapter
@@ -406,7 +418,30 @@ const Kits = (() => {
     const has = type => type in ENGINE || type in IMPLS || type in DATA || type in WORLDS;
     const isEngine = type => type in ENGINE;
 
-    return { ENGINE, KITS, WORLDS, IMPLS, DATA, implsIn, kitsFor, has, isEngine };
+    // The features of a world of type `world` its data asks for, in the manifest's order (each after those it requires):
+    // native its native data, types its entities' types, overrides { <name>: bool } (its root's `features`)
+    function featuresOf(world, native, types, overrides = {}) {
+        const all = KITS[WORLDS[world].kit].features || {};
+        const get = (o, path) => path.split('.').reduce((a, k) => (a == null ? undefined : a[k]), o);
+        const set = (v => (v !== undefined && v !== null && v !== false && !(Array.isArray(v) && !v.length) && !(typeof v === 'object' && !Array.isArray(v) && !Object.keys(v).length)));
+        const needs = new Set(types.flatMap(t => implsIn(world, t).flatMap(i => i.needs)));
+        const on = new Set();
+        for (let changed = true; changed;) {
+            changed = false;
+            for (const [name, f] of Object.entries(all)) {
+                if (on.has(name) || overrides[name] === false) continue;
+                const w = f.when || {};
+                const want = overrides[name] === true || (w.types || []).some(t => types.includes(t)) || (w.needs || []).some(n => needs.has(n)) ||
+                    (w.data || []).some(p => set(get(native, p))) || (w.features || []).some(x => on.has(x)) ||
+                    Object.entries(all).some(([o, g]) => on.has(o) && (g.requires || []).includes(name));
+                if (want) { on.add(name); changed = true; }
+            }
+        }
+        for (const name of on) for (const r of all[name].requires || []) if (!on.has(r)) throw new Error(`feature "${name}" requires "${r}", which is off`);
+        return Object.keys(all).filter(n => on.has(n));
+    }
+
+    return { ENGINE, KITS, WORLDS, IMPLS, DATA, implsIn, kitsFor, featuresOf, has, isEngine };
 })();
 
 if (typeof module !== 'undefined') module.exports = Kits;

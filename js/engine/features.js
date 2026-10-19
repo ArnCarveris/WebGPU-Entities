@@ -15,12 +15,19 @@
 // scenario has that world, after their kit and the kits the world uses; `kit` in them is the world's own exports over
 // its kit's (a world part reads its kit's exports as kit.X too, and shadows none of them). The last part returns
 // { create(ctx) }: one world of that type (a FeatureWorld, see Host.createInstance).
+//
+// A feature is what a kit's worlds are made of beyond their core, built only when a world's data asks for it (the
+// manifest's features: when / requires, Kits.featuresOf): parts under js/kits/<kit>/features/<name>/ registered with
+// Features.feature('<kit>/<name>', fn), loaded with the kits it uses before the world is built; `kit` in them is the
+// feature's exports over its kit's and its required features'. The world gets the features on as fx.features.
 
 const Features = {
     // the kits as the manifest has them: { uses, parts, types, data, worlds }
     get KITS() { return Kits.KITS; },
     ENGINE_KITS: ['noise', 'view', 'gpu', 'gui'],
     worldParts: {},
+    featureParts: {},
+    featureModules: {},
     modules: {},
     kitParts: {},
     kitModules: {},
@@ -28,6 +35,7 @@ const Features = {
 
     kit(name, fn) { (this.kitParts[name] ??= []).push(fn); },
     world(type, fn) { (this.worldParts[type] ??= []).push(fn); },
+    feature(key, fn) { (this.featureParts[key] ??= []).push(fn); },
 
     // scripts added with async = false download in parallel and run in the order they were added
     script(src) {
@@ -56,6 +64,23 @@ const Features = {
             const world = await this.assemble(`world "${type}"`, srcs, () => this.worldParts[type], engine, Object.create(base));
             if (typeof world.create !== 'function') throw new Error(`world "${type}" has no create()`);
             return world;
+        })());
+    },
+
+    // A kit's feature (KITS[kit].features[name]), once per page: the kits it uses, the features it requires, then its
+    // parts (js/kits/<kit>/features/<name>/), over its kit's exports and the required features' (feature parts register
+    // with Features.feature('<kit>/<name>', fn))
+    loadFeature(kit, name, engine) {
+        const key = `${kit}/${name}`;
+        return (this.featureModules[key] ??= (async () => {
+            const spec = this.KITS[kit]?.features?.[name];
+            if (!spec) throw new Error(`kit "${kit}" has no feature "${name}"`);
+            const base = await this.loadKit(kit, engine);
+            for (const k of spec.uses ?? []) await this.loadKit(k, engine);
+            const under = Object.create(base);
+            for (const r of spec.requires ?? []) Object.assign(under, await this.loadFeature(kit, r, engine));
+            const srcs = spec.parts.map(p => `js/kits/${kit}/features/${name}/${p}.js`);
+            return this.assemble(`feature "${key}"`, srcs, () => this.featureParts[key], engine, Object.create(under));
         })());
     },
 

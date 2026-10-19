@@ -2,8 +2,9 @@
 // Render extensions: what a renderer draws besides its own, contributed from outside it.
 
 Features.kit('gpu', (engine, kit) => {
-// A renderer of some kind ('portal'...) takes the extensions registered for that kind when it is made: any kit or
-// feature part (which load before any world is made) can register one, and the renderer's own code doesn't change.
+// A renderer of some kind ('portal'...) takes the extensions registered for that kind when it is made: any kit part
+// (which load before any world is made) can register one, and the renderer's own code doesn't change; and those of the
+// features on in its world (fx.features: a feature exporting extensions: { <kind>: factory }), for that world alone.
 // register(kind, factory): factory(renderer) makes one extension per renderer (its own resources), an object with
 //   name                        renderer.ext[name]
 //   stencil: { slot: spec }     reserved in the renderer's StencilLayout with its own slots, before it resolves
@@ -12,16 +13,21 @@ Features.kit('gpu', (engine, kit) => {
 //   ...and whatever the renderer kind's own contract asks (portal: overlay, info, commands; see its renderer.js)
 const registry = new Map();
 
+// what the features on in a world (fx.features: { <name>: their exports }) add to one of its parts (a renderer kind, a
+// world's World or App: any role its kit names), in the features' order: each feature's extensions[role], if it has one
+const extensionsOf = (features, role) => Object.values(features || {}).map(f => f.extensions?.[role]).filter(Boolean);
+
 const RenderExtensions = {
     register(kind, factory) {
         if (!registry.has(kind)) registry.set(kind, []);
         registry.get(kind).push(factory);
     },
 
-    for(kind) {
-        return registry.get(kind) || [];
+    // the factories for a renderer of this kind: the registered ones, then its world's features' (fx.features)
+    for(kind, features = {}) {
+        return [...(registry.get(kind) || []), ...extensionsOf(features, kind)];
     },
 };
 
-return { RenderExtensions };
+return { RenderExtensions, extensionsOf };
 });
