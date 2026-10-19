@@ -1,8 +1,9 @@
 'use strict';
 // The phone's camera: renders the view and takes photos, in any world that can render a view of itself.
 
-Features.kit('gui', (engine, kit) => {
-const { V3, bearingOf, BLIT_SHADER, CLEAR_COLOR, MediaLibrary, ViewTarget } = kit;
+Features.kit('media', (engine, kit) => {
+const { V3, bearingOf, BLIT_SHADER, CLEAR_COLOR } = engine.kits.gui;
+const { MediaLibrary, ViewTarget } = kit;
 
 // game: the world's app: renderer (the materials contract, views.js), audio ({ emit }), scene (renderView), handheld
 //       (the engine's), phoneModel() (the phone's world matrix, held by the player), placeLabel(x, z) (optional)

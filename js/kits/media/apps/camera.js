@@ -1,8 +1,8 @@
 'use strict';
 // The phone's camera app.
 
-Features.kit('gui', (engine, kit) => {
-const { col, clipTime, pad3, IOS, PHONE_NAV_H, PhoneApp } = kit;
+Features.kit('media', (engine, kit) => {
+const { col, clipTime, pad3, IOS, PHONE_NAV_H, PhoneApp } = engine.kits.gui;
 
 // Camera: live viewfinder (the phone camera's render target), photo / video modes
 class CameraApp extends PhoneApp {

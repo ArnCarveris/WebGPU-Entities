@@ -39,7 +39,7 @@ const GUI_BIAS = { constant: -4, slopeScale: -2, clamp: 0 };     // the bias mod
 // its own (when the model changed since: once however many views draw it), and the screen's glass is drawn again with
 // that target as its texture, at exactly the glass's depth: no offset, nothing to z-fight.
 //
-// It also holds the GUI materials the screens draw with (the gui kit's materials contract, js/kits/gui/views.js: the
+// It also holds the GUI materials the screens draw with (the gui kit's materials contract, js/kits/media/views.js: the
 // atlas, CCTV feeds, the viewfinder...), lent to the handheld's renderer too; video (a 2d-array frame pool) only shows
 // on the handheld. A view target's own material isn't drawn into it.
 

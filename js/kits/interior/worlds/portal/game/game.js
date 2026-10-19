@@ -215,7 +215,7 @@ class Game {
         this.hud.tick(now, vis);
     }
 
-    // the scene contract of the gui kit's views (js/kits/gui/views.js): a view of the island into `target`, with the
+    // the scene contract of the media kit's views (js/kits/media/views.js): a view of the island into `target`, with the
     // main view's culling and masking options; it submits its own frame, before the main one
     renderView(enc, target, s) {
         const w = this.world, o = this.opts, t = performance.now() / 1000, W = target.width, H = target.height;

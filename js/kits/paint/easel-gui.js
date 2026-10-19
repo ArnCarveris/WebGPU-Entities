@@ -1,8 +1,8 @@
 'use strict';
 // The paint easel's screen: an EntityGUI painting into a PaintCanvas (on the kit's Renderer).
 
-Features.kit('gui', (engine, kit) => {
-const { clamp, col, EntityGUI } = kit;
+Features.kit('paint', (engine, kit) => {
+const { clamp, col, EntityGUI } = engine.kits.gui;
 
 // Paint easel GUI (640x480): brushes, palette, size, undo / clear, and the painting itself, which is
 // a surface whose material is the easel's PaintCanvas render target.

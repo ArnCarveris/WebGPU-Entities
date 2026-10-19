@@ -1,8 +1,9 @@
 'use strict';
 // The paint canvas: brush dabs stamped into a texture.
 
-Features.kit('gui', (engine, kit) => {
-const { ALPHA_BLEND, stampShader } = kit;
+Features.kit('paint', (engine, kit) => {
+const { ALPHA_BLEND } = engine.kits.gui;
+const { stampShader } = kit;
 
 // GPU paint canvas: brush dabs are stamped into a render target, which GUIs show through a material.
 // One level of undo is a GPU copy taken at the start of each stroke.

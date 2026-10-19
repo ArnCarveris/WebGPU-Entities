@@ -47,10 +47,10 @@ class Bindings {
             lamp: { get: () => g.world.lampScale * 100, set: (v) => { g.world.lampScale = v / 100; }, min: 0, max: 200, fmt: pct },
             stepVolume: { get: () => g.audio.stepVolume * 100, set: (v) => { g.audio.stepVolume = v / 100; }, min: 0, max: 100, fmt: pct },
             cctv: {
-                get: () => g.cctv.selected,
-                set: (i) => g.cctv.select(i),
-                label: (i) => g.cctv.cameras[i].label,
-                options: () => g.cctv.cameras.map((c) => ({ title: c.label, sub: c.offline ? `${c.name} (offline)` : c.name }))
+                get: () => g.cctv?.selected ?? 0,
+                set: (i) => g.cctv?.select(i),
+                label: (i) => g.cctv?.cameras[i]?.label ?? '',
+                options: () => (g.cctv?.cameras || []).map((c) => ({ title: c.label, sub: c.offline ? `${c.name} (offline)` : c.name }))
             },
 
             // read-only text
@@ -60,19 +60,19 @@ class Bindings {
             'hatch.status': { text: () => cap(door().status) },
             'hatch.code': { text: () => g.world.get(links.terminal).gui.content.hatchCode },
             'hatch.action': { text: () => (door().isOpen ? 'Seal hatch' : 'Open hatch (override)') },
-            'media.summary': { text: () => g.camera.library.summary() },
-            'iptv.summary': { text: () => `${g.iptv.channels.length} channels · ${g.iptv.current.name}` },
+            'media.summary': { text: () => g.camera?.library.summary() ?? '' },
+            'iptv.summary': { text: () => (g.iptv ? `${g.iptv.channels.length} channels · ${g.iptv.current.name}` : '') },
             'stats.fps': { text: () => `${g.stats.fps} fps` },
             'stats.resolution': { text: () => `${g.renderer.width} × ${g.renderer.height}` },
             'stats.guiSurfaces': { text: () => String(g.interaction.guis.length) },
             'stats.terminal': { text: () => g.stats.gui(g.world.get(links.terminal).gui) },
             'stats.easel': { text: () => g.stats.gui(g.world.get(links.easel).gui) },
             'stats.phone': { text: () => g.stats.gui(g.handheld.gui) },
-            'stats.cctv': { text: () => (g.cctv.renderingCamera ? `${g.cctv.renderingCamera.label} rendering` : 'Idle') },
-            'stats.camera': { text: () => (g.camera.shot ? 'Rendering' : 'Idle') },
-            'stats.photos': { text: () => `${g.camera.library.counts().photos} / ${g.camera.cfg.photo.capacity}` },
-            'stats.videoFrames': { text: () => `${g.camera.cfg.video.pool - g.camera.library.freeLayers.length} / ${g.camera.cfg.video.pool}` },
-            'stats.iptv': { text: () => (g.iptv.hasFrame ? `${g.iptv.texW}×${g.iptv.texH}` : 'Idle') }
+            'stats.cctv': { text: () => (g.cctv?.renderingCamera ? `${g.cctv.renderingCamera.label} rendering` : 'Idle') },
+            'stats.camera': { text: () => (g.camera?.shot ? 'Rendering' : 'Idle') },
+            'stats.photos': { text: () => (g.camera ? `${g.camera.library.counts().photos} / ${g.camera.cfg.photo.capacity}` : '') },
+            'stats.videoFrames': { text: () => (g.camera ? `${g.camera.cfg.video.pool - g.camera.library.freeLayers.length} / ${g.camera.cfg.video.pool}` : '') },
+            'stats.iptv': { text: () => (g.iptv?.hasFrame ? `${g.iptv.texW}×${g.iptv.texH}` : 'Idle') }
         };
     }
 

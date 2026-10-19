@@ -1,11 +1,13 @@
 'use strict';
-// The gui kit's media systems on the island: CCTV, the phone's camera and photos, IPTV.
+// The media kit's systems on the island: CCTV, the phone's camera and photos, IPTV (the kit loads with a security camera or
+// the scenario's cctv, media or iptv).
 
 Features.world('portal', (engine, kit) => {
-const { M4, CctvSystem, PhoneCamera, IptvPlayer, mediaApps, mediaPages } = engine.kits.gui;
+const { M4 } = engine.kits.gui;
+const media = () => engine.kits.media;
 
 // What the scenario asks for: CCTV over its security cameras (securityCamera entities; portal.cctv tunes it), the
-// phone's camera and photo library (portal.media), IPTV (portal.iptv). This is their `game` (js/kits/gui/views.js):
+// phone's camera and photo library (portal.media), IPTV (portal.iptv). This is their `game` (js/kits/media/views.js):
 // the GUI materials of the renderer's GUI pass (render/gui-pass.js), the island as their scene (Game.renderView), the
 // engine's handheld, whose Camera, Photos and IPTV pages it lends. A scenario loaded later replaces the systems; the handheld keeps the apps it was
 // lent, which read them from here.
@@ -23,9 +25,10 @@ class PortalMedia {
 
     load(scn, world) {
         this.iptv?.video?.pause?.();
-        this.cctv = world.cameras.length ? new CctvSystem(this, scn.cctv) : null;
-        this.camera = scn.media ? new PhoneCamera(this, scn.media) : null;
-        this.iptv = scn.iptv ? new IptvPlayer(this, scn.iptv) : null;
+        const M = media();
+        this.cctv = world.cameras.length ? new M.CctvSystem(this, scn.cctv) : null;
+        this.camera = scn.media ? new M.PhoneCamera(this, scn.media) : null;
+        this.iptv = scn.iptv ? new M.IptvPlayer(this, scn.iptv) : null;
         for (const s of [this.cctv, this.camera, this.iptv]) s?.init(this.renderer);
         if (!this.provided && (this.camera || this.iptv)) this.provide();
     }
@@ -35,8 +38,8 @@ class PortalMedia {
         const media = this;
         this.handheld.provide({
             id: this.app.fx.id,
-            get pages() { return mediaPages(media); },
-            apps: mediaApps(this),
+            get pages() { return engine.kits.media.mediaPages(media); },
+            apps: engine.kits.media.mediaApps(this),
             renderer: this.renderer,
             fullscreen: () => !!this.iptv?.fullscreen,
             hidden: () => { if (this.iptv) this.iptv.fullscreen = false; },

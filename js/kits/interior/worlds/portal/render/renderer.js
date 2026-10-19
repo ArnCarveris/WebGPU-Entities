@@ -195,7 +195,7 @@ class Renderer {
     // f.cmds: draw | sky | mark | glass | veil | water and the extensions' ops, executed in order (portal-tree DFS in
     // stencil mode)
     // f.draws: one { o, fog } per draw slot; fog = the portals it is seen through, nearest first
-    // target: a view target (js/kits/gui/views.js) instead of the canvas
+    // target: a view target (js/kits/media/views.js) instead of the canvas
     render(f, target = null) {
         const d = this.device, q = d.queue, W = target ? target.width : this.W, H = target ? target.height : this.H;
         const into = target ? { ...this.attachments(target), resolve: target.colorView } : { msaa: this.msaa.createView(), depth: this.depth.createView(), resolve: this.fx.target() };

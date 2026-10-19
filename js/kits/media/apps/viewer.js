@@ -1,8 +1,8 @@
 'use strict';
 // The phone's photo viewer.
 
-Features.kit('gui', (engine, kit) => {
-const { col, timeText, clipTime, pad3, IOS, PHONE_NAV_H, PhoneApp } = kit;
+Features.kit('media', (engine, kit) => {
+const { col, timeText, clipTime, pad3, IOS, PHONE_NAV_H, PhoneApp } = engine.kits.gui;
 
 // Full photo / looping video with newer / older / delete
 class ViewerApp extends PhoneApp {

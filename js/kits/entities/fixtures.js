@@ -4,7 +4,7 @@
 
 Features.kit('entities', (engine, kit) => {
 const { kits } = engine;
-const { V3, M4, EaselGUI, PaintCanvas } = kits.gui;
+const { V3, M4 } = kits.gui;
 const { door, securityCamera, drone, LightSource } = kit;
 
 // World entities drawn as model instances. Each is constructed from a scenario definition ({ type, id, ... }); its world
@@ -194,10 +194,11 @@ function fixtureTypes(Base) {
         }
     }
 
-    // Painting easel: wooden model, a paint render target and the easel GUI
+    // Painting easel: wooden model, a paint render target and the easel GUI (the paint kit's, loaded with an easel)
     class Easel extends ModelEntity {
         constructor(def, world) {
             super(def, world);
+            const { PaintCanvas, EaselGUI } = kits.paint;
             this.canvas = new PaintCanvas(`paint:${def.id}`, def.paint);
             this.gui = new EaselGUI(def.gui, def.paint, this.canvas);
         }

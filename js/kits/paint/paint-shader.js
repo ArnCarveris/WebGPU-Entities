@@ -1,7 +1,7 @@
 'use strict';
 // WGSL: the paint stamp the easel's brush draws with.
 
-Features.kit('gui', (engine, kit) => {
+Features.kit('paint', (engine, kit) => {
 const { NoiseWGSL } = engine.kits.noise;
 // Brush stamping: every dab is an instanced quad drawn into the paint render target. The brush type
 // picks the dab's shape; flow is how much paint one dab lays down.

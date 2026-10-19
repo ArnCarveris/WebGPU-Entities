@@ -1,7 +1,7 @@
 'use strict';
 // Views: pictures a world draws of itself for its screens and the phone (CCTV feeds, the phone's camera).
 
-Features.kit('gui', (engine, kit) => {
+Features.kit('media', (engine, kit) => {
 // A view target: a colour texture of the canvas format that a world renders a view into, shown by GUIs as `material`
 // (a world never samples it while drawing into it). Like Doom 3 subviews, the systems that own one (CctvSystem,
 // PhoneCamera) only render it when something shows it.

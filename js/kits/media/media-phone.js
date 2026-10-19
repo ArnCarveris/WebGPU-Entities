@@ -1,7 +1,7 @@
 'use strict';
 // The media apps on the engine's handheld, for any world that has the media systems.
 
-Features.kit('gui', (engine, kit) => {
+Features.kit('media', (engine, kit) => {
 const { CameraApp, GalleryApp, ViewerApp, TvApp } = kit;
 
 // What a world lends the handheld (handheld.provide) for its media systems: the Camera and Photos apps over its

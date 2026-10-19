@@ -1,8 +1,9 @@
 'use strict';
 // CCTV: security cameras' feeds, for any world that can render a view of itself.
 
-Features.kit('gui', (engine, kit) => {
-const { clamp, wrapIndex, ViewTarget } = kit;
+Features.kit('media', (engine, kit) => {
+const { clamp, wrapIndex } = engine.kits.gui;
+const { ViewTarget } = kit;
 
 // CCTV: renders the selected security camera into a view target, exposed to GUIs as the 'cctv' material. It only
 // renders when a screen asked for it this frame (request()).

@@ -4,11 +4,12 @@
 //
 //   <kit>: {
 //     about, uses (the kits it builds on), parts (js/kits/<kit>/<part>.js, in load order),
-//     types:  entity types it implements, by factory: <factory>: { base, needs, types: { <type>: [Class, about] } }
+//     types:  entity types it implements, by factory: <factory>: { base, needs, types: { <type>: [Class, about, { uses }] } }
 //             kits.<kit>.<factory>(Base, options) makes the classes over a world's entity base (Base: the world's
 //             `bases[base]`); a world takes the types of every factory whose base it has and whose `needs` it provides.
-//             A factory that returns one class (not a set of them) names none ([null, about]).
-//     data:   data types it reads (config blocks, presets, plans): { <type>: about }
+//             A factory that returns one class (not a set of them) names none ([null, about]). A type's `uses`: kits it
+//             needs beyond its kit's (an easel's paint), loaded only with an entity of it.
+//     data:   data types it reads (config blocks, presets, plans): { <type>: about }; a world with one of them loads it
 //     worlds: the world types it offers: <type>: { title, about, uses, parts, bases, provides, schema, implicit }
 //             parts: js/kits/<kit>/worlds/<type>/<part>.js (Features.world); bases: the entity bases it has (names);
 //             provides: what else its entity types may need of it (structures, weather, water...); schema: how its
@@ -77,7 +78,7 @@ const Kits = (() => {
                 sectorTypes: {
                     base: 'sector',
                     types: {
-                        securityCamera: ['SecurityCamera', 'a security camera (sweep, feed)'], prop: ['Prop', 'a placed model (with screens)'],
+                        securityCamera: ['SecurityCamera', 'a security camera (sweep, feed)', { uses: ['media'] }], prop: ['Prop', 'a placed model (with screens)'],
                         light: ['Lamp', 'a light source'], stairs: ['Stairs', 'stairs'], hull: ['Hull', 'a vehicle hull'], helm: ['Helm', 'a vehicle helm'],
                         door: ['Door', 'a door (auto, locked, sliding)'], drone: ['Drone', 'a patrolling or wandering drone'],
                     },
@@ -88,8 +89,8 @@ const Kits = (() => {
                         static: ['ModelEntity', 'a static model'], door: ['SlidingDoor', 'a sliding door (auto, locked)'],
                         lamp: ['SwingingLamp', 'a swinging lamp'], alarmBeacon: ['AlarmBeacon', 'a spinning alarm beacon'],
                         light: ['PointLight', 'a light source'], drone: ['PatrolDrone', 'a patrolling drone'],
-                        securityCamera: ['SecurityCamera', 'a security camera (sweep, feed)'], avatar: ['Avatar', 'an avatar'],
-                        terminal: ['Terminal', 'a terminal with an EntityGUI'], easel: ['Easel', 'a paintable easel'],
+                        securityCamera: ['SecurityCamera', 'a security camera (sweep, feed)', { uses: ['media'] }], avatar: ['Avatar', 'an avatar'],
+                        terminal: ['Terminal', 'a terminal with an EntityGUI'], easel: ['Easel', 'a paintable easel', { uses: ['paint'] }],
                     },
                 },
             },
@@ -316,16 +317,13 @@ const Kits = (() => {
             parts: ['stencil', 'pipelines', 'extensions', 'wgsl-library', 'lines', 'half', 'profiler', 'dynamic-scale'],
         },
         gui: {
-            about: 'EntityGUI: world-space GUIs, the phone, media (CCTV, camera, gallery, IPTV)',
+            about: 'EntityGUI: world-space GUIs (their renderer, atlas, schedule, interaction, render-target fallback) and the phone',
             uses: ['noise', 'gpu'],
             parts: [
                 'math', 'materials', 'geometry', 'gui-mode', 'shaders', 'renderer', 'atlas', 'device-context', 'entity-gui', 'gui-schedule', 'interaction', 'gui-targets', 'world-gui',
-                'phone-gui', 'phone-apps', 'paint-shader', 'paint-canvas', 'easel-gui', 'views', 'media', 'cctv', 'phone-camera',
-                'iptv', 'apps/camera', 'apps/gallery', 'apps/viewer', 'apps/tv', 'media-phone',
+                'phone-gui', 'phone-apps',
             ],
-            data: {
-                cctv: 'CCTV feeds', media: 'phone camera and gallery', iptv: 'IPTV channels', phone: "the phone's apps and pages", radar: 'the radar app',
-            },
+            data: { phone: "the phone's apps and pages", radar: 'the radar app' },
             worlds: {
                 gui: {
                     title: 'Entity GUI',
@@ -345,6 +343,16 @@ const Kits = (() => {
                 },
             },
         },
+        // the media of a world of EntityGUIs: views into it (ViewTarget), CCTV over its security cameras, the phone's camera and
+        // gallery, IPTV, and their phone apps; the world is their scene (views.js: renderView)
+        media: {
+            about: 'views into a world, CCTV, the phone camera and its gallery, IPTV, and their phone apps',
+            uses: ['gui'],
+            parts: ['views', 'media', 'cctv', 'phone-camera', 'iptv', 'apps/camera', 'apps/gallery', 'apps/viewer', 'apps/tv', 'media-phone'],
+            data: { cctv: 'CCTV feeds', media: 'phone camera and gallery', iptv: 'IPTV channels' },
+        },
+        // paintable surfaces: an easel's GUI and its paint canvas (stamped on the GPU)
+        paint: { about: 'paint canvases and the easel GUI over them', uses: ['noise', 'gui'], parts: ['paint-shader', 'paint-canvas', 'easel-gui'] },
         atmosphere: {
             about: 'the volumetric atmosphere (clouds, precipitation, haze, lightning) over a terrain and its structures: its renderer and what it writes each frame, the World under it (WorldExtensions), its App (AppExtensions) and the engine adapter (atmosphereWorld)',
             uses: ['noise', 'view', 'world', 'gpu', 'terrain', 'weather'],
@@ -414,7 +422,7 @@ const Kits = (() => {
     // entity implementations by type: [{ kit, factory, base, needs, cls, about }]
     const IMPLS = {};
     for (const [kit, k] of Object.entries(KITS)) for (const [factory, f] of Object.entries(k.types || {}))
-        for (const [type, [cls, about]] of Object.entries(f.types)) (IMPLS[type] ??= []).push({ kit, factory, base: f.base, needs: f.needs || [], cls, about });
+        for (const [type, [cls, about, opts = {}]] of Object.entries(f.types)) (IMPLS[type] ??= []).push({ kit, factory, base: f.base, needs: f.needs || [], uses: opts.uses || [], cls, about });
 
     // data types: type -> [kit or kit/world]
     const DATA = {};
@@ -429,8 +437,10 @@ const Kits = (() => {
         return (IMPLS[type] || []).filter(i => w.bases.includes(i.base) && i.needs.every(n => w.provides.includes(n)));
     };
 
-    // the kits an entity of `type` needs loaded in a world of type `world` (its implementation's kit, with what it uses)
-    const kitsFor = (world, type) => [...new Set(implsIn(world, type).map(i => i.kit))];
+    // the kits an entity of `type` needs loaded in a world of type `world`: its implementation's kit and what the type uses
+    // beyond it (each with what it uses), or the kits that read it, a data type
+    const kitsFor = (world, type) => [...new Set([...implsIn(world, type).flatMap(i => [i.kit, ...i.uses]),
+        ...(DATA[type] || []).filter(d => !d.world).map(d => d.kit)])];
 
     const has = type => type in ENGINE || type in IMPLS || type in DATA || type in WORLDS;
     const isEngine = type => type in ENGINE;
