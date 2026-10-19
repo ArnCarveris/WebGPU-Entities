@@ -64,9 +64,11 @@ class World {
         return [0, 0];
     }
 
-    // open water at x, z: the land-use map's, or an entity's own (a river's channel, which villages draw at its true width)
+    // open water at x, z: the sea off the coastline, the land-use map's (inland: by the shore the coastline is finer), or
+    // an entity's own (a river's channel, which villages draw at its true width)
     water(x, z) {
-        return this.field.landAt(x, z, 2) > 0.4 || this.entities.some(e => e.waterAt?.(x, z));
+        const d = this.field.coastAt?.(x, z)[0] ?? Infinity;
+        return d < 0 || this.field.landAt(x, z, 2) > 0.4 && d > 20 || this.entities.some(e => e.waterAt?.(x, z));
     }
 
     add(def, spawn = true) {

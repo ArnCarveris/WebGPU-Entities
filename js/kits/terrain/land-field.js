@@ -10,6 +10,10 @@ const { toHalf, fromHalf } = kits.gpu;
 // octaves of value noise, each [wavelength m, amplitude per m of roughness], and the hash both sides share
 const DETAIL_OCTAVES = [[29, 0.6], [11, 0.25], [4.3, 0.1], [1.7, 0.04]];
 const EASE = 4000;          // m: beyond the map the heights ease back to the base level over this
+// the shore as drawn (LandField.shore; the shader's terrainShore): from the coastline the beach rises BEACH m per m
+// and gives way to the data's heights over SHORE_BLEND m; land never under its beach line (up to 0.6 m: the importer's
+// floor for land cells)
+const BEACH = 0.05, SHORE_BLEND = 40;
 
 // a value in -1..1 for lattice point (ix, iz) of octave s (the shader's detailHash, bit for bit)
 const detailHash = (ix, iz, s) => {
@@ -35,7 +39,8 @@ const cubicW = t => { const t2 = t * t, t3 = t2 * t; return [(-t3 + 2 * t2 - t) 
 // Beyond the map the terrain eases back to its base level. As drawn (surface) the heights are interpolated bicubically,
 // and where rough > 0 (m: about how far the detail lifts and sinks the ground on gentle slopes; more on steep ones) the
 // procedural detail adds what the data is too coarse to hold, kept off what keepSmooth() marked (roads, buildings),
-// the shore and open water: the `smooth` mask, mres^2 texels over the map.
+// the shore and open water: the `smooth` mask, mres^2 texels over the map. With a coastline (setCoast) the same texels
+// hold the distance to it, and the ground near it is shaped by that (shore) instead of the data's coarse step to the sea.
 class LandField extends kit.Heightfield {
     constructor(size, n, base, { rough = 0 } = {}) {
         super(size, n, base);
@@ -46,6 +51,54 @@ class LandField extends kit.Heightfield {
         this.mcell = size / this.mres;
         this.smooth = new Uint8Array(this.mres * this.mres);
         this.canopy = null;
+        this.coast = null;          // u8 signed distance to the coastline per smooth texel: (d / coastBand + 1) / 2 x 255
+        this.coastBand = 0;
+    }
+
+    // the coastline (geoCoast: { n, band, dist } over the same square, u8 as stored): resampled onto the smooth mask's
+    // texels (sharing its texture, smoothTex's g); a field with no roughness gets the mask's texels for it
+    setCoast(c) {
+        if (this.mres < 2) {
+            this.mres = Math.min(4096, this.n * 2);
+            this.mcell = this.size / this.mres;
+            this.smooth = new Uint8Array(this.mres * this.mres);
+        }
+        const M = this.mres, n = c.n, out = new Uint8Array(M * M), src = c.dist;
+        for (let j = 0; j < M; j++) for (let i = 0; i < M; i++) {
+            if (n === M) { out[j * M + i] = src[j * M + i]; continue; }
+            const fx = clamp((i + 0.5) * n / M - 0.5, 0, n - 1), fz = clamp((j + 0.5) * n / M - 0.5, 0, n - 1);
+            const a = Math.min(Math.floor(fx), n - 2), b = Math.min(Math.floor(fz), n - 2), tx = fx - a, tz = fz - b;
+            out[j * M + i] = Math.round(lerp(lerp(src[b * n + a], src[b * n + a + 1], tx), lerp(src[(b + 1) * n + a], src[(b + 1) * n + a + 1], tx), tz));
+        }
+        this.coast = out;
+        this.coastBand = c.band;
+    }
+
+    // the signed distance (m, + on land) to the coastline at x, z, and its gradient: bilinear over the texels as the
+    // shader's coastAt reads them; the band (far inland) without a coastline
+    coastAt(x, z) {
+        const M = this.mres, B = this.coastBand;
+        if (!this.coast) return [B || 1e9, 0, 0];
+        const fx = clamp((x - this.origin) / this.mcell - 0.5, 0, M - 1), fz = clamp((z - this.origin) / this.mcell - 0.5, 0, M - 1);
+        const i = Math.min(Math.floor(fx), M - 2), j = Math.min(Math.floor(fz), M - 2), tx = fx - i, tz = fz - j, m = this.coast;
+        const at = k => (m[k] / 255 * 2 - 1) * B;
+        const a = at(j * M + i), b = at(j * M + i + 1), c = at((j + 1) * M + i), d = at((j + 1) * M + i + 1);
+        return [lerp(lerp(a, b, tx), lerp(c, d, tx), tz), lerp(b - a, d - c, tz) / this.mcell, lerp(c - a, d - b, tx) / this.mcell];
+    }
+
+    // the ground near the coast ([height, dh/dx, dh/dz] of the smooth heights c): the sea's level on the sea side; on
+    // land a beach rising from it, giving way to the heights (kept over the beach line) within SHORE_BLEND m (the shader's
+    // terrainShore)
+    shore(x, z, c) {
+        if (!this.coast) return c;
+        const [d, dx, dz] = this.coastAt(x, z), s = this.base;
+        if (d >= this.coastBand * 0.99) return c;
+        if (d <= 0) return [s, 0, 0];
+        let [h, gx, gz] = c;
+        const fl = s + Math.min(BEACH * d, 0.6);
+        if (h < fl) { const k = BEACH * d < 0.6 ? BEACH : 0; h = fl; gx = k * dx; gz = k * dz; }
+        const t = Math.min(d / SHORE_BLEND, 1), k = t * t * (3 - 2 * t), dk = 6 * t * (1 - t) / SHORE_BLEND, e = h - s - BEACH * d;
+        return [s + BEACH * d + k * e, lerp(BEACH * dx, gx, k) + dk * e * dx, lerp(BEACH * dz, gz, k) + dk * e * dz];
     }
 
     // the tree canopy over the map (geoCanopy: { n, cover, height } over the same square): canopyTex
@@ -136,12 +189,16 @@ class LandField extends kit.Heightfield {
     // the terrain as drawn: bicubic heights plus the detail. Structures stand on this, so they neither float nor sink
     // (the finest lod's triangles, 1 m apart by default, stay within centimetres of it)
     surface(x, z) {
-        const [h, gx, gz] = this.cubic(x, z);
+        const [h, gx, gz] = this.shore(x, z, this.cubic(x, z));
         return h + this.detail(x, z, h, Math.hypot(gx, gz));
     }
 
-    // r8 texels: the smooth mask
-    packSmooth() { return this.smooth; }
+    // rg8 texels: the smooth mask, the coast's distance (255, far inland, without a coastline)
+    packSmooth() {
+        const M = this.mres, out = new Uint8Array(M * M * 2).fill(255);
+        for (let k = 0; k < M * M; k++) { out[k * 2] = this.smooth[k]; if (this.coast) out[k * 2 + 1] = this.coast[k]; }
+        return out;
+    }
 
     // rgba16float texels: the height as two halves (r + g: half floats alone step 1 m above 1024 m; the remainder keeps
     // it to a tenth of a millimetre, and both filter linearly), the normal's x and z (its y from them)
@@ -166,5 +223,5 @@ class LandField extends kit.Heightfield {
     }
 }
 
-return { LandField, DETAIL_OCTAVES, TERRAIN_EASE: EASE };
+return { LandField, DETAIL_OCTAVES, TERRAIN_EASE: EASE, BEACH, SHORE_BLEND };
 });

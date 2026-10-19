@@ -5,7 +5,7 @@
 Features.kit('geo', (engine, kit) => {
 const { Common } = engine;
 const { clamp, lerp } = Common;
-const { terrainData, roadData, buildingData, canopyData, buildRoads, buildBuildings, smoothRoads, smoothBuildings } = kit;
+const { terrainData, roadData, buildingData, canopyData, coastData, buildRoads, buildBuildings, smoothRoads, smoothBuildings } = kit;
 
 function geoTypes(Base) {
     // The ground of `data` (a geo terrain id): its heights, and its land cover painted (built-up, woods, water). On a
@@ -63,6 +63,13 @@ function geoTypes(Base) {
         stamp(f) { f.setCanopy?.(canopyData(this.def.data)); }
     }
 
+    // The coastline of `data` (a geo coast id: the signed distance to it on a finer grid than the terrain's, over the same
+    // square), given to the field (LandField.setCoast): the shore is drawn along it, not along the data's coarse cells
+    class GeoCoast extends Base {
+        get anchor() { return null; }
+        stamp(f) { f.setCoast?.(coastData(this.def.data)); }
+    }
+
     // A named place: its label `labelHeight` m over the ground at pos, shown within `range` m of the eye (0: always)
     class Place extends Base {
         get labelRange() { return this.def.range || 0; }
@@ -83,7 +90,7 @@ function geoTypes(Base) {
         }
     }
 
-    return { GeoTerrain, GeoRoads, GeoBuildings, GeoCanopy, GeoPlaces, Place };
+    return { GeoTerrain, GeoRoads, GeoBuildings, GeoCanopy, GeoCoast, GeoPlaces, Place };
 }
 
 return { geoTypes };

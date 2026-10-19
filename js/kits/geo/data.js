@@ -1,7 +1,7 @@
 'use strict';
 // A real place's data as tools/geo-import.mjs writes it (scenarios/data/<region>/*.js, loaded by ScenarioData before
 // the worlds are built), decoded once per id: the terrain (heights, land cover, place names), the roads, the buildings,
-// the tree canopy.
+// the tree canopy, the coastline's distance field.
 // Coordinates are the scenario's metres about the region's centre: x east, z south.
 
 Features.kit('geo', (engine, kit) => {
@@ -66,5 +66,10 @@ function canopyData(id) {
     });
 }
 
-return { GeoReader, terrainData, roadData, buildingData, canopyData };
+// { meta, n, size, band, dist (n x n, u8: the signed distance to the coastline, (d / band + 1) / 2 x 255, + on land) }
+function coastData(id) {
+    return once(id, ({ meta, bytes }) => ({ meta, n: meta.resolution, size: meta.size, band: meta.band, dist: bytes }));
+}
+
+return { GeoReader, terrainData, roadData, buildingData, canopyData, coastData };
 });

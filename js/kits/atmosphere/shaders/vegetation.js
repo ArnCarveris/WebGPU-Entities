@@ -27,6 +27,30 @@ fn canopyAt(xz: vec2f) -> vec2f {
     return vec2f(c.x, c.y * 255.0);
 }
 
+// the canopy map's cover at xz as the ground is shaded by it: a cubic B-spline over its texels (four bilinear taps), so
+// the 18 m cells round off into blobs instead of bilinear squares and diamonds
+fn canopySmooth(xz: vec2f) -> f32 {
+    let sz = vec2f(textureDimensions(canopyTex));
+    let c = (xz - F.tdomain.xy) / F.tdomain.z * sz - 0.5;
+    let f = fract(c);
+    let i = c - f;
+    let f2 = f * f;
+    let f3 = f2 * f;
+    let w0 = (1.0 - 3.0 * f + 3.0 * f2 - f3) / 6.0;
+    let w1 = (4.0 - 6.0 * f2 + 3.0 * f3) / 6.0;
+    let w2 = (1.0 + 3.0 * f + 3.0 * f2 - 3.0 * f3) / 6.0;
+    let w3 = f3 / 6.0;
+    let g0 = w0 + w1;
+    let g1 = w2 + w3;
+    let h0 = (i - 0.5 + w1 / g0) / sz;
+    let h1 = (i + 1.5 + w3 / g1) / sz;
+    let a = textureSampleLevel(canopyTex, clampSamp, h0, 0.0).x;
+    let b = textureSampleLevel(canopyTex, clampSamp, vec2f(h1.x, h0.y), 0.0).x;
+    let d = textureSampleLevel(canopyTex, clampSamp, vec2f(h0.x, h1.y), 0.0).x;
+    let e = textureSampleLevel(canopyTex, clampSamp, h1, 0.0).x;
+    return g0.y * (g0.x * a + g1.x * b) + g1.y * (g0.x * d + g1.x * e);
+}
+
 fn forestCover(xz: vec2f, woods: f32) -> f32 {
     if (F.tdetail.w > 1.5) { return sat(canopyAt(xz).x * 1.15); }
     return sat(woods * (0.4 + vnoise2(xz / 300.0)) * 1.3);
@@ -38,7 +62,8 @@ fn canopyField(xz: vec2f) -> vec2f {
     let uv = (xz - F.tdomain.xy) / F.tdomain.z;
     if (any(uv < vec2f(0.0)) || any(uv > vec2f(1.0))) { return vec2f(0.0); }
     let land = textureSampleLevel(landTex, clampSamp, uv, 0.0);
-    if (land.z > 0.3 || textureSampleLevel(smoothTex, clampSamp, uv, 0.0).x > 0.25) { return vec2f(0.0); }
+    let cs = coastAt(xz).x;
+    if (cs < 3.0 || select(land.z, land.z * smoothstep(20.0, 50.0, cs), F.tdetail.y > 0.0) > 0.3 || textureSampleLevel(smoothTex, clampSamp, uv, 0.0).x > 0.25) { return vec2f(0.0); }
     if (F.tdetail.w > 1.5) { return canopyAt(xz); }
     return vec2f(forestCover(xz, land.y), ${CANOPY}.0);
 }
@@ -66,14 +91,17 @@ fn vegScatter(@builtin(global_invocation_id) gid: vec3u) {
     let uv = (xz - F.tdomain.xy) / F.tdomain.z;
     if (any(uv < vec2f(0.0)) || any(uv > vec2f(1.0))) { return; }
     let land = textureSampleLevel(landTex, clampSamp, uv, 0.0);
-    if (land.z > 0.3 || textureSampleLevel(smoothTex, clampSamp, uv, 0.0).x > 0.25) { return; }  // water, roads, buildings
+    // (along a coastline, geoCoast: none within 3 m of it or off it; the land use's water only inland)
+    let cs = coastAt(xz).x;
+    let lake = select(land.z, land.z * smoothstep(20.0, 50.0, cs), F.tdetail.y > 0.0);
+    if (cs < 3.0 || lake > 0.3 || textureSampleLevel(smoothTex, clampSamp, uv, 0.0).x > 0.25) { return; }  // water, roads, buildings
     let th = terrainHeight(xz);
     if (th.x < 0.8) { return; }
     // how likely a plant is here: the forest, else a few on open ground and in yards; fewer on cliffs
     let forest = forestCover(xz, land.y);
     // the shore: low ground with open water (the sea's painted in, like lakes) within some 60 m
-    var wet = 0.0;
-    for (var k = 0; k < 4; k++) {
+    var wet = select(0.0, 1.0 - smoothstep(30.0, 80.0, cs), F.tdetail.y > 0.0);
+    for (var k = 0; k < 4 && F.tdetail.y <= 0.0; k++) {
         let o = vec2f(f32(k % 2) * 2.0 - 1.0, f32(k / 2) * 2.0 - 1.0) * 60.0 / F.tdomain.z;
         wet = max(wet, textureSampleLevel(landTex, clampSamp, uv + o, 0.0).z);
     }

@@ -16,6 +16,7 @@
 
         {"$comment":"the island: its ground and land cover, roads, buildings and place names (scenarios/data/oahu/: node tools/geo-import.mjs oahu)"},
         {"type":"geoTerrain","data":"oahu/terrain"},
+        {"type":"geoCoast","data":"oahu/coast"},
         {"type":"geoRoads","data":"oahu/roads","skip":["footway","path","steps","cycleway"],"minor":true,"curves":true,"marks":true},
         {"type":"geoBuildings","data":"oahu/buildings","seed":7},
         {"type":"geoCanopy","data":"oahu/canopy"},

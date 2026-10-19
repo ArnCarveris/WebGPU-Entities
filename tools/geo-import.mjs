@@ -3,10 +3,10 @@
 //
 //   node tools/geo-import.mjs <region> [--pbf <file.osm.pbf>] [--cache <dir>]
 //
-// Writes scenarios/data/<region>/{terrain,roads,buildings,canopy}.js: classic scripts (the page opened from disk can run them,
+// Writes scenarios/data/<region>/{terrain,coast,roads,buildings,canopy}.js: classic scripts (the page opened from disk can run them,
 // not fetch them) each calling ScenarioData.put(id, meta, base64), the payload deflated (js/engine/scenario-data.js
 // inflates it before the worlds are built). The geo kit (js/kits/geo/) reads them: the `geoTerrain`, `geoRoads` and
-// `geoBuildings` entities, and `geoCanopy` (where the region has a `canopy`).
+// `geoBuildings` entities, `geoCoast` (where the region has a coastline) and `geoCanopy` (where the region has a `canopy`).
 //
 // Sources, downloaded once into the cache (default: <tmp>/webgpu-entities-geo):
 //   heights   AWS Terrain Tiles (Terrarium PNGs, public): land and bathymetry, area-averaged into the grid's cells
@@ -436,21 +436,22 @@ async function osm() {
 }
 
 // ------------------------------------------------------------------------------------------------ rasters
-// every cell centre inside the polygon (rings, even-odd) gets fn(idx)
-function fillPolygon(rings, fn) {
+// every cell centre of an n x n grid over the square (default: the region's) inside the polygon (rings, even-odd) gets fn(idx)
+function fillPolygon(rings, fn, n = N) {
+    const cell = SIZE / n, at = i => ORIGIN + (i + 0.5) * cell;
     let z0 = Infinity, z1 = -Infinity;
     for (const r of rings) for (const p of r) { z0 = Math.min(z0, p[1]); z1 = Math.max(z1, p[1]); }
-    const j0 = Math.max(0, Math.ceil((z0 - ORIGIN) / CELL - 0.5)), j1 = Math.min(N - 1, Math.floor((z1 - ORIGIN) / CELL - 0.5));
+    const j0 = Math.max(0, Math.ceil((z0 - ORIGIN) / cell - 0.5)), j1 = Math.min(n - 1, Math.floor((z1 - ORIGIN) / cell - 0.5));
     for (let j = j0; j <= j1; j++) {
-        const z = cx(j), xs = [];
+        const z = at(j), xs = [];
         for (const r of rings) for (let k = 0; k + 1 < r.length; k++) {
             const [ax, az] = r[k], [bx, bz] = r[k + 1];
             if ((az <= z) !== (bz <= z)) xs.push(ax + (z - az) / (bz - az) * (bx - ax));
         }
         xs.sort((a, b) => a - b);
         for (let k = 0; k + 1 < xs.length; k += 2) {
-            const i0 = Math.max(0, Math.ceil((xs[k] - ORIGIN) / CELL - 0.5)), i1 = Math.min(N - 1, Math.floor((xs[k + 1] - ORIGIN) / CELL - 0.5));
-            for (let i = i0; i <= i1; i++) fn(j * N + i);
+            const i0 = Math.max(0, Math.ceil((xs[k] - ORIGIN) / cell - 0.5)), i1 = Math.min(n - 1, Math.floor((xs[k + 1] - ORIGIN) / cell - 0.5));
+            for (let i = i0; i <= i1; i++) fn(j * n + i);
         }
     }
 }
@@ -470,6 +471,30 @@ function seaMask(shore) {
     const sea = new Uint8Array(N * N).fill(1);
     for (const r of shore) fillPolygon([r], k => { sea[k] ^= 1; });
     return sea;
+}
+
+// the shore's signed distance (m, + on land) on an M x M grid, exact to the coastline's segments within `band` m of
+// them (clamped beyond): the sign from the rings (even-odd at each cell centre), the distance from every segment near
+// the cell. Filtered linearly, its zero line follows the coast well inside a cell, where the 36 m sea mask steps
+function coastField(shore, M, band) {
+    const mc = SIZE / M, land = new Uint8Array(M * M), d2 = new Float32Array(M * M).fill(band * band), reach = band / mc + 1;
+    for (const r of shore) fillPolygon([r], k => { land[k] ^= 1; }, M);
+    for (const r of shore) for (let k = 0; k + 1 < r.length; k++) {
+        const [ax, az] = r[k], [bx, bz] = r[k + 1], ex = bx - ax, ez = bz - az, l2 = ex * ex + ez * ez || 1e-9;
+        const i0 = Math.max(0, Math.floor((Math.min(ax, bx) - ORIGIN) / mc - reach)), i1 = Math.min(M - 1, Math.ceil((Math.max(ax, bx) - ORIGIN) / mc + reach));
+        const j0 = Math.max(0, Math.floor((Math.min(az, bz) - ORIGIN) / mc - reach)), j1 = Math.min(M - 1, Math.ceil((Math.max(az, bz) - ORIGIN) / mc + reach));
+        for (let j = j0; j <= j1; j++) {
+            const pz = ORIGIN + (j + 0.5) * mc - az;
+            for (let i = i0; i <= i1; i++) {
+                const px = ORIGIN + (i + 0.5) * mc - ax, t = Math.max(0, Math.min(1, (px * ex + pz * ez) / l2));
+                const dx = px - t * ex, dz = pz - t * ez, q = dx * dx + dz * dz, c = j * M + i;
+                if (q < d2[c]) d2[c] = q;
+            }
+        }
+    }
+    const out = new Uint8Array(M * M);
+    for (let c = 0; c < M * M; c++) out[c] = Math.round((Math.sqrt(d2[c]) * (land[c] ? 1 : -1) / band * 0.5 + 0.5) * 255);
+    return out;
 }
 
 // ------------------------------------------------------------------------------------------------ encoding
@@ -524,6 +549,12 @@ const places = data.places.map(p => { const [x, z] = toLocal(p.lat, p.lon); retu
     .filter(p => Math.abs(p.x) < HALF && Math.abs(p.z) < HALF);
 writeData('terrain', { ...frame, sea: seaLevel, min: lo, max: hi, layout: 'int16 heights (dm, each row delta coded), then u8 planes: built-up, woods, water',
     places, attribution: `Heights: AWS Terrain Tiles (Terrarium; USGS 3DEP, NOAA and others). Land cover and places: ${OSM_ATTR}` }, terr);
+
+// the shore (where the region has a coastline): u8 signed distance to the coast, (d / band + 1) / 2 x 255, + on land
+if (data.shore.length) {
+    const M = R.coast?.resolution || N * 2, band = R.coast?.band || 96;
+    writeData('coast', { ...frame, resolution: M, band, layout: `u8 signed distance to the coastline (m, + on land): (d / ${band} + 1) / 2 x 255, clamped`, attribution: OSM_ATTR }, coastField(data.shore, M, band));
+}
 
 // the tree canopy (the region's `canopy`): u8 cover (0..255, the share of each cell under canopy), then u8 height (m)
 if (R.canopy) {

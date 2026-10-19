@@ -46,6 +46,7 @@ const EntityTypes = (() => {
         geoRoads: "a real place's roads from data: ribbons with rounded curves on the ground, bridges, markings",
         geoBuildings: "a real place's buildings from data: their footprints stood up to their heights, flat or hipped roofs",
         geoCanopy: "a real place's tree canopy from data (cover and height): where the plants grow and how tall",
+        geoCoast: "a real place's coastline from data (distance to it, 18 m grid): the shore drawn along it, beaches and surf",
         geoPlaces: "a real place's names from data (towns, peaks...) as place labels", place: 'a named place (its label)',
     });
     def('curvature', { curvature: "the outdoors drawn on a round planet (radius, on, reference): O(1) per point, the world itself stays flat" });

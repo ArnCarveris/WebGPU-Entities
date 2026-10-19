@@ -217,8 +217,8 @@ class Renderer {
         this.canopyMap = d.createTexture({ size: [cp.n, cp.n], format: 'rg8unorm', usage: U.TEXTURE_BINDING | U.COPY_DST });
         d.queue.writeTexture({ texture: this.canopyMap }, cp.bytes, { bytesPerRow: cp.n * 2 }, [cp.n, cp.n]);
         this.smoothMap?.destroy();
-        this.smoothMap = d.createTexture({ size: [f.mres, f.mres], format: 'r8unorm', usage: U.TEXTURE_BINDING | U.COPY_DST });
-        d.queue.writeTexture({ texture: this.smoothMap }, f.packSmooth(), { bytesPerRow: f.mres }, [f.mres, f.mres]);
+        this.smoothMap = d.createTexture({ size: [f.mres, f.mres], format: 'rg8unorm', usage: U.TEXTURE_BINDING | U.COPY_DST });
+        d.queue.writeTexture({ texture: this.smoothMap }, f.packSmooth(), { bytesPerRow: f.mres * 2 }, [f.mres, f.mres]);
         // the terrain: CDLOD nodes picked each frame (terrainDraws), each the same patch (vsTerrain), its node an instance
         this.terrainLod = new TerrainLod(f, { step: world.terrain.step, detail: world.terrain.detail });
         if (!this.terrainIndex) {

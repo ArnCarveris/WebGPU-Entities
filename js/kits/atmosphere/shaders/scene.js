@@ -7,7 +7,7 @@ const {
 } = kit;
 const { BUS, BUS_IN } = engine.kits.transit;
 const { INTERIOR_DRAW, BLD_ID, BLD_LIT, BLD_STACK, BLD_DARK } = engine.kits.settlement;
-const { TERRAIN_PATCH, DETAIL_OCTAVES, TERRAIN_EASE } = engine.kits.terrain;
+const { TERRAIN_PATCH, DETAIL_OCTAVES, TERRAIN_EASE, BEACH, SHORE_BLEND } = engine.kits.terrain;
 
 // needs F, heightTex, clampSamp: the terrain's height and normal at xz (beyond the heightfield it flattens to the base).
 // heightTex: the height as two half floats (r + g), the normal's x and z
@@ -103,8 +103,48 @@ fn terrainSmooth(xz: vec2f, sp: f32) -> vec3f {
     return mix(terrainCubic(xz), lin, t);
 }
 
+// the coast's signed distance (m, + on land) at xz and its gradient: smoothTex's g read texel by texel, bilinear
+// (LandField.coastAt); F.tdetail.y its band (0: no coastline, far inland everywhere)
+fn coastAt(xz: vec2f) -> vec3f {
+    let B = F.tdetail.y;
+    if (B <= 0.0) { return vec3f(1e9, 0.0, 0.0); }
+    let M = i32(textureDimensions(smoothTex).x);
+    let cell = F.tdomain.z / f32(M);
+    let g = clamp((xz - F.tdomain.xy) / cell - 0.5, vec2f(0.0), vec2f(f32(M - 1)));
+    let i = min(vec2i(floor(g)), vec2i(M - 2));
+    let t = g - vec2f(i);
+    let a = (textureLoad(smoothTex, i, 0).y * 2.0 - 1.0) * B;
+    let b = (textureLoad(smoothTex, i + vec2i(1, 0), 0).y * 2.0 - 1.0) * B;
+    let c = (textureLoad(smoothTex, i + vec2i(0, 1), 0).y * 2.0 - 1.0) * B;
+    let d = (textureLoad(smoothTex, i + vec2i(1, 1), 0).y * 2.0 - 1.0) * B;
+    return vec3f(mix(mix(a, b, t.x), mix(c, d, t.x), t.y), mix(b - a, d - c, t.y) / cell, mix(c - a, d - b, t.x) / cell);
+}
+
+// the ground near the coast (LandField.shore, term for term): the sea's level on the sea side; on land a beach rising
+// ${BEACH} m per m from it, giving way to the heights c (kept over the beach line) within ${SHORE_BLEND} m
+fn terrainShore(xz: vec2f, c: vec3f) -> vec3f {
+    if (F.tdetail.y <= 0.0) { return c; }
+    // (most of the ground is far inland or out at sea: one filtered read tells, before the four texels)
+    let g = textureSampleLevel(smoothTex, clampSamp, (xz - F.tdomain.xy) / F.tdomain.z, 0.0).y;
+    if (g > 0.995) { return c; }
+    if (g < 0.49) { return vec3f(F.misc.z, 0.0, 0.0); }
+    let cd = coastAt(xz);
+    let d = cd.x;
+    let s = F.misc.z;
+    if (d >= F.tdetail.y * 0.99) { return c; }
+    if (d <= 0.0) { return vec3f(s, 0.0, 0.0); }
+    var h = c;
+    let fl = s + min(${BEACH} * d, 0.6);
+    if (h.x < fl) { h = vec3f(fl, select(0.0, ${BEACH}, ${BEACH} * d < 0.6) * cd.yz); }
+    let t = min(d / ${SHORE_BLEND}.0, 1.0);
+    let k = t * t * (3.0 - 2.0 * t);
+    let dk = 6.0 * t * (1.0 - t) / ${SHORE_BLEND}.0;
+    let e = h.x - s - ${BEACH} * d;
+    return vec3f(s + ${BEACH} * d + k * e, mix(${BEACH} * cd.yz, h.yz, k) + dk * e * cd.yz);
+}
+
 fn terrainSurface(xz: vec2f, sp: f32) -> vec3f {
-    let c = terrainSmooth(xz, sp);
+    let c = terrainShore(xz, terrainSmooth(xz, sp));
     if (F.tdetail.x <= 0.0) { return c; }
     let uv = (xz - F.tdomain.xy) / F.tdomain.z;
     let water = sat(textureSampleLevel(landTex, clampSamp, uv, 0.0).z);
@@ -411,6 +451,25 @@ fn streetGlow(p: vec3f, n: vec3f, v: vec3f, shin: f32, px: f32, share: f32) -> L
     return o;
 }
 
+// The ground's fine grain near the eye (detail mapping, procedural): octaves of value noise from 7 m down to a
+// quarter metre, each faded out as a pixel (px, m) grows past a quarter of its wavelength, so far ground stays as it was
+// and nothing shimmers. x albedo factor (about 1), yz a tilt for the normal (dh/dx, dh/dz)
+fn groundGrain(xz: vec2f, px: f32, rough: f32) -> vec3f {
+    var g = vec3f(0.0);
+    let o = array<vec3f, 4>(vec3f(7.3, 0.11, 0.04), vec3f(2.3, 0.10, 0.05), vec3f(0.75, 0.08, 0.04), vec3f(0.24, 0.06, 0.03));
+    for (var k = 0; k < 4; k++) {
+        let w = sat(o[k].x / (4.0 * px) - 1.0);
+        if (w <= 0.0) { break; }
+        let nz = detailNoise(xz / o[k].x, u32(k) + 11u);
+        g += w * vec3f(nz.x * o[k].y, nz.yz * o[k].z * mix(1.0, 3.0, rough));
+    }
+    return vec3f(1.0 + g.x, g.yz);
+}
+
+// noise for the ground near the eye, one fetch: a slice of the clouds' shape volume (Worley octaves) tiled every 300 m:
+// y and z (features of some 75 and 37 m) move where the colour maps are read, w (some 19 m) the shoreline
+fn groundNoise(xz: vec2f) -> vec4f { return textureSampleLevel(shapeTex, repSamp, vec3f(xz / 300.0, 0.31), 0.0) - 0.5; }
+
 @fragment fn fsTerrain(i: TerrOut) -> @location(0) vec4f {
     let p = i.world;
     let px = max(length(fwidth(p.xz)), 0.05);
@@ -419,22 +478,64 @@ fn streetGlow(p: vec3f, n: vec3f, v: vec3f, shin: f32, px: f32, share: f32) -> L
     let n = normalize(vec3f(-i.grad.x, 1.0, -i.grad.y));
     // (beyond the map: nothing, or the sea round a real island, F.geo.y)
     let land4 = select(vec4f(0.0, 0.0, F.geo.y, 0.0), textureSampleLevel(landTex, clampSamp, uv, 0.0), inside);
-    let land = land4.xyz;
     let natural = F.geo.x > 0.5;
+    // a real place's coastline (geoCoast): the distance to it per pixel (m, + on land), wandering a little finer than
+    // its 18 m grid; the sea is what lies off it (the land use's water only inland, its cells being coarser)
+    let near = natural && inside && px < 12.0;
+    let gn = select(vec4f(0.0), groundNoise(p.xz), near);
+    let coast = F.tdetail.y > 0.0 && inside;
+    var cd = 1e9;
+    if (coast) { cd = (textureSampleLevel(smoothTex, clampSamp, uv, 0.0).y * 2.0 - 1.0) * F.tdetail.y + gn.w * 9.0; }
+    let aa = max(px * 0.6, 0.3);
+    let sea = 1.0 - smoothstep(-aa, aa, cd);
+    var land = land4.xyz;
+    if (coast) { land.z = max(sea, land.z * smoothstep(20.0, 50.0, cd)); }
+    // (the colour maps read through a little noise, about a data cell, where a pixel is small enough to see their cells:
+    // the edges of the town and the woods wander instead of following the bilinear diamonds)
+    var warp = vec2f(0.0);
+    if (near) {
+        warp = gn.yz * (F.tdomain.z / F.tdomain.w) * 2.6 * (1.0 - smoothstep(6.0, 12.0, px));
+        land = vec3f(textureSampleLevel(landTex, clampSamp, (p.xz + warp - F.tdomain.xy) / F.tdomain.z, 0.0).xy, land.z);
+    }
     var alb = select(fieldColor(p.xz, px), naturalColor(p.xz, px, p.y), natural);
     alb = mix(alb, select(townColor(p.xz, px), urbanColor(p.xz, px), natural), sat(land.x * (0.6 + 0.8 * vnoise2(p.xz / 700.0)) * 1.4 - 0.2));
-    // a natural shore: sand just over the water's edge
-    alb = mix(alb, vec3f(0.62, 0.56, 0.44) * (0.9 + 0.2 * vnoise2(p.xz / 7.0)), select(0.0, (1.0 - smoothstep(1.5, 4.0, p.y - F.misc.z)) * (1.0 - land.x) * smoothstep(0.82, 0.95, n.y), natural));
+    // a natural shore: sand just over the water's edge (a beach of wandering width along the coastline, darker where the
+    // surf wets it, dark lava rock where the shore is steep; without a coastline, by height)
+    // (all of it within 50 m of the coast: the rest of the ground skips it)
+    var sand = 0.0;
+    var shoreRock = 0.0;
+    var wetSand = 1.0;
+    if (natural) {
+        if (!coast) {
+            sand = (1.0 - smoothstep(1.5, 4.0, p.y - F.misc.z)) * (1.0 - land.x) * smoothstep(0.82, 0.95, n.y);
+        } else if (cd < 50.0) {
+            let wide = 14.0 + 34.0 * vnoise2(p.xz / 420.0);
+            sand = (1.0 - smoothstep(wide * 0.55, wide, cd)) * smoothstep(0.78, 0.92, n.y) * (1.0 - smoothstep(0.5, 0.9, land.x));
+            shoreRock = (1.0 - smoothstep(12.0, 45.0, cd)) * smoothstep(0.86, 0.66, n.y);
+            if (cd < 9.0) { wetSand = mix(0.62, 1.0, smoothstep(0.5, 5.0 + 3.0 * vnoise2(p.xz / 40.0), cd)); }
+        }
+    }
+    if (sand > 0.0) { alb = mix(alb, vec3f(0.62, 0.56, 0.44) * (0.9 + 0.2 * vnoise2(p.xz / 7.0)) * wetSand, sand); }
+    if (shoreRock > 0.0) { alb = mix(alb, vec3f(0.19, 0.175, 0.16) * (0.8 + 0.4 * vnoise2(p.xz / 9.0)), shoreRock * 0.85); }
     // the forest floor: where crowns are a few pixels or more (plants, carpet), only under a canopy closed enough to
     // shade it; where they are smaller than a pixel, the canopy's whole cover (the crowns' colour, seen together)
-    let fc = forestCover(p.xz, land.y);
-    let forest = mix(sat((fc - 0.35) * 1.6), fc, smoothstep(0.8, 3.0, px));
+    // (a canopy map: smoothed, and moved by half as much as the land use, its cells being half the size)
+    var fc = forestCover(p.xz + warp * 0.5, land.y);
+    if (F.tdetail.w > 1.5 && px < 2.5) { fc = sat(canopySmooth(p.xz + warp * 0.5) * 1.15); }
+    let forest = mix(sat((fc - 0.35) * 1.6), fc, smoothstep(0.8, 3.0, px)) * (1.0 - 0.85 * sand);
     alb = mix(alb, vec3f(0.07, 0.11, 0.06) * (0.8 + 0.4 * vnoise2(p.xz / 40.0)), forest);
     // mountains: conifers, then rock above the tree line and on steep slopes
     let wild = smoothstep(150.0, 700.0, p.y - F.misc.z);
     let rock = sat(smoothstep(3300.0, 3700.0, p.y + 200.0 * vnoise2(p.xz / 500.0)) + smoothstep(0.82, 0.62, n.y));
     let mtn = mix(vec3f(0.09, 0.12, 0.07), vec3f(0.33, 0.31, 0.29), rock);
     alb = mix(alb, mtn, wild);
+    // the fine grain near the eye (rougher on rock), on land
+    var n2 = n;
+    if (px < 1.8 && sea < 1.0) {
+        let gr = groundGrain(p.xz, px, max(max(rock * wild, shoreRock), 1.0 - n.y));
+        alb *= gr.x;
+        n2 = normalize(vec3f(-i.grad.x - gr.y, 1.0, -i.grad.y - gr.z));
+    }
     // weather on the ground
     // structures: their sun shadows, and dry ground where they keep the rain and snow off
     let gs = groundAt(p.xz);
@@ -462,14 +563,28 @@ fn streetGlow(p: vec3f, n: vec3f, v: vec3f, shin: f32, px: f32, share: f32) -> L
     let sg = streetGlow(p + n * 0.05, nw, v, mix(60.0, 900.0, pool), px, land4.w);
     lp.d += sg.d;
     lp.s += sg.s;
-    var col = alb * (F.sunCol.rgb * max(dot(n, s), 0.0) * sh.x * sl.x + F.ambient.rgb * sh.y * sl.z * (0.55 + 0.45 * n.y) + FLASH_COLOR * flashLit(p) * 0.03 + lp.d);
+    var col = alb * (F.sunCol.rgb * max(dot(n2, s), 0.0) * sh.x * sl.x + F.ambient.rgb * sh.y * sl.z * (0.55 + 0.45 * n2.y) + FLASH_COLOR * flashLit(p) * 0.03 + lp.d);
     // wet ground and open water reflect the sky
     let r = reflect(-v, nw);
     let fres = 0.02 + 0.98 * pow(1.0 - max(dot(nw, v), 0.0), 5.0);
     let spec = skyColor(r) * sh.y + F.sunCol.rgb * sh.x * pow(max(dot(r, s), 0.0), 400.0) * 4.0 + lp.s;
     // (a real place's sea is tropical blue-green, paler over the shallows by the shore)
-    let body = select(vec3f(0.01, 0.02, 0.025), mix(vec3f(0.012, 0.045, 0.06), vec3f(0.03, 0.11, 0.10), smoothstep(0.995, 0.6, water)), natural);
+    // (along a coastline: over the 60..120 m off it, wandering)
+    var shallow = smoothstep(0.995, 0.6, water);
+    if (coast && pool > 0.0) { shallow = 1.0 - smoothstep(0.0, 60.0 + 60.0 * vnoise2(p.xz / 350.0), -cd); }
+    let body = select(vec3f(0.01, 0.02, 0.025), mix(vec3f(0.012, 0.045, 0.06), vec3f(0.03, 0.11, 0.10), shallow), natural);
     col = mix(col, body * F.ambient.rgb + spec * fres, pool);
+    // the surf along a coastline: a wash of foam at the water's edge and broken lines of it rolling in over the first
+    // metres, which melt into a pale band where a pixel is too big for them
+    if (coast && natural && cd < 0.0 && cd > -40.0) {
+        let off = -cd;
+        let edge = (1.0 - smoothstep(0.0, 1.0 + 2.0 * vnoise2(p.xz / 11.0 + F.cam.w * 0.05), off)) * (0.55 + 0.45 * vnoise2(p.xz / 2.5));
+        let roll = sat(sin(off * 0.45 - F.cam.w * 0.9 + vnoise2(p.xz / 45.0) * 9.0) * 0.5 + 0.5);
+        let lines = smoothstep(0.82, 1.0, roll) * smoothstep(0.3, 0.8, vnoise2(p.xz / 9.0 + vec2f(F.cam.w * 0.3, 0.0))) * vnoise2(p.xz / 1.7) * (1.0 - smoothstep(4.0, 18.0 + 10.0 * vnoise2(p.xz / 300.0), off));
+        let foam = mix(sat(max(edge, lines)), (1.0 - smoothstep(0.0, 10.0, off)) * 0.25, smoothstep(0.3, 2.0, px)) * sea;
+        let lit = F.sunCol.rgb * max(dot(n, s), 0.0) * sh.x * sl.x + F.ambient.rgb * sh.y * sl.z;
+        col = mix(col, vec3f(0.85, 0.88, 0.88) * lit, foam * 0.7);
+    }
     col += spec * fres * wet * 0.35 * (1.0 - pool);
     col += skyColor(r) * sh.y * length(rg) * 1.5;                         // the rings catch the sky at any angle
     let kind = select(select(select(1.0, 2.0, rock * wild > 0.5), 3.0, paved > 0.5), 4.0, water > 0.5);
