@@ -9,7 +9,7 @@
             "root":{"label":"Cloud · High Plains","layer":{"role":"atmosphere"}}},
         {"type":"render","radar":false},
         {"$comment":"the plains sink under the river map (inset: the ground meets its edges at their own height), and the sea goes on south of it"},
-        {"type":"clearing","label":"","pos":[6000,6000],"size":[2048,2048],"level":1370,"blend":260,"inset":true},
+        {"type":"clearing","of":"sky","label":"","pos":[6000,6000],"size":[2048,2048],"level":1370,"blend":260,"inset":true},
         {"type":"lake","of":"sky","label":"","pos":[5300,7900],"radius":1300,"level":1397},
         {"type":"lake","of":"sky","label":"","pos":[6700,7900],"radius":1300,"level":1397},
 

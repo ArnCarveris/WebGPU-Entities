@@ -13,7 +13,7 @@
 //   controls     PointerInput (look / act / keys on a world's canvas; a camera: kits.view's FirstPersonView)
 //
 // Bigger generic building blocks (random and noise, a first-person view, a world's HUD, terrain, transit lines...) are
-// kits (js/kits, see Features.KITS).
+// kits (js/kits, see js/kits/manifest.js).
 
 const Common = (() => {
 const DEG = Math.PI / 180;

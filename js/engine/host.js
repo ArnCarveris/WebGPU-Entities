@@ -3,8 +3,9 @@
 //
 //   1. catalog + scenario (scenarios/*.json over HTTP, or the embedded copies when opened from disk; a dropped file)
 //   2. one GPU device for everything (GpuChoice adapter), one canvas
-//   3. a world per feature root entity, each built by its feature script (Features) from its entities
-//      (ScenarioFormat.toNative), with its own HUD root (in-world labels, toasts) and input scope; its options and
+//   3. a world per root entity (one a kit offers; entities no world of the scenario takes bring in their own:
+//      ScenarioFormat.complete), each built by its kit's world parts (Features) from its entities
+//      (ScenarioFormat.toNative), the kits of its entities' types loaded first, with its own HUD root (in-world labels, toasts) and input scope; its options and
 //      readouts go on the handheld (world.handheld(), see handheld.js)
 //   4. the frame: the camera's world first, the camera passed to the others, each world renders (into the canvas when
 //      it is alone, else into its layer); the Compositor merges the layers (or hands them to the atmosphere world);
@@ -111,7 +112,7 @@ class Host {
         }
     }
 
-    // which feature a native scenario was made for: the schema that takes all its keys and shares the most with it
+    // which world a native scenario was made for: the schema that takes all its keys and shares the most with it
     static importNative(native, name) {
         let best = null;
         for (const f of Object.keys(ScenarioFormat.SCHEMAS)) {
@@ -122,7 +123,7 @@ class Host {
                 if (!best || score > best.score) best = { score, f, entities };
             } catch { /* not this feature */ }
         }
-        if (!best || !best.score) throw new Error('not a scenario of entities, nor one made for any of the features');
+        if (!best || !best.score) throw new Error('not a scenario of entities, nor one made for any of the worlds');
         return { name: native.name || name, group: 'Dropped', entities: best.entities };
     }
 
@@ -170,10 +171,12 @@ class Host {
 
     async createWorlds(scenario) {
         const roots = ScenarioFormat.roots(scenario);
-        if (!roots.length) throw new Error(`Scenario "${scenario.name}" has no feature world (an entity of type ${Object.keys(ScenarioFormat.SCHEMAS).join(' / ')})`);
+        if (!roots.length) throw new Error(`Scenario "${scenario.name}" has no world (an entity of type ${Object.keys(ScenarioFormat.SCHEMAS).join(' / ')}, or one a world takes)`);
         const engine = this.engine;
         this.composed = roots.length > 1;
         for (const root of roots) {
+            // the kits its entities are of (only those the scenario has), then the world's own parts
+            for (const k of ScenarioFormat.kitsOf(scenario, root)) await Features.loadKit(k, engine);
             const module = await Features.load(root.feature, engine);
             const inst = this.createInstance(root, scenario, module);
             this.instances.push(inst);

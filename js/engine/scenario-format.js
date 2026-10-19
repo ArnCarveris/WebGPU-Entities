@@ -2,16 +2,22 @@
 // ScenarioFormat: everything is an entity.
 //
 // A scenario is one flat list of entities: { name, group, description, entities: [ { type, id?, of?, ...fields } ] }.
-// Every type is one of js/kits/types.js (EntityTypes): types are the kits', not the features'. Engine entities
-// (camera, view, link, include, hud.toast, handheld, handheld.page, sound.*) drive the host. A feature world is a root
-// entity whose type is the feature's name ({ type: "water", id: "river" }); everything that world is made of is an
-// entity of a plain type: terrain stamps, lakes, storm cells, materials, models, views, lighting presets, config
-// blocks ({ type: "light" }, { type: "mountain" }). Such an entity belongs to the world named by `of`, or else to the
-// only world of the scenario that takes its type (any world when there is only one). `camera` and `view` are the
-// engine's unless they have `of` (then they are that world's camera block / one of its views).
+// Every type is one of the kit manifest's (js/kits/manifest.js, Kits): an engine type, an entity type a kit implements,
+// a data type a kit or world reads, or a world type. Engine entities (camera, view, link, include, hud.toast, handheld,
+// handheld.page, sound.*) drive the host. A world is a root entity of a world type ({ type: "water", id: "river" });
+// everything that world is made of is an entity of a plain type: terrain stamps, lakes, storm cells, materials,
+// models, views, lighting presets, config blocks ({ type: "light" }, { type: "mountain" }). Such an entity belongs to
+// the world named by `of`, or else to the only world of the scenario that takes its type (any world when there is
+// only one). A world takes the entity types whose implementation's base it has and whose needs it provides, and the
+// data types of its schema (Kits.implsIn). `camera` and `view` are the engine's unless they have `of` (then they
+// are that world's camera block / one of its views).
 //
-// Each feature engine still reads its own native layout (materials as a map, views as a list, ...). SCHEMAS says
-// how a feature's entities map onto it, so toNative / fromNative convert both ways without per-feature code:
+// Any kit's entity works in any scenario: an entity no world of the scenario takes brings in a world that does (its
+// implicit root: complete()), composed with the others; a scenario of plain entities needs no root at all.
+//
+// Each world still reads its own native layout (materials as a map, views as a list, ...). Its schema (the manifest's
+// worlds.<type>.schema, SCHEMAS here) says how its entities map onto it, so toNative / fromNative convert both ways
+// without per-world code:
 //
 //   config   singleton blocks: native key -> one entity of that type holding its fields (non-objects as `value`);
 //            `rename` gives a block whose key is taken (a feature's name, an engine type) another type
@@ -20,7 +26,7 @@
 //   lists    native list -> one entity of that type per item, in order
 //            (a map value's or list item's own `type` field is kept in the field named after its slot type:
 //            a water tool { type: "pour" } is { type: "tool", tool: "pour" })
-//   kinds    the feature's own entity classes (its native `entities` list)
+//   (entity types: the world's native `entities` list, each { type, ...fields })
 //
 // include { scenario, as, skip, only, root }: the entities of another scenario, spliced in its place (resolveIncludes).
 // `as` renames its world (the root's id, `of` fields, and the world's name in the engine entities' expressions),
@@ -28,59 +34,12 @@
 // The included world's entities get its `of`. A composition is a few includes plus what joins them.
 
 const ScenarioFormat = (() => {
-    // js/kits/types.js: a script before this one in the page, a module in node
-    const Types = typeof EntityTypes !== 'undefined' ? EntityTypes : require('../kits/types.js');
+    // js/kits/manifest.js: a script before this one in the page, a module in node
+    const Types = typeof Kits !== 'undefined' ? Kits : require('../kits/manifest.js');
 
-    const SCHEMAS = {
-        cloud: {
-            title: 'Entity Cloud',
-            config: ['terrain', 'render', 'weather', 'lighting', 'hurricane', 'streetLights', 'curvature'],
-            maps: { 'weather.states': { type: 'weatherState' }, 'lighting.presets': { type: 'light' }, buildings: { type: 'building' },
-                'plans.buildings': { type: 'buildingPlan' }, 'plans.storeys': { type: 'storeyPlan' }, 'plans.cores': { type: 'corePlan' }, 'plans.rooms': { type: 'roomType' }, 'plans.furniture': { type: 'furniture' }, 'plans.furnishings': { type: 'furnishing' } },
-            lists: { clouds: 'cloudLayer', views: 'view' },
-            kinds: ['clearing', 'tilt', 'hills', 'mountain', 'range', 'river', 'lake', 'town', 'forest', 'village', 'busStation', 'skyscraper', 'structure', 'bus',
-                'storm', 'supercell', 'squall', 'spawner', 'geoTerrain', 'geoRoads', 'geoBuildings', 'geoCanopy', 'geoCoast', 'geoPlaces', 'place'],
-        },
-        water: {
-            title: 'Entity Water',
-            config: ['terrain', 'sim', 'waves', 'water', 'lighting'],
-            rename: { water: 'waterShading' },
-            maps: { lighting: { type: 'light', except: ['start'] } },
-            lists: { tools: 'tool', views: 'view' },
-            kinds: ['tilt', 'hills', 'mountain', 'valley', 'basin', 'coast', 'dam', 'sea', 'lake', 'spring', 'drain', 'rain', 'debris'],
-        },
-        origin: {
-            title: 'Entity Origin',
-            config: ['start', 'camera', 'origin', 'lighting'],
-            rename: { origin: 'floatingOrigin' },
-            maps: { materials: { type: 'material' }, models: { type: 'model', value: 'parts' } },
-            lists: { bookmarks: 'bookmark' },
-            kinds: ['body', 'prop', 'field', 'orbiter'],
-        },
-        imposter: {
-            title: 'Entity Imposter',
-            config: ['camera', 'environment', 'lod', 'shadows', 'imposter', 'drop'],
-            rename: { imposter: 'imposterAtlas' },
-            maps: { lighting: { type: 'light' }, materials: { type: 'material' }, models: { type: 'model' } },
-            lists: { views: 'view' },
-            kinds: ['terrain', 'prop', 'compare', 'scatter'],
-        },
-        portal: {
-            title: 'Entity Portal',
-            config: ['camera', 'player', 'minimap', 'outdoor', 'cctv', 'media', 'iptv'],
-            maps: { materials: { type: 'material' }, models: { type: 'model' }, buildings: { type: 'building' },
-                'plans.buildings': { type: 'buildingPlan' }, 'plans.storeys': { type: 'storeyPlan' }, 'plans.cores': { type: 'corePlan' }, 'plans.rooms': { type: 'roomType' }, 'plans.furniture': { type: 'furniture' }, 'plans.furnishings': { type: 'furnishing' } },
-            lists: { areas: 'area', portals: 'visPortal', occluders: 'occluder', vehicles: 'vehicle', views: 'view', structures: 'structure' },
-            kinds: ['securityCamera', 'prop', 'light', 'stairs', 'hull', 'helm', 'door', 'drone'],
-        },
-        gui: {
-            title: 'Entity GUI',
-            config: ['player', 'facility', 'cctv', 'media', 'iptv', 'waves', 'radar', 'places', 'phone'],
-            maps: { materials: { type: 'material' }, models: { type: 'model', value: 'parts' } },
-            lists: { views: 'view' },
-            kinds: ['static', 'door', 'lamp', 'alarmBeacon', 'light', 'drone', 'securityCamera', 'avatar', 'terminal', 'easel'],
-        },
-    };
+    // each world type's schema: { title, config, rename, maps, lists }
+    const SCHEMAS = Object.fromEntries(Object.entries(Types.WORLDS).map(([type, w]) =>
+        [type, { title: w.title || type, config: [], maps: {}, lists: {}, ...w.schema }]));
 
     // fields the engine adds to any entity; never passed to a feature engine
     const ENGINE_FIELDS = ['of', 'type', '$comment'];
@@ -116,7 +75,7 @@ const ScenarioFormat = (() => {
         return { type, ...rest };
     };
 
-    // the types a feature's entities may take: type -> { kind: config | map | list | entity, key / path }
+    // the types a world's entities may take: type -> { kind: config | map | list | entity, key / path }
     const slotCache = new Map();
     function slotTypes(feature) {
         if (slotCache.has(feature)) return slotCache.get(feature);
@@ -124,26 +83,27 @@ const ScenarioFormat = (() => {
         for (const k of schema.config) m.set(schema.rename?.[k] || k, { kind: 'config', key: k });
         for (const [path, spec] of Object.entries(schema.maps)) m.set(spec.type, { kind: 'map', path, spec });
         for (const [path, type] of Object.entries(schema.lists)) m.set(type, { kind: 'list', path });
-        for (const k of schema.kinds || []) {
-            if (m.has(k)) throw new Error(`${feature}: entity class "${k}" clashes with a schema slot`);
+        for (const k of Object.keys(Types.IMPLS)) {
+            if (!Types.implsIn(feature, k).length) continue;
+            if (m.has(k)) throw new Error(`${feature}: entity type "${k}" clashes with a schema slot`);
             m.set(k, { kind: 'entity' });
         }
         for (const t of m.keys()) {
-            if (!Types.has(t)) throw new Error(`${feature}: type "${t}" is not in js/kits/types.js`);
-            if (SCHEMAS[t]) throw new Error(`${feature}: type "${t}" is a feature's name`);
+            if (!Types.has(t)) throw new Error(`${feature}: type "${t}" is not in js/kits/manifest.js`);
+            if (SCHEMAS[t]) throw new Error(`${feature}: type "${t}" is a world type`);
         }
         slotCache.set(feature, m);
         return m;
     }
     const takes = (feature, type) => slotTypes(feature).has(type);
 
-    // an engine entity: hud.* / sound.* / an engine type of js/kits/types.js, but `camera` / `view` only without `of`
+    // an engine entity: hud.* / sound.* / an engine type of js/kits/manifest.js, but `camera` / `view` only without `of`
     const isEngine = e => typeof e.type === 'string' && (/^(hud|sound)\./.test(e.type) || Types.isEngine(e.type)) &&
         !(e.of && (e.type === 'camera' || e.type === 'view'));
-    // an entity that belongs to a feature world
+    // an entity that belongs to a world
     const isChild = e => typeof e.type === 'string' && !SCHEMAS[e.type] && !isEngine(e);
 
-    // the feature roots of a scenario: [{ feature, id, def }]
+    // the world roots of a scenario: [{ feature (its world type), id, def }]
     function roots(scenario) {
         return (scenario.entities || []).filter(e => SCHEMAS[e.type]).map(def => ({ feature: def.type, id: def.id || def.type, def }));
     }
@@ -153,7 +113,7 @@ const ScenarioFormat = (() => {
         const where = e.of ? ` (of "${e.of}")` : '';
         if (!Types.has(e.type)) {
             const dot = e.type.indexOf('.'), kind = e.type.slice(dot + 1);
-            const hint = dot > 0 && SCHEMAS[e.type.slice(0, dot)] && Types.has(kind) ? `: write it as "${kind}"` : ' (js/kits/types.js)';
+            const hint = dot > 0 && SCHEMAS[e.type.slice(0, dot)] && Types.has(kind) ? `: write it as "${kind}"` : ' (js/kits/manifest.js)';
             throw new Error(`unknown entity type "${e.type}"${where}${hint}`);
         }
         if (e.of) {
@@ -168,21 +128,21 @@ const ScenarioFormat = (() => {
         throw new Error(`${e.type}: no world of this scenario takes it`);
     }
 
-    // the entities of one feature world, in scenario order
+    // the entities of one world, in scenario order
     function childrenOf(scenario, root) {
         const all = roots(scenario);
         return (scenario.entities || []).filter(e => isChild(e) && worldOf(e, all).id === root.id);
     }
 
-    // feature entities -> the native scenario object that feature's engine reads
+    // a world's entities -> the native scenario object that world reads
     function toNative(scenario, root) {
-        if (!SCHEMAS[root.feature]) throw new Error(`unknown feature "${root.feature}"`);
+        if (!SCHEMAS[root.feature]) throw new Error(`unknown world type "${root.feature}"`);
         const slots = slotTypes(root.feature);
         const native = { name: root.def.name || scenario.name || root.id };
         const entities = [];
         for (const e of childrenOf(scenario, root)) {
             const type = e.type, slot = slots.get(type);
-            if (!slot) throw new Error(`${root.id}: ${root.feature} has no "${type}"`);
+            if (!slot) throw new Error(`${root.id}: a ${root.feature} world takes no "${type}"`);
             if (slot.kind === 'entity') { entities.push({ type, ...strip(e) }); continue; }
             if (slot.kind === 'config') {
                 const body = 'value' in e && Object.keys(strip(e)).length === 1 ? e.value : untag(strip(e), type);
@@ -208,10 +168,42 @@ const ScenarioFormat = (() => {
         return native;
     }
 
-    // a feature's native scenario -> entities (the root first); used to import scenarios made for the single demos
+    // the kits a world's entities need (each type's implementation's kit), beyond the world's own
+    function kitsOf(scenario, root) {
+        return [...new Set(childrenOf(scenario, root).flatMap(e => Types.kitsFor(root.feature, e.type)))];
+    }
+
+    // Implicit roots: the entities that no world of the scenario takes (and name none with `of`) bring in worlds that
+    // take them: first the world type that takes the most of them (on a tie one that says how it joins a scenario, its
+    // `implicit`, then the manifest's order), then for what is left, and so on. Each new root goes first, id = its type,
+    // and the entities it was brought in for name it (`of`). With other worlds a new one joins them as its `implicit`
+    // says (fields merged into its root: a sky's layer role); alone it is the scenario's world as it is.
+    function complete(scenario) {
+        const ents = scenario.entities || [], have = roots(scenario);
+        // a data type of no world here goes to the only world, which reads what it wants of it (worldOf), as before
+        let left = ents.filter(e => isChild(e) && !e.of && Types.has(e.type) && !have.some(r => takes(r.feature, e.type)) &&
+            !(have.length === 1 && !(e.type in Types.IMPLS)));
+        const add = [], via = new Map();
+        while (left.length) {
+            const score = w => left.filter(e => takes(w, e.type)).length;
+            const best = Object.keys(SCHEMAS).map((w, k) => ({ w, k, n: score(w), imp: !!Types.WORLDS[w].implicit }))
+                .filter(c => c.n).sort((a, b) => b.n - a.n || b.imp - a.imp || a.k - b.k)[0];
+            if (!best) break;           // taken by no world at all: worldOf says so
+            const id = have.some(r => r.id === best.w) || add.some(r => r.id === best.w) ? `${best.w}${add.length + 1}` : best.w;
+            add.push({ type: best.w, id });
+            for (const e of left.filter(e => takes(best.w, e.type))) via.set(e, id);
+            left = left.filter(e => !via.has(e));
+        }
+        if (!add.length) return scenario;
+        const many = have.length + add.length > 1;
+        const rootsAdded = add.map(r => (many ? { ...r, ...(Types.WORLDS[r.type].implicit || {}) } : r));
+        return { ...scenario, entities: [...rootsAdded, ...ents.map(e => (via.has(e) ? { ...e, of: via.get(e) } : e))] };
+    }
+
+    // a world's native scenario -> entities (the root first); used to import scenarios made for the single demos
     function fromNative(feature, native, id = feature) {
         const schema = SCHEMAS[feature];
-        if (!schema) throw new Error(`unknown feature "${feature}"`);
+        if (!schema) throw new Error(`unknown world type "${feature}"`);
         const slots = slotTypes(feature);
         const root = { type: feature };
         if (id !== feature) root.id = id;
@@ -249,7 +241,7 @@ const ScenarioFormat = (() => {
         }
         for (const e of native.entities || []) {
             const { type, ...rest } = e;
-            if (slots.get(type)?.kind !== 'entity') throw new Error(`${feature}: native entity type "${type}" is not one of its kinds`);
+            if (slots.get(type)?.kind !== 'entity') throw new Error(`${feature}: native entity type "${type}" is not one it takes`);
             out.push(ent(type, rest));
         }
         return out;
@@ -288,10 +280,11 @@ const ScenarioFormat = (() => {
                 out.push(x);
             }
         }
-        return { ...scenario, entities: out };
+        const done = { ...scenario, entities: out };
+        return depth ? done : complete(done);
     }
 
-    return { SCHEMAS, roots, childrenOf, worldOf, isEngine, takes, toNative, fromNative, resolveIncludes, isObj };
+    return { SCHEMAS, roots, childrenOf, worldOf, isEngine, takes, kitsOf, complete, toNative, fromNative, resolveIncludes, isObj };
 })();
 
 if (typeof module !== 'undefined') module.exports = ScenarioFormat;

@@ -1,17 +1,13 @@
 'use strict';
-// The scenario's entity types, by name: the terrain kit's mesh terrain and the entities kit's ground props, drawn
-// through the world's meshes (World.meshes, the common mesh interface).
+// The imposter world's entity types: any kit's whose base is a ground entity (the kit manifest: the terrain kit's mesh
+// terrain, the entities kit's ground props), drawn through the world's meshes (World.meshes, the common mesh interface).
 
 Features.world('imposter', (engine, kit) => {
 const { kits } = engine;
 
 // Each is constructed from a scenario definition ({ type, id, ... }) and spawned once, in scenario order (kits.world's
 // Entity).
-const { Entity } = kits.world;
-const Terrain = kits.terrain.meshTerrain(Entity);
-const { Prop, Compare, Scatter } = kits.entities.groundProps(Entity);
-
-const ENTITY_TYPES = { terrain: Terrain, prop: Prop, compare: Compare, scatter: Scatter };
+const ENTITY_TYPES = kits.world.entityTypes('imposter', { ground: kits.world.Entity });
 
 return { ENTITY_TYPES };
 });

@@ -1,0 +1,412 @@
+'use strict';
+// Kits: the one description of every kit, read by the loader (Features), the scenario format (ScenarioFormat) and the
+// worlds (their entity classes). Nothing else lists kits, types or worlds.
+//
+//   <kit>: {
+//     about, uses (the kits it builds on), parts (js/kits/<kit>/<part>.js, in load order),
+//     types:  entity types it implements, by factory: <factory>: { base, needs, types: { <type>: [Class, about] } }
+//             kits.<kit>.<factory>(Base, options) makes the classes over a world's entity base (Base: the world's
+//             `bases[base]`); a world takes the types of every factory whose base it has and whose `needs` it provides.
+//             A factory that returns one class (not a set of them) names none ([null, about]).
+//     data:   data types it reads (config blocks, presets, plans): { <type>: about }
+//     worlds: the world types it offers: <type>: { title, about, uses, parts, bases, provides, schema, implicit }
+//             parts: js/kits/<kit>/worlds/<type>/<part>.js (Features.world); bases: the entity bases it has (names);
+//             provides: what else its entity types may need of it (structures, weather, water...); schema: how its
+//             data types map onto its native layout (ScenarioFormat); implicit: the root entity it gets when a scenario
+//             has none of it but an entity only it takes (an entity of any kit works in any scenario).
+//   }
+//
+// ENGINE: the engine's own entity types (js/engine). Plain script, not a kit part: the scenario format reads it before
+// any kit loads, in the page and in node tools (module.exports).
+
+const Kits = (() => {
+    const ENGINE = {
+        include: 'splices another scenario\'s entities in its place',
+        camera: 'which world drives the camera, or the engine\'s free camera; with `of`: that world\'s camera settings',
+        view: 'a viewpoint in composition space; with `of`: one of that world\'s views (`each` + `follow` per member)',
+        link: 'sets a world parameter from an expression',
+        handheld: 'the engine\'s handheld phone',
+        'handheld.page': 'a page of the handheld',
+        'hud.toast': 'a message once the scenario starts',
+        'sound.master': 'master gain', 'sound.bed': 'a looped sound', 'sound.cue': 'a one-shot sound',
+    };
+
+    const KITS = {
+        noise: { about: 'random numbers, value noise, fbm, their WGSL', parts: ['random', 'value', 'wgsl'] },
+        mesh: {
+            about: 'the common mesh interface every world draws through: geometry, a builder, tiled meshes',
+            parts: ['geometry', 'builder', 'interface', 'tiled'],
+            data: { material: 'a material', model: 'a model (parts)' },
+        },
+        view: {
+            about: 'the first-person view (fly / walk) every camera is',
+            parts: ['first-person'],
+            data: { player: 'the player (FirstPersonView: start, speeds, walk)' },
+        },
+        world: {
+            about: 'entity bases, HUD layers, pages and the FeatureWorld adapter every world is',
+            parts: ['entity', 'hud', 'pages', 'feature-world'],
+            data: { lighting: 'which lighting preset starts, and lighting settings', light: 'a lighting preset (sun, sky, fog...)' },
+        },
+        entities: {
+            about: 'the shared entity kinds (spin, cameras, doors, lights, drones) and the entity sets of space, ground, sector and fixture worlds',
+            uses: ['noise', 'world', 'mesh', 'gui'],
+            parts: ['spin', 'camera', 'door', 'light', 'drone', 'space', 'ground-props', 'sectors', 'fixtures'],
+            types: {
+                spaceTypes: {
+                    base: 'space',
+                    types: {
+                        body: ['Body', 'a celestial body'], prop: ['Prop', 'a placed model (on a body: lat / lon / alt)'],
+                        field: ['Field', 'a scattered field of props'], orbiter: ['Orbiter', 'a body on an orbit'],
+                    },
+                },
+                groundProps: {
+                    base: 'ground',
+                    types: {
+                        prop: ['Prop', 'a placed model on the ground'], scatter: ['Scatter', 'props scattered over the terrain'],
+                        compare: ['Compare', 'mesh vs imposter comparison row'],
+                    },
+                },
+                sectorTypes: {
+                    base: 'sector',
+                    types: {
+                        securityCamera: ['SecurityCamera', 'a security camera (sweep, feed)'], prop: ['Prop', 'a placed model (with screens)'],
+                        light: ['Lamp', 'a light source'], stairs: ['Stairs', 'stairs'], hull: ['Hull', 'a vehicle hull'], helm: ['Helm', 'a vehicle helm'],
+                        door: ['Door', 'a door (auto, locked, sliding)'], drone: ['Drone', 'a patrolling or wandering drone'],
+                    },
+                },
+                fixtureTypes: {
+                    base: 'fixture',
+                    types: {
+                        static: ['ModelEntity', 'a static model'], door: ['SlidingDoor', 'a sliding door (auto, locked)'],
+                        lamp: ['SwingingLamp', 'a swinging lamp'], alarmBeacon: ['AlarmBeacon', 'a spinning alarm beacon'],
+                        light: ['PointLight', 'a light source'], drone: ['PatrolDrone', 'a patrolling drone'],
+                        securityCamera: ['SecurityCamera', 'a security camera (sweep, feed)'], avatar: ['Avatar', 'an avatar'],
+                        terminal: ['Terminal', 'a terminal with an EntityGUI'], easel: ['Easel', 'a paintable easel'],
+                    },
+                },
+            },
+            worlds: {
+                origin: {
+                    title: 'Entity Origin',
+                    about: 'a real-scale solar system under a floating origin',
+                    parts: [
+                        'core/config', 'core/math', 'core/world-pos', 'core/origin', 'render/mesh', 'render/materials',
+                        'render/instances', 'render/shaders', 'render/renderer', 'world/entities', 'world/world', 'game/floating',
+                        'game/camera', 'game/hud', 'game/app', 'phone-pages', 'feature',
+                    ],
+                    bases: ['space'],
+                    schema: {
+                        config: ['start', 'camera', 'origin', 'lighting'],
+                        rename: { origin: 'floatingOrigin' },
+                        maps: { materials: { type: 'material' }, models: { type: 'model', value: 'parts' } },
+                        lists: { bookmarks: 'bookmark' },
+                    },
+                    data: { bookmark: 'a bookmarked place', start: 'the starting bookmark', floatingOrigin: 'floating origin settings (distance, angle, scale)' },
+                },
+            },
+        },
+        terrain: {
+            about: 'heightfields and what shapes them (stamps, channels, land use), mesh terrain, the land field and its LOD',
+            uses: ['world', 'noise', 'gpu'],
+            parts: ['heightfield', 'stamps', 'channels', 'landuse', 'mesh-terrain', 'land-field', 'terrain-lod'],
+            types: {
+                terrainTypes: {
+                    base: 'terrain',
+                    types: {
+                        tilt: ['Tilt', 'a plane tilting the ground'], hills: ['Hills', 'rolling noise hills'], mountain: ['Mountain', 'a peak'],
+                        range: ['Range', 'a ridge of peaks along a line'], lake: ['Lake', 'a bowl filled to a level'],
+                        clearing: ['Clearing', 'levels the ground in a rectangle or disc (inset: meets its edges at their height)'],
+                        river: ['River', 'a river channel'], valley: ['Valley', 'a carved valley'], basin: ['Basin', 'a basin'],
+                        coast: ['Coast', 'a coastline'], dam: ['Dam', 'a dam wall (breaches)'],
+                        town: ['Town', "a town's built-up ground (land use)"], forest: ['Forest', 'woods (land use)'],
+                    },
+                },
+                meshTerrain: { base: 'ground', types: { terrain: [null, 'a mesh terrain'] } },
+            },
+            data: { terrain: 'the heightfield (size, resolution, base shape)' },
+        },
+        hydrology: {
+            about: 'water sources and sinks on a terrain; the water world simulates them',
+            uses: ['terrain'],
+            parts: ['sources'],
+            types: {
+                hydrologyTypes: {
+                    base: 'terrain', needs: ['water'],
+                    types: {
+                        sea: ['Sea', 'sea level'], spring: ['Spring', 'a water source'], drain: ['Drain', 'a water sink'],
+                        rain: ['Rain', 'rain over an area'], debris: ['Debris', 'floating debris'],
+                    },
+                },
+            },
+            worlds: {
+                water: {
+                    title: 'Entity Water',
+                    about: 'a GPU shallow-water river simulation with surface-wave cascades and debris',
+                    uses: ['noise', 'view', 'world', 'terrain'],
+                    parts: [
+                        'config', 'terrain/heightfield', 'shaders/flow', 'shaders/waves', 'shaders/debris', 'shaders/render',
+                        'gpu/helpers', 'entities/types', 'world', 'sim/flow', 'sim/waves',
+                        'sim/debris', 'renderer', 'tools', 'hud', 'app', 'phone-pages', 'feature',
+                    ],
+                    bases: ['terrain'],
+                    provides: ['water'],
+                    schema: {
+                        config: ['terrain', 'sim', 'waves', 'water', 'lighting'],
+                        rename: { water: 'waterShading' },
+                        maps: { lighting: { type: 'light', except: ['start'] } },
+                        lists: { tools: 'tool', views: 'view' },
+                    },
+                    data: {
+                        sim: 'water simulation settings', waves: 'surface waves', tool: 'a tool on a key',
+                        waterShading: 'water shading (colour, absorption, refraction, foam)',
+                    },
+                },
+            },
+        },
+        weather: {
+            about: 'storm cells, the climate, the sky and cloud layers, lightning',
+            uses: ['noise'],
+            parts: ['storms', 'climate', 'sky', 'lightning'],
+            types: {
+                weatherTypes: {
+                    base: 'terrain', needs: ['weather'],
+                    types: {
+                        storm: ['StormCell', 'a storm cell'], supercell: ['Supercell', 'a supercell'],
+                        squall: ['SquallLine', 'a squall line'], spawner: ['Spawner', 'spawns storm cells'],
+                    },
+                },
+            },
+            data: {
+                weather: 'weather settings and the starting state', weatherState: 'a weather state', cloudLayer: 'a cloud layer',
+                hurricane: 'a hurricane',
+            },
+        },
+        interior: {
+            about: 'interiors: origins, vis areas and portals, portal visibility, floor plans',
+            uses: ['mesh'],
+            parts: ['origin', 'vis-area', 'frustum', 'trees', 'areas', 'area-set', 'portal-vis', 'vis-debug', 'area-map', 'vis-inspector', 'floorplan', 'interior'],
+            data: {
+                building: 'a building archetype (storeys, windows, doors, furniture)', area: 'a vis area (room) with its lights',
+                visPortal: 'a vis portal (door, window, hatch) between areas', occluder: 'an occluder box',
+            },
+            worlds: {
+                portal: {
+                    title: 'Entity Portal',
+                    about: 'a bunker compound of areas and portals, stencil-masked traversal, a freighter, drones',
+                    uses: ['noise', 'view', 'world', 'entities', 'transit', 'building', 'gpu', 'gui'],
+                    parts: [
+                        'core/config', 'core/math', 'core/geometry2d', 'core/frustum', 'render/mesh', 'render/materials',
+                        'render/shaders', 'render/renderer', 'render/gui-pass', 'render/frame-builder', 'vis/object-trees',
+                        'vis/portal-vis', 'world/collision', 'world/area', 'world/portal', 'world/light-transport', 'world/architecture', 'world/outdoors',
+                        'world/nav-graph', 'world/vehicle', 'world/power', 'gui/screens', 'world/entities', 'world/world', 'game/player', 'game/input',
+                        'game/hud', 'game/media', 'game/game', 'phone-pages', 'feature',
+                    ],
+                    bases: ['sector'],
+                    schema: {
+                        config: ['camera', 'player', 'minimap', 'outdoor', 'cctv', 'media', 'iptv'],
+                        maps: { materials: { type: 'material' }, models: { type: 'model' }, buildings: { type: 'building' }, ...plans() },
+                        lists: { areas: 'area', portals: 'visPortal', occluders: 'occluder', vehicles: 'vehicle', views: 'view', structures: 'structure' },
+                    },
+                    data: { minimap: 'the minimap', outdoor: 'the outdoors (fog, sun)' },
+                },
+            },
+        },
+        transit: {
+            about: 'routes, lines and the vehicles on them (buses, ships), lifts',
+            uses: ['interior', 'mesh', 'gui'],
+            parts: ['paths', 'line', 'bus', 'ship', 'elevator', 'lifts', 'lift-interaction', 'drive-control'],
+            types: { busTypes: { base: 'terrain', needs: ['structures'], types: { bus: ['BusLine', 'a bus line with its fleet'] } } },
+            data: { vehicle: 'a vehicle on a route (the freighter)' },
+        },
+        building: {
+            about: 'buildings as floor-plan compositions: plans, cores, furnishing, floors, lifts',
+            uses: ['noise', 'mesh', 'interior', 'transit', 'gui'],
+            parts: ['library', 'core', 'furnish', 'floors', 'ladders', 'planned', 'sectors', 'doors', 'room-vis', 'lift-control'],
+            // floor plans: data, kept in scenarios/plans/ and included where a world builds from them
+            data: {
+                buildingPlan: 'a building as a floor-plan composition: sections of storeys (storeyPlans), its core (corePlan), its lift groups',
+                storeyPlan: 'a storey layout: bands of rooms and corridors round the core, or a hall',
+                corePlan: 'a core: stairwell, lift banks (shafts with their technical space, pit, overrun, ladder), lift lobby',
+                roomType: 'a kind of room: its furniture, lamps, colours',
+                furniture: 'a furniture item: footprint and parts', furnishing: "an unplanned archetype's furniture per storey",
+                structure: 'a building placed from a buildingPlan (any world that builds from plans)',
+            },
+        },
+        settlement: {
+            about: 'villages, bus stations, skyscrapers and the structures they build (solids, shelters, doors, buildings)',
+            uses: ['noise', 'mesh', 'interior', 'transit', 'building'],
+            parts: [
+                'settlements', 'structures/limits', 'structures/palette', 'structures/solids', 'structures/shelter-boxes', 'structures/doors',
+                'structures/buildings', 'structures/fixtures', 'structures/structures', 'structures/meshes', 'structures/walker',
+                'structures/door-control', 'structures/sound-events',
+            ],
+            types: {
+                settlementTypes: {
+                    base: 'terrain', needs: ['structures'],
+                    types: {
+                        village: ['Village', 'a village on a road'], busStation: ['BusStation', "a town's bus station"],
+                        skyscraper: ['Skyscraper', 'a skyscraper built from a buildingPlan, its plaza round it'],
+                        structure: ['Structure', 'a building placed from a buildingPlan'],
+                    },
+                },
+            },
+            data: { streetLights: 'street light settings' },
+        },
+        curvature: {
+            about: "a round planet's surface out of a flat world, O(1) per point (the outdoors as drawn: renderers, culling)",
+            parts: ['curvature'],
+            data: { curvature: 'the outdoors drawn on a round planet (radius, on, reference): O(1) per point, the world itself stays flat' },
+        },
+        geo: {
+            about: "a real place (tools/geo-import.mjs's data, ScenarioData): its ground, roads, buildings and place names as entities",
+            uses: ['noise', 'world', 'mesh', 'terrain'],
+            parts: ['data', 'curves', 'roads', 'buildings', 'types'],
+            types: {
+                // a real place, imported by tools/geo-import.mjs into scenarios/data/<region>/ (an entity's `data` names it)
+                geoTypes: {
+                    base: 'terrain', needs: ['structures'],
+                    types: {
+                        geoTerrain: ['GeoTerrain', "a real place's ground: its heights and land cover (built-up, woods, water) from data"],
+                        geoRoads: ['GeoRoads', "a real place's roads from data: ribbons with rounded curves on the ground, bridges, markings"],
+                        geoBuildings: ['GeoBuildings', "a real place's buildings from data: their footprints stood up to their heights, flat or hipped roofs"],
+                        geoCanopy: ['GeoCanopy', "a real place's tree canopy from data (cover and height): where the plants grow and how tall"],
+                        geoCoast: ['GeoCoast', "a real place's coastline from data (distance to it, 18 m grid): the shore drawn along it, beaches and surf"],
+                        geoPlaces: ['GeoPlaces', "a real place's names from data (towns, peaks...) as place labels"], place: ['Place', 'a named place (its label)'],
+                    },
+                },
+            },
+        },
+        imposter: {
+            about: 'octahedral imposters for any renderer: bake a mesh into a light-agnostic G-buffer atlas, draw instances as imposters from it, cull them into LOD lists (docs/imposter.md)',
+            parts: ['octahedral', 'atlas', 'shaders', 'gpu', 'baker', 'lists'],
+            worlds: {
+                imposter: {
+                    title: 'Entity Imposter',
+                    about: 'a valley of meshes and their octahedral imposters, LOD-culled on the GPU',
+                    uses: ['noise', 'view', 'world', 'terrain', 'entities'],
+                    parts: [
+                        'core/config', 'core/util', 'core/math', 'assets/textures',
+                        'assets/materials', 'assets/geometry', 'gpu/mesh', 'assets/models', 'assets/loaders', 'shaders/common',
+                        'shaders/mesh', 'shaders/cull', 'shaders/imposter', 'shaders/overlay', 'gpu/renderer', 'world/lighting', 'world/archetype', 'world/entities', 'world/world',
+                        'game/camera', 'game/hud', 'game/game', 'phone-pages', 'feature',
+                    ],
+                    bases: ['ground'],
+                    schema: {
+                        config: ['camera', 'environment', 'lod', 'shadows', 'imposter', 'drop'],
+                        rename: { imposter: 'imposterAtlas' },
+                        maps: { lighting: { type: 'light' }, materials: { type: 'material' }, models: { type: 'model' } },
+                        lists: { views: 'view' },
+                    },
+                    data: {
+                        environment: 'the starting environment preset', lod: 'LOD settings', shadows: 'shadow settings',
+                        imposterAtlas: 'imposter atlas settings (grid, resolution, mode)', drop: 'dropping a model file into the scene',
+                    },
+                },
+            },
+        },
+        gpu: { about: 'stencil layouts, pipeline tables, render extensions, lines, half floats, profiling, dynamic scale', parts: ['stencil', 'pipelines', 'extensions', 'lines', 'half', 'profiler', 'dynamic-scale'] },
+        gui: {
+            about: 'EntityGUI: world-space GUIs, the phone, media (CCTV, camera, gallery, IPTV)',
+            uses: ['noise', 'gpu'],
+            parts: [
+                'math', 'materials', 'geometry', 'gui-mode', 'shaders', 'renderer', 'atlas', 'device-context', 'entity-gui', 'gui-schedule', 'interaction', 'gui-targets', 'world-gui',
+                'phone-gui', 'phone-apps', 'paint-shader', 'paint-canvas', 'easel-gui', 'views', 'media', 'cctv', 'phone-camera',
+                'iptv', 'apps/camera', 'apps/gallery', 'apps/viewer', 'apps/tv', 'media-phone',
+            ],
+            data: {
+                cctv: 'CCTV feeds', media: 'phone camera and gallery', iptv: 'IPTV channels', phone: "the phone's apps and pages", radar: 'the radar app',
+            },
+            worlds: {
+                gui: {
+                    title: 'Entity GUI',
+                    about: 'a facility of world-space GUIs (terminals, CCTV, easels) walked by a player',
+                    uses: ['view', 'world', 'entities', 'interior'],
+                    parts: [
+                        'core/audio', 'gui/terminal-gui', 'world/entities', 'gui/apps/radar', 'world/world', 'game/player',
+                        'game/input', 'game/bindings', 'game/game', 'feature',
+                    ],
+                    bases: ['fixture'],
+                    schema: {
+                        config: ['player', 'facility', 'cctv', 'media', 'iptv', 'waves', 'radar', 'places', 'phone'],
+                        maps: { materials: { type: 'material' }, models: { type: 'model', value: 'parts' } },
+                        lists: { views: 'view' },
+                    },
+                    data: { facility: 'facility state (log)', places: 'named zones', waves: 'radar pings' },
+                },
+            },
+        },
+        atmosphere: {
+            about: 'the volumetric atmosphere (clouds, precipitation, haze, lightning) over a terrain and its structures: its renderer and what it writes each frame, the World under it (WorldExtensions), its App (AppExtensions) and the engine adapter (AtmosphereWorld)',
+            uses: ['noise', 'view', 'world', 'gpu', 'gui', 'mesh', 'interior', 'transit', 'building', 'settlement', 'terrain', 'weather', 'curvature', 'imposter'],
+            parts: [
+                'limits', 'quality', 'bindings', 'shaders/common', 'shaders/shelter', 'shaders/occupancy', 'shaders/noise', 'shaders/weather',
+                'shaders/volumetrics', 'shaders/scene', 'shaders/vegetation', 'shaders/final', 'passes', 'vegetation', 'renderer', 'far-lights', 'surroundings', 'light-writer',
+                'frame-writer', 'world', 'app/hud', 'app/menus', 'app/controls', 'app/key-commands', 'app/app', 'app/phone-pages', 'app/feature',
+            ],
+            data: { render: 'render settings' },
+            worlds: {
+                // its entity types, its World extension (Storms: cells, hurricane, tornado) and App extension (Clouds: the
+                // cloud picker, storm keys, menus, readout), composed onto this kit's World, App and adapter
+                cloud: {
+                    title: 'Entity Cloud',
+                    about: 'volumetric clouds and weather over a terrain with its towns, buildings and buses',
+                    parts: ['entities', 'storms', 'clouds', 'world-type'],
+                    bases: ['terrain'],
+                    provides: ['structures', 'weather'],
+                    schema: {
+                        config: ['terrain', 'render', 'weather', 'lighting', 'hurricane', 'streetLights', 'curvature'],
+                        maps: { 'weather.states': { type: 'weatherState' }, 'lighting.presets': { type: 'light' }, buildings: { type: 'building' }, ...plans() },
+                        lists: { clouds: 'cloudLayer', views: 'view' },
+                    },
+                    // what any scenario gets with a weather entity and no sky: this world over the others
+                    implicit: { layer: { role: 'atmosphere' } },
+                },
+            },
+        },
+    };
+
+    // the building kit's plan data, as a world that builds from plans maps it
+    function plans() {
+        return {
+            'plans.buildings': { type: 'buildingPlan' }, 'plans.storeys': { type: 'storeyPlan' }, 'plans.cores': { type: 'corePlan' },
+            'plans.rooms': { type: 'roomType' }, 'plans.furniture': { type: 'furniture' }, 'plans.furnishings': { type: 'furnishing' },
+        };
+    }
+
+    // ------------------------------------------------------------------------------------------- derived
+    // worlds by type: { kit, ...spec }
+    const WORLDS = {};
+    for (const [kit, k] of Object.entries(KITS)) for (const [type, w] of Object.entries(k.worlds || {})) {
+        if (WORLDS[type]) throw new Error(`world "${type}" offered by kits ${WORLDS[type].kit} and ${kit}`);
+        WORLDS[type] = { kit, type, uses: [], bases: [], provides: [], data: {}, ...w };
+    }
+
+    // entity implementations by type: [{ kit, factory, base, needs, cls, about }]
+    const IMPLS = {};
+    for (const [kit, k] of Object.entries(KITS)) for (const [factory, f] of Object.entries(k.types || {}))
+        for (const [type, [cls, about]] of Object.entries(f.types)) (IMPLS[type] ??= []).push({ kit, factory, base: f.base, needs: f.needs || [], cls, about });
+
+    // data types: type -> [kit or kit/world]
+    const DATA = {};
+    for (const [kit, k] of Object.entries(KITS)) {
+        for (const [type, about] of Object.entries(k.data || {})) (DATA[type] ??= []).push({ kit, about });
+        for (const [w, spec] of Object.entries(k.worlds || {})) for (const [type, about] of Object.entries(spec.data || {})) (DATA[type] ??= []).push({ kit, world: w, about });
+    }
+
+    // the implementations of `type` a world of type `world` takes: its base, and every need provided
+    const implsIn = (world, type) => {
+        const w = WORLDS[world];
+        return (IMPLS[type] || []).filter(i => w.bases.includes(i.base) && i.needs.every(n => w.provides.includes(n)));
+    };
+
+    // the kits an entity of `type` needs loaded in a world of type `world` (its implementation's kit, with what it uses)
+    const kitsFor = (world, type) => [...new Set(implsIn(world, type).map(i => i.kit))];
+
+    const has = type => type in ENGINE || type in IMPLS || type in DATA || type in WORLDS;
+    const isEngine = type => type in ENGINE;
+
+    return { ENGINE, KITS, WORLDS, IMPLS, DATA, implsIn, kitsFor, has, isEngine };
+})();
+
+if (typeof module !== 'undefined') module.exports = Kits;

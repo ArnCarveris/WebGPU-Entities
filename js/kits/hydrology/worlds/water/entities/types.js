@@ -1,5 +1,6 @@
 'use strict';
-// The scenario's entity types, by name: the kits' (terrain, hydrology), over the water's entity base.
+// The water world's entity types: any kit's whose base is a terrain entity and whose needs this world provides (water:
+// the kit manifest), made over the water's entity base.
 
 Features.world('water', (engine, kit) => {
 const { kits } = engine;
@@ -8,24 +9,9 @@ const { kits } = engine;
 // labels 16 m over the ground.
 class Entity extends kits.terrain.TerrainEntity {}
 
-const { Tilt, Hills, Mountain, Lake, Valley, Basin, Coast, Dam } = kits.terrain.terrainTypes(Entity, { peakLabel: 10, lake: { label: 12 } });
-const { Sea, Spring, Drain, Rain, Debris } = kits.hydrology.hydrologyTypes(Entity);
-
-const ENTITY_TYPES = {
-    tilt: Tilt,
-    hills: Hills,
-    mountain: Mountain,
-    valley: Valley,
-    basin: Basin,
-    coast: Coast,
-    dam: Dam,
-    sea: Sea,
-    lake: Lake,
-    spring: Spring,
-    drain: Drain,
-    rain: Rain,
-    debris: Debris,
-};
+const ENTITY_TYPES = kits.world.entityTypes('water', { terrain: Entity }, { terrainTypes: { peakLabel: 10, lake: { label: 12 } } });
+const { Lake, Dam } = ENTITY_TYPES.group('terrainTypes');
+const { Sea, Spring } = ENTITY_TYPES.group('hydrologyTypes');
 
 return { Entity, ENTITY_TYPES, Lake, Dam, Sea, Spring };
 });

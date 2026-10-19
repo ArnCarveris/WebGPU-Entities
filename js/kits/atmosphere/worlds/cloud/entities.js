@@ -1,5 +1,6 @@
 'use strict';
-// The scenario's entity types, by name: the kits' (terrain, settlement, transit, weather, geo), over the cloud's entity base.
+// The cloud world's entity types: any kit's whose base is a terrain entity and whose needs this world provides
+// (structures, weather: the kit manifest), made over the cloud's entity base.
 
 Features.world('cloud', (engine, kit) => {
 const { kits } = engine;
@@ -10,40 +11,10 @@ class Entity extends kits.terrain.TerrainEntity {
     get labelLift() { return 300; }
 }
 
-const { Tilt, Hills, Mountain, Range, River, Lake, Clearing, Town, Forest } = kits.terrain.terrainTypes(Entity, { peakLabel: 100, lake: { radius: 1000 } });
-const { Village, BusStation, Skyscraper, Structure } = kits.settlement.settlementTypes(Entity);
-const { Bus, BusLine } = kits.transit.busTypes(Entity);
-const { StormCell, Supercell, SquallLine, Spawner } = kits.weather.weatherTypes(Entity);
+const ENTITY_TYPES = kits.world.entityTypes('cloud', { terrain: Entity }, { terrainTypes: { peakLabel: 100, lake: { radius: 1000 } } });
+const { Town } = ENTITY_TYPES.group('terrainTypes');
+const { StormCell, Supercell, SquallLine, Spawner } = ENTITY_TYPES.group('weatherTypes');
 const { HURRICANE, TORNADO } = kits.weather;
-const { GeoTerrain, GeoRoads, GeoBuildings, GeoCanopy, GeoCoast, GeoPlaces, Place } = kits.geo.geoTypes(Entity);
 
-const ENTITY_TYPES = {
-    clearing: Clearing,
-    tilt: Tilt,
-    hills: Hills,
-    mountain: Mountain,
-    range: Range,
-    river: River,
-    lake: Lake,
-    town: Town,
-    forest: Forest,
-    village: Village,
-    busStation: BusStation,
-    skyscraper: Skyscraper,
-    structure: Structure,
-    bus: BusLine,
-    storm: StormCell,
-    supercell: Supercell,
-    squall: SquallLine,
-    spawner: Spawner,
-    geoTerrain: GeoTerrain,
-    geoRoads: GeoRoads,
-    geoBuildings: GeoBuildings,
-    geoCanopy: GeoCanopy,
-    geoCoast: GeoCoast,
-    geoPlaces: GeoPlaces,
-    place: Place,
-};
-
-return { Entity, ENTITY_TYPES, Town, River, Bus, BusLine, StormCell, Supercell, SquallLine, Spawner, HURRICANE, TORNADO };
+return { Entity, ENTITY_TYPES, Town, StormCell, Supercell, SquallLine, Spawner, HURRICANE, TORNADO };
 });
