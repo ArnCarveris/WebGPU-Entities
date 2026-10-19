@@ -1,18 +1,19 @@
 'use strict';
 // atmosphereWorld(type): a world under this kit's sky as one world of the engine, the hooks of its FeatureWorld
 // (js/engine/host.js calls these; view / setView: its camera's). A world type is a spec, not a subclass: { world(scenario,
-// features): its World (with its WorldExtensions), extensions: its AppExtensions, title } (the cloud world's `cloud`). As the "atmosphere" of a
-// composition it takes the other worlds into its scene before its volumetrics (Renderer.encodeInject).
+// features): the one World with its WorldExtensions, extensions: its AppExtensions, title } (the cloud world's `cloud`). As the "atmosphere" of a
+// composition it takes the other worlds into its scene before its volumetrics (its RendererExtension's encodeInject).
 
 Features.kit('atmosphere', (engine, kit) => {
 const { kits } = engine;
 const { FeatureWorld } = kits.world, { HUD } = FeatureWorld;
-const { NEAR, QUALITY, App, phonePages } = kit;
+const { NEAR, QUALITY, AppExtension, phonePages } = kit;
+const { App } = engine.kits.world;
 
 // the world of a world type (type: its spec) as the engine runs it (a FeatureWorld's hooks)
 const atmosphereWorld = type => ({
     hud: HUD.labels + HUD.toast,
-    app: fx => new App(fx, type),
+    app: fx => new App(AppExtension, fx, type),
 
     // reversed-Z, infinite far plane, metres (the near plane comes in to 5 cm on foot)
     depth() {
@@ -24,6 +25,7 @@ const atmosphereWorld = type => ({
     get moves() { return ['fly', 'walk']; },
     get move() { return this.app.walker.active ? 'walk' : 'fly'; },
     setMove(mode) { this.app.controls.setWalk(mode === 'walk'); },
+
 
     // its scenario's views (`view` entities): one each, or, following an entity with `each`, one per member of it (a bus line's
     // buses), named by `name` with {label} the member's, its sub line what the member is doing

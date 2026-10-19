@@ -25,7 +25,8 @@ Features.world('imposter', (engine, kit) => {
 const { Common, kits } = engine;
 const { DEG, clamp, v3 } = Common;
 const { FeatureWorld } = kits.world, { HUD } = FeatureWorld;
-const { MSAA, CASCADES, LOD_MODES, ATLAS_VIEWS, GRID_CHOICES, RES_CHOICES, Game, phonePages } = kit;
+const { MSAA, CASCADES, LOD_MODES, ATLAS_VIEWS, GRID_CHOICES, RES_CHOICES, AppExtension, phonePages } = kit;
+const { App } = engine.kits.world;
 
 // This demo as one world of the engine (js/engine/host.js calls these; view / setView: its camera's).
 const FILE_INPUT = `<input data-hud="file" type="file" multiple accept=".glb,.gltf,.bin,.obj,.mtl,.json,.png,.jpg,.jpeg,.webp" hidden>`;
@@ -33,7 +34,7 @@ const FILE_INPUT = `<input data-hud="file" type="file" multiple accept=".glb,.gl
 const imposterWorld = {
     hud: HUD.toast + FILE_INPUT,
 
-    app: fx => new Game(fx),
+    app: fx => new App(AppExtension, fx),
 
     // dropped models (the engine keeps scenario .json drops)
     drop(files) { this.app.loadFiles(files); },
@@ -63,6 +64,7 @@ const imposterWorld = {
 
     // the readout and every control, on the engine's handheld (js/engine/handheld.js)
     handheld() { return phonePages(this.app); },
+
 
     set(key, v) {
         const g = this.app;

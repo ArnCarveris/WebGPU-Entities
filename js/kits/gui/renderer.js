@@ -1,5 +1,5 @@
 'use strict';
-// The renderer: device, pipelines, instances, GUI materials, views and scene passes.
+// The gui kit's RendererExtension (the one Renderer, kits.gpu): device, pipelines, instances, GUI materials, views and scene passes.
 
 Features.kit('gui', (engine, kit) => {
 const { MeshBuilder, GuiSurface, GuiMode, M4, guiWgsl } = kit;
@@ -54,9 +54,10 @@ async function checkShaderModule(module) {
     }
 }
 
-class Renderer {
+class RendererExtension {
     // fx: the feature context (the host's device, canvas size and target; see js/engine/host.js)
-    constructor(fx) {
+    constructor(renderer, fx) {
+        this.renderer = renderer.mount(this);
         this.fx = fx;
         this.pipelines = {};
         this.materials = new Map();     // name -> { shading, view, version }
@@ -276,7 +277,7 @@ class Renderer {
     }
 
     createView() {
-        return new RenderView(this);
+        return new RenderView(this.renderer);
     }
 
     // Bind group for (view, material), cached per view until the material's texture changes
@@ -328,7 +329,7 @@ class Renderer {
             colorAttachments: [{ view: colorView, clearValue: CLEAR_COLOR, loadOp: load ? 'load' : 'clear', storeOp: 'store' }],
             depthStencilAttachment: this.depthAttachment(depthView)
         });
-        return new ScenePass(this, pass, view);
+        return new ScenePass(this.renderer, pass, view);
     }
 }
 
@@ -421,5 +422,5 @@ class ScenePass {
     }
 }
 
-return { GuiShadings, UNIFORM_FLOATS, MAX_LIGHTS, INSTANCE_FLOATS, GUI_STRIDE, DEPTH_FORMAT, CLEAR_COLOR, WORLD_VERTEX_LAYOUT, GUI_VERTEX_LAYOUT, ALPHA_BLEND, checkShaderModule, Renderer, RenderView, ScenePass };
+return { GuiShadings, UNIFORM_FLOATS, MAX_LIGHTS, INSTANCE_FLOATS, GUI_STRIDE, DEPTH_FORMAT, CLEAR_COLOR, WORLD_VERTEX_LAYOUT, GUI_VERTEX_LAYOUT, ALPHA_BLEND, checkShaderModule, RendererExtension, RenderView, ScenePass };
 });

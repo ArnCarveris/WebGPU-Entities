@@ -1,22 +1,22 @@
 'use strict';
-// The world: builds the scenario's entities and moves them.
+// The origin's WorldExtension (the one World, kits.world): builds the scenario's entities and moves them.
 
 Features.world('origin', (engine, kit) => {
-const { Common, kits } = engine;
+const { Common } = engine;
 const { DEG, v3 } = Common;
 const {
     MAX_BODIES, SURFACES, quat, WorldPos, Model, GeometryPool, MaterialTable, Instance, InstanceStore, ENTITY_TYPES,
 } = kit;
 
-class World {
-    constructor(scenario, device, density = 1) {
+class WorldExtension {
+    constructor(world, scenario, device, density = 1) {
+        this.world = world.mount(this);
         this.scenario = scenario;
+        this.types = ENTITY_TYPES;
         this.density = density;
         this.materials = new MaterialTable(scenario.materials || {});
         this.models = new Map(Object.entries(scenario.models || {}).map(([n, parts]) => [n, new Model(n, parts, this.materials)]));
         this.modelList = [...this.models.values()];
-        this.entities = [];
-        this.byId = new Map();
         this.bodies = [];
         this.landmarks = [];
         this.dynamic = [];
@@ -31,15 +31,16 @@ class World {
             },
             rotation: rot => quat.euler(rot),
         };
-        for (const def of scenario.entities || []) kits.world.addEntity(this, ENTITY_TYPES, def);
+        for (const def of scenario.entities || []) world.add(def);
         if (this.bodies.length > MAX_BODIES) throw new Error(`more than ${MAX_BODIES} bodies`);
         this.geometry = new GeometryPool(this.modelList);
         this.store = new InstanceStore(device, this.modelList);
         this.sunPos = this.sun ? this.sun.pos : new WorldPos();
     }
 
-    get(id) {
-        const e = this.byId.get(id);
+    // the entity a placement refers to (an unknown one is an error)
+    need(id) {
+        const e = this.world.get(id);
         if (!e) throw new Error(`unknown entity "${id}"`);
         return e;
     }
@@ -61,21 +62,21 @@ class World {
     resolve(spec) {
         let pos, q = quat.identity();
         if (spec.orbit) {
-            const o = spec.orbit, P = this.get(o.parent), r = o.radius ?? P.radius + (o.altitude || 0);
+            const o = spec.orbit, P = this.need(o.parent), r = o.radius ?? P.radius + (o.altitude || 0);
             const qo = quat.mul(quat.mul(P.frame.q, quat.axisAngle([0, 1, 0], (o.node || 0) * DEG)), quat.axisAngle([1, 0, 0], (o.incl || 0) * DEG));
             const a = (o.angle || 0) * DEG, local = [Math.cos(a) * r, 0, -Math.sin(a) * r];
             const radial = quat.rotate(qo, v3.norm(local)), along = v3.cross(quat.rotate(qo, [0, 1, 0]), radial);
             pos = P.pos.add(quat.rotate(qo, local));
             q = quat.fromAxes(along, radial, v3.cross(along, radial));          // Y points away from the parent
         } else if (spec.surface && typeof spec.surface === 'object') {
-            const s = spec.surface, P = this.get(s.parent), lat = (s.lat || 0) * DEG, lon = (s.lon || 0) * DEG;
+            const s = spec.surface, P = this.need(s.parent), lat = (s.lat || 0) * DEG, lon = (s.lon || 0) * DEG;
             const n = quat.rotate(P.frame.q, [Math.cos(lat) * Math.cos(lon), Math.sin(lat), Math.cos(lat) * Math.sin(lon)]);
             let east = v3.cross(quat.rotate(P.frame.q, [0, 1, 0]), n);
             east = v3.len(east) < 1e-9 ? quat.rotate(P.frame.q, [1, 0, 0]) : v3.norm(east);
             pos = P.pos.add(v3.mul(n, P.radius + (s.alt || 0)));
             q = quat.mul(quat.fromAxes(east, n, v3.cross(east, n)), quat.axisAngle([0, 1, 0], (s.heading || 0) * DEG));
         } else if (spec.parent) {
-            const P = this.get(spec.parent);
+            const P = this.need(spec.parent);
             pos = P.pos.add(quat.rotate(P.frame.q, spec.offset || [0, 0, 0]));
             q = P.frame.q;
         } else {
@@ -110,5 +111,5 @@ class World {
     destroy() { this.store.destroy(); }
 }
 
-return { World };
+return { WorldExtension };
 });

@@ -1,31 +1,34 @@
 'use strict';
-// The game: the frame loop, scenario loading, settings and imports.
+// The imposter's game, its AppExtension (the one App, kits.world): the frame loop, scenario loading, settings and imports.
 
 Features.world('imposter', (engine, kit) => {
 const { Common, kits } = engine;
 const { lerp, v3, fmtK } = Common;
 const { Oct, ImposterBaker } = kits.imposter;
+const { World } = kits.world;
+const { Renderer } = kits.gpu;
 const {
     INSTANCE_FLOATS, FORCE, LOD_MODES, ATLAS_VIEWS, nextFrame, quat, ModelLibrary, GltfLoader, ObjLoader,
-    Renderer, Lighting, World, FlyCamera, InputSystem, Hud, ControlPanel,
+    RendererExtension, Lighting, WorldExtension, FlyCamera, InputSystem, Hud, ControlPanel,
 } = kit;
 
-class Game {
-    constructor(fx) {
+class AppExtension {
+    constructor(app, fx) {
+        this.app = app.mount(this);
         const scenario = fx.native;
         this.fx = fx;
         this.ui = fx.ui;
         this.canvas = fx.canvas;
         this.scenario = scenario;
         this.baseScenario = scenario;       // last scenario loaded from data (drops of models derive from it)
-        this.renderer = new Renderer(fx);
+        this.renderer = new Renderer(RendererExtension, fx);
         this.lib = new ModelLibrary();
         this.camera = new FlyCamera();
         this.lighting = new Lighting();
         this.bakes = 0;                     // atlas bakes since start
         this.bakesAfterRelight = 0;         // ... since the lighting first changed (only manual rebakes / new models)
-        this.input = new InputSystem(this);
-        this.hud = new Hud(this);
+        this.input = new InputSystem(this.app);
+        this.hud = new Hud(this.app);
         this.world = null;
         this.loading = false;
         this.baking = false;
@@ -43,7 +46,7 @@ class Game {
     async start() {
         await this.renderer.init();
         this.baker = new ImposterBaker(this.renderer.device);
-        this.panel = new ControlPanel(this);
+        this.panel = new ControlPanel(this.app);
         this.input.attach();
         this.attachFiles();
         this.loadScenario(this.scenario);
@@ -67,7 +70,7 @@ class Game {
         if (this.loading) { this.toast('Still loading…'); return; }
         this.loading = true;
         try {
-            const world = new World(this, sc);
+            const world = new World(WorldExtension, this.app, sc);
             await world.build();
             const old = this.world;
             this.world = world;
@@ -245,5 +248,5 @@ class Game {
     }
 }
 
-return { Game };
+return { AppExtension };
 });

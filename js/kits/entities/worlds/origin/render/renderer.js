@@ -1,12 +1,15 @@
 'use strict';
-// The renderer: bodies and instances.
+// The origin's RendererExtension (the one Renderer, kits.gpu): bodies and instances.
 
 Features.world('origin', (engine, kit) => {
 const { MAX_BODIES, ORIGIN_BYTES, BODY_FLOATS, FRAME_FLOATS, VERTEX_FLOATS, SAMPLES, WGSL } = kit;
 
-class Renderer {
+class RendererExtension {
     // the host's device and canvas (fx: the feature context, see js/engine/host.js)
-    constructor(fx) { this.fx = fx; }
+    constructor(renderer, fx) {
+        this.renderer = renderer.mount(this);
+        this.fx = fx;
+    }
 
     async init() {
         const device = this.device = this.fx.device;
@@ -133,5 +136,5 @@ class Renderer {
     }
 }
 
-return { Renderer };
+return { RendererExtension };
 });

@@ -1,8 +1,7 @@
 'use strict';
-// The world: builds the scenario's entities into archetypes.
+// The imposter's WorldExtension (the one World, kits.world): builds the scenario's entities into archetypes.
 
 Features.world('imposter', (engine, kit) => {
-const { kits } = engine;
 const { Archetype, FORCE, Geo, MeshBuilder, lin, quat, ENTITY_TYPES } = kit;
 
 // A builder of the mesh interface for indexed surfaces (point / face) over a Geo with vertex colours; finish(): the Geo
@@ -13,14 +12,15 @@ class GeoMesh {
     finish() { return this.g; }
 }
 
-class World {
-    constructor(game, scenario) {
+class WorldExtension {
+    constructor(world, game, scenario) {
+        this.world = world.mount(this);
+        this.types = ENTITY_TYPES;
         this.game = game;
         this.sc = scenario;
         this.lib = game.lib;
         this.archetypes = new Map();
         this.list = [];
-        this.entities = [];
         this.terrain = null;
         this.occ = new Map();           // spatial hash of footprints: 8 m cells -> [x, z, r, ...]
         this.occMax = 0;
@@ -51,7 +51,7 @@ class World {
 
     async build() {
         this.lib.load(this.sc);
-        for (const def of this.sc.entities || []) kits.world.addEntity(this, ENTITY_TYPES, def, { warnings: this.warnings, tolerant: true });
+        for (const def of this.sc.entities || []) this.world.add(def, { warnings: this.warnings, tolerant: true });
         this.warnings.push(...new Set(this.lib.warnings));
         // the highest a shadow caster reaches (the terrain's peak plus a margin for the models on it): see writeShadows
         let peak = 0;
@@ -91,10 +91,10 @@ class World {
         return false;
     }
 
-    update(dt, t) { for (const e of this.entities) e.update(dt, t); }
+    update(dt, t) { for (const e of this.world.entities) e.update(dt, t); }
 
     destroy() { for (const a of this.list) a.destroy(); }
 }
 
-return { World };
+return { WorldExtension };
 });

@@ -1,21 +1,21 @@
 'use strict';
-// The renderer: terrain, water and debris.
+// The water's RendererExtension (the one Renderer, kits.gpu): terrain, water and debris.
 
 Features.world('water', (engine, kit) => {
 const { Common } = engine;
 const { makeBuffer, gridIndices, bindLayout, bindGroup } = Common;
 const { FRAME_FLOATS, waterWgsl, TU, BU, makeTex } = kit;
 
-// Renderer. What the features on in its world add to it are its extensions (RendererExtension, new E(renderer), kept as
-// renderer.ext[E.key]); each hook optional: wgsl(library, modules) (its chunks over the core's stubs; modules: the scene
-// and surface modules' chunk names), pipelines(ctx) (ctx { scene, surface, layoutA, layoutB, pipe }), surface(pass) (its
-// draws in the surface pass, after the water)
-class Renderer {
+// The renderer. What the features on in its world add to it are its other extensions (their RendererExtensions,
+// renderer.compose: new E(renderer), kept as renderer.ext[E.key]); each hook optional: wgsl(library, modules) (its
+// chunks over the core's stubs; modules: the scene and surface modules' chunk names), pipelines(ctx) (ctx { scene,
+// surface, layoutA, layoutB, pipe }), surface(pass) (its draws in the surface pass, after the water)
+class RendererExtension {
     // the host's device and canvas (fx: the world context, see js/engine/host.js; fx.features: the features on in its world)
-    constructor(fx) {
+    constructor(renderer, fx) {
+        this.renderer = renderer.mount(this);
         this.fx = fx;
-        this.ext = {};
-        this.extensions = engine.kits.gpu.extensionsOf(fx.features, 'renderer').map(E => (this.ext[E.key] = new E(this)));
+        renderer.compose(engine.kits.gpu.extensionsOf(fx.features, 'renderer'));
     }
 
     async init() {
@@ -37,7 +37,7 @@ class Renderer {
         // its shaders: the core's chunks, the features' over them
         this.wgsl = waterWgsl();
         this.modules = { scene: ['COMMON', 'SCENE'], surface: ['COMMON', 'SURFACE'] };
-        for (const x of this.extensions) x.wgsl?.(this.wgsl, this.modules);
+        for (const x of this.renderer.extensions) x.wgsl?.(this.wgsl, this.modules);
         const scene = d.createShaderModule({ label: 'scene', code: this.wgsl.code(...this.modules.scene) });
         const surface = d.createShaderModule({ label: 'surface', code: this.wgsl.code(...this.modules.surface) });
         const layoutA = d.createPipelineLayout({ bindGroupLayouts: [this.worldLayout] });
@@ -62,7 +62,7 @@ class Renderer {
         });
         // (its storage buffers' stand-ins: no debris)
         this.noParticles = makeBuffer(d, 64, BU().STORAGE);
-        for (const x of this.extensions) x.pipelines?.({ scene, surface, layoutA, layoutB, pipe });
+        for (const x of this.renderer.extensions) x.pipelines?.({ scene, surface, layoutA, layoutB, pipe });
     }
 
     setSim(world, flow, waves, debris) {
@@ -125,7 +125,7 @@ class Renderer {
         b.setPipeline(this.pWater);
         b.setIndexBuffer(this.waterIndex, 'uint32');
         b.drawIndexed(this.waterCount);
-        for (const x of this.extensions) x.surface?.(b);
+        for (const x of this.renderer.extensions) x.surface?.(b);
         b.end();
         if (this.depthC) {
             enc.copyTextureToTexture({ texture: this.depth }, { texture: this.depthC }, [this.width, this.height]);
@@ -141,5 +141,5 @@ class Renderer {
     }
 }
 
-return { Renderer };
+return { RendererExtension };
 });

@@ -1,5 +1,5 @@
 'use strict';
-// The world: builds the facility and its entities and runs them.
+// The facility's WorldExtension (the one World, kits.world): builds the facility and its entities and runs them.
 
 Features.world('gui', (engine, kit) => {
 const { kits } = engine;
@@ -7,14 +7,16 @@ const { MeshBuilder, MAX_LIGHTS } = engine.kits.gui;
 const { ENTITY_TYPES, TerminalGUI } = kit;
 
 // The facility: entities built from scenario data, shared facility state and actions. What the features on in its world
-// add to it are its extensions (WorldExtension, new E(world) before its entities, kept as world.ext[E.key]): the radar
-// feature's waves (world.waves).
+// add to it are the world's other extensions (their WorldExtensions, world.compose: new E(world) before its entities,
+// kept as world.ext[E.key]): the radar feature's waves (world.waves).
 
 // What a facility without the radar feature has for its waves (footsteps, doors, drones and the alarm emit them): none
 const NO_WAVES = { list: [], emit() {}, prune() {} };
 
-class World {
-    constructor(game, scenario) {
+class WorldExtension {
+    constructor(world, game, scenario) {
+        this.world = world.mount(this);
+        this.types = ENTITY_TYPES;
         this.game = game;
         this.scenario = scenario;
         this.lightsOn = true;
@@ -23,10 +25,7 @@ class World {
         this.lampScale = 1;
         this.log = [...scenario.facility.log];
         this.waves = NO_WAVES;
-        this.ext = {};
-        this.extensions = kits.gpu.extensionsOf(game.fx.features, 'world').map(E => (this.ext[E.key] = new E(this)));
-        this.entities = [];
-        this.byId = new Map();
+        world.compose(kits.gpu.extensionsOf(game.fx.features, 'world'));
         this.modelMeshes = new Map();    // model name -> its renderer mesh (mesh())
         this.guis = [];
 
@@ -46,24 +45,18 @@ class World {
                 return h;
             },
         };
-        for (const def of scenario.entities) kits.world.addEntity(this, ENTITY_TYPES, def, { spawn: false });
-        this.guis = this.entities.flatMap((e) => e.guis);
+        for (const def of scenario.entities) world.add(def, { spawn: false });
+        this.guis = this.world.entities.flatMap((e) => e.guis);
     }
 
     init(renderer) {
         this.renderer = renderer;
-        for (const e of this.entities) e.init(renderer);
+        for (const e of this.world.entities) e.init(renderer);
         for (const g of this.guis) g.attach(this.game);
     }
 
-    get(id) {
-        const e = this.byId.get(id);
-        if (!e) throw new Error(`No entity "${id}"`);
-        return e;
-    }
-
     ofType(Type) {
-        return this.entities.filter((e) => e instanceof Type);
+        return this.world.entities.filter((e) => e instanceof Type);
     }
 
     // Model meshes are shared between entities that use the same model
@@ -83,7 +76,7 @@ class World {
     }
 
     setDoor(id, open, source) {
-        const door = this.get(id);
+        const door = this.world.get(id);
         if (!door.setOpen(open)) return;
         const name = door.name.toUpperCase();
         this.pushLog(open ? `${source} - ${name} OPENING` : `${name} SEALING...`);
@@ -112,14 +105,14 @@ class World {
     // ---- per frame ----
     update(dt, t) {
         this.alarmPulse = this.alarm ? Math.pow(0.5 + 0.5 * Math.sin(t * 7), 3) : 0;
-        for (const e of this.entities) e.update(dt, t);
+        for (const e of this.world.entities) e.update(dt, t);
         this.waves.prune(t);
     }
 
     // Uniform inputs shared by every view this frame
     frameState(t) {
         const lights = [];
-        for (const e of this.entities) e.lights(lights, t);
+        for (const e of this.world.entities) e.lights(lights, t);
         while (lights.length < MAX_LIGHTS) lights.push([0, 0, 0, 0, 0, 0, 0, 0]);
         const f = this.game.scenario.facility || {};
         return { time: t, lightsOn: this.lightsOn, alarmPulse: this.alarmPulse, lights, fog: f.fog ?? 0.05, ambient: f.ambient ?? 0 };
@@ -140,9 +133,9 @@ class World {
     }
 
     collide(p) {
-        for (const e of this.entities) e.collide(p);
+        for (const e of this.world.entities) e.collide(p);
     }
 }
 
-return { World };
+return { WorldExtension };
 });

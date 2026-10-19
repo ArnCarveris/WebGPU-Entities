@@ -1,5 +1,5 @@
 'use strict';
-// The renderer: owns the GPU resources and encodes a frame: the sky, the terrain, the weather, the volumetrics, the
+// The atmosphere's RendererExtension (the one Renderer, kits.gpu): owns the GPU resources and encodes a frame: the sky, the terrain, the weather, the volumetrics, the
 // precipitation, the bloom and the composite. What a world has beyond that (its structures, plants, buses...) the features
 // on in it draw, as its extensions.
 
@@ -14,8 +14,9 @@ const { MAX_BOLT_SEGS } = kits.weather;
 const { GpuProfiler } = kits.gpu;
 const { TerrainLod, TERRAIN_MAX_NODES, terrainPatchIndices } = kits.terrain;
 
-// Renderer. What the features on in its world add to it are its extensions (RendererExtension: a class built with the
-// renderer, new E(renderer), kept as renderer.ext[E.key]), in the features' order; each member optional:
+// The renderer. What the features on in its world add to it are its other extensions (their RendererExtensions: classes
+// built with the renderer, renderer.compose: new E(renderer), kept as renderer.ext[E.key]), in the features' order; each
+// member optional:
 //   frame                    its fields of the frame uniform (FrameBlock: [name, type] pairs, after the core's)
 //   wgsl(library, modules)   its shader chunks, over the core's stubs, before any module is made; modules: the chunk
 //                            names of the scene and final modules ({ scene, final }), to add its own to
@@ -33,13 +34,13 @@ const { TerrainLod, TERRAIN_MAX_NODES, terrainPatchIndices } = kits.terrain;
 //   indoor(pass)             its draws of what is inside, over the whole screen, after the outdoors
 //   late(pass)               the outdoors after the indoors (scissored as outdoor's)
 //   final(pass)              its draws in the final pass, after the composite and the precipitation
-class Renderer {
+class RendererExtension {
     // fx: the world context (the host's device, canvas size, target, the features on in its world (fx.features), and in
     // a composition the other worlds to put under the clouds: fx.inject; see js/engine/host.js)
-    constructor(fx) {
+    constructor(renderer, fx) {
+        this.renderer = renderer.mount(this);
         this.fx = fx;
-        this.ext = {};
-        this.extensions = kits.gpu.extensionsOf(fx.features, 'renderer').map(E => (this.ext[E.key] = new E(this)));
+        renderer.compose(kits.gpu.extensionsOf(fx.features, 'renderer'));
         this.outdoors = null;           // the outdoors seen from inside ({ seen, rect }: a feature's portal traversal), or all of it
     }
 
@@ -51,7 +52,7 @@ class Renderer {
             scene: ['SKY', 'WEATHER_SAMPLE', 'SHADOW_SAMPLE', 'SHELTER', 'TERRAIN', 'FOREST', 'SCENE'],
             final: ['SKY', 'WEATHER_SAMPLE', 'SHADOW_SAMPLE', 'SHELTER', 'TERRAIN', 'FINAL'],
         };
-        for (const x of this.extensions) x.wgsl?.(this.wgsl, this.modules);
+        for (const x of this.renderer.extensions) x.wgsl?.(this.wgsl, this.modules);
         this.profiler = new GpuProfiler(this.device, ['weather', 'ground', 'vegetation', 'scene', 'froxel', 'tiles', 'march', 'resolve', 'bloom', 'final']);
         this.format = this.fx.format;
         // the scene's depth: with a stencil when the device has one to share out (StencilLayout: the world-space GUIs'
@@ -59,7 +60,7 @@ class Renderer {
         this.depthFormat = this.device.features.has('depth32float-stencil8') ? 'depth32float-stencil8' : 'depth32float';
         this.stencilBits = this.depthFormat === 'depth32float' ? 0 : 8;
         const d = this.device, B = GPUBufferUsage;
-        this.frame = new FrameBlock(this.extensions.flatMap(x => x.frame || []));
+        this.frame = new FrameBlock(this.renderer.extensions.flatMap(x => x.frame || []));
         this.frameBuf = makeBuffer(d, this.frame.data.byteLength, B.UNIFORM | B.COPY_DST);
         this.cellData = new Float32Array(MAX_CELLS * CELL_FLOATS);
         this.cellBuf = makeBuffer(d, this.cellData.byteLength, B.STORAGE | B.COPY_DST);
@@ -69,12 +70,12 @@ class Renderer {
         this.repSamp = d.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'repeat', addressModeV: 'repeat', addressModeW: 'repeat' });
         this.clampSamp = d.createSampler({ magFilter: 'linear', minFilter: 'linear', addressModeU: 'clamp-to-edge', addressModeV: 'clamp-to-edge' });
         this.noise = new NoiseVolumes(d);
-        this.weatherPass = new WeatherPass(this);
+        this.weatherPass = new WeatherPass(this.renderer);
         this.worldSet = new BindingSet(d, WORLD_BINDINGS.map(b => b[0]));
-        this.froxelPass = new FroxelPass(this);
-        this.cloudPass = new CloudPass(this);
+        this.froxelPass = new FroxelPass(this.renderer);
+        this.cloudPass = new CloudPass(this.renderer);
         this.createPipelines();
-        for (const x of this.extensions) await x.init?.();
+        for (const x of this.renderer.extensions) await x.init?.();
         this.width = this.height = 0;
         this.scale = 0.5;
     }
@@ -82,8 +83,8 @@ class Renderer {
     createPipelines() {
         const d = this.device;
         this.screenLayout = bindLayout(d, GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT, ['tex', 'tex', 'depth', 'tex']);
-        const scene = this.sceneModule = d.createShaderModule({ label: 'scene', code: shaderSource(this, this.worldSet, this.wgsl.code(...this.modules.scene)) });
-        const final = d.createShaderModule({ label: 'final', code: shaderSource(this, this.worldSet, this.wgsl.code(...this.modules.final)) });
+        const scene = this.sceneModule = d.createShaderModule({ label: 'scene', code: shaderSource(this.renderer, this.worldSet, this.wgsl.code(...this.modules.scene)) });
+        const final = d.createShaderModule({ label: 'final', code: shaderSource(this.renderer, this.worldSet, this.wgsl.code(...this.modules.final)) });
         const layoutA = d.createPipelineLayout({ bindGroupLayouts: [this.worldSet.layout] });
         const layoutB = d.createPipelineLayout({ bindGroupLayouts: [this.worldSet.layout, this.screenLayout] });
         // an object's frame (busData: wgslObject), at a dynamic offset per object: group 1 in the scene pass, group 2 in the
@@ -112,7 +113,7 @@ class Renderer {
         this.lineLayer = new kits.gpu.LineLayer(d, { format: this.format, depth: { format: this.depthFormat, compare: 'greater' } });
         // bloom (WGSL_BLOOM): fullscreen passes into the levels of this.bloom, no depth
         this.bloomLayout = bindLayout(d, GPUShaderStage.FRAGMENT, ['tex', 'tex']);
-        const bloom = d.createShaderModule({ label: 'bloom', code: shaderSource(this, this.worldSet, this.wgsl.code('BLOOM')) });
+        const bloom = d.createShaderModule({ label: 'bloom', code: shaderSource(this.renderer, this.worldSet, this.wgsl.code('BLOOM')) });
         const layoutBloom = d.createPipelineLayout({ bindGroupLayouts: [this.worldSet.layout, this.bloomLayout] });
         const bloomPipe = (fs, blend) => d.createRenderPipeline({
             label: fs, layout: layoutBloom,
@@ -132,7 +133,7 @@ class Renderer {
             primitive: { topology: 'triangle-list' },
         });
         const ctx = { scene, final, layoutA, layoutB, layoutBus, layoutGlass, pipe, blendAlpha };
-        for (const x of this.extensions) x.pipelines?.(ctx);
+        for (const x of this.renderer.extensions) x.pipelines?.(ctx);
     }
 
     setWorld(world) {
@@ -160,24 +161,24 @@ class Renderer {
             this.terrainQuarter = pi.length / 4;
             this.terrainNodes = d.createBuffer({ size: TERRAIN_MAX_NODES * 16, usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST });
         }
-        this.groundPass = new GroundPass(this, world);
+        this.groundPass = new GroundPass(this.renderer, world);
         // the objects drawn in their own frames (busData, BUS_UNIFORM bytes each): each extension's frames(world) of
         // them from its frameBase; written each frame up to what they used (useFrames)
         let slots = 0;
-        for (const x of this.extensions) { x.frameBase = slots; slots += x.frames?.(world) || 0; }
+        for (const x of this.renderer.extensions) { x.frameBase = slots; slots += x.frames?.(world) || 0; }
         this.busUBuf?.destroy();
         this.busData = new Float32Array(Math.max(slots, 1) * BUS_UNIFORM / 4);
         this.busUBuf = d.createBuffer({ size: this.busData.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.busGroup = d.createBindGroup({ label: 'object frames', layout: this.busLayout, entries: [{ binding: 0, resource: { buffer: this.busUBuf, size: 208 } }] });
         this.framesUsed = 0;
-        for (const x of this.extensions) x.setWorld?.(world);
+        for (const x of this.renderer.extensions) x.setWorld?.(world);
         const res = {
             F: this.frameBuf, shapeTex: this.noise.shapeView, detailTex: this.noise.detailView, weatherTex: this.weatherPass.weatherView,
             shadowTex: this.weatherPass.shadowView, heightTex: this.heightView, landTex: this.landMap.createView(), smoothTex: this.smoothMap.createView(), canopyTex: this.canopyMap.createView(), repSamp: this.repSamp,
             clampSamp: this.clampSamp, cells: this.cellBuf, ground: this.groundPass.buffer, bolts: this.boltBuf, anvilTex: this.weatherPass.anvilView,
             layerTex: this.weatherPass.layerView, styleTex: this.weatherPass.styleView, occ: this.weatherPass.occ, buildings: this.noBuildings,
         };
-        for (const x of this.extensions) x.bindings?.(res);
+        for (const x of this.renderer.extensions) x.bindings?.(res);
         this.worldGroup = this.worldSet.group(res, 'world');
     }
 
@@ -314,7 +315,7 @@ class Renderer {
     }
 
     render(enc, probeTexel, particles, bolts, interleave, shadowSlices, froxels, volumetrics = true, tiles = true, bloom = true) {
-        const q = this.device.queue, prof = this.profiler, X = this.extensions;
+        const q = this.device.queue, prof = this.profiler, X = this.renderer.extensions;
         q.writeBuffer(this.frameBuf, 0, this.frame.data);
         q.writeBuffer(this.cellBuf, 0, this.cellData);
         if (this.framesUsed) q.writeBuffer(this.busUBuf, 0, this.busData, 0, this.framesUsed * BUS_UNIFORM / 4);
@@ -384,5 +385,5 @@ class Renderer {
     }
 }
 
-return { Renderer };
+return { RendererExtension };
 });

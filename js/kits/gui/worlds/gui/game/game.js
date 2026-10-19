@@ -1,13 +1,15 @@
 'use strict';
-// The game: the frame loop over world, screens and renderer.
+// The facility's game, its AppExtension (the one App, kits.world): the frame loop over world, screens and renderer.
 
 Features.world('gui', (engine, kit) => {
 const {
-    M4, MaterialTable, Renderer, GuiAtlas, DeviceContext, DEPTH_FORMAT, InteractionSystem, GuiSchedule,
+    M4, MaterialTable, RendererExtension, GuiAtlas, DeviceContext, DEPTH_FORMAT, InteractionSystem, GuiSchedule,
 } = engine.kits.gui;
-const { AudioSystem, SecurityCamera, World, PlayerController, InputSystem, Bindings } = kit;
+const { World } = engine.kits.world;
+const { Renderer } = engine.kits.gpu;
+const { AudioSystem, SecurityCamera, WorldExtension, PlayerController, InputSystem, Bindings } = kit;
 
-// Game: builds every system from the scenario and runs the frame.
+// The game: builds every system from the scenario and runs the frame.
 //
 // Frame order:
 //   simulate (player, world) -> route the cursor -> update GUIs, rebuild the models that are due (GuiSchedule)
@@ -44,29 +46,29 @@ class FrameStats {
     }
 }
 
-class Game {
-    constructor(fx) {
+class AppExtension {
+    constructor(app, fx) {
+        this.app = app.mount(this);
         this.fx = fx;
         this.scenario = fx.native;
         this.canvas = fx.canvas;
-        this.renderer = new Renderer(fx);
+        this.renderer = new Renderer(RendererExtension, fx);
         this.audio = new AudioSystem(fx);
         this.far = fx.native.player.far || 100;
-        this.input = new InputSystem(this, fx.io);
+        this.input = new InputSystem(this.app, fx.io);
         this.stats = new FrameStats();
         this.lastTime = performance.now();
-        this.ext = {};
-        this.extensions = engine.kits.gpu.extensionsOf(fx.features, 'app').map(E => (this.ext[E.key] = new E(this)));
+        app.compose(engine.kits.gpu.extensionsOf(fx.features, 'app'));
     }
 
     // the media feature's systems, if on
-    get cctv() { return this.ext.media?.cctv || null; }
-    get camera() { return this.ext.media?.camera || null; }
-    get iptv() { return this.ext.media?.iptv || null; }
+    get cctv() { return this.app.ext.media?.cctv || null; }
+    get camera() { return this.app.ext.media?.camera || null; }
+    get iptv() { return this.app.ext.media?.iptv || null; }
 
     async start() {
         const r = this.renderer, s = this.scenario;
-        this.world = new World(this, s);
+        this.world = new World(WorldExtension, this.app, s);
         await r.init();
         await GuiAtlas.loadFonts();
         r.reserveSurfaces(this.world.guis.length);
@@ -78,8 +80,8 @@ class Game {
         this.dc = new DeviceContext(this.atlas);
         this.schedule = new GuiSchedule();
 
-        this.player = new PlayerController(this, s.player);
-        this.scene = this;
+        this.player = new PlayerController(this.app, s.player);
+        this.scene = this.app;
         this.views = new Map();         // view target -> its depth and view uniforms
         this.handheld = this.fx.host.handheld;
         // the view ray through the mouse, unless it looks around or the handheld has the cursor
@@ -88,9 +90,9 @@ class Game {
             if (!input.mouse.inside || input.looking || handheld.hasCursor) return null;
             return { eye: player.eye, dir: player.viewRay(input.mouse, player.fovy) };
         });
-        this.bindings = new Bindings(this);
+        this.bindings = new Bindings(this.app);
 
-        for (const x of this.extensions) x.start?.(r);
+        for (const x of this.app.extensions) x.start?.(r);
         this.world.init(r);
         r.finalizeInstances();
         this.mainView = r.createView();
@@ -106,10 +108,10 @@ class Game {
             id: fx.id,
             pages: this.scenario.phone.pages,
             bindings: this.bindings,
-            apps: (phone) => Object.assign({}, ...this.extensions.map(x => x.apps?.(phone))),
+            apps: (phone) => Object.assign({}, ...this.app.extensions.map(x => x.apps?.(phone))),
             renderer: r,
-            fullscreen: () => !!this.ext.media?.fullscreen,
-            hidden: () => this.ext.media?.hidden(),
+            fullscreen: () => !!this.app.ext.media?.fullscreen,
+            hidden: () => this.app.ext.media?.hidden(),
             // while this world's player is the camera: its stride sways the phone, its lights light it (in eye space)
             motion: () => (fx.cameraLocked ? null : { moving: player.moving, stepPhase: player.stepPhase }),
             lighting: (t) => {
@@ -186,13 +188,13 @@ class Game {
         const frame = this.frameState = world.frameState(t);
         const view = player.viewMatrix();
         this.mainView.update(M4.multiply(M4.perspective(player.fovy, r.aspect, 0.02, this.far), view), player.eye, frame);
-        for (const x of this.extensions) x.prepare?.();
+        for (const x of this.app.extensions) x.prepare?.();
 
         world.writeInstances(r);
 
         // Passes
         r.beginFrame();
-        for (const x of this.extensions) x.passes?.(r, now);
+        for (const x of this.app.extensions) x.passes?.(r, now);
         r.updateGuiTargets(r.encoder, world.guis);
         const pass = r.beginScenePass(r.swapView, r.depthView, this.mainView);
         world.render(pass, { showAvatar: false });
@@ -203,5 +205,5 @@ class Game {
     }
 }
 
-return { Game };
+return { AppExtension };
 });

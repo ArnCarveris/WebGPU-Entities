@@ -1,5 +1,5 @@
 'use strict';
-// The app: owns the world, the camera and the settings, and runs the frame (update, then render) through its parts:
+// The atmosphere's AppExtension (the one App, kits.world): owns the world, the camera and the settings, and runs the frame (update, then render) through its parts:
 // its own (menus, commands, keys, HUD, the walker and its footsteps, surroundings, lights, frame uniform and renderer,
 // the gpu kit's dynamic resolution), for which it is the host (world, camera, walker, renderer, settings, fx), and what is
 // composed in: its extensions, the features' on in the world (their extensions.app: the structures' doors and lifts, the
@@ -18,20 +18,21 @@ const { GpuChoice, Common, kits } = engine;
 const { clamp, v3, PointerInput } = Common;
 const { FirstPersonView } = kits.view;
 const SLOW_ALT = { keys: ['AltLeft'], factor: 0.2 };       // Alt held: a fifth of the speed
-const { Hud, AppMenus, Controls, KeyCommands, SPLASH_PARTICLES, RENDER_DEFAULTS, QUALITY, FRAME_BUDGET, Renderer, Surroundings, LightWriter, FrameWriter,
+const { Hud, AppMenus, Controls, KeyCommands, SPLASH_PARTICLES, RENDER_DEFAULTS, QUALITY, FRAME_BUDGET, RendererExtension, Surroundings, LightWriter, FrameWriter,
     Walker, Footsteps } = kit;
-const { DynamicScale } = kits.gpu;
+const { DynamicScale, Renderer } = kits.gpu;
 
-class App {
+class AppExtension {
 
     // world(scenario): the world (World, with the world type's extensions); extensions: AppExtension classes; title: the
     // readout's
-    constructor(fx, { world, extensions = [], title = 'ENTITIES' }) {
+    constructor(app, fx, { world, extensions = [], title = 'ENTITIES' }) {
+        this.app = app.mount(this);
         this.fx = fx;
         this.createWorld = world;
         this.title = title;
         this.canvas = fx.canvas;
-        this.renderer = new Renderer(fx);
+        this.renderer = new Renderer(RendererExtension, fx);
         this.input = new PointerInput(fx.io);
         this.hud = new Hud(fx.ui);
         this.camera = new FirstPersonView({ pos: [0, 3000, 0], speed: 400, wheel: { step: 1.25, min: 5, max: 20000 }, clearance: 1.5, ceiling: 25000, slow: SLOW_ALT });
@@ -55,16 +56,16 @@ class App {
         this.flashVeil = 0;
         this.probe = { coverage: 0, top: 0, precip: 0, virga: 0, cover: 0 };
         // its parts
-        this.menus = new AppMenus(this);
+        this.menus = new AppMenus(this.app);
         this.ext = {};
         this.worldExtensions = kits.gpu.extensionsOf(fx.features, 'world');
-        this.extensions = [...kits.gpu.extensionsOf(fx.features, 'app'), ...extensions].map(E => (this.ext[E.key] = new E(this)));
-        this.controls = new Controls(this);
-        this.keys = new KeyCommands(this);
-        this.surroundings = new Surroundings(this);
-        this.footsteps = new Footsteps(this);
-        this.lights = new LightWriter(this);
-        this.frameWriter = new FrameWriter(this);
+        app.compose([...kits.gpu.extensionsOf(fx.features, 'app'), ...extensions]);
+        this.controls = new Controls(this.app);
+        this.keys = new KeyCommands(this.app);
+        this.surroundings = new Surroundings(this.app);
+        this.footsteps = new Footsteps(this.app);
+        this.lights = new LightWriter(this.app);
+        this.frameWriter = new FrameWriter(this.app);
         this.dynamicScale = new DynamicScale(FRAME_BUDGET);
     }
 
@@ -83,9 +84,9 @@ class App {
         this.quality = clamp(this.cfg.quality, 0, QUALITY.length - 1);
         this.timeScale = this.cfg.timeScale;
         this.radar = this.cfg.radar ?? false;       // off unless the scenario wants it: the screen stays clean
-        for (const x of this.extensions) x.configure?.(this.cfg);
+        for (const x of this.app.extensions) x.configure?.(this.cfg);
         this.renderer.setWorld(world);
-        for (const x of this.extensions) x.load?.(world);
+        for (const x of this.app.extensions) x.load?.(world);
         const L = scenario.lighting || {};
         this.lightPresets = L.presets || { default: {} };
         this.lightNames = Object.keys(this.lightPresets);
@@ -114,13 +115,13 @@ class App {
             if (!this.paused) { this.time += dt; this.weatherTime += wdt; }
             w.busBoost = this.busFast || this.input.keys.has('KeyZ') ? 10 : 1;     // hold Z (or the bus menu): the buses run ten times as fast
             w.update(this.paused ? 0 : dt, wdt, this.time);
-            for (const x of this.extensions) x.update?.(dt, io);
+            for (const x of this.app.extensions) x.update?.(dt, io);
             // on foot after the bus has moved, so a rider's eye is where the bus is this frame
-            if (this.walker.active && !locked) this.walker.update(dt, io, this.input, this);
-            for (const x of this.extensions) x.afterWalk?.(dt, io, now);
+            if (this.walker.active && !locked) this.walker.update(dt, io, this.input, this.app);
+            for (const x of this.app.extensions) x.afterWalk?.(dt, io, now);
             if (v3.len(v3.sub(before, this.camera.pos)) > 3000) this.reset = true;
             this.surroundings.update(dt);
-            for (const x of this.extensions) x.sounds?.();
+            for (const x of this.app.extensions) x.sounds?.();
             this.footsteps.update();
         }
         if (!render) return;
@@ -142,10 +143,10 @@ class App {
         this.lastCam = [...this.camera.pos];
         this.frameNo++;
         this.reset = false;
-        this.hud.drawLabels(this);
-        this.hud.update(this, now);
+        this.hud.drawLabels(this.app);
+        this.hud.update(this.app, now);
     }
 }
 
-return { App };
+return { AppExtension };
 });

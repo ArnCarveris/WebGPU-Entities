@@ -13,14 +13,15 @@ Features.world('gui', (engine, kit) => {
 const { kits } = engine;
 const { FeatureWorld } = kits.world;
 const { Interior, InteriorIndex, Origin } = kits.interior;
-const { Game } = kit;
+const { AppExtension } = kit;
+const { App } = engine.kits.world;
 
 // This demo as one world of the engine (js/engine/host.js calls these). All of its UI is in the 3D scene (and on the
 // engine's handheld).
 const guiWorld = {
     hud: '',
 
-    app: fx => new Game(fx),
+    app: fx => new App(AppExtension, fx),
 
     // classic 0..1 depth, near 0.02, far 100 or the scenario's player.far (depth-stencil, the depth aspect)
     depth() {

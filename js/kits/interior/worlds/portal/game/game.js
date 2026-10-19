@@ -1,15 +1,17 @@
 'use strict';
-// The game: the frame loop over world, visibility and renderer.
+// The portal's game, its AppExtension (the one App, kits.world): the frame loop over world, visibility and renderer.
 
 Features.world('portal', (engine, kit) => {
 const { Common } = engine;
 const { v3 } = Common;
 const {
-    m4, Renderer, FrameBuilder, PortalVis, World, PlayerController, InputSystem, Hud,
+    m4, RendererExtension, FrameBuilder, PortalVis, WorldExtension, PlayerController, InputSystem, Hud,
 } = kit;
 const { VisInspector } = engine.kits.interior;
+const { World } = engine.kits.world;
+const { Renderer } = engine.kits.gpu;
 
-// Game: builds the world from a scenario and runs the frame.
+// The game: builds the world from a scenario and runs the frame.
 //
 // Frame order:
 //   world update (vehicles first, so riders use this frame's pose) -> player -> portal traversal
@@ -27,14 +29,15 @@ const NO_LINES = new Float32Array(0);
 
 const MASK_MODES = ['stencil', 'scissor', 'none'];
 
-class Game {
-    constructor(fx) {
+class AppExtension {
+    constructor(app, fx) {
+        this.app = app.mount(this);
         this.fx = fx;
         this.ui = fx.ui;
         this.canvas = fx.canvas;
-        this.renderer = new Renderer(fx);
-        this.input = new InputSystem(this, fx.io);
-        this.hud = new Hud(this);
+        this.renderer = new Renderer(RendererExtension, fx);
+        this.input = new InputSystem(this.app, fx.io);
+        this.hud = new Hud(this.app);
         this.onError = (e) => console.error(e);
         this.world = null;
         this.player = null;
@@ -47,21 +50,20 @@ class Game {
         this.running = false;
         this.lastT = performance.now();
         this.interaction = null;        // the GUI screens' cursor (the screens feature's)
-        this.ext = {};
-        this.extensions = engine.kits.gpu.extensionsOf(fx.features, 'app').map(E => (this.ext[E.key] = new E(this)));
+        app.compose(engine.kits.gpu.extensionsOf(fx.features, 'app'));
     }
 
     get cam() { return this.player && this.player.cam; }
 
     async start() {
         await this.renderer.init();
-        for (const x of this.extensions) await x.start?.();
+        for (const x of this.app.extensions) await x.start?.();
         this.input.attach();
     }
 
     // build a world from scenario data and make it current (throws on errors in the data)
     load(scn) {
-        const world = new World(scn, this.fx.features);
+        const world = new World(WorldExtension, scn, this.fx.features);
         this.world = world;
         this.vis = new PortalVis(world);
         this.frameBuilder = new FrameBuilder(world, this.renderer);
@@ -70,8 +72,8 @@ class Game {
         this.renderer.upload(world);
         this.opts.freeze = false;
         this.inspector = this.createInspector(world);
-        this.player = new PlayerController(this, scn.camera, scn.player);
-        for (const x of this.extensions) x.load?.(scn, world);
+        this.player = new PlayerController(this.app, scn.camera, scn.player);
+        for (const x of this.app.extensions) x.load?.(scn, world);
         if (world.warnings.length) this.hud.toast(`${world.warnings.length} scenario warning(s), see console`);
         else this.hud.toast(`Loaded "${scn.name || 'scenario'}": ${world.areas.length - 1} areas, ${world.portals.length} portals`);
     }
@@ -95,7 +97,7 @@ class Game {
     // the visibility inspector (the interior kit's: floor map, traversal, frames on the handheld) over the world, with the
     // island's own layers on its map (the sea, the ship's route and hull, the drones) and the masking options
     createInspector(w) {
-        const g = this;
+        const g = this.app;
         return new VisInspector({
             set: w, opts: this.opts, keys: { culling: '1', freeze: '2', portals: '4', volumes: '5', map: 'M', wide: 'N' },
             map: {
@@ -199,7 +201,7 @@ class Game {
         stats.objs = fr.objs.length;
         this.frameStats = fr.stats;
         this.frameMode = mode;
-        for (const x of this.extensions) x.frame?.(now, { eye, fwd, viewProj, height: H });
+        for (const x of this.app.extensions) x.frame?.(now, { eye, fwd, viewProj, height: H });
 
         const lines = I.lines();
         R.render({ globals: this.globals(viewProj, eye, t, W, H, mode === 'stencil'), areas: w.lightingTable(t, eye), draws: fr.draws, cmds: fr.cmds, polys: fr.polys, stencil: mode === 'stencil', lines: lines.data, lineDepthCount: lines.depthCount });
@@ -216,7 +218,7 @@ class Game {
         if (!o.occluders) vis.occluders = [];
         const mode = o.culling ? o.mode : 'none';
         const fr = this.viewBuilder.build(vis, mode, W, H);
-        for (const x of this.extensions) x.view?.(this.viewBuilder.stamp, this.frameNow);
+        for (const x of this.app.extensions) x.view?.(this.viewBuilder.stamp, this.frameNow);
         this.renderer.render({
             globals: this.globals(viewProj, s.eye, t, W, H, mode === 'stencil'), areas: w.lightingTable(t, s.eye), draws: fr.draws, cmds: fr.cmds,
             polys: fr.polys, stencil: mode === 'stencil', lines: NO_LINES, lineDepthCount: 0,
@@ -239,5 +241,5 @@ class Game {
     }
 }
 
-return { MASK_MODES, Game };
+return { MASK_MODES, AppExtension };
 });

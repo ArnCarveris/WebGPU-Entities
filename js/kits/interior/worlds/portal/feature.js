@@ -10,14 +10,15 @@
 Features.world('portal', (engine, kit) => {
 const { kits } = engine;
 const { FeatureWorld } = kits.world, { HUD } = FeatureWorld;
-const { MASK_MODES, Game, phonePages } = kit;
+const { MASK_MODES, AppExtension, phonePages } = kit;
+const { App } = engine.kits.world;
 
 // This demo as one world of the engine (js/engine/host.js calls these).
 const portalWorld = {
     hud: HUD.crosshair + HUD.toast,
 
     app(fx) {
-        const g = new Game(fx);
+        const g = new App(AppExtension, fx);
         g.onError = fx.fail;
         return g;
     },

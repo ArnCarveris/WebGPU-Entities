@@ -1,5 +1,5 @@
 'use strict';
-// The renderer: culling, meshes, imposters and the overlay (the sun's shadows: the shadows feature's).
+// The imposter's RendererExtension (the one Renderer, kits.gpu): culling, meshes, imposters and the overlay (the sun's shadows: the shadows feature's).
 
 Features.world('imposter', (engine, kit) => {
 const { Common, kits } = engine;
@@ -9,18 +9,18 @@ const {
     MSAA, DEPTH_FORMAT, LISTS, GLOBAL_FLOATS, LOD_MODES, ATLAS_VIEWS, m4, TextureFactory, uploadImage, imposterWgsl, IMPOSTER_MODULES,
 } = kit;
 
-// Renderer. What the features on in its world add to it are its extensions (RendererExtension, new E(renderer), kept as
-// renderer.ext[E.key]); each hook optional: wgsl(library, modules) (its chunks over the core's stand-ins; modules: each
-// module's chunk names), globals() (its entries of bind group 0: { layout, resources }), init(ctx) (its resources and
-// pipelines; ctx: the modules, layouts, vertex layout), frame(cam, env, st, aspect, casterTop) (its uniforms, before the
-// frame's cull), passes(enc, archs, st, cam) (its passes after the cull, before the main one), gpuTimes(t, ms) (its share
-// of the timestamp readout)
-class Renderer {
+// The renderer. What the features on in its world add to it are its other extensions (their RendererExtensions,
+// renderer.compose: new E(renderer), kept as renderer.ext[E.key]); each hook optional: wgsl(library, modules) (its
+// chunks over the core's stand-ins; modules: each module's chunk names), globals() (its entries of bind group 0: {
+// layout, resources }), init(ctx) (its resources and pipelines; ctx: the modules, layouts, vertex layout), frame(cam,
+// env, st, aspect, casterTop) (its uniforms, before the frame's cull), passes(enc, archs, st, cam) (its passes after
+// the cull, before the main one), gpuTimes(t, ms) (its share of the timestamp readout)
+class RendererExtension {
     // fx: the feature context (the host's device, canvas size, target; see js/engine/host.js)
-    constructor(fx) {
+    constructor(renderer, fx) {
+        this.renderer = renderer.mount(this);
         this.fx = fx;
-        this.ext = {};
-        this.extensions = kits.gpu.extensionsOf(fx.features, 'renderer').map(E => (this.ext[E.key] = new E(this)));
+        renderer.compose(kits.gpu.extensionsOf(fx.features, 'renderer'));
         this.onError = msg => console.error(msg);
         this.globals = new Float32Array(GLOBAL_FLOATS);
         this.patterns = new Map();
@@ -58,7 +58,7 @@ class Renderer {
 
         const tex = (binding, visibility = S.FRAGMENT) => ({ binding, visibility, texture: {} });
         const smp = binding => ({ binding, visibility: S.FRAGMENT, sampler: {} });
-        this.globalsExt = this.extensions.map(x => x.globals?.()).filter(Boolean);
+        this.globalsExt = this.renderer.extensions.map(x => x.globals?.()).filter(Boolean);
         this.bgl0 = device.createBindGroupLayout({ entries: [
             { binding: 0, visibility: S.VERTEX | S.FRAGMENT | S.COMPUTE, buffer: { type: 'uniform' } }, smp(1),
             ...this.globalsExt.flatMap(g => g.layout),
@@ -75,7 +75,7 @@ class Renderer {
         // its shaders: the core's chunks, the extensions' over them, each module the chunks it names
         this.wgsl = imposterWgsl();
         const modules = Object.fromEntries(Object.entries(IMPOSTER_MODULES).map(([k, v]) => [k, [...v]]));
-        for (const x of this.extensions) x.wgsl?.(this.wgsl, modules);
+        for (const x of this.renderer.extensions) x.wgsl?.(this.wgsl, modules);
         const M = Object.fromEntries(Object.entries(modules).map(([k, names]) => [k, device.createShaderModule({ code: this.wgsl.code(...names) })]));
         const vertexLayout = MESH_BUFFERS;          // the imposter kit's standard mesh: + per-vertex AO
         const mainDepth = (write, compare) => ({ format: DEPTH_FORMAT, depthWriteEnabled: write, depthCompare: compare });
@@ -117,7 +117,7 @@ class Renderer {
 
         const cullMod = M.cull;
         this.cullPipe = device.createComputePipeline({ layout: layout(this.bgl0, imp.listsLayout), compute: { module: cullMod, entryPoint: 'cull' } });
-        for (const x of this.extensions) await x.init?.({ modules: M, meshLayout, impLayout, vertexLayout });
+        for (const x of this.renderer.extensions) await x.init?.({ modules: M, meshLayout, impLayout, vertexLayout });
 
         this.resize();
     }
@@ -206,7 +206,7 @@ class Renderer {
                 if (list) a.cpuCasters += seen ? 1 : 0; else a.visible[0] = seen ? 1 : 0;
                 if (!seen) continue;
             }
-            const gm = a.asset.gpu(this), L = a.lists;
+            const gm = a.asset.gpu(this.renderer), L = a.lists;
             pass.setVertexBuffer(0, gm.vbuf);
             pass.setVertexBuffer(1, gm.aoBuf);
             pass.setIndexBuffer(gm.ibuf, 'uint32');
@@ -214,7 +214,7 @@ class Renderer {
             a.asset.mesh.submeshes.forEach((s, i) => {
                 const p = meshPipe(s.material);
                 if (p !== cur) { pass.setPipeline(p); cur = p; }
-                pass.setBindGroup(1, s.material.bindGroup(this));
+                pass.setBindGroup(1, s.material.bindGroup(this.renderer));
                 if (a.static) pass.drawIndexed(s.count, a.count, s.first, 0, 0);
                 else pass.drawIndexedIndirect(L.args, L.meshArgs(list, i));
             });
@@ -232,10 +232,10 @@ class Renderer {
         this.resize();
         const d = this.device, archs = world ? world.list : [];
         this.writeGlobals(cam, env, st, time);
-        for (const x of this.extensions) x.frame?.(cam, env, st, this.width / this.height, world?.casterTop ?? 0);
+        for (const x of this.renderer.extensions) x.frame?.(cam, env, st, this.width / this.height, world?.casterTop ?? 0);
         for (let k = 0; k < LISTS; k++) d.queue.writeBuffer(this.viewBuf, k * 256, this.viewData, k * 64, 24);
         const enc = d.createCommandEncoder();
-        for (const a of archs) a.upload(this);
+        for (const a of archs) a.upload(this.renderer);
         if (archs.length) {
             const cp = enc.beginComputePass({ timestampWrites: this.stamps(0) });
             cp.setPipeline(this.cullPipe);
@@ -256,7 +256,7 @@ class Renderer {
             archs.forEach((a, i) => { if (!a.static) enc.copyBufferToBuffer(a.lists.args, 0, this.readBuf, offsets[i], a.lists.setStride * LISTS); });
         }
 
-        for (const x of this.extensions) x.passes?.(enc, archs, st, cam);
+        for (const x of this.renderer.extensions) x.passes?.(enc, archs, st, cam);
 
         const pass = enc.beginRenderPass({
             timestampWrites: this.stamps(10),
@@ -291,7 +291,7 @@ class Renderer {
         d.queue.submit([enc.finish()]);
         if (doTime) {
             this.queryPending = true;
-            const parts = this.extensions.filter(x => x.gpuTimes).map(x => [x, x.timed?.(st, archs)]);
+            const parts = this.renderer.extensions.filter(x => x.gpuTimes).map(x => [x, x.timed?.(st, archs)]);
             this.queryRead.mapAsync(GPUMapMode.READ).then(() => {
                 const t = new BigUint64Array(this.queryRead.getMappedRange()), ms = k => Math.max(0, Number(t[k + 1] - t[k])) / 1e6;
                 this.gpuTimes = { cull: ms(0), shadow: null, main: ms(10) };
@@ -322,5 +322,5 @@ class Renderer {
     }
 }
 
-return { Renderer };
+return { RendererExtension };
 });

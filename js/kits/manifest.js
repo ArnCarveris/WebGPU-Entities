@@ -55,8 +55,8 @@ const Kits = (() => {
             data: { player: 'the player (FirstPersonView: start, speeds, walk)' },
         },
         world: {
-            about: 'entity bases, HUD layers, pages and the FeatureWorld adapter every world is',
-            parts: ['entity', 'hud', 'pages', 'feature-world'],
+            about: 'entity bases, the one World and App every world type extends, HUD layers, pages and the FeatureWorld adapter every world is',
+            parts: ['entity', 'world', 'app', 'hud', 'pages', 'feature-world'],
             data: { lighting: 'which lighting preset starts, and lighting settings', light: 'a lighting preset (sun, sky, fog...)' },
         },
         entities: {
@@ -347,8 +347,8 @@ const Kits = (() => {
             },
         },
         gpu: {
-            about: 'stencil layouts, pipeline tables, render extensions, WGSL libraries, lines, half floats, profiling, dynamic scale',
-            parts: ['stencil', 'pipelines', 'extensions', 'wgsl-library', 'lines', 'half', 'profiler', 'dynamic-scale'],
+            about: 'the one Renderer every world type extends, stencil layouts, pipeline tables, render extensions, WGSL libraries, lines, half floats, profiling, dynamic scale',
+            parts: ['stencil', 'pipelines', 'extensions', 'renderer', 'wgsl-library', 'lines', 'half', 'profiler', 'dynamic-scale'],
         },
         gui: {
             about: 'EntityGUI: world-space GUIs (their renderer, atlas, schedule, interaction, render-target fallback) and the phone',

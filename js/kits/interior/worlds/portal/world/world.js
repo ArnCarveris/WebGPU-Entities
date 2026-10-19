@@ -1,5 +1,5 @@
 'use strict';
-// The world: builds the scenario's architecture and entities and runs them.
+// The portal's WorldExtension (the one World, kits.world): builds the scenario's architecture and entities and runs them.
 
 Features.world('portal', (engine, kit) => {
 const { Common, kits } = engine;
@@ -11,24 +11,26 @@ const {
     pushSeg, CollisionSet, Area, Portal, Occluder, Architecture, Outdoors, PowerGrid, ENTITY_TYPES,
 } = kit;
 
-// World: built entirely from the scenario data; its areas, portals and occluders are an AreaSet (kits.interior: areaAt,
-// the outdoor portal tree, the PortalVis graph).
+// The world: built entirely from the scenario data; its areas, portals and occluders are an AreaSet (kits.interior:
+// areaAt, the outdoor portal tree, the PortalVis graph).
 //
 // Build order: materials -> areas -> portals -> occluders -> generated architecture -> outdoors
 // (terrain, scatter, seabed) -> entities -> vehicles (claim what is inside their hulls) -> link entities
 // -> object trees -> collision -> sea surface.
 //
-// What the features on in its world add to it are its extensions (WorldExtension, new E(world) before anything is
-// built, kept as world.ext[E.key]); each hook optional: vehicles() (its vehicles: the vehicles feature's freighter),
+// What the features on in its world add to it are the world's other extensions (their WorldExtensions, world.compose:
+// new E(world) before anything is built, kept as world.ext[E.key]); each hook optional: vehicles() (its vehicles: the vehicles feature's freighter),
 // actors() (positions the entities see besides the player's: the drones feature's drones), and the light transport
 // feature's gather(on, t, eye) / write(data, o, x) (what shines into each area through its portals: lightingTable).
 // Constructing one may set what the world's entities ask of it: guiKinds (the screens feature's GUI kinds), nav (the
 // drones feature's navigation graph).
 
-class World extends AreaSet {
+class WorldExtension extends AreaSet {
     // features: the features on in its world (fx.features)
-    constructor(scn, features = {}) {
+    constructor(world, scn, features = {}) {
         super();
+        this.world = world.mount(this);
+        this.types = ENTITY_TYPES;
         // the planned buildings (`structures`: placements of the floor plans in its `plans`) built into its own areas,
         // portals, models and entities first (the building kit)
         this.scn = scn = kits.building.withStructures(scn);
@@ -36,7 +38,6 @@ class World extends AreaSet {
         this.pool = new GeometryPool();
         this.objects = [];              // static members (chunks with owners), in the per-area trees
         this.dynamic = [];              // entities updated every frame, in spawn order
-        this.entities = [];
         this.doors = [];
         this.helms = [];
         this.drones = [];
@@ -45,8 +46,7 @@ class World extends AreaSet {
         this.cameras = [];              // security cameras (entities.js SecurityCamera)
         this.maxLights = MAX_LIGHTS;    // per area
         this.guiKinds = {};             // the GUI screens' kinds (the screens feature's)
-        this.ext = {};
-        this.extensions = kits.gpu.extensionsOf(features, 'world').map(E => (this.ext[E.key] = new E(this)));
+        world.compose(kits.gpu.extensionsOf(features, 'world'));
         // the common mesh interface (kits.mesh): builders resolve material names and scenario models; static geometry
         // goes into the area trees (addStatic: opts { name, owners, lightArea, vehicle, dockedOnly, solid, climbable }),
         // parts are pool chunks drawn with their own matrix
@@ -57,25 +57,25 @@ class World extends AreaSet {
             bounds: (part, M) => worldBounds(M, part),
             split: (b, plane) => splitMesh(b, plane),
         };
-        this.power = new PowerGrid(this);
+        this.power = new PowerGrid(world);
         this.materials = new MaterialTable(scn.materials, this.warnings);
         this.buildAreas();
         this.buildPortals();
-        this.occluders = (scn.occluders || []).map((d, i) => new Occluder(d, i, this));
+        this.occluders = (scn.occluders || []).map((d, i) => new Occluder(d, i, world));
         for (const O of this.occluders) this.areas[O.area].occluders.push(O.index);
-        new Architecture(this).build();
-        this.outdoors = new Outdoors(this, scn.outdoor);
+        new Architecture(world).build();
+        this.outdoors = new Outdoors(world, scn.outdoor);
         this.water = this.outdoors.water;
         this.outdoors.build();
         this.spawnEntities();
-        this.vehicles = this.extensions.flatMap(x => x.vehicles?.() || []);
+        this.vehicles = this.world.extensions.flatMap(x => x.vehicles?.() || []);
         for (const veh of this.vehicles) veh.claim();
         this.indexAreas();
         // the vehicles in a GridHash by their bounding spheres (re-bucketed as they cross cells, Vehicle.update): point
         // queries (areaAt, groundAt, collide) look only at the ones over p, however many sail
         this.vehicleGrid = new GridHash(64);
         for (const veh of this.vehicles) this.vehicleGrid.insert(veh, ...veh.rect());
-        for (const e of this.entities) e.link();
+        for (const e of this.world.entities) e.link();
         this.buildTrees();
         this.buildCollision();
         this.water?.update(this.hulls);
@@ -192,7 +192,7 @@ class World extends AreaSet {
 
     // ---- entities ----
     spawnEntities() {
-        for (const def of this.scn.entities || []) kits.world.addEntity(this, ENTITY_TYPES, def, { warnings: this.warnings });
+        for (const def of this.scn.entities || []) this.world.add(def, { warnings: this.warnings });
     }
 
     addDynamic(e) { this.dynamic.push(e); }
@@ -281,7 +281,7 @@ class World extends AreaSet {
         this.time = t;
         for (const veh of this.vehicles) veh.update(dt, t);
         this.power.update(dt, t);
-        const all = actors.concat(this.extensions.flatMap(x => x.actors?.() || []));
+        const all = actors.concat(this.world.extensions.flatMap(x => x.actors?.() || []));
         for (const e of this.dynamic) e.update(dt, t, all);
         for (const list of this.dynamicByArea) list.length = 0;
         for (const e of this.dynamic) for (const o of e.owners) this.dynamicByArea[o].push(e);
@@ -296,7 +296,7 @@ class World extends AreaSet {
         const on = this.areas.map(() => []);
         for (const e of this.dynamic) if (e.light && e.lightOn) on[e.lightArea].push(e.light);
         this.areas.forEach((a, i) => on[i].push(...(this.power.powered(i) ? a.lights : a.lights.filter(L => L.signal === 'pulse'))));
-        const lt = this.ext.lightTransport, through = lt ? lt.gather(on, t, eye) : this.areas.map(() => []);
+        const lt = this.world.ext.lightTransport, through = lt ? lt.gather(on, t, eye) : this.areas.map(() => []);
         this.areas.forEach((a, i) => {
             const o = i * AREA_FLOATS, lights = on[i].slice(0, MAX_LIGHTS), into = through[i];
             data.set([a.ambient[0], a.ambient[1], a.ambient[2], 0, a.fog[0], a.fog[1], a.fog[2], a.fog[3], a.sun, lights.length, into.length, 0], o);
@@ -307,5 +307,5 @@ class World extends AreaSet {
     }
 }
 
-return { World, tiltAxes };
+return { WorldExtension, tiltAxes };
 });

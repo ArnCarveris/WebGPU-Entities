@@ -22,14 +22,15 @@ Features.world('origin', (engine, kit) => {
 const { Common, kits } = engine;
 const { v3 } = Common;
 const { FeatureWorld } = kits.world, { HUD } = FeatureWorld;
-const { SAMPLES, NEAR, quat, App, phonePages } = kit;
+const { SAMPLES, NEAR, quat, AppExtension, phonePages } = kit;
+const { App } = engine.kits.world;
 
 // This demo as one world of the engine (js/engine/host.js calls these; view / setView: its camera's, in metres from
 // world 0).
 const originWorld = {
     hud: HUD.labels + HUD.toast,
 
-    app: fx => new App(fx),
+    app: fx => new App(AppExtension, fx),
 
     // reversed-Z, infinite far plane, 4x MSAA; depth is in origin units: s metres each
     depth() {
@@ -76,6 +77,7 @@ const originWorld = {
 
     // the readout and every option, on the engine's handheld (js/engine/handheld.js)
     handheld() { return phonePages(this.app); },
+
 
     set(key, v) {
         const a = this.app, f = a.floating;

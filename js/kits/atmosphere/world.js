@@ -1,11 +1,12 @@
 'use strict';
-// World: a world under the atmosphere: the scenario's entities (its types) on a terrain (the terrain kit's LandField), the
-// weather state, the cloud layers and lightning (the weather kit's). The Renderer and FrameWriter draw it. What a world
-// type adds, and what the features on in it bring (the structures the entities build, the buses running on them...), is
-// composed in as extensions, never by subclassing.
+// The atmosphere's WorldExtension (the one World, kits.world): a world under the atmosphere: the scenario's entities (its
+// types) on a terrain (the terrain kit's LandField), the weather state, the cloud layers and lightning (the weather kit's).
+// The renderer and FrameWriter draw it. What a world type adds, and what the features on in it bring (the structures the
+// entities build, the buses running on them...), is composed in as the world's other extensions, never by subclassing.
 //
-// WorldExtension: a class built with the world (new E(world), before its entities), kept as world.ext[E.key]: the
-// world type's and the features' on in it (their extensions.world); each hook optional, called in order:
+// Their WorldExtensions: classes built with the world (world.compose: new E(world), before its entities), kept as
+// world.ext[E.key]: the world type's and the features' on in it (their extensions.world); each hook optional, called in
+// order:
 //   created()           after the core's systems (terrain, curvature, weather, clouds, lightning), before the entities:
 //                       a feature puts its own in their place (the curvature feature's Curvature)
 //   centre()            [x, z]: where what the scenario does not place goes (the lit town); the first one's
@@ -46,14 +47,14 @@ class FlatCurvature {
     gpu() { return [this.K, 0, this.horizon() * 1.1, this.radius]; }
 }
 
-class World {
+class WorldExtension {
     // types: the entity classes by type name; town: the class the lit town (scenario streetLights) is painted with (a
-    // town entity's); extensions: WorldExtension classes
-    constructor(scenario, { types, town, extensions = [] }) {
+    // town entity's); extensions: the other WorldExtension classes
+    constructor(world, scenario, { types, town, extensions = [] }) {
+        this.world = world.mount(this);
         this.scenario = scenario;
         this.types = types;
-        this.ext = {};
-        this.extensions = extensions.map(E => (this.ext[E.key] = new E(this)));
+        world.compose(extensions);
         this.meshes = null;             // the common mesh interface (kits.mesh), for what draws itself (a bus): the structures'
         this.lamps = null;              // lamp kinds, for what lights itself (a bus's headlights, tail lights, cabin): theirs
         const t = { size: 64000, resolution: 512, base: 1500, fieldSize: 800, pivots: 0.2, ...(scenario.terrain || {}) };
@@ -64,28 +65,26 @@ class World {
         this.weather = new WeatherSystem(scenario.weather);
         this.clouds = new CloudLayers(scenario.clouds);
         this.lightning = new Lightning();
-        for (const x of this.extensions) x.created?.();
-        this.entities = [];
-        this.byId = new Map();
+        for (const x of world.extensions) x.created?.();
         this.flashCount = 0;
         this.buses = [];                 // the vehicles to board and ride (the buses feature's: every bus of every BusLine)
         this.busBoost = 1;               // their time runs this many times as fast (hold Z)
-        for (const def of scenario.entities || []) this.add(def, false);
-        for (const e of this.entities) { e.stamp(this.field); this.field.updateRange(); }
-        for (const x of this.extensions) x.build?.();
+        for (const def of scenario.entities || []) world.add(def, { spawn: false });
+        for (const e of this.world.entities) { e.stamp(this.field); this.field.updateRange(); }
+        for (const x of this.world.extensions) x.build?.();
         // the lit town (streetLights): painted like a town entity (the structures feature gives its streets the fake lamps)
         const sl = scenario.streetLights;
         this.streetLights = sl ? { pos: sl.pos || this.centre, radius: sl.radius || 4000, density: sl.density ?? 0.95 } : null;
-        if (this.streetLights) new town(this.streetLights, this).stamp(this.field);
-        for (const x of this.extensions) x.townLit?.();
-        for (const e of [...this.entities]) e.spawn();
-        for (const x of this.extensions) x.spawned?.();
-        this.rainZones = new RainZones(this);
+        if (this.streetLights) new town(this.streetLights, world).stamp(this.field);
+        for (const x of this.world.extensions) x.townLit?.();
+        for (const e of [...this.world.entities]) e.spawn();
+        for (const x of this.world.extensions) x.spawned?.();
+        this.rainZones = new RainZones(world);
     }
 
     // where what the scenario does not place goes: an extension's, or the middle
     get centre() {
-        for (const x of this.extensions) if (x.centre) return x.centre();
+        for (const x of this.world.extensions) if (x.centre) return x.centre();
         return [0, 0];
     }
 
@@ -93,49 +92,43 @@ class World {
     // an entity's own (a river's channel, which villages draw at its true width)
     water(x, z) {
         const d = this.field.coastAt?.(x, z)[0] ?? Infinity;
-        return d < 0 || this.field.landAt(x, z, 2) > 0.4 && d > 20 || this.entities.some(e => e.waterAt?.(x, z));
+        return d < 0 || this.field.landAt(x, z, 2) > 0.4 && d > 20 || this.world.entities.some(e => e.waterAt?.(x, z));
     }
-
-    add(def, spawn = true) {
-        return kits.world.addEntity(this, this.types, def, { spawn });
-    }
-
-    get(id) { return this.byId.get(id); }
 
     // analytic storm structures for the GPU: motherships (12 floats each) and shelf lines (16 floats each), a tornado
     features() {
         const out = { ms: [], shelves: [], tornado: null };
-        for (const e of this.entities) e.features(out);
-        for (const x of this.extensions) x.features?.(out);
+        for (const e of this.world.entities) e.features(out);
+        for (const x of this.world.extensions) x.features?.(out);
         return { ms: out.ms.slice(0, MAX_MOTHERSHIPS), shelves: out.shelves.slice(0, MAX_SHELVES), tornado: out.tornado };
     }
 
     // a hurricane for the GPU, or null
     hurricaneData(maxTop) {
-        for (const x of this.extensions) { const h = x.hurricane?.(maxTop); if (h) return h; }
+        for (const x of this.world.extensions) { const h = x.hurricane?.(maxTop); if (h) return h; }
         return null;
     }
 
     update(dt, wdt, t) {
         this.weather.update(dt, wdt);
         this.rainZones.update(dt);
-        for (const x of this.extensions) x.advance?.(dt, wdt);
-        for (const e of [...this.entities]) e.update(dt, wdt, t);
-        for (const x of this.extensions) x.after?.(dt, wdt, t);
-        if (this.entities.some(e => e.dead)) {
-            this.entities = this.entities.filter(e => !e.dead);
-            for (const [k, e] of this.byId) if (e.dead) this.byId.delete(k);
+        for (const x of this.world.extensions) x.advance?.(dt, wdt);
+        for (const e of [...this.world.entities]) e.update(dt, wdt, t);
+        for (const x of this.world.extensions) x.after?.(dt, wdt, t);
+        if (this.world.entities.some(e => e.dead)) {
+            this.world.entities = this.world.entities.filter(e => !e.dead);
+            for (const [k, e] of this.world.byId) if (e.dead) this.world.byId.delete(k);
         }
         this.lightning.update(dt);
     }
 
     // storm cells for the GPU, nearest to `around` first when there are too many
     gpuCells(around) {
-        const list = this.entities.map(e => e.cell()).filter(Boolean);
+        const list = this.world.entities.map(e => e.cell()).filter(Boolean);
         if (list.length > MAX_CELLS) list.sort((a, b) => Math.hypot(a.x - around[0], a.z - around[2]) - Math.hypot(b.x - around[0], b.z - around[2]));
         return list.slice(0, MAX_CELLS);
     }
 }
 
-return { World, FlatCurvature };
+return { WorldExtension, FlatCurvature };
 });

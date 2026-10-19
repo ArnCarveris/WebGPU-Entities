@@ -11,6 +11,7 @@
 //   GPU          makeBuffer, gridIndices, bindLayout / bindGroup (bind groups from a list of binding kinds)
 //   text         fmtKm (m or km), fmtNum (k / M / G with a unit), fmtK (k / M counts)
 //   controls     PointerInput (look / act / keys on a world's canvas; a camera: kits.view's FirstPersonView)
+//   Composite    the one World, App and Renderer every world type runs through: its type's extension answers for it
 //
 // Bigger generic building blocks (random and noise, a first-person view, a world's HUD, terrain, transit lines...) are
 // kits (js/kits, see js/kits/manifest.js).
@@ -346,9 +347,59 @@ class PointerInput {
     }
 }
 
+// Composite: there is one World (kits.world), one App (kits.world) and one Renderer (kits.gpu); what a world type makes
+// of each is its extension (a WorldExtension, AppExtension, RendererExtension), composed in, never a class of its own.
+// Composite.of(host) wraps a host so that what it has not itself its base answers: the type's extension, which mounts
+// itself first thing in its constructor (this.world = world.mount(this)): its members, getters and setters, and its
+// methods (bound to it); a name neither has is set on the base. The base passes the host, not itself, to what it makes.
+// compose(host, list, ...args): the other extensions (the features' on in its world: new E(host, ...args)), kept as
+// host.ext[E.key], in order in host.extensions; the base calls its hooks where it runs them.
+const BOUND = new WeakMap();
+const FORWARD = {
+    get(t, k, r) {
+        if (k in t) return Reflect.get(t, k, r);
+        const b = t.base;
+        if (!b || !(k in b)) return undefined;
+        const v = b[k];
+        if (typeof v !== 'function') return v;
+        const bound = BOUND.get(t);
+        let m = bound.get(k);
+        if (!m || m.fn !== v) bound.set(k, m = { fn: v, call: v.bind(b) });
+        return m.call;
+    },
+    set(t, k, v, r) {
+        if (k in t || !t.base) return Reflect.set(t, k, v, r);
+        t.base[k] = v;
+        return true;
+    },
+    has(t, k) { return k in t || !!t.base && k in t.base; },
+};
+const Composite = {
+    of(host) {
+        host.base = null;
+        host.ext = {};
+        host.extensions = [];
+        BOUND.set(host, new Map());
+        return new Proxy(host, FORWARD);
+    },
+    mount(host, base) {
+        if (host.base) throw new Error(`${host.constructor.name}: a second base (${base.constructor.name})`);
+        host.base = base;
+        return host;
+    },
+    compose(host, list, ...args) {
+        return list.map(E => {
+            const x = new E(host, ...args);
+            if (E.key) host.ext[E.key] = x;
+            host.extensions.push(x);
+            return x;
+        });
+    },
+};
+
 return {
     DEG, clamp, sat01, lerp, smoothstep, v3, quat, m4, frustumPlanes, yawPitch,
     polylineLengths, polylineNearest, polylineBox, GroundFrame, makeBuffer, gridIndices, bindLayoutEntry, bindResource, bindLayout, bindGroup,
-    fmtKm, fmtNum, fmtK, PointerInput,
+    fmtKm, fmtNum, fmtK, PointerInput, Composite,
 };
 })();

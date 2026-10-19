@@ -1,5 +1,5 @@
 'use strict';
-// The renderer: pipelines, buffers and the draw of one frame.
+// The portal's RendererExtension (the one Renderer, kits.gpu): pipelines, buffers and the draw of one frame.
 
 Features.world('portal', (engine, kit) => {
 const {
@@ -8,7 +8,7 @@ const {
 } = kit;
 const { StencilLayout, buildPipelines, RenderExtensions } = engine.kits.gpu;
 
-// Renderer: pipelines for the scene, sky, stencil marks, water, glass / fog veils and debug lines, and one render pass
+// The renderer: pipelines for the scene, sky, stencil marks, water, glass / fog veils and debug lines, and one render pass
 // that executes a command list built by FrameBuilder, into the canvas or a view target (render(f, target), with its
 // own MSAA colour and depth).
 //
@@ -32,37 +32,37 @@ const { StencilLayout, buildPipelines, RenderExtensions } = engine.kits.gpu;
 // ctx (init / pipelines) carries the renderer's modules (world, sky, poly, lines), layouts (world: groups 0 + 1, base:
 // group 0), bind group layouts (bgl0, bgl1), buffers, blends, and `region`, the slots a draw in its entry's region tests.
 
-class Renderer {
+class RendererExtension {
     // fx: the feature context (the host's device and canvas target; see js/engine/host.js)
-    constructor(fx) {
+    constructor(renderer, fx) {
+        this.renderer = renderer.mount(this);
         this.fx = fx;
         this.onError = (msg) => console.error(msg);
         this.stencil = new StencilLayout();
         for (const [name, spec] of Object.entries(STENCIL)) this.stencil.reserve(name, spec);
         this.regions = this.stencil.slot('portal.regions');
         this.targets = new Map();       // view target -> its MSAA colour and depth
-        this.ext = {};                  // render extensions by name
-        this.exts = [];
+        // (its render extensions: renderer.ext by name, renderer.extensions in order)
         this.handlers = new Map();      // command op -> its extension
-        for (const make of RenderExtensions.for('portal', fx.features)) this.extend(make(this));
+        for (const make of RenderExtensions.for('portal', fx.features)) this.extend(make(this.renderer));
     }
 
     // a render extension (see above), before init()
     extend(ext) {
         if (this.stencil.resolved) throw new Error(`render extension "${ext.name}": added after init()`);
-        if (this.ext[ext.name]) throw new Error(`render extension "${ext.name}": added twice`);
+        if (this.renderer.ext[ext.name]) throw new Error(`render extension "${ext.name}": added twice`);
         for (const [name, spec] of Object.entries(ext.stencil || {})) this.stencil.reserve(name, spec);
         for (const op of Object.keys(ext.commands || {})) {
             if (this.handlers.has(op)) throw new Error(`render extension "${ext.name}": command "${op}" is "${this.handlers.get(op).name}"'s`);
             this.handlers.set(op, ext);
         }
-        this.ext[ext.name] = ext;
-        this.exts.push(ext);
+        this.renderer.ext[ext.name] = ext;
+        this.renderer.extensions.push(ext);
         return ext;
     }
 
     // the extensions FrameBuilder asks for overlay commands
-    get overlays() { return this.exts.filter(x => x.overlay); }
+    get overlays() { return this.renderer.extensions.filter(x => x.overlay); }
 
     async init() {
         const device = this.device = this.fx.device;
@@ -89,7 +89,7 @@ class Renderer {
         // its shaders: the core's chunks, the extensions' over them, each module the chunks it names
         this.wgsl = portalWgsl();
         const modules = Object.fromEntries(Object.entries(PORTAL_MODULES).map(([k, v]) => [k, [...v]]));
-        for (const x of this.exts) x.wgsl?.(this.wgsl, modules);
+        for (const x of this.renderer.extensions) x.wgsl?.(this.wgsl, modules);
         const mod = names => device.createShaderModule({ code: this.wgsl.code(...names) });
         const ctx = {
             device, format: this.format, depthFormat: DEPTH_FORMAT, samples: 4, stencil: this.stencil,
@@ -115,7 +115,7 @@ class Renderer {
             },
             blends: { alpha: { color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' }, alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' } } },
         };
-        for (const x of this.exts) await x.init?.(this, ctx);
+        for (const x of this.renderer.extensions) await x.init?.(this.renderer, ctx);
         const R = ['portal.regions'], M = ['portal.mark'];
         // stencil mode draws inside its entry's region; scissor / none modes draw unmasked
         const masked = { stencil: { stencil: { test: R } }, plain: {} };
@@ -137,7 +137,7 @@ class Renderer {
             lineDepth: lines('less-equal'),
             lineOverlay: lines('always'),
         });
-        for (const x of this.exts) if (x.pipelines) x.pipes = buildPipelines(ctx, x.pipelines(ctx));
+        for (const x of this.renderer.extensions) if (x.pipelines) x.pipes = buildPipelines(ctx, x.pipelines(ctx));
     }
 
     upload(world) {
@@ -184,7 +184,7 @@ class Renderer {
 
     // the draw slot info.z of an object: the first extension's that has one
     info(o) {
-        for (const x of this.exts) {
+        for (const x of this.renderer.extensions) {
             const v = x.info?.(o);
             if (v !== undefined) return v;
         }
@@ -193,7 +193,7 @@ class Renderer {
 
     // the draw slot info.w: the first extension's that has one (a GUI screen's virtual width)
     infoW(o) {
-        for (const x of this.exts) {
+        for (const x of this.renderer.extensions) {
             const v = x.infoW?.(o);
             if (v !== undefined) return v;
         }
@@ -227,7 +227,7 @@ class Renderer {
         if (lineVerts) q.writeBuffer(this.lineBuf, 0, f.lines, 0, lineVerts * 7);
 
         const enc = d.createCommandEncoder();
-        for (const x of this.exts) x.prepare?.(f, enc, target);
+        for (const x of this.renderer.extensions) x.prepare?.(f, enc, target);
         const pass = enc.beginRenderPass({
             colorAttachments: [{ view: into.msaa, resolveTarget: into.resolve,
                 clearValue: { r: 0.004, g: 0.005, b: 0.007, a: 1 }, loadOp: 'clear', storeOp: 'discard' }],
@@ -308,5 +308,5 @@ class Renderer {
     }
 }
 
-return { Renderer };
+return { RendererExtension };
 });

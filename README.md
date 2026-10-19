@@ -187,7 +187,11 @@ only list of kits, entity types, data types and worlds, and everything else is l
   imposter kit's, cloud the atmosphere kit's. Its entity classes are made from the manifest when first used
   (`kits.world.entityTypes`), over its bases: no world lists its types. It is composed, not derived: a world part
   returns `{ create: fx => new FeatureWorld(fx, spec) }`, the spec its HUD, its app and whichever of the host's hooks it
-  has (depth, stats, views, ground, sheltered, set...) over the defaults.
+  has (depth, stats, views, ground, sheltered, set...) over the defaults. There is one `World`, one `App` (the world
+  kit's) and one `Renderer` (the gpu kit's), never a class of a world's own: what a world type makes of each is its
+  `WorldExtension`, `AppExtension` and `RendererExtension`, which mounts itself on the one class and answers for it
+  (`Common.Composite`: what the host has not itself, its base has), and the features' extensions are composed into the
+  same host (`host.compose(list)`: `host.ext[key]`, `host.extensions`).
 - **A feature** is what a world is made of beyond its core, built only when the world's data asks for it (`when`: an
   entity of a type, an entity whose implementation needs something, a data path, through a list in any of its items
   (`entities.screen`), another feature; `requires`), its

@@ -1,13 +1,15 @@
 'use strict';
-// The app: the simulation and render loop, input and the camera.
+// The water's AppExtension (the one App, kits.world): the simulation and render loop, input and the camera.
 
 Features.world('water', (engine, kit) => {
 const { Common, kits } = engine;
 const { DEG, clamp, v3, m4, PointerInput } = Common;
 const { FirstPersonView } = kits.view;
+const { World } = kits.world;
+const { Renderer } = kits.gpu;
 const SLOW_ALT = { keys: ['AltLeft'], factor: 0.2 };       // Alt held: a fifth of the speed
 const {
-    NEAR, RENDER_MODES, WATER_DEFAULTS, Dam, World, FlowSim, Renderer, TOOL_TYPES, Hud,
+    NEAR, RENDER_MODES, WATER_DEFAULTS, Dam, WorldExtension, FlowSim, RendererExtension, TOOL_TYPES, Hud,
 } = kit;
 
 // What a river without the waves or debris features has in their place (AppExtension.load puts theirs): no wave layers,
@@ -15,16 +17,17 @@ const {
 const NO_WAVES = { layers: [], encode() {}, splash() {}, reset() {} };
 const NO_DEBRIS = { count: 0, particles: null, emitters: null, encode() {} };
 
-// The app. What the features on in its world add are its extensions (AppExtension, new E(app), kept as app.ext[E.key]);
+// The app. What the features on in its world add are its other extensions (their AppExtensions, app.compose: new E(app),
+// kept as app.ext[E.key]);
 // each hook optional: load(scenario) (a new world: the waves feature's cascade as app.waves, the debris feature's logs as
 // app.debris, over the stand-ins)
-class App {
-    constructor(fx) {
+class AppExtension {
+    constructor(app, fx) {
+        this.app = app.mount(this);
         this.fx = fx;
-        this.ext = {};
-        this.extensions = engine.kits.gpu.extensionsOf(fx.features, 'app').map(E => (this.ext[E.key] = new E(this)));
+        app.compose(engine.kits.gpu.extensionsOf(fx.features, 'app'));
         this.canvas = fx.canvas;
-        this.renderer = new Renderer(fx);
+        this.renderer = new Renderer(RendererExtension, fx);
         this.input = new PointerInput(fx.io);
         this.hud = new Hud(fx.ui);
         this.camera = new FirstPersonView({ pos: [0, 200, 0], speed: 80, wheel: { step: 1.2, min: 2, max: 2000 }, clearance: 2, slow: SLOW_ALT });
@@ -42,10 +45,10 @@ class App {
 
     load(scenario) {
         const d = this.renderer.device;
-        const world = new World(scenario);
+        const world = new World(WorldExtension, scenario);
         const flow = new FlowSim(d, world);
-        Object.assign(this, { world, flow, waves: NO_WAVES, debris: NO_DEBRIS, scenario });
-        for (const x of this.extensions) x.load?.(scenario);
+        Object.assign(this.app, { world, flow, waves: NO_WAVES, debris: NO_DEBRIS, scenario });
+        for (const x of this.app.extensions) x.load?.(scenario);
         this.renderer.setSim(world, flow, this.waves, this.debris);
         this.stepsPerFrame = flow.cfg.stepsPerFrame;
         this.water = { ...WATER_DEFAULTS, ...(scenario.water || {}) };
@@ -161,7 +164,7 @@ class App {
             const hit = this.hit = w.field.raycast(this.camera.pos, this.camera.ray(mx, my, rect.width, rect.height));
             this.extraSources = [];
             this.acting = !!(hit && this.input.acting && this.tool && !this.paused);
-            if (this.acting) this.tool.apply(this, hit, dt);
+            if (this.acting) this.tool.apply(this.app, hit, dt);
 
             if (!this.paused) w.update(dt, this.time);
             if (w.field.dirty) flow.uploadTerrain();
@@ -184,10 +187,10 @@ class App {
         r.render(enc);
         d.queue.submit([enc.finish()]);
         flow.afterSubmit();
-        this.hud.drawLabels(this);
-        this.hud.update(this, now);
+        this.hud.drawLabels(this.app);
+        this.hud.update(this.app, now);
     }
 }
 
-return { App };
+return { AppExtension };
 });

@@ -1,16 +1,19 @@
 'use strict';
-// The app: the frame loop over world, origin, camera and renderer.
+// The origin's AppExtension (the one App, kits.world): the frame loop over world, origin, camera and renderer.
 
 Features.world('origin', (engine, kit) => {
 const { Common } = engine;
+const { World } = engine.kits.world;
+const { Renderer } = engine.kits.gpu;
 const { DEG, clamp, v3, PointerInput } = Common;
-const { BODY_FLOATS, NEAR, quat, m4, Renderer, World, FloatingOrigin, Camera, CameraController, Hud } = kit;
+const { BODY_FLOATS, NEAR, quat, m4, RendererExtension, WorldExtension, FloatingOrigin, Camera, CameraController, Hud } = kit;
 
-class App {
-    constructor(fx) {
+class AppExtension {
+    constructor(app, fx) {
+        this.app = app.mount(this);
         this.fx = fx;
         this.canvas = fx.canvas;
-        this.renderer = new Renderer(fx);
+        this.renderer = new Renderer(RendererExtension, fx);
         this.input = new PointerInput(fx.io, { act: false });
         this.hud = new Hud(fx.ui);
         this.camera = new Camera();
@@ -28,7 +31,7 @@ class App {
     }
 
     load(scenario, keepCamera = false) {
-        const world = new World(scenario, this.renderer.device, this.density);
+        const world = new World(WorldExtension, scenario, this.renderer.device, this.density);
         if (this.world) this.world.destroy();
         this.world = world;
         this.scenario = scenario;
@@ -128,10 +131,10 @@ class App {
         this.writeFrame(prox);
         w.bodies.forEach((b, i) => b.pack(r.bodyData, i * BODY_FLOATS, f.origin, this.camera.pos));
         r.render(w, w.bodies.length);
-        this.hud.drawLabels(this);
-        this.hud.update(this, prox, now);
+        this.hud.drawLabels(this.app);
+        this.hud.update(this.app, prox, now);
     }
 }
 
-return { App };
+return { AppExtension };
 });

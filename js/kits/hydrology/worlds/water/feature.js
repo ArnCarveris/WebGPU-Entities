@@ -24,13 +24,14 @@
 Features.world('water', (engine, kit) => {
 const { kits } = engine;
 const { FeatureWorld } = kits.world, { HUD } = FeatureWorld;
-const { NEAR, RENDER_MODES, Dam, App, phonePages } = kit;
+const { NEAR, RENDER_MODES, Dam, AppExtension, phonePages } = kit;
+const { App } = engine.kits.world;
 
 // This demo as one world of the engine (js/engine/host.js calls these; view / setView: its camera's).
 const waterWorld = {
     hud: HUD.labels + HUD.toast,
 
-    app: fx => new App(fx),
+    app: fx => new App(AppExtension, fx),
 
     // reversed-Z, infinite far plane, metres
     depth() {
@@ -65,6 +66,7 @@ const waterWorld = {
 
     // the readout and every option, on the engine's handheld (js/engine/handheld.js)
     handheld() { return phonePages(this.app); },
+
 
     set(key, v) {
         const a = this.app, w = a.world;

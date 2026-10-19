@@ -148,9 +148,10 @@ class Handheld {
         this.host.audio.configure(cfg.sounds || []);
         GpuChoice.probe?.();
 
-        const { Renderer, MaterialTable, MeshBuilder, GuiAtlas, DeviceContext, PhoneGUI } = Features.kits.gui;
+        const { RendererExtension, MaterialTable, MeshBuilder, GuiAtlas, DeviceContext, PhoneGUI } = Features.kits.gui;
+        const { Renderer } = Features.kits.gpu;
         const host = this.host;
-        const r = this.renderer = new Renderer({
+        const r = this.renderer = new Renderer(RendererExtension, {
             device: host.device, format: host.format,
             size: () => [host.width, host.height],
             target: () => host.swapView(),
