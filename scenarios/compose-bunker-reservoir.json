@@ -13,7 +13,7 @@
         {"$comment":"the island stands in the Reservoir (level 1520): its sea is the lake's"},
         {"type":"include","scenario":"portal-bunker-compound","as":"bunker",
             "root":{"label":"Portal · Bunker compound","layer":{"transform":{"offset":[-11000,1521.2,15000]},"focus":true}}},
-        {"type":"outdoor","fog":[0.62,0.66,0.72,0.0012],"sunDir":[0.857,0.242,-0.456],"sunColor":[1.1,0.95,0.8],
+        {"type":"outdoor","fog":[0.62,0.66,0.72,0.0012],"sunColor":[1.1,0.95,0.8],
             "skyTop":[0.35,0.42,0.55],"skyHorizon":[0.7,0.72,0.75]},
 
         {"type":"camera","from":"bunker"},

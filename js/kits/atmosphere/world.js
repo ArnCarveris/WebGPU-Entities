@@ -40,6 +40,7 @@ class FlatCurvature {
     setEye(eye) { this.eye = [eye[0], eye[1], eye[2]]; this.K = this.radius + Math.max(eye[1] - this.reference, -0.5 * this.radius); }
     horizon() { return 260000; }
     horizonDip() { return 0; }
+    altitude(p) { return p[1] - this.reference; }
     offset() { return [0, 0, 0]; }
     toRender(p) { return [p[0], p[1], p[2]]; }
     toWorld(r) { return [r[0], r[1], r[2]]; }

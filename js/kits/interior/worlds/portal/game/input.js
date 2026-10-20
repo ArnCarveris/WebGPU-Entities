@@ -2,8 +2,9 @@
 // Keyboard and mouse input.
 
 Features.world('portal', (engine, kit) => {
-// InputSystem: held keys, pointer-lock mouse look and key presses routed to the game. Presses on the GUI screen under the
-// cursor (Game.interaction.focus: the screens feature's) go to it, and don't take the mouse for looking.
+// InputSystem: held keys, mouse look and key presses routed to the game. Walking, the mouse looks while the canvas has
+// it (pointer lock: the engine takes it on a click, Esc gives it back); flying, dragging looks. Presses on the GUI screen
+// under the cursor (Game.interaction.focus: the screens feature's) go to it, and don't take the mouse for looking.
 
 class InputSystem {
     constructor(game, io) {
@@ -12,31 +13,30 @@ class InputSystem {
         this.canvas = io.canvas;
         this.keys = new Set();
         this.mouse = { x: 0, y: 0, inside: false };
-        this.guiPress = false;
+        this.dragging = false;
     }
 
     attach() {
         const canvas = this.canvas, io = this.io, g = this.game;
         const track = e => { this.mouse.x = e.clientX; this.mouse.y = e.clientY; this.mouse.inside = true; };
-        io.listen(canvas, 'pointermove', track);
+        const look = e => {
+            const p = this.game.player;
+            if (!p || this.game.fx.cameraLocked) return;
+            const s = p.cfg.mouseSensitivity;
+            p.cam.look(e.movementX * s, e.movementY * s);
+        };
+        io.listen(canvas, 'pointermove', e => { track(e); if (this.dragging && document.pointerLockElement !== canvas) look(e); });
         io.listen(canvas, 'pointerleave', () => { this.mouse.inside = false; });
         io.listen(canvas, 'pointerdown', e => {
             track(e);
-            this.guiPress = false;
-            if (e.button !== 0 || !g.interaction?.focus) return;
-            this.guiPress = true;
+            if (e.button !== 0) return;
+            if (!g.interaction?.focus) { this.dragging = true; return; }
+            e.preventDefault();         // a press on a screen doesn't take the mouse
             g.interaction.pointerDown();
         });
-        io.listen(window, 'pointerup', () => g.interaction?.pointerUp());
+        io.listen(window, 'pointerup', () => { this.dragging = false; g.interaction?.pointerUp(); });
         io.listen(canvas, 'wheel', e => { if (g.interaction?.wheel(e.deltaY)) e.preventDefault(); });
-        io.listen(canvas, 'click', () => { if (this.guiPress) this.guiPress = false; else canvas.requestPointerLock?.(); });
-        io.listen(document, 'mousemove', e => {
-            const p = this.game.player;
-            if (document.pointerLockElement !== canvas || !p) return;
-            const s = p.cfg.mouseSensitivity;
-            if (this.game.fx.cameraLocked) return;
-            p.cam.look(e.movementX * s, e.movementY * s);
-        });
+        io.listen(document, 'mousemove', e => { if (document.pointerLockElement === canvas) look(e); });
         io.listen(document, 'keydown', e => {
             this.keys.add(e.code);
             if (this.game.world && e.code === 'KeyF') this.game.onKey(e.code);     // the door at hand, the helm: the one command key

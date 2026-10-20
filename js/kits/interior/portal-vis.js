@@ -131,5 +131,21 @@ function portalQuad(index, verts, front, back, normal, flags = {}) {
     };
 }
 
+// What of the outdoors (area 0) the eye of traversal `res` sees (kits.world Outdoors): null, all of it, from outdoors,
+// with culling off or past the traversal's entries; from inside, only through the portals it passed out to it (their
+// screen rectangle, whole pixels; null rect: most of the screen), or nothing (a room without windows in view, a shaft)
+PortalVis.outdoorsOf = res => {
+    if (!res || res.root === 0 || !res.enabled || res.truncated) return null;
+    return res.sky ? { seen: true, rect: PortalVis.clampRect(res.skyRect, res.W, res.H) } : { seen: false, rect: null };
+};
+
+// a screen rectangle [x0, y0, x1, y1] (px) within W x H, whole pixels, or the whole screen when it covers most of it
+PortalVis.clampRect = (r, W, H) => {
+    if (!r) return null;
+    const x0 = Math.max(0, Math.floor(r[0])), y0 = Math.max(0, Math.floor(r[1])), x1 = Math.min(W, Math.ceil(r[2])), y1 = Math.min(H, Math.ceil(r[3]));
+    if (x1 <= x0 || y1 <= y0) return [0, 0, 0, 0];
+    return (x1 - x0) * (y1 - y0) > 0.9 * W * H ? null : [x0, y0, x1, y1];
+};
+
 return { PortalVis, portalQuad };
 });

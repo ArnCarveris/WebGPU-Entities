@@ -114,7 +114,7 @@ Every other option (weather, lighting, render modes, views, toggles, loading fil
 | `water` | `deep` colour, `absorb` (per m, rgb), `refraction`, `foam`, `detail`, `flowScale` (visual speed of advected detail and debris) |
 | `entities` | `{ type, id, label, ... }`, where `type` maps to a class in `ENTITY_TYPES` (below), applied in order |
 | `tools` | `{ type, key, rate / strength }`, types `pour`, `drain`, `raise`, `dig`, `splash` |
-| `lighting` | named presets plus `start`: `sun` { `azimuth`, `elevation`, `color`, `intensity` }, `sky` { `top`, `horizon` }, `ground`, `ambient`, `fog`, `exposure` |
+| `lighting` | named presets plus `start`: `sun` { `azimuth`, `elevation` (degrees; 150 and 40 when left out), `color`, `intensity` }, `sky` { `top`, `horizon` }, `ground`, `ambient`, `fog`, `exposure`. In a composition the sun it follows (`set('sunDir')`) stands in for `azimuth` / `elevation`, so a preset there gives only its colours |
 | `views` | `{ name, pos [x, y, z], look [x, y, z] }` |
 
 Positions are metres: `[x, z]` on the map, with x east, z south, and the map centred on 0.

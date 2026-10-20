@@ -82,15 +82,20 @@ fn weather(@builtin(global_invocation_id) g: vec3u) {
         let c = cells[i];
         let dist = length(xz - c.a.xy);
         if (dist > c.a.z * 3.4) { continue; }                          // beyond every footprint of this cell (anvil reach)
-        // anvil: tall cells spread a sheet downwind under the tropopause
+        // anvil: tall cells spread a sheet downwind under the tropopause. It spreads at the equilibrium level, under the
+        // overshooting top (the cell's top, the tower's dome over the updraft rises out of it); its top sinks away from
+        // the updraft and is lumpy (the outline's noise), so seen from above it is no flat lid
         let tall = sat((c.a.w - F.cloud.y - 2500.0) / 4000.0) * sat(c.b.x * 2.0);
         if (tall > 0.0) {
             let ad = xz - c.a.xy - wd * c.a.z * 0.8;
             let along = dot(ad, wd);
-            let ra = length(vec2f(along * 0.6, dot(ad, vec2f(-wd.y, wd.x)))) / (c.a.z * 1.6) * (0.8 + 0.4 * fbm2(xz / 5000.0 + c.b.z * 7.0, 3));
+            let fo = fbm2(xz / 5000.0 + c.b.z * 7.0, 3);
+            let ra = length(vec2f(along * 0.6, dot(ad, vec2f(-wd.y, wd.x)))) / (c.a.z * 1.6) * (0.8 + 0.4 * fo);
             let ga = sat(1.0 - ra);
             let a = ga * ga * (3.0 - 2.0 * ga) * tall * 0.85;
-            if (a > 0.005) { anvCov = max(anvCov, a); anvTop = max(anvTop, c.a.w); }
+            let sink = sat(dist / (c.a.z * 3.0));
+            let at = c.a.w - 400.0 - 0.1 * (c.a.w - F.cloud.x) - 1100.0 * sink * sink + (fo - 0.5) * 1000.0;
+            if (a > 0.005) { anvCov = max(anvCov, a); anvTop = max(anvTop, at); }
         }
         if (dist > c.a.z * 1.45) { continue; }                         // the rest (body, shelf, rain core) is closer in
         let d = xz - c.a.xy;

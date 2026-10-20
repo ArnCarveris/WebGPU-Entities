@@ -61,7 +61,8 @@ class CameraController {
         if (inp.keys.has('Space')) m = v3.add(m, U);
         if (inp.keys.has('KeyC')) m = v3.sub(m, U);
         const boost = (inp.keys.has('ShiftLeft') || inp.keys.has('ShiftRight') ? 10 : 1) * (inp.keys.has('ControlLeft') || inp.keys.has('ControlRight') ? 0.1 : 1);
-        this.unitSpeed = 6 * 2 ** this.speedExp * boost;           // origin units / s
+        // origin units / s, but at least twice the pace of anything moving nearby (an orbiter): else it catches up
+        this.unitSpeed = Math.max(6 * 2 ** this.speedExp, 2 * (prox.pace || 0) / origin.scale) * boost;
         const target = v3.len(m) ? v3.mul(v3.norm(m), this.unitSpeed * origin.scale) : [0, 0, 0];
         cam.vel = v3.lerp(cam.vel, target, 1 - Math.exp(-dt * 6));
         cam.pos.addIn(v3.mul(cam.vel, dt));

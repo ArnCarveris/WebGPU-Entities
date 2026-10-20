@@ -51,17 +51,20 @@ fn cloudPossible(p: vec3f) -> bool {
 fn tileBin(t: f32) -> u32 { return min(u32(sqrt(max(t, 0.0) / F.march.z) * 64.0), 63u); }
 
 // the march's clipping of a ray to the cloud slab, [t0, t1]; t1 < t0 when the ray misses it (from the eye; drawn
-// curved, the slab is the shell between two spheres)
+// curved, the slab is the shell between two spheres). The slab ends at the highest cloud this frame (features.z, under
+// render.maxTop): from above, the steps start at the tops instead of spreading over the empty air up to maxTop, which
+// left them too coarse to find the tops (terraced into rings)
 fn slabSpan(ro: vec3f, dir: vec3f, tMax: f32) -> vec2f {
-    if (curveOn()) { return curveSpan(dir, F.misc.z - 1500.0, F.noise.w, tMax); }
+    let top = F.features.z;
+    if (curveOn()) { return curveSpan(dir, F.misc.z - 1500.0, top, tMax); }
     var t0 = 0.0;
     var t1 = tMax;
     if (abs(dir.y) > 1e-5) {
-        let ta = (F.noise.w - ro.y) / dir.y;
+        let ta = (top - ro.y) / dir.y;
         let tb = (F.misc.z - 1500.0 - ro.y) / dir.y;
         t0 = max(t0, min(ta, tb));
         t1 = min(t1, max(ta, tb));
-    } else if (ro.y > F.noise.w) { t1 = -1.0; }
+    } else if (ro.y > top) { t1 = -1.0; }
     return vec2f(t0, t1);
 }
 `;

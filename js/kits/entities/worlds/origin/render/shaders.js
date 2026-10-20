@@ -4,7 +4,7 @@
 Features.world('origin', (engine, kit) => {
 const { kits } = engine;
 const { NoiseWGSL } = kits.noise;
-const { CELL, VERTEX_FLOATS, MeshBuilder } = kit;
+const { CELL, VERTEX_FLOATS, MAX_COVERS, MeshBuilder } = kit;
 
 function cubeWGSL() {
     // 36 corners of the unit cube, counter-clockwise seen from outside
@@ -25,7 +25,8 @@ struct Frame {
     up: vec4f,          // w = tan(fov/2)
     sun: vec4f,         // sun in origin space, w = radians per pixel
     sky: vec4f,         // atmosphere colour, w = star visibility
-    misc: vec4f,        // exposure, sun intensity
+    misc: vec4f,        // exposure, sun intensity, covers
+    cover: array<vec4f, ${MAX_COVERS * 2}>,   // the ground of worlds standing on the bodies (AppExtension.writeCovers)
 };
 struct Origin { cell: vec4i, local: vec4f, ax: vec4f, ay: vec4f, az: vec4f };
 struct Material { albedo: vec4f, emissive: vec4f, params: vec4f };
@@ -112,18 +113,47 @@ struct BodyFrag { @location(0) color: vec4f, @builtin(frag_depth) depth: f32 };
     return o;
 }
 
-fn surfaceColor(b: Body, n: vec3f, t: f32) -> vec3f {
+// how much body bi's surface in world direction n takes the colour of the ground of a world standing on it there (rgb;
+// a: all of it over that world's ground, easing back to the body's own colour over eight times its radius)
+fn coverAt(bi: u32, n: vec3f) -> vec4f {
+    var o = vec4f(0.0);
+    for (var k = 0u; k < u32(frame.misc.z); k++) {
+        let c = frame.cover[k * 2u];
+        let d = frame.cover[k * 2u + 1u];
+        if (u32(c.w) != bi) { continue; }
+        let w = 1.0 - smoothstep(d.w, d.w * 8.0, length(n - c.xyz));
+        if (w > o.a) { o = vec4f(d.rgb, w); }
+    }
+    return o;
+}
+
+fn surfaceColor(b: Body, bi: u32, n: vec3f, t: f32) -> vec3f {
     let kind = u32(b.shape.y);
+    let cov = coverAt(bi, n);
     let q = n + vec3f(b.shape.z);
     let base = b.color.rgb;
     let fine = clamp(1.0 - t / (b.center.w * 0.01), 0.0, 1.0);
     if (kind == 2u) {                                               // earth
         let h = fbm(q * 2.2, 6) + 0.06 * fbm(q * 40.0, 3);
-        let land = smoothstep(0.52, 0.55, h);
-        let landCol = mix(vec3f(0.1, 0.26, 0.07), vec3f(0.42, 0.36, 0.22), smoothstep(0.56, 0.75, h));
-        var c = mix(vec3f(0.015, 0.06, 0.18), landCol, land);
+        let land = max(smoothstep(0.52, 0.55, h), cov.a);
+        let landCol = mix(mix(vec3f(0.1, 0.26, 0.07), vec3f(0.42, 0.36, 0.22), smoothstep(0.56, 0.75, h)), cov.rgb, cov.a);
+        // close up (from some 700 km in), the land's own patchwork of some kilometres and some hundreds of metres, about
+        // its colour from afar
+        // (each of them gone before it is finer than a pixel, px: the pixel's size on the unit sphere)
+        let px = t * frame.sun.w / b.center.w;
+        let near1 = (1.0 - smoothstep(b.center.w * 0.004, b.center.w * 0.12, t)) * (1.0 - smoothstep(0.08, 0.25, px * 2.0e3));
+        let near2 = (1.0 - smoothstep(b.center.w * 0.0005, b.center.w * 0.006, t)) * (1.0 - smoothstep(0.1, 0.3, px * 2.0e4));
+        // (lighter and darker, and in patches greener: crops and fallow seen from afar)
+        let mottle = 1.0 + (fbm(n * 2.0e3, 2) - 0.5) * 1.6 * near1 + (fbm(n * 2.0e4, 3) - 0.5) * 0.8 * near2;
+        let green = smoothstep(0.42, 0.62, fbm(n * 5.0e3 + vec3f(7.0), 2)) * near1 * (1.0 - smoothstep(0.08, 0.25, px * 5.0e3)) * 0.8;
+        var c = mix(vec3f(0.015, 0.06, 0.18), mix(landCol, landCol * vec3f(0.72, 1.08, 0.66), green) * mottle, land);
         c = mix(c, vec3f(0.9), smoothstep(0.82, 0.9, abs(n.y) + 0.1 * h));
-        let cloud = smoothstep(0.5, 0.72, fbm(q * 4.0 + vec3f(3.1), 5));
+        // its clouds painted on: a stand-in for clouds seen from afar, broken up into fields of them with gaps from some
+        // 3000 km in, and thinning out within some 250 km of the eye (no flat white deck on the ground close by: an
+        // atmosphere standing on it draws its own clouds there)
+        let nearC = 1.0 - smoothstep(b.center.w * 0.1, b.center.w * 0.5, t);
+        let deck = fbm(q * 4.0 + vec3f(3.1), 5) + (fbm(n * 90.0 + vec3f(5.3), 4) - 0.5) * 0.45 * nearC;
+        let cloud = smoothstep(0.5 + 0.06 * nearC, 0.72, deck) * smoothstep(b.center.w * 0.01, b.center.w * 0.04, t);
         return mix(c, vec3f(0.95), cloud * 0.85);
     }
     if (kind == 3u || kind == 4u) {                                 // gas / ice giant
@@ -132,14 +162,14 @@ fn surfaceColor(b: Body, n: vec3f, t: f32) -> vec3f {
         let band = sin(n.y * bands + w * 4.0) * 0.5 + 0.5;
         var c = base * (0.72 + 0.4 * band);
         if (kind == 3u) { c = mix(c, base * vec3f(1.1, 0.75, 0.55), smoothstep(0.6, 0.8, w) * 0.6); }
-        return c;
+        return mix(c, cov.rgb, cov.a);
     }
     // rocky / mars: continents, then close-up detail that fades in near the camera
     let h = fbm(q * 3.0, 6);
     let d = (fbm(n * 2.0e4, 4) - 0.5) * 0.35 + (fbm(n * 3.0e5, 3) - 0.5) * 0.3 * fine;
     var c = base * (0.55 + 0.7 * h + d);
     if (kind == 5u) { c = mix(c, base * vec3f(0.45, 0.35, 0.3), smoothstep(0.55, 0.65, fbm(q * 5.0, 4))); }
-    return c;
+    return mix(c, cov.rgb, cov.a);
 }
 
 @fragment fn fsBody(v: BodyOut) -> BodyFrag {
@@ -163,14 +193,16 @@ fn surfaceColor(b: Body, n: vec3f, t: f32) -> vec3f {
             let g = fbm(toWorldDir(n) * 9.0 + vec3f(frame.cam.w * 0.01), 5);
             col = b.color.rgb * b.color.w * (0.7 + 0.6 * g) * (0.35 + 0.65 * pow(max(dot(n, -dir), 0.0), 0.35));
         } else {
-            let alb = surfaceColor(b, toWorldDir(n), t);
+            let alb = surfaceColor(b, v.bi, toWorldDir(n), t);
             let L = normalize(frame.sun.xyz - p);
             let ndl = dot(n, L);
             col = alb * (max(ndl, 0.0) * frame.misc.y + 0.004);
             if (u32(b.shape.y) == 2u) { col += vec3f(0.6) * pow(max(dot(n, normalize(L - dir)), 0.0), 60.0) * max(ndl, 0.0) * 0.3; }
             if (b.atmo.w > 0.0) {
+                // the air between the eye and the ground: all of it from space; from within the air, only as much as the
+                // way through it holds (t against its height), so the ground close by keeps its colour
                 let rim = pow(1.0 - max(dot(n, -dir), 0.0), 3.0);
-                let day = smoothstep(-0.25, 0.35, ndl);
+                let day = smoothstep(-0.25, 0.35, ndl) * (1.0 - exp(-t / b.atmo.w));
                 col = mix(col, b.atmo.rgb * day * 0.5, 0.12 * day) + b.atmo.rgb * rim * day * 0.9;
             }
         }

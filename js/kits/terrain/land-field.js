@@ -143,6 +143,20 @@ class LandField extends kit.Heightfield {
         }
     }
 
+    // keeps the ground where inside(x, z) (within the box) free of the procedural detail and the plants: what another
+    // world covers (a bare clearing); the mask made for it if the field has none
+    keepBare(x0, z0, x1, z1, inside) {
+        if (this.mres < 2) {
+            this.mres = Math.min(4096, this.n * 2);
+            this.mcell = this.size / this.mres;
+            this.smooth = new Uint8Array(this.mres * this.mres);
+        }
+        const M = this.mres, c = this.mcell, o = this.origin, m = this.smooth;
+        const i0 = Math.max(0, Math.floor((x0 - o) / c)), i1 = Math.min(M - 1, Math.ceil((x1 - o) / c));
+        const j0 = Math.max(0, Math.floor((z0 - o) / c)), j1 = Math.min(M - 1, Math.ceil((z1 - o) / c));
+        for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) if (inside(o + (i + 0.5) * c, o + (j + 0.5) * c)) m[j * M + i] = 255;
+    }
+
     // the smooth mask at x, z (0..1), filtered like the GPU's smoothTex
     smoothAt(x, z) {
         const M = this.mres;

@@ -43,7 +43,10 @@ class Hud extends kits.world.WorldHud {
     }
 
     drawLabels(app) {
-        const L = this.labels, g = L.begin(), { W, H, dpr } = L, od = app.frameWriter.outdoors;
+        const L = this.labels, g = L.begin(), { W, H, dpr } = L, od = app.frameWriter.outdoors, air = app.airHere ?? 1;
+        // (thinning out with the air, none above it: AppExtension.airAt)
+        if (air <= 0) return;
+        g.globalAlpha = air;
         // (the labels are of the outdoors: only where the portal traversal sees it from inside)
         L.region = od ? { ...od, W: app.renderer.width, H: app.renderer.height } : null;
         // on foot: a dot in the middle, and what E would do
@@ -69,9 +72,8 @@ class Hud extends kits.world.WorldHud {
         L.font();
         for (const e of [...app.world.entities, ...app.world.buses]) {
             if (!e.label || e.off || (e === app.rideBus && app.inBus)) continue;
-            const p = e.anchor, at = p && L.place(app.frameWriter.viewProj, app.world.curvature.toRender(p));
+            const p = e.anchor, d = p && v3.len(v3.sub(p, app.camera.pos)), at = p && L.place(app.frameWriter.viewProj, app.world.curvature.toRender(p), d);
             if (!at) continue;
-            const d = v3.len(v3.sub(p, app.camera.pos));
             if (e.labelRange && d > e.labelRange) continue;          // (a place name: only near it)
             let s = null;
             for (const x of app.extensions) if ((s = x.label?.(e, d))) break;

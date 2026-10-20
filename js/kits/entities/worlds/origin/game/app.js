@@ -6,7 +6,7 @@ const { Common } = engine;
 const { World } = engine.kits.world;
 const { Renderer } = engine.kits.gpu;
 const { DEG, clamp, v3, PointerInput } = Common;
-const { BODY_FLOATS, NEAR, quat, m4, RendererExtension, WorldExtension, FloatingOrigin, Camera, CameraController, Hud } = kit;
+const { BODY_FLOATS, MAX_COVERS, NEAR, quat, m4, RendererExtension, WorldExtension, FloatingOrigin, Camera, CameraController, Hud } = kit;
 
 class AppExtension {
     constructor(app, fx) {
@@ -106,7 +106,32 @@ class AppExtension {
             starVis = 1 - clamp(k * day * 3, 0, 1);
         }
         F.set([sky[0], sky[1], sky[2], starVis], 36);
-        F.set([this.lighting.exposure, this.lighting.sun, 0, 0], 40);
+        F.set([this.lighting.exposure, this.lighting.sun, this.writeCovers(F, 44), 0], 40);
+    }
+
+    // The ground of the worlds standing on its bodies in a composition (their FeatureWorld.footprint with an albedo: an
+    // atmosphere's map) into F at o, MAX_COVERS at most: [direction from the body's centre (world axes), body index]
+    // [albedo, angular radius] each. Its surface takes that colour there, easing back to its own over some eight times
+    // that (surfaceColor), so the ground beyond their maps is theirs. Returns how many
+    writeCovers(F, o) {
+        const host = this.fx.host, self = host?.instances.find(i => i.ctx === this.fx);
+        if (!self) return 0;
+        let n = 0;
+        for (const i of host.instances) {
+            if (i === self || !i.ready || n >= MAX_COVERS) continue;
+            let fp = null;
+            try { fp = i.world.footprint?.(); } catch { fp = null; }
+            if (!fp?.albedo) continue;
+            const p = host.frameOf(self).local(host.frameOf(i).point([(fp.lo[0] + fp.hi[0]) / 2, fp.floor, (fp.lo[1] + fp.hi[1]) / 2]));
+            const r = Math.hypot(fp.hi[0] - fp.lo[0], fp.hi[1] - fp.lo[1]) / 2;
+            this.world.bodies.some((b, k) => {
+                const d = v3.sub(p, b.frame.pos.metres()), len = v3.len(d);
+                if (Math.abs(len - b.radius) > Math.max(b.atmosphere?.height || 0, 0.02 * b.radius)) return false;
+                F.set([d[0] / len, d[1] / len, d[2] / len, k, ...fp.albedo, r / b.radius], o + n++ * 8);
+                return true;
+            });
+        }
+        return n;
     }
 
     // update: input, camera, world, rebase; render: the frame. The host runs both, or (in a composition) the

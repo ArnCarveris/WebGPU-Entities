@@ -20,7 +20,7 @@ The scenario picker (top right) lists every original demo's scenario, rendered b
 | Imposter Valley weather | cloud (atmosphere) + imposter: the valley's forests under the plains' clouds and sun |
 | Bunker on the Reservoir | cloud (atmosphere) + portal: the bunker island in a lake; indoors, the rain stays out |
 | Planetfall | origin + imposter: the valley on the real-scale Earth, flown to from orbit; the valley's sun is the Sun |
-| Sector 07 on the Moon | origin + gui: the GUI facility at Shackleton Base; the handheld's Keys hands the camera to its player inside |
+| Sector 07 on the Moon | origin + gui: the GUI facility at Shackleton Base; the handheld's Walk hands the camera to its player inside |
 | Grand tour of the plains | cloud (atmosphere) + water + imposter + portal, with the engine's free camera and viewpoints |
 | Every kit | origin + cloud (atmosphere) + water + imposter + portal + gui: all six worlds and all twenty kits, the plains standing on the real-scale Earth |
 | High Plains · Riverlands · Sol Transit · Imposter Valley · Bunker compound · Sector 07 | each original demo on its own |
@@ -29,8 +29,9 @@ The scenario picker (top right) lists every original demo's scenario, rendered b
 The screen shows the worlds and nothing else (their in-world labels, toasts, a corner chip). Every option and readout is
 on the **handheld**, a phone the engine holds in every scenario: <kbd>TAB</kbd> (or the chip) takes it out, <kbd>Esc</kbd>
 puts it away. Its root page has a section per world (its status, its options, its controls), the scenario's pages, and
-the engine's options: scenario, worlds (in a composition: show / hide each one, give one the keys),
-view, move, sound, GPU. The only keys are moving, looking, using what is at hand and the handheld itself; a toast lists
+the engine's options: scenario, view, walk, sound, GPU. The controls are the same in every world and composition: the
+keys go with the camera (to the world driving it, or, with the engine's camera, to the world it is inside), so nobody
+picks who has them. The only keys are moving, looking, using what is at hand and the handheld itself; a toast lists
 them when a scenario starts.
 
 Views are the engine's too: the handheld's **View** lists the scenario's `view` entities and every world's own
@@ -41,8 +42,13 @@ member of that entity, from data: `{ "type": "view", "of": "cloud", "name": "{la
 lists every bus of the line `bus` (named by `{label}`, with what it is doing under it); `spot` is where on it (a bus's
 `door` or `seat`).
 
-Walking and flying are the engine's: <kbd>H</kbd> (or the handheld's Move) switches the camera between them, in every
-scenario. The engine's own camera walks on the highest ground of every shown world (each world's `ground()`, merged in
+Walking and flying are the engine's: the handheld's **Walk** switch toggles the camera between them, in every
+scenario. Flying, dragging looks; walking, a click on the world takes the mouse to look (pointer lock, as in the
+original Entity Portal) and <kbd>Esc</kbd> gives it back. Walking starts where you are: when the camera's world can't
+walk (the floating-origin flight), the world that can walk there borrows the camera from the current view (the one
+whose interior you are in, as the bunker in Every kit's Loft, else the one with the highest ground under you within its
+footprint), and flying gives it back from where the walk ended. Only with none there does walking go to another of
+`camera.from` (Sector 07 on the Moon: the facility's player). The engine's own camera walks on the highest ground of every world (each world's `ground()`, merged in
 composition space, so you walk on what you see); a world that has the camera walks its own way (cloud: its walker,
 into buildings and buses; portal: its player, stairs, ladders, swimming; water, imposter: their first-person view on the
 same merged ground; gui: always on foot; origin: flying only).
@@ -143,9 +149,9 @@ the engines work) are the original READMEs, in [docs/features](docs/features).
 
 | Type | Fields | |
 |---|---|---|
-| `camera` | `from: "<world>"` or `["a", "b"]`, `carry` · or `controller: "fly"`, `pos`, `look`, `fov`, `speed` · `mode: "walk"` | which world's camera drives the others, or the engine's free camera (WASD, drag, wheel, Space / C); `mode` starts it walking (<kbd>H</kbd> switches) |
+| `camera` | `from: "<world>"` or `["a", "b"]`, `carry` · or `controller: "fly"`, `pos`, `look`, `fov`, `speed` · `mode: "walk"` | which world's camera drives the others, or the engine's free camera (WASD, drag, wheel, Space / C); `mode` starts it walking (the handheld's Walk switches) |
 | `view` | `name`, `pos`, `look`, `fov` | a viewpoint in composition space, picked on the handheld's View |
-| `link` | `to: "<world>.<param>"`, `value: expr` | sets a world's parameter from an expression every frame (when it changes); every world has `visible` (shown or hidden, as by its tick in the bar) |
+| `link` | `to: "<world>.<param>"`, `value: expr` | sets a world's parameter from an expression every frame (when it changes) |
 | `include` | `scenario`, `as`, `skip`, `only`, `root` | splices another scenario's entities, or a part kept in its own file (`"gui/<id>"`: a scenario's GUIs, under `scenarios/gui/`): `as` renames its world (and its name in expressions), `skip` / `only` filter by type (`"view"`, `"sound.*"`), `root` merges fields into its root |
 | `handheld` | `startShown`, `title`, `fovDeg`, `pose`, `screen`, `model`, `materials`, `lighting`, `sounds` | the engine's handheld, in every scenario (<kbd>TAB</kbd> / <kbd>Esc</kbd>, or the corner chip): merged over its defaults, later entities winning |
 | `handheld.page` | `id`, `of`, `title`, `nav: { section, sub, icon }`, `sections` | a page of the handheld, the scenario's HUD: cells `label` `text` `nav` `switch` `slider` `picker` `action`; `label` / `text` take `expr`, a template of the frame scope (`"{sky.rain\|pct}"`); `nav` lists it in that section of the root page, `of` ties it to a world |
@@ -157,18 +163,18 @@ the engines work) are the original READMEs, in [docs/features](docs/features).
 **Expressions** (`js/engine/expr.js`) are parsed, never `eval`'d: literals, names (`river.flow.volume`, `sky['rain']`),
 `?: || && ?? == != < <= > >= + - * / % !`, and functions (`min max abs floor ceil round sqrt pow exp log sin cos clamp
 lerp mix smoothstep step sign hypot len contains rand fixed num dist pct onoff`). They read the frame's scope:
-`time`, `fps`, `focus` (the world with the keys), `scenario`, and every world's stats by its id. Template formats:
+`time`, `fps`, `focus` (the world with the keys: the camera's), `scenario`, and every world's stats by its id. Template formats:
 a digit count, `num` (k / M / G, `num: m³` adds a unit), `dist`, `pct`, `int`, `onoff`, `yesno`, `ms`, `upper`.
 
 **Worlds' stats, parameters and events** (what expressions read, what links set, what cues hear):
 
 | World | stats | `link` parameters | events |
 |---|---|---|---|
-| cloud | weather light rain snow inside sheltered inBus walking wind agl busDist busSpeed riding temperature coverage cells flashes veil time fps | weather light paused quality timeScale indoors radar | thunder door busDoor step weather |
-| water | volume wet maxSpeed inflow boost rain breached settling light mode tool acting height debris steps fps | rain boost paused light breach | toggle breach reset tool |
+| cloud | weather light rain snow inside sheltered inBus walking wind agl busDist busSpeed riding temperature coverage cells flashes veil air time fps | weather light paused quality timeScale indoors radar sunDir | thunder door busDoor step weather |
+| water | volume wet maxSpeed inflow boost rain breached settling light mode tool acting height debris steps fps | rain boost paused light breach sunDir | toggle breach reset tool |
 | origin | speed fromZero body altitude near rebases reason scale translate rotate scaling everyFrame instances draws density sunAt fps | paused translate rotate scale everyFrame labels | rebase jump toggle |
 | imposter | loading baking bakes lod lodDistance shadows light instances meshes imposters height fps | light lod shadows sunDir | toggle relight baked |
-| portal | area outdoor onShip state swimming driving culling mode draws tris shipSpeed shipDist drones fps | any of its options (culling walk map help...) | door step |
+| portal | area outdoor onShip state swimming driving culling mode draws tris shipSpeed shipDist drones fps | any of its options (culling walk map help...), sunDir | door step |
 | gui | lightsOn alarm phone moving running noise gui sound fps | lights alarm phone | door step shutter chime easel delete hover miss press granted denied cctv alarm (the handheld: `handheld.shown` `handheld.tap`) |
 
 The sounds the original demos synthesised in code are now data: the weather's beds and thunder (cloud), the GUI's
@@ -189,7 +195,7 @@ only list of kits, entity types, data types and worlds, and everything else is l
   imposter kit's, cloud the atmosphere kit's. Its entity classes are made from the manifest when first used
   (`kits.world.entityTypes`), over its bases: no world lists its types. It is composed, not derived: a world part
   returns `{ create: fx => new FeatureWorld(fx, spec) }`, the spec its HUD, its app and whichever of the host's hooks it
-  has (depth, stats, views, ground, sheltered, set...) over the defaults. There is one `World`, one `App` (the world
+  has (depth, stats, views, ground, sheltered, outdoors, sunDir, veil, footprint, set...) over the defaults. There is one `World`, one `App` (the world
   kit's) and one `Renderer` (the gpu kit's), never a class of a world's own: what a world type makes of each is its
   `WorldExtension`, `AppExtension` and `RendererExtension`, which mounts itself on the one class and answers for it
   (`Common.Composite`: what the host has not itself, its base has), and the features' extensions are composed into the
@@ -239,17 +245,45 @@ the nearest world per pixel. Where a world draws only sky, the others show throu
 A world with `layer.role: "atmosphere"` (cloud) does not take part in the merge: the merged picture and its depth go into
 its scene before its volumetrics (`Renderer.encodeInject` in `js/kits/atmosphere/renderer.js`: depth as reversed-Z, colour back to
 scene radiance through the inverse of its display transform), so its clouds, rain, haze, lightning, bloom and
-tonemapping cover the other worlds too.
+tonemapping cover the other worlds too. It knows where its air ends: the cloud world's `render.airTop` (m over its
+ground) and `render.airFade` (the band below it where the air thins out, by default a third of it) make it fade to what
+lies behind it with height, measured from the centre of its round planet; above it, and near the other bodies, it
+draws nothing of its own and the other worlds show bare (Every kit: 40 km, thinning from 20 km).
 
 Where a world sits: `layer.transform: { offset: [x, y, z], yaw }` in composition space, or `{ anchor: "<world>:<entity>",
 offset, yaw }` to ride on an entity of another world (a site on the Earth, a moon base). The camera passes between the
 worlds as a view (position, forward, up, fov in metres) through those transforms, so a valley anchored on a real-scale
 planet stays exact under the floating origin.
 
-What makes a composition fit is more data: `clearing` (a cloud entity) levels the plains under another
-world's footprint (`inset`: inside it, so the terrain meets the other world's edge at its own height); extra lighting
-presets match the other worlds' suns to the sky's; links carry state across (`sky.rain > 0.05` → `river.rain`,
-`!bunker.outdoor` → `sky.indoors`, `sol.sunAt['valley-site']` → `valley.sunDir`).
+Every world of a composition is always there and always runs: nothing shows, hides or solos a world. What keeps the
+worlds out of each other's way are the composition's own rules, each a hook a world may have (`FeatureWorld`) and data:
+
+- **Where the camera is.** Inside an interior of a world (`sheltered(p)`: a building, a cabin, a portal area), the camera
+  is inside for every world (`Host.inside`): the others see the outdoors only as that world does (`outdoors(p)`: the
+  screen rectangle of the portals its traversal passed out through, or nothing; their `fx.outdoors`), so an atmosphere
+  draws its sky, clouds and weather only there, every world's in-world labels show only there, and where no world draws
+  the sky shows only there too (elsewhere that world's own background: the void under a floor grating). An atmosphere
+  keeps its rain off the camera (`indoors`), unless a link drives that.
+- **Whose sun.** A world takes its sun from the world it stands in (`Host.lights`: the direction to that world's sun,
+  `sunDir(p)`, into its own frame as `set('sunDir')`, kept whatever lighting preset it picks): the worlds under an
+  atmosphere from the atmosphere, the atmosphere from the sky world (`layer.sky`, which keeps its own), every world from
+  the sky world when there is no atmosphere. `layer.sun` names another world, or `false` keeps a world's own; a link to
+  its `sunDir` does too. A followed world's lighting presets give only their colours, then (the compositions' *plains
+  day*, *plains afternoon*... have no sun angles).
+- **What is beyond the air.** An atmosphere says how much its air hides a point beyond it (`veil(p, dir, d)`: past
+  where the view ray leaves its air, `render.airTop` over its round planet, by day its sky hides what is in space, thinning
+  out with the air about the eye; by night or under the moon nothing, the night sky shows it; past the planet's ground
+  all of it). Every other world's in-world labels fade by it (`Host.veilOf`, their `fx.ui.veil`: the ray through the
+  label's pixel of the frame's view and its distance, so no world has to say where its points are): Sol's planets and
+  stations leave the plains' daytime sky, the river's, valley's and bunker's labels, inside the air, stay, and from
+  space nothing changes.
+- **Whose ground.** A world says what ground it covers (`footprint()`: its map, its terrain's square, its island, its
+  rooms); an atmosphere's terrain makes room under each when it is built (`fx.footprints`, in its frame): sunk a little
+  below the other world's lowest ground inside its edges, the terrain meeting them at its own height (a building gets a
+  pad at its floor), and bare (no plants). Lakes that carry a river's sea on into the plains are the scenario's own.
+- **The rest is links**, carrying state across (`sky.rain > 0.05` → `river.rain`, `sky.light` → `river.light`), and the
+  layer: `role` (`atmosphere`), `sky` (whose sky shows where no world draws), `focus` (with the engine's camera, the world with the
+  keys while the camera is inside none), `transform`, `sun`.
 
 ## Layout
 
@@ -258,7 +292,7 @@ index.html                  the page: canvas, the worlds' HUD root (labels, toas
 css/entities.css            shell, chip and toasts, what the worlds still draw on the screen (.fhud[data-world])
 js/engine/
     host.js                 boot, GPU device, worlds (each with the kits and features its data asks for), the frame,
-                            links
+                            the composition's rules (inside, suns, footprints), links
     common.js               small helpers everything shares (scalars, v3 / quat / m4, frustum planes, polylines,
                             buffers and bind groups, number formats, pointer input)
     scenario-format.js      the worlds' schemas (from the manifest), entities <-> each world's native scenario,
@@ -371,7 +405,7 @@ js/kits/<kit>/              a kit's parts (Features.kit); its exports are engine
                             into at most six wall apertures for culling) + weather shelter; GridHash and InteriorIndex
                             find them in O(1) (at, sheltered) and cull them by range + portals (seen). Cloud's
                             buildings and bus cabins, portal's areas (their areaAt), the gui facility; the host
-                            keeps an atmosphere world's rain off the camera inside any shown world's interior.
+                            keeps an atmosphere world's rain off the camera inside any world's interior.
                             worlds/portal: the bunker compound (portal-room visibility, stencil-masked traversal)
     transit/                paths (roundPath, offsetLine, SplineRoute), TransitLine + LineVehicle: vehicles running
                             a closed route (PolylineRoute, SplineRoute) on a timetable with stops, dwell, doors,

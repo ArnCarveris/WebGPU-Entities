@@ -36,7 +36,7 @@ const guiWorld = {
     // its player walks the facility, always
     get moves() { return ['walk']; },
     get move() { return 'walk'; },
-    get keys() { return [['drag', 'look'], ['WASD', 'walk'], ['Shift', 'run'], ['click', 'screens']]; },
+    get keys() { return [...FeatureWorld.WALK_KEYS, ['click', 'screens']]; },
     setMove(mode) {},
 
     // the facility is a building (kits.interior): the room within the player's bounds and the corridor beyond the
@@ -51,6 +51,13 @@ const guiWorld = {
             if (d) ix.add(new Interior({ owner: this, origin: at, lo: [d.x[0] - 0.3, -0.5, d.minZ - 0.3], hi: [d.x[1] + 0.3, top, b.z[0]], portals: [{ ...hatch, n: [0, 0, 1] }] }));
         }
         return this.interiors.sheltered(p);
+    },
+
+    // the facility's rooms, on their floor (FeatureWorld.footprint)
+    footprint() {
+        const c = this.app?.player?.cfg, b = c?.bounds, d = c?.doorway;
+        if (!b) return null;
+        return { lo: [b.x[0] - 0.3, Math.min(b.z[0], d?.minZ ?? b.z[0]) - 0.3], hi: [b.x[1] + 0.3, b.z[1] + 0.3], floor: 0, ground: false };
     },
 
     stats() {

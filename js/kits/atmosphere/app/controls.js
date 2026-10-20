@@ -4,7 +4,7 @@
 
 Features.kit('atmosphere', (engine, kit) => {
 const { Common } = engine;
-const { DEG, clamp } = Common;
+const { DEG, clamp, v3 } = Common;
 const { QUALITY, RENDER_MODES } = kit;
 const { RAIN_VARIANTS } = engine.kits.weather;
 const { WALK } = kit;
@@ -26,11 +26,21 @@ class Controls {
         a.menus.sync();
     }
 
+    // a preset's sun (or moon) and exposure; its direction the one followed, if any (follow)
     setLight(name) {
-        const a = this.app, p = a.lightPresets[name] || {};
+        const a = this.app, p = a.lightPresets[name] || {}, d = a.sunAlong;
         a.lightName = name || 'default';
         a.sun = { azimuth: (p.azimuth ?? 150) * DEG, elevation: (p.elevation ?? 35) * DEG, intensity: p.intensity ?? 12, exposure: p.exposure ?? 0.45,
             moon: p.moon ? clamp(p.moon, 0.02, 1) : 0 };
+        if (d) { a.sun.azimuth = Math.atan2(d[0], -d[2]); a.sun.elevation = Math.asin(clamp(d[1], -1, 1)); }
+    }
+
+    // the sun of another world (a composition's, Host.lights): its direction d (this world's frame, toward it), kept
+    // whatever light is picked
+    follow(d) {
+        const a = this.app;
+        a.sunAlong = v3.norm(d);
+        this.setLight(a.lightName);
     }
 
     // walk from here (down on the ground below the camera), or fly again

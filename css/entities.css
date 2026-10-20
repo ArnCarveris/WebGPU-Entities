@@ -71,7 +71,6 @@ canvas#view.drag { cursor: grabbing; }
 
 /* ------------------------------------------------------------------------------------------- feature HUDs */
 /* what a world still puts on the screen: in-world labels, toasts, a crosshair (its options and readouts are on the handheld) */
-.fhud.hidden { display: none; }
 .fhud.unfocused .panel { display: none !important; }
 .fhud .panel:empty { display: none !important; }
 .fhud canvas.labels { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; }

@@ -40,6 +40,15 @@ p_origin = R^T (p - T) / s
   and the camera's altitude are computed in doubles on the CPU each frame (a few bodies, so O(bodies)).
   The stable root `t = c / (-b + sqrt(b² - c))` with `c = alt·(alt + 2R)` keeps the ground exact at
   1.7 m eye height on a 1.7e6 m Moon.
+- **Close up**, Earth's land gets a patchwork of kilometres and hundreds of metres (each octave gone
+  before it is finer than a pixel); its painted clouds break up into cloud fields within some 3000 km
+  of the eye and thin out within some 250 km (an atmosphere standing on it draws real ones there);
+  its air's glow on the ground only builds up with the way through it, so from inside the air the
+  ground nearby keeps its colour.
+- **What stands on a body shows on it** (a composition): a world whose `footprint()` has an `albedo`
+  (an atmosphere's terrain map) colours the body's surface there, easing back to its own colour over
+  eight times the footprint's radius (`AppExtension.writeCovers`, at most `MAX_COVERS` = 4; on Earth it
+  counts as land). The plains of *Every kit* go on as plains-coloured land past their map.
 - Reversed-Z with an infinite far plane (`depth32float`) plus 4× MSAA.
 
 Turn **T** off to see the classic problem: the origin is pinned to world 0, and at Neptune the f32

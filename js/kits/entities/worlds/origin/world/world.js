@@ -8,6 +8,8 @@ const {
     MAX_BODIES, SURFACES, quat, WorldPos, Model, GeometryPool, MaterialTable, Instance, InstanceStore, ENTITY_TYPES,
 } = kit;
 
+const PACE_REACH = 30;      // s
+
 class WorldExtension {
     constructor(world, scenario, device, density = 1) {
         this.world = world.mount(this);
@@ -91,9 +93,10 @@ class WorldExtension {
         this.store.flush();
     }
 
-    // Distance to the nearest thing worth resolving (body surface or landmark), plus the dominant body
+    // Distance to the nearest thing worth resolving (body surface or landmark), plus the dominant body, and `pace`: the
+    // speed of the fastest moving thing that could reach pos within PACE_REACH seconds (flight there keeps ahead of it)
     proximity(pos) {
-        let dist = Infinity, body = null, alt = Infinity, rel = Infinity, near = null;
+        let dist = Infinity, body = null, alt = Infinity, rel = Infinity, near = null, pace = 0;
         for (const b of this.bodies) {
             const a = v3.len(pos.sub(b.pos)) - b.radius;
             if (a < dist) dist = a;
@@ -103,7 +106,10 @@ class WorldExtension {
             const d = Math.max(v3.len(pos.sub(l.pos)) - l.radius, l.spacing);
             if (d < dist) { dist = d; near = l; }
         }
-        return { dist: Math.max(dist, 0.5), body, alt, near };
+        for (const e of this.dynamic) {
+            if (e.speed > pace && v3.len(pos.sub(e.pos)) - e.radius < e.speed * PACE_REACH) pace = e.speed;
+        }
+        return { dist: Math.max(dist, 0.5), body, alt, near, pace };
     }
 
     get instanceCount() { return this.store.count; }

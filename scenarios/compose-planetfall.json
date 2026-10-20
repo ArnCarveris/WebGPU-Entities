@@ -17,8 +17,7 @@
         {"type":"shadows","distance":800},
 
         {"type":"camera","from":"sol"},
-        {"$comment":"the valley's sun is the Sun as seen from the site"},
-        {"type":"link","to":"valley.sunDir","value":"sol.sunAt['valley-site']"},
+        {"$comment":"the valley's sun is the Sun as seen from the site (riding on the solar system, it takes its sun); its light, day or night by it"},
         {"type":"link","to":"valley.light","value":"sol.sunAt['valley-site'][1] < 0.03 ? 'night' : 'noon'"},
         {"$comment":"the handheld's pages: scenarios/gui/compose-planetfall.json","type":"include","scenario":"gui/compose-planetfall"}
     ]

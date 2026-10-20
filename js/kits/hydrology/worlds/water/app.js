@@ -67,7 +67,8 @@ class AppExtension {
         const sun = p.sun || {}, az = (sun.azimuth ?? 150) * DEG, el = (sun.elevation ?? 40) * DEG;
         this.lightName = name || 'default';
         this.light = {
-            dir: [Math.cos(el) * Math.sin(az), Math.sin(el), -Math.cos(el) * Math.cos(az)],
+            // (toward the sun: the preset's, or the one followed, sunAlong: another world's in a composition)
+            dir: this.sunAlong ? [...this.sunAlong] : [Math.cos(el) * Math.sin(az), Math.sin(el), -Math.cos(el) * Math.cos(az)],
             color: sun.color || [1, 0.95, 0.85], intensity: sun.intensity ?? 3,
             top: p.sky?.top || [0.22, 0.42, 0.78], horizon: p.sky?.horizon || [0.62, 0.74, 0.86],
             ground: p.ground || [0.24, 0.22, 0.18], ambient: p.ambient ?? 0.9, fog: p.fog ?? 0.00025, exposure: p.exposure ?? 1,

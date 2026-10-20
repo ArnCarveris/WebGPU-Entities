@@ -47,7 +47,7 @@ const portalWorld = {
 
     // the keys there are (FeatureWorld.keys; every option is on the handheld): walking, flying through walls, at the helm
     get keys() {
-        const P = this.app.player, look = ['click', 'look (Esc frees the mouse)'];
+        const P = this.app.player, look = FeatureWorld.LOOK_KEYS[this.move];
         if (P?.driving) return [look, ['W / S', 'throttle'], ['A / D', 'rudder'], ['X', 'stop'], ['Space', 'rudder centre'], ['F', 'leave the helm']];
         if (this.move === 'fly') return [look, ['WASD', 'move'], ['Space / E', 'up'], ['Q / Ctrl', 'down'], ['Shift', 'fast'], ['F', 'door / helm']];
         return [look, ['WASD', 'walk'], ['Shift', 'run'], ['Space', 'jump'], ['F', 'door / helm']];
@@ -87,9 +87,23 @@ const portalWorld = {
     // its portal visibility (the interior kit's VisInspector): floor map, traversal, frames on the handheld
     get inspector() { return this.app?.inspector || null; },
 
+    // its outdoors' terrain (the island), down to its lowest ground (FeatureWorld.footprint)
+    footprint() {
+        const o = this.app.world?.outdoors, t = o?.terrain;
+        if (!t?.extent) return null;
+        const [x0, z0, x1, z1] = t.extent;
+        let floor = Infinity;
+        for (let z = z0; z <= z1; z += 4) for (let x = x0; x <= x1; x += 4) floor = Math.min(floor, o.height(x, z));
+        return { lo: [x0, z0], hi: [x1, z1], floor, ground: true };
+    },
+
+    // toward the sun of its outdoors, the same everywhere
+    sunDir() { const w = this.app?.world; return w ? engine.Common.v3.norm(w.sunDir) : null; },
+
     set(key, v) {
         const o = this.app.opts;
-        if (key in o && typeof o[key] === typeof v) o[key] = v;
+        if (key === 'sunDir' && Array.isArray(v)) this.app.world.sunAlong = engine.Common.v3.norm(v);
+        else if (key in o && typeof o[key] === typeof v) o[key] = v;
     },
 };
 

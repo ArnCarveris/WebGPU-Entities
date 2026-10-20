@@ -22,7 +22,7 @@ class RendererExtension {
 
         const U = GPUBufferUsage;
         this.frameData = new Float32Array(FRAME_FLOATS);
-        this.frameBuf = device.createBuffer({ size: 256, usage: U.UNIFORM | U.COPY_DST });
+        this.frameBuf = device.createBuffer({ size: FRAME_FLOATS * 4, usage: U.UNIFORM | U.COPY_DST });
         this.originBuf = device.createBuffer({ size: ORIGIN_BYTES, usage: U.UNIFORM | U.COPY_DST });
         this.bodyData = new Float32Array(MAX_BODIES * BODY_FLOATS);
         this.bodyBuf = device.createBuffer({ size: this.bodyData.byteLength, usage: U.STORAGE | U.COPY_DST });

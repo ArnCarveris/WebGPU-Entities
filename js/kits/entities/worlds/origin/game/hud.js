@@ -50,7 +50,7 @@ class Hud extends kits.world.WorldHud {
             const d = v3.len(cam.pos.sub(e.pos));
             if (d < e.radius * 1.5 && !(e instanceof Body)) continue;
             if (e instanceof Body && d - e.radius < e.radius * 0.05) continue;
-            const at = L.place(vp, o.toLocal(e.pos));
+            const at = L.place(vp, o.toLocal(e.pos), d);
             if (!at) continue;
             const [x, y] = at;
             if (placed.some(p => Math.abs(p[0] - x) < 140 * dpr && Math.abs(p[1] - y) < 13 * dpr)) continue;

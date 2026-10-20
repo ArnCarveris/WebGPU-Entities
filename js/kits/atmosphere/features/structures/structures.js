@@ -103,7 +103,7 @@ class StructuresApp {
         // the outdoors as the traversal sees it (the renderer leaves it out, or draws it within the portals' rectangle);
         // the unplanned buildings are seen from it
         fw.outdoors = fw.roomVis.outdoors;
-        if (fw.outdoors.seen) for (const [, it] of S.interiors.seen(cam.pos, planes, INTERIOR_DRAW, 'building')) S.buildings.draws(it.owner, inside);
+        if (fw.outdoors?.seen !== false) for (const [, it] of S.interiors.seen(cam.pos, planes, INTERIOR_DRAW, 'building')) S.buildings.draws(it.owner, inside);
         // its sector and portal frames, about the eye
         r.lineLayer.write(fw.roomVis.inspector.lines(cam.pos), m4.mul(proj, m4.view([0, 0, 0], right, up, fwd)));
         // the lift cars the traversal reached (their areas), the landing doors and counterweights near

@@ -13,6 +13,7 @@ const {
     NEAR, WEATHER_RES, GROUND_RES, CELL_FLOATS, QUALITY, SHADOW_SLICES, FROXEL_NEAR, BUS_UNIFORM,
 } = kit;
 const { rainFall, Sky } = engine.kits.weather;
+const { Outdoors } = engine.kits.world;
 
 class FrameWriter {
     constructor(app) {
@@ -50,11 +51,12 @@ class FrameWriter {
         const near = a.walker.active ? 0.05 : NEAR, proj = m4.reversedInfinite(cam.fov, aspect, near);
         this.viewProj = m4.mul(proj, m4.view(cam.pos, right, up, fwd));
         // what the features draw this frame (their AppExtension.draws: the buses near, the rooms the portal traversal reaches
-        // and their lifts, the world-space GUIs); one that sees the outdoors from inside sets this.outdoors ({ seen, rect })
+        // and their lifts, the world-space GUIs); one that sees the outdoors from inside sets this.outdoors ({ seen, rect });
+        // the camera inside another world of a composition sees it only as that world does (fx.outdoors)
         this.outdoors = null;
         const view = { proj, near, basis: { fwd, right, up }, aspect, planes: frustumPlanes(this.viewProj, { reversed: true }) };
         for (const x of a.extensions) x.draws?.(this, view);
-        r.outdoors = this.outdoors;
+        this.outdoors = r.outdoors = Outdoors.meet(this.outdoors, a.fx.outdoors, r.width, r.height);
         // the cabin the rain and the march leave out (the features': AppExtension.cabin() { rank, inv (world to its frame),
         // lo, hi }, the lowest rank's: the lift car the camera is in, the bus ridden or the nearest, the building it is in),
         // or none
@@ -92,8 +94,12 @@ class FrameWriter {
         F.set('precip', [w.weather.freezingLevel, cfg.slant, cfg.rainExtinction, cfg.snowExtinction]);
         F.set('wdomain', [wo[0], wo[1], ws, WEATHER_RES]);
         F.set('tdomain', [f.origin, f.origin, f.size, f.n]);
-        F.set('geo', [w.terrain.style === 'natural' ? 1 : 0, w.terrain.outside === 'sea' ? 1 : 0, r.terrainLod.range0, w.terrain.moisture ?? 0.5]);
+        // (beyond the map, terrain.outside: the plain at its base (0), the sea (1), or none (-1): what lies behind it shows)
+        F.set('geo', [w.terrain.style === 'natural' ? 1 : 0, { sea: 1, none: -1 }[w.terrain.outside] ?? 0, r.terrainLod.range0, w.terrain.moisture ?? 0.5]);
         F.set('tdetail', [f.rough, f.coastBand, r.terrainLod.step, r.vegetation ? (f.canopy ? 2 : 1) : 0]);
+        // (beyond a map with no ground of its own, in a composition: the ground of the world it stands on, in the other
+        // worlds' merged picture (fx.inject), its last terrain.edge m fading into it: fsTerrain)
+        F.set('outside', [a.fx.inject ? 1 : 0, 0, 0, w.terrain.outside === 'none' ? w.terrain.edge || 0 : 0]);
         F.set('ground', [w.terrain.fieldSize, w.terrain.pivots, GROUND_RES, this.outdoors?.seen === false ? 1 : a.mode]);     // (mode 1: the scene alone, no volumetrics: also indoors with the outdoors out of sight)
         F.set('cirrus', [cfg.maxTop + 800, c.cirrus, 9000, c.drizzle]);
         F.set('march', [q.steps, q.light, cfg.maxDistance, a.radar ? 1 : 0]);

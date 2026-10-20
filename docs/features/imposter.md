@@ -157,7 +157,7 @@ FlyCamera, InputSystem, Hud, ControlPanel, Game, main
 | Key | Contents |
 |---|---|
 | `name`, `camera` | title; start `pos` (y above the ground), `yaw`, `pitch` (degrees), `fov`, `speed` |
-| `lighting` | named lighting scenarios: `sun` (`azimuth`, `elevation` in degrees, or `dir`; `color`, `intensity`), `sky` (`top`, `horizon`), `ambient` (`sky`, `ground`, `strength`), `fog` (`color`, `density`), `exposure`, `emission` (scale of emissive materials) |
+| `lighting` | named lighting scenarios: `sun` (`azimuth`, `elevation` in degrees, or `dir`; neither: a default; `color`, `intensity`; in a composition the sun it follows, `set('sunDir')`, stands in for its direction, so a preset there gives only its colours), `sky` (`top`, `horizon`), `ambient` (`sky`, `ground`, `strength`), `fog` (`color`, `density`), `exposure`, `emission` (scale of emissive materials) |
 | `environment` | the starting `lighting` scenario by name, or a scenario object |
 | `lod` | `mode` (`auto`, `mesh`, `imposter`), `distance` (metres per 5 m of radius), `fade` (band as a fraction of the distance), `far` |
 | `shadows` | `enabled`, `distance` (metres the cascades cover), `resolution` (per cascade), `lambda` (split: 0 uniform .. 1 logarithmic) |

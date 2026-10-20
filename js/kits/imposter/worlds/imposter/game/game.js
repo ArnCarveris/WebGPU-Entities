@@ -30,6 +30,7 @@ class AppExtension {
         this.input = new InputSystem(this.app);
         this.hud = new Hud(this.app);
         this.world = null;
+        this.next = null;                   // the world being loaded (loadScenario)
         this.loading = false;
         this.baking = false;
         this.cpuMs = 0;
@@ -70,7 +71,8 @@ class AppExtension {
         if (this.loading) { this.toast('Still loading…'); return; }
         this.loading = true;
         try {
-            const world = new World(WorldExtension, this.app, sc);
+            // (next: the world being loaded; its entities, the terrain among them, are there before it bakes)
+            const world = this.next = new World(WorldExtension, this.app, sc);
             await world.build();
             const old = this.world;
             this.world = world;
@@ -90,6 +92,7 @@ class AppExtension {
             this.toast('Scenario error: ' + err.message, 6000);
         } finally {
             this.loading = false;
+            this.next = null;
         }
     }
 

@@ -74,6 +74,13 @@ class Curvature {
         return Math.sqrt(h * (2 * R + h)) + Math.sqrt(Math.max(top, 0) * (2 * R + top));
     }
 
+    // how high p is over the reference (m): over the sphere when on, measured from its centre (below the world's origin),
+    // so it holds however far p is
+    altitude(p) {
+        const h = p[1] - this.reference;
+        return this.on ? Math.hypot(p[0], this.radius + h, p[2]) - this.radius : h;
+    }
+
     // how far below the eye's level the horizon of the reference lies (rad): acos(R / K); 0 off, or under the reference
     horizonDip() {
         if (!this.on || this.K <= this.radius) return 0;

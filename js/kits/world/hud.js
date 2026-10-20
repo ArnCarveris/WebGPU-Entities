@@ -17,10 +17,50 @@ class Toast {
     }
 }
 
-// in-world labels on a 2D canvas over the world: begin() sizes and clears it, place() projects a point, mark() draws one
+// What of the outdoors the eye sees from inside an interior: null, all of it (the eye is outdoors), or { seen (any of it),
+// rect ([x0, y0, x1, y1] px of a W x H frame: the screen rectangle of the portals it is seen through; null: the whole
+// screen), W, H }: a world's own (its portal traversal's) or the composition's (fx.outdoors: the camera inside another
+// world's interior, Host.inside)
+const Outdoors = {
+    SEALED: { seen: false, rect: null },
+
+    // r's rectangle in a W x H frame (whole pixels, covering)
+    scaled(r, W, H) {
+        if (!r?.rect || !r.W || (r.W === W && r.H === H)) return r;
+        const [x0, y0, x1, y1] = r.rect, sx = W / r.W, sy = H / r.H;
+        return { seen: r.seen, rect: [Math.floor(x0 * sx), Math.floor(y0 * sy), Math.ceil(x1 * sx), Math.ceil(y1 * sy)], W, H };
+    },
+
+    // what both let through, in a W x H frame
+    meet(a, b, W, H) {
+        a = Outdoors.scaled(a, W, H);
+        b = Outdoors.scaled(b, W, H);
+        if (!a || !b) return a || b || null;
+        if (!a.seen || !b.seen) return Outdoors.SEALED;
+        if (!a.rect || !b.rect) return { seen: true, rect: a.rect || b.rect, W, H };
+        const r = [Math.max(a.rect[0], b.rect[0]), Math.max(a.rect[1], b.rect[1]), Math.min(a.rect[2], b.rect[2]), Math.min(a.rect[3], b.rect[3])];
+        return r[2] > r[0] && r[3] > r[1] ? { seen: true, rect: r, W, H } : Outdoors.SEALED;
+    },
+
+    // whether r hides point [x, y] of a w x h frame
+    hides(r, x, y, w, h) {
+        if (!r) return false;
+        if (!r.seen) return true;
+        if (!r.rect) return false;
+        const u = x * (r.W || w) / w, v = y * (r.H || h) / h;
+        return !(u >= r.rect[0] && u <= r.rect[2] && v >= r.rect[1] && v <= r.rect[3]);
+    },
+};
+
+// in-world labels on a 2D canvas over the world: begin() sizes and clears it, place() projects a point, mark() draws one.
+// What of the outdoors they may show: their world's own `region` and the composition's (outer(): fx.outdoors); how much
+// the composition's other worlds hide a point beyond them (veil(x, y, W, H, d): fx.ui.veil, an atmosphere's daytime sky
+// what is in space)
 class LabelLayer {
-    constructor(canvas) {
+    constructor(canvas, outer = null, veil = null) {
         this.canvas = canvas;
+        this.outer = outer;
+        this.veil = veil;
         this.g = canvas.getContext('2d');
         this.W = this.H = 0;
         this.dpr = 1;
@@ -40,26 +80,31 @@ class LabelLayer {
         this.g.textBaseline = 'middle';
     }
 
-    // canvas pixel [x, y] of world point p under viewProj, or null behind the eye or well off the screen, or where the
-    // `region` (what of the outdoors the eye sees from inside: { seen, rect [x0, y0, x1, y1] in a W x H frame }, the
-    // portal traversal's; null: all of it) hides it
-    place(viewProj, p) {
+    // canvas pixel [x, y, alpha] of world point p under viewProj, or null behind the eye or well off the screen, or where
+    // what of the outdoors the eye sees from inside (Outdoors: its `region`, the world's portal traversal's, and the
+    // composition's) hides it; d (m from the eye, if given): faded by what the other worlds hide of it (veil), null where
+    // they hide it all
+    place(viewProj, p, d) {
         const clip = m4.project(viewProj, p);
         if (clip[3] <= 0) return null;
-        const x = (clip[0] / clip[3] * 0.5 + 0.5) * this.W, y = (0.5 - clip[1] / clip[3] * 0.5) * this.H, r = this.region;
-        if (r && (!r.seen || (r.rect && !(x * r.W / this.W >= r.rect[0] && x * r.W / this.W <= r.rect[2] && y * r.H / this.H >= r.rect[1] && y * r.H / this.H <= r.rect[3])))) return null;
-        return x < -50 || x > this.W + 50 || y < -20 || y > this.H + 20 ? null : [x, y];
+        const x = (clip[0] / clip[3] * 0.5 + 0.5) * this.W, y = (0.5 - clip[1] / clip[3] * 0.5) * this.H;
+        if (x < -50 || x > this.W + 50 || y < -20 || y > this.H + 20) return null;
+        if (Outdoors.hides(this.region, x, y, this.W, this.H) || Outdoors.hides(this.outer?.(), x, y, this.W, this.H)) return null;
+        const a = d > 0 && this.veil ? 1 - this.veil(x, y, this.W, this.H, d) : 1;
+        return a > 0.02 ? [x, y, Math.min(a, 1)] : null;
     }
 
-    // a diamond at [x, y] and the text to its right
-    mark([x, y], color, text) {
+    // a diamond at [x, y] and the text to its right (alpha: how much of it shows)
+    mark([x, y, alpha = 1], color, text) {
         const g = this.g, dpr = this.dpr;
+        g.globalAlpha = alpha;
         g.strokeStyle = g.fillStyle = color;
         g.lineWidth = dpr;
         g.beginPath();
         g.moveTo(x, y - 4 * dpr); g.lineTo(x + 4 * dpr, y); g.lineTo(x, y + 4 * dpr); g.lineTo(x - 4 * dpr, y); g.closePath();
         g.stroke();
         g.fillText(text, x + 8 * dpr, y);
+        g.globalAlpha = 1;
     }
 }
 
@@ -69,7 +114,7 @@ class WorldHud {
     constructor(ui, { labels = false, every = 150, toastMs = 2200 } = {}) {
         this.lines = [];
         this.toaster = new Toast(ui.$('toast'));
-        this.labels = labels ? new LabelLayer(ui.$('labels')) : null;
+        this.labels = labels ? new LabelLayer(ui.$('labels'), ui.region, ui.veil) : null;
         this.showLabels = true;
         this.every = every;
         this.toastMs = toastMs;
@@ -86,5 +131,5 @@ class WorldHud {
     }
 }
 
-return { Toast, LabelLayer, WorldHud };
+return { Outdoors, Toast, LabelLayer, WorldHud };
 });

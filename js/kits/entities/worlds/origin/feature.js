@@ -57,8 +57,14 @@ const originWorld = {
         };
     },
 
-    // the direction to the sun in the frame of every entity marked `sunProbe` (worlds riding on it light by it, through a
-    // link: { to: "valley.sunDir", value: "sol.sunAt['site']" })
+    // toward the Sun from p (metres, this world's frame): what lights the worlds riding on it in a composition (Host.lights)
+    sunDir(p) {
+        const w = this.app?.world;
+        return w?.sun ? v3.norm(v3.sub(w.sunPos.metres(), p)) : null;
+    },
+
+    // the direction to the sun in the frame of every entity marked `sunProbe` (for expressions: a link can light a world
+    // by it, { to: "valley.sunDir", value: "sol.sunAt['site']" }, though a world riding on it takes its sun by default)
     sunProbes() {
         const w = this.app.world, out = {};
         for (const e of w.entities) {

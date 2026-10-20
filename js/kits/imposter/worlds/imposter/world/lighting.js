@@ -44,6 +44,7 @@ class Lighting {
         this.from = null;
         this.t = 1;
         this.changes = 0;               // relights since start (switches + sun / emission tweaks)
+        this.sunAlong = null;           // the sun followed (another world's in a composition: follow), whatever preset
     }
 
     get names() { return Object.keys(this.presets); }
@@ -61,12 +62,30 @@ class Lighting {
     set(name, animate = true) {
         if (!this.presets[name]) return;
         this.name = name;
-        this.target = parseEnv(this.presets[name]);
+        this.target = this.along(parseEnv(this.presets[name]));
         if (animate) { this.from = this.env; this.t = 0; this.changes++; }
         else { this.env = { ...this.target }; this.t = 1; }
     }
 
     cycle() { const n = this.names; this.set(n[(n.indexOf(this.name) + 1) % n.length]); }
+
+    // the sun of another world (Host.lights): its direction d (toward it, this world's frame) in every preset from now on
+    follow(d) {
+        this.sunAlong = v3.norm(d);
+        this.along(this.target);
+        if (this.t >= 1) this.env = { ...this.target };
+        else if (this.from) this.along(this.from);
+    }
+
+    // env with the followed sun's azimuth and elevation (no lower than 2 degrees: the atlases are lit from above)
+    along(env) {
+        const d = this.sunAlong;
+        if (!d) return env;
+        env.azimuth = (Math.atan2(d[0], d[2]) / DEG + 360) % 360;
+        env.elevation = Math.max(Math.asin(Math.min(Math.max(d[1], -1), 1)) / DEG, 2);
+        env.sunDir = sunDirFrom(env.azimuth, env.elevation);
+        return env;
+    }
 
     // azimuth, elevation or emission
     tweak(key, value) {

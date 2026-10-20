@@ -2,7 +2,9 @@
 // Keyboard and mouse input.
 
 Features.world('gui', (engine, kit) => {
-// Mouse / keyboard. Presses go to the GUI under the cursor first; otherwise dragging looks around.
+// Mouse / keyboard. Presses go to the GUI under the cursor first; otherwise dragging looks around. While the canvas has
+// the mouse (pointer lock: walking, the engine takes it on a click) every motion looks, and the cursor is the screen's
+// centre (the crosshair).
 
 class InputSystem {
     constructor(game, io) {
@@ -16,21 +18,24 @@ class InputSystem {
 
     attach() {
         const { canvas, game, io } = this;
+        const locked = () => document.pointerLockElement === canvas;
         const track = (e) => {
-            this.mouse.x = e.clientX;
-            this.mouse.y = e.clientY;
+            const r = locked() && canvas.getBoundingClientRect();
+            this.mouse.x = r ? r.left + r.width / 2 : e.clientX;
+            this.mouse.y = r ? r.top + r.height / 2 : e.clientY;
             this.mouse.inside = true;
         };
         io.listen(canvas, 'pointermove', (e) => {
             track(e);
-            if (this.looking && !game.fx.cameraLocked) game.player.look(e.movementX, e.movementY);
+            if ((this.looking || locked()) && !game.fx.cameraLocked) game.player.look(e.movementX, e.movementY);
         });
         io.listen(canvas, 'pointerleave', () => { this.mouse.inside = false; });
         io.listen(canvas, 'pointerdown', (e) => {
             track(e);
             const taken = game.interaction.pointerDown();
             if (!taken) this.looking = true;
-            if (taken !== 'gui') canvas.setPointerCapture(e.pointerId);
+            if (taken === 'gui') e.preventDefault();         // a press on a screen doesn't take the mouse
+            else if (!locked()) canvas.setPointerCapture(e.pointerId);
         });
         const release = () => {
             this.looking = false;

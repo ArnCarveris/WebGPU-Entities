@@ -15,7 +15,7 @@
 
 Features.kit('atmosphere', (engine, kit) => {
 const { GpuChoice, Common, kits } = engine;
-const { clamp, v3, PointerInput } = Common;
+const { clamp, smoothstep, v3, PointerInput } = Common;
 const { FirstPersonView } = kits.view;
 const SLOW_ALT = { keys: ['AltLeft'], factor: 0.2 };       // Alt held: a fifth of the speed
 const { Hud, AppMenus, Controls, KeyCommands, SPLASH_PARTICLES, RENDER_DEFAULTS, QUALITY, FRAME_BUDGET, RendererExtension, Surroundings, LightWriter, FrameWriter,
@@ -69,12 +69,66 @@ class AppExtension {
         this.dynamicScale = new DynamicScale(FRAME_BUDGET);
     }
 
+    // how much of its air there is at p (1 all of it; render.airTop: the height over its ground's reference where it ends
+    // and space begins, thinning out over render.airFade below it, by default a third of it; unset, it never ends)
+    airAt(p) {
+        const top = this.cfg?.airTop;
+        if (!(top > 0) || !this.world) return 1;
+        const fade = Math.max(this.cfg.airFade ?? top / 3, 1);
+        return smoothstep(top, top - fade, this.world.curvature.altitude(p));
+    }
+
+    // how much its air hides, from an eye at p, a point d m away along dir (unit): nothing short of where the view ray
+    // leaves its air (render.airTop, over the planet as drawn: the shell about the centre R + the eye's height below
+    // it); past that, in space, what its sky hides (all of it by day, thinning out with the air about the eye, airAt;
+    // nothing by night or under the moon: the night sky shows what lies beyond), or, past the planet, all of it. 0 .. 1;
+    // 0 with no airTop
+    airHides(p, dir, d) {
+        const top = this.cfg?.airTop, sun = this.sun;
+        if (!(top > 0) || !this.world || !sun) return 0;
+        const air = this.airAt(p);
+        if (air <= 0) return 0;
+        const c = this.world.curvature, h = p[1] - c.reference;
+        let out = Infinity, under = false;
+        if (c.on) {
+            // |(0, K, 0) + t dir| = r: t = -b ± sqrt(b² - K² + r²); the air's far side, and the ground's near one first
+            const R = c.radius, K = R + h, b = K * dir[1], g = b * b - K * K + R * R;
+            out = -b + Math.sqrt(Math.max(b * b - K * K + (R + top) * (R + top), 0));
+            under = h > 0 && b < 0 && g >= 0;
+        } else if (dir[1] > 0) out = (top - h) / dir[1];
+        if (!(d > out)) return 0;
+        if (under) return 1;
+        return this.daySky() * air;
+    }
+
+    // how much its sky hides what lies beyond it: all by day, none by night or under the moon
+    daySky() { const s = this.sun; return s.moon > 0 ? 0 : smoothstep(-0.1, 0.05, Math.sin(s.elevation)); }
+
+    // airHides for the GPU (Renderer.encodeInject: the other worlds beyond its air drop out where its sky hides them):
+    // [on (round), K (R + the eye's height), C ((R + top)² - K², exactly), top - height (flat)] and how much it hides
+    // there (null: nothing, no airTop)
+    airShell(p) {
+        const top = this.cfg?.airTop;
+        if (!(top > 0) || !this.world || !this.sun) return null;
+        const c = this.world.curvature, h = p[1] - c.reference, R = c.radius;
+        return { shell: [c.on ? 1 : 0, R + h, (top - h) * (2 * R + top + h), top - h], hides: this.daySky() * this.airAt(p) };
+    }
+
     async start() {
         GpuChoice.probe();
         await this.renderer.init();
     }
 
     load(scenario) {
+        // the ground the composition's other worlds cover (fx.footprints): its terrain makes room under each (bare clearings,
+        // after its own stamps): a world with its own ground to its edges sinks the terrain inside them a little below its
+        // lowest ground, the terrain meeting them at its own height; a building gets a pad at its floor
+        const room = (this.fx.footprints || []).map(fp => ({
+            type: 'clearing', label: '', pos: fp.pos, size: fp.size, yaw: fp.yaw, inset: fp.ground, bare: true,
+            level: fp.floor - (fp.ground ? Math.max(2, 0.005 * Math.max(...fp.size)) : 0.05),
+            blend: fp.ground ? clamp(0.12 * Math.min(...fp.size), 100, 300) : 150,
+        }));
+        if (room.length) scenario = { ...scenario, entities: [...(scenario.entities || []), ...room] };
         const world = this.createWorld(scenario, this.worldExtensions);
         this.world = world;
         // thunder from each flash, timed by its distance from the camera then
@@ -124,6 +178,18 @@ class AppExtension {
             this.footsteps.update();
         }
         if (!render) return;
+        // above its air (airAt), nothing of it: only what lies behind it (Renderer.encodeSpace)
+        const air = this.airHere = this.airAt(this.camera.pos);
+        if (air <= 0) {
+            const enc = r.device.createCommandEncoder();
+            r.encodeSpace(enc, 1, true);
+            r.device.queue.submit([enc.finish()]);
+            this.lastCam = [...this.camera.pos];
+            this.frameNo++;
+            this.hud.drawLabels(this.app);
+            this.hud.update(this.app, now);
+            return;
+        }
         // the volumetric resolution: the preset's, or lower while the GPU time is over budget (a resize keeps the history)
         const q = QUALITY[this.quality];
         r.resize(q.dynamic && r.profiler.enabled ? this.dynamicScale.update(q, r.profiler.total, this.time) : q.scale);
@@ -134,7 +200,9 @@ class AppExtension {
         const particles = total > 0.001 ?fw.splashStart + (this.near.rain > 0.02 ? SPLASH_PARTICLES : 0) : 0;
         // (from inside, with the outdoors out of sight through the portals: no volumetrics, no rain; FrameWriter.outdoors)
         const out = fw.outdoors?.seen !== false;
+        r.air = this.airShell(this.camera.pos);
         r.render(enc, fw.probeTexel, out ? particles : 0, w.lightning.count, QUALITY[this.quality].interleave, fw.shadowSlices, this.froxels && out, this.mode !== 1 && out, this.tiles, this.bloom && this.cfg.bloom > 0);
+        if (air < 1) r.encodeSpace(enc, 1 - air);
         r.device.queue.submit([enc.finish()]);
         r.weatherPass.afterSubmit();
         r.profiler.afterSubmit();

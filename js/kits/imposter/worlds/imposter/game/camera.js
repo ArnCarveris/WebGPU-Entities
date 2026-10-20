@@ -35,8 +35,11 @@ class InputSystem {
 
     attach() {
         const c = this.game.canvas, cam = () => this.game.camera, io = this.game.fx.io;
-        io.listen(c, 'pointerdown', e => { c.setPointerCapture(e.pointerId); this.drag = [e.clientX, e.clientY]; });
+        // dragging looks, and (pointer lock: walking, the engine takes the mouse on a click) any motion
+        const locked = () => document.pointerLockElement === c;
+        io.listen(c, 'pointerdown', e => { if (!locked()) { c.setPointerCapture(e.pointerId); this.drag = [e.clientX, e.clientY]; } });
         io.listen(c, 'pointermove', e => {
+            if (locked()) { cam().look(e.movementX, e.movementY); return; }
             if (!this.drag) return;
             cam().look(e.clientX - this.drag[0], e.clientY - this.drag[1]);
             this.drag = [e.clientX, e.clientY];

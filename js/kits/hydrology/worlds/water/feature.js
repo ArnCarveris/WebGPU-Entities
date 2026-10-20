@@ -67,6 +67,18 @@ const waterWorld = {
     // the readout and every option, on the engine's handheld (js/engine/handheld.js)
     handheld() { return phonePages(this.app); },
 
+    // its map, down to its lowest ground (FeatureWorld.footprint)
+    footprint() {
+        const f = this.app.world?.field;
+        if (!f) return null;
+        let floor = Infinity;
+        for (const h of f.h) if (h < floor) floor = h;
+        return { lo: [-f.size / 2, -f.size / 2], hi: [f.size / 2, f.size / 2], floor, ground: true };
+    },
+
+    // toward its sun (its light's), the same everywhere
+    sunDir() { return this.app?.light ? [...this.app.light.dir] : null; },
+
     // the keys there are (FeatureWorld.keys; every option is on the handheld)
     get keys() {
         const keys = [...(this.move === 'walk' ? FeatureWorld.WALK_KEYS : FeatureWorld.FLY_KEYS), ['Alt', 'slow']];
@@ -80,6 +92,7 @@ const waterWorld = {
         else if (key === 'boost') w.boost = !!v;
         else if (key === 'paused') a.paused = !!v;
         else if (key === 'light' && a.lightNames.includes(v)) a.setLight(v);
+        else if (key === 'sunDir' && Array.isArray(v)) { a.sunAlong = engine.Common.v3.norm(v); a.setLight(a.lightName); }
         else if (key === 'breach') for (const d of w.entities) if (d instanceof Dam && !!d.target !== !!v) d.toggle();
     },
 };

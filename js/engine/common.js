@@ -301,8 +301,9 @@ function fmtNum(x, unit = '') {
 const fmtK = n => (n >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'k' : String(Math.round(n)));
 
 // ---------------------------------------------------------------------------------------------- controls
-// Pointer and keys over a world's canvas (io: its InputRouter scope): left drag looks; the right button (or Ctrl + left)
-// acts, `acting` while held and once per press in consume().clicks. Without `act`, any button looks.
+// Pointer and keys over a world's canvas (io: its InputRouter scope): left drag looks, and so does any motion while the
+// canvas has the mouse (pointer lock: walking, Host takes it on a click); the right button (or Ctrl + left) acts, `acting`
+// while held and once per press in consume().clicks. Without `act`, any button looks.
 class PointerInput {
     constructor(io, { act = true } = {}) {
         const el = io.canvas;
@@ -315,14 +316,15 @@ class PointerInput {
         this.acting = false;
         this.clicks = [];
         io.listen(el, 'contextmenu', e => e.preventDefault());
+        const locked = () => document.pointerLockElement === el;
         io.listen(el, 'pointerdown', e => {
-            el.setPointerCapture(e.pointerId);
+            if (!locked()) el.setPointerCapture(e.pointerId);
             if (act && (e.button === 2 || (e.button === 0 && e.ctrlKey))) { this.acting = true; this.clicks.push([e.clientX, e.clientY]); }
             else if (e.button === 0 || !act) { this.looking = true; el.classList.add('drag'); }
         });
         io.listen(el, 'pointermove', e => {
             this.mouse = [e.clientX, e.clientY];
-            if (this.looking) { this.dx += e.movementX; this.dy += e.movementY; }
+            if (this.looking || locked()) { this.dx += e.movementX; this.dy += e.movementY; }
         });
         const up = () => { this.looking = this.acting = false; el.classList.remove('drag'); };
         io.listen(el, 'pointerup', up);

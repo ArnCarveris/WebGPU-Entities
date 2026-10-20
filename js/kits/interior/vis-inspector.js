@@ -4,7 +4,7 @@
 // frames (VisDebug lines, drawn by the world's renderer).
 
 Features.kit('interior', (engine, kit) => {
-const { VisDebug, AreaMap, portalStateOf } = kit;
+const { VisDebug, AreaMap, portalStateOf, PortalVis } = kit;
 
 const OPTS = { culling: true, freeze: false, portals: false, volumes: false, map: true, wide: false, tree: true };
 
@@ -51,6 +51,10 @@ class VisInspector {
         if (!this.vis || !(o.portals || o.volumes || o.freeze)) return { data: VisInspector.NONE, depthCount: 0 };
         return this.debug.build(this.vis, o, o.freeze ? this.frozenState : null, this.view.fov, origin);
     }
+
+    // what of the outdoors the eye of the last traversal sees (PortalVis.outdoorsOf; null: all of it): what the world tells
+    // the others of a composition while the camera is inside it (FeatureWorld.outdoors)
+    outdoors() { return this.opts.culling ? PortalVis.outdoorsOf(this.vis) : null; }
 
     // what to call area i
     areaName(i) {

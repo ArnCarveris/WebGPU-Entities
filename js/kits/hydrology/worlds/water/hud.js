@@ -39,9 +39,8 @@ class Hud extends kits.world.WorldHud {
         L.font();
         for (const e of app.world.entities) {
             if (!e.label) continue;
-            const p = e.anchor, at = p && L.place(app.viewProj, p);
+            const p = e.anchor, d = p && v3.len(v3.sub(p, app.camera.pos)), at = p && L.place(app.viewProj, p, d);
             if (!at) continue;
-            const d = v3.len(v3.sub(p, app.camera.pos));
             const extra = e instanceof Spring ? ` ${(e.def.rate * (app.world.boost ? (e.def.boost ?? 8) : 1)).toFixed(0)} m³/s` : '';
             L.mark(at, e instanceof Spring || e instanceof Lake || e instanceof Sea ? 'rgba(110,220,255,0.9)' : 'rgba(255,201,74,0.9)',
                 `${e.label}${extra}  ${d < 1000 ? d.toFixed(0) + ' m' : (d / 1000).toFixed(2) + ' km'}`);

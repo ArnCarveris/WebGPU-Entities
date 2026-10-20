@@ -161,10 +161,10 @@ fn convectiveDensity(p: vec3f, w: vec4f, an: vec4f, st: vec4f, detail: bool) -> 
         cov = min(sat(w.x * mix(1.0, 0.72, h)) * 0.94 + covBoost, 1.0);      // towers narrow upwards
     }
     if (p.y > base0 + 2500.0) {
-        let band = 2800.0;
+        let band = 2800.0 * (0.35 + 0.65 * sat(an.x / 0.6));                 // thick over the core, thinning to the edges
         if (an.x > 0.01 && p.y > an.y - band && p.y < an.y) {
             let ha = (p.y - (an.y - band)) / band;
-            let pa = sat(ha / 0.35) * sat((1.0 - ha) / 0.2);
+            let pa = sat(ha / 0.35) * sat((1.0 - ha) / 0.3);
             if (an.x * pa > cov * prof) { cov = min(an.x + covBoost, 1.0); prof = pa; h = max(h, 0.85); }
         }
     }

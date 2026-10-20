@@ -5,7 +5,9 @@
 // canvas format, with the same camera. Its depth buffer, whatever its convention (reversed-Z with an infinite far
 // plane, classic 0..1 with a far plane, multisampled, with stencil), is turned into view depth in metres (linearize);
 // then every pixel takes the colour of the nearest world. Where a world shows only sky, the others show through; where
-// all do, the first world flagged `sky` (else the first) gives the sky.
+// all do, the first world flagged `sky` (else the first) gives the sky, within what of the outdoors the camera sees
+// (all of it, unless it is inside a world's interior: Host.inside); elsewhere that world's own background does (the
+// void under a floor grating, the dark beyond a sealed room).
 //
 // A world with layer role "atmosphere" (the cloud engine) does not take part in the merge: the merged picture and its
 // depth are handed to it instead (merge into `inject`), it puts them into its own scene before its volumetrics, and
@@ -58,16 +60,19 @@ class Compositor {
                 if (${i}u < prm.count) {
                     let z = textureLoad(z${i}, p, 0).x;
                     if (z < bz) { bz = z; bc = textureLoad(c${i}, p, 0); }
-                    if (z >= 3.0e38 && !gotSky && (prm.sky == ${i}u)) { sky = textureLoad(c${i}, p, 0); gotSky = true; }
+                    if (z >= 3.0e38 && !gotSky && (skyAt == ${i}u)) { sky = textureLoad(c${i}, p, 0); gotSky = true; }
                 }`).join('');
         const merge = (mrt) => /* wgsl */`
             ${fullscreen}
-            struct P { count: u32, sky: u32, _a: u32, _b: u32 }
+            // sky: the sky world's layer, within the outdoors' rectangle (px); own: the layer whose background shows elsewhere
+            struct P { count: u32, sky: u32, own: u32, _a: u32, rect: vec4f }
             @group(0) @binding(0) var<uniform> prm: P;
             ${decl}
             struct Out { @location(0) color: vec4f, ${mrt ? '@location(1) z: vec4f,' : ''} }
             @fragment fn fsMerge(@builtin(position) fp: vec4f) -> Out {
                 let p = vec2i(fp.xy);
+                let open = fp.x >= prm.rect.x && fp.x < prm.rect.z && fp.y >= prm.rect.y && fp.y < prm.rect.w;
+                let skyAt = select(prm.own, prm.sky, open);
                 var bz = 3.0e38;
                 var bc = vec4f(0.0, 0.0, 0.0, 1.0);
                 var sky = vec4f(0.0, 0.0, 0.0, 1.0);
@@ -92,7 +97,7 @@ class Compositor {
                 fragment: { module, entryPoint: 'fsMerge', targets: mrt ? [{ format: 'rgba8unorm' }, { format: 'r32float' }] : [{ format }] },
             });
         });
-        this.mergeParams = d.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+        this.mergeParams = d.createBuffer({ size: 32, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         const dummy = (fmt) => d.createTexture({ size: [1, 1], format: fmt, usage: GPUTextureUsage.TEXTURE_BINDING }).createView();
         this.dummyColor = dummy('rgba8unorm');
         this.dummyZ = dummy('r32float');
@@ -157,10 +162,14 @@ class Compositor {
         return true;
     }
 
-    // nearest-wins merge of `insts` (in priority order) into `out` (a canvas-format view), or into the inject targets
-    merge(enc, insts, out, skyIndex = 0) {
+    // nearest-wins merge of `insts` (in priority order) into `out` (a canvas-format view), or into the inject targets;
+    // sky { index: the sky's layer, own: the layer whose background shows outside `rect` (px; null: the whole screen) }
+    merge(enc, insts, out, { index = 0, own = index, rect = null } = {}) {
         const N = Compositor.MAX, list = insts.slice(0, N), mrt = !out;
-        this.device.queue.writeBuffer(this.mergeParams, 0, new Uint32Array([list.length, Math.max(0, skyIndex), 0, 0]));
+        const prm = new ArrayBuffer(32), r = rect || [0, 0, this.width, this.height];
+        new Uint32Array(prm, 0, 4).set([list.length, Math.max(0, index), Math.max(0, own), 0]);
+        new Float32Array(prm, 16, 4).set(r);
+        this.device.queue.writeBuffer(this.mergeParams, 0, prm);
         const entries = [{ binding: 0, resource: { buffer: this.mergeParams } }];
         for (let i = 0; i < N; i++) {
             const l = list[i] && this.layers.get(list[i]);

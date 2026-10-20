@@ -466,14 +466,37 @@ fn groundGrain(xz: vec2f, px: f32, rough: f32) -> vec3f {
 // y and z (features of some 75 and 37 m) move where the colour maps are read, w (some 19 m) the shoreline
 fn groundNoise(xz: vec2f) -> vec4f { return textureSampleLevel(shapeTex, repSamp, vec3f(xz / 300.0, 0.31), 0.0) - 0.5; }
 
+// what lies behind the scene at pixel q (behindTex: the other worlds of a composition, in display colour) as this
+// scene's radiance: back through the inverse of its display transform (gamma, ACES, exposure), as the inject pass
+// brings them in (Renderer.encodeInject)
+fn behindAt(q: vec2f) -> vec3f {
+    let y = clamp(pow(textureLoad(behindTex, min(vec2i(q), vec2i(textureDimensions(behindTex)) - 1), 0).rgb, vec3f(2.2)), vec3f(0.0), vec3f(0.985));
+    let a = 2.51 - 2.43 * y;
+    let b = 0.03 - 0.59 * y;
+    let c = -0.14 * y;
+    return (-b + sqrt(b * b - 4.0 * a * c)) / (2.0 * a) / max(F.sunCol.w, 1e-4);
+}
+
 @fragment fn fsTerrain(i: TerrOut) -> @location(0) vec4f {
     let p = i.world;
     let px = max(length(fwidth(p.xz)), 0.05);
     let uv = (p.xz - F.tdomain.xy) / F.tdomain.z;
     let inside = all(uv > vec2f(0.0)) && all(uv < vec2f(1.0));
+    // (beyond the map: the plain, the sea round a real island (F.geo.y 1), or no ground at all (-1): what lies behind
+    // it shows, in a composition the planet it stands on)
+    if (!inside && F.geo.y < 0.0) { discard; }
+    // ... and over the map's last F.outside.w m (terrain.edge) the map fades into it: toward the edge its colour gives
+    // way to that of what lies behind it (behindAt), at the edge all of it. Where the fade starts wanders by a third of
+    // its width
+    var fade = 0.0;
+    if (F.outside.w > 0.0) {
+        let e = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y)) * F.tdomain.z;
+        fade = 1.0 - smoothstep(0.0, F.outside.w, e + F.outside.w * (0.67 * vnoise2(p.xz / 5300.0) + 0.33 * vnoise2(p.xz / 1700.0) - 0.5) * 0.66);
+        // (nothing known of what lies behind: a dither, a growing share of its pixels left out)
+        if (F.outside.x < 0.5 && ign(i.pos.xy) < smoothstep(0.35, 1.0, fade)) { discard; }
+    }
     let n = normalize(vec3f(-i.grad.x, 1.0, -i.grad.y));
-    // (beyond the map: nothing, or the sea round a real island, F.geo.y)
-    let land4 = select(vec4f(0.0, 0.0, F.geo.y, 0.0), textureSampleLevel(landTex, clampSamp, uv, 0.0), inside);
+    let land4 = select(vec4f(0.0, 0.0, max(F.geo.y, 0.0), 0.0), textureSampleLevel(landTex, clampSamp, uv, 0.0), inside);
     let natural = F.geo.x > 0.5;
     // a real place's coastline (geoCoast): the distance to it per pixel (m, + on land), wandering a little finer than
     // its 18 m grid; the sea is what lies off it (the land use's water only inland, its cells being coarser)
@@ -583,10 +606,20 @@ fn groundNoise(xz: vec2f) -> vec4f { return textureSampleLevel(shapeTex, repSamp
     }
     col += spec * fres * wet * 0.35 * (1.0 - pool);
     col += skyColor(r) * sh.y * length(rg) * 1.5;                         // the rings catch the sky at any angle
+    if (fade > 0.0 && F.outside.x > 0.5) { col = mix(col, behindAt(i.pos.xy), smoothstep(0.0, 1.0, fade)); }
     let kind = select(select(select(1.0, 2.0, rock * wild > 0.5), 3.0, paved > 0.5), 4.0, water > 0.5);
     return vec4f(col, select(0.0, kind + 0.45 * puddle, rainNow > 0.0 && n.y > 0.7));
 }
 `;
 
-return { WGSL_TERRAIN, WGSL_SCENE };
+// the ground's colour from afar (linear albedo), as fsTerrain draws it where a pixel spans many fields: fieldColor's
+// average crop colour, or a real place's naturalColor at its moisture (terrain: the world's terrain entity). What shows
+// of it from further still: the planet it stands on in a composition (its footprint's albedo)
+const groundAlbedo = t => {
+    if (t.style !== 'natural') return [0.30, 0.25, 0.17];
+    const m = Math.min(Math.max((t.moisture ?? 0.5) - 0.15, 0), 1);
+    return [0.30 + (0.12 - 0.30) * m, 0.26 + (0.20 - 0.26) * m, 0.15 + (0.07 - 0.15) * m];
+};
+
+return { WGSL_TERRAIN, WGSL_SCENE, groundAlbedo };
 });

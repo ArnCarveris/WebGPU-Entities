@@ -2,9 +2,9 @@
 // One camera for every world of a composition.
 //
 //   camera { controller: "fly", pos, look, fov, speed }    the engine flies it (WASD, drag, wheel, Space / C)
-//   camera { ..., mode: "walk" }                           ... walking (H switches): on the ground of every shown world
+//   camera { ..., mode: "walk" }                           ... walking (the handheld switches): on the ground of every world
 //   camera { from: "<world id>" }                         that world's own camera (walk, fly, ride...) drives it
-//   camera { from: ["a", "b"], carry }                    ... several: giving one the keys (`) gives it the camera too,
+//   camera { from: ["a", "b"], carry }                    ... several: walking or flying (the handheld's Walk) gives the camera to one that can,
 //                                                         from where the camera is (carry, default) or where it was
 //
 // Each world sits in the composition through its root entity's `layer.transform`: { offset: [x, y, z], yaw: deg } or
@@ -53,6 +53,10 @@ class LayerFrame {
     point(p) { return CamMath.add(this.pos, CamMath.qRotate(this.q, p)); }
     local(p) { return CamMath.qRotate(CamMath.qConj(this.q), CamMath.sub(p, this.pos)); }
 
+    // a direction of this frame in composition space, and back
+    dir(d) { return CamMath.qRotate(this.q, d); }
+    localDir(d) { return CamMath.qRotate(CamMath.qConj(this.q), d); }
+
     // this frame placed in a parent frame
     within(parent) {
         return new LayerFrame(CamMath.add(parent.pos, CamMath.qRotate(parent.q, this.pos)), CamMath.qMul(parent.q, this.q));
@@ -60,7 +64,7 @@ class LayerFrame {
 }
 
 // the engine's own camera (camera { controller: "fly" }): a FirstPersonView (kits.view, an engine kit) driven by
-// PointerInput, flying or walking on floor(x, y, z) (composition space: every shown world's ground, Host.floorAt)
+// PointerInput, flying or walking on floor(x, y, z) (composition space: every world's ground, Host.floorAt)
 class FlyCamera {
     constructor(def, io, floor) {
         this.eye = new Features.kits.view.FirstPersonView({ pos: def.pos || [0, 100, 0], fov: (def.fov || 60) * Math.PI / 180,

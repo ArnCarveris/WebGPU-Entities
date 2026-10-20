@@ -177,9 +177,24 @@ class RendererExtension {
             shadowTex: this.weatherPass.shadowView, heightTex: this.heightView, landTex: this.landMap.createView(), smoothTex: this.smoothMap.createView(), canopyTex: this.canopyMap.createView(), repSamp: this.repSamp,
             clampSamp: this.clampSamp, cells: this.cellBuf, ground: this.groundPass.buffer, bolts: this.boltBuf, anvilTex: this.weatherPass.anvilView,
             layerTex: this.weatherPass.layerView, styleTex: this.weatherPass.styleView, occ: this.weatherPass.occ, buildings: this.noBuildings,
+            behindTex: this.behindView(),
         };
         for (const x of this.renderer.extensions) x.bindings?.(res);
+        this.worldRes = res;
         this.worldGroup = this.worldSet.group(res, 'world');
+    }
+
+    // what lies behind it (behindTex): the other worlds of a composition, merged (fx.inject, a new view whenever the
+    // screen's size changes), else a 1 x 1 stand-in; the world group follows it
+    behindView() {
+        this.behindNone ??= this.device.createTexture({ size: [1, 1], format: 'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING }).createView();
+        return this.fx.inject?.colorView || this.behindNone;
+    }
+    bindBehind() {
+        const v = this.behindView();
+        if (!this.worldRes || this.worldRes.behindTex === v) return;
+        this.worldRes.behindTex = v;
+        this.worldGroup = this.worldSet.group(this.worldRes, 'world');
     }
 
     // an extension used its frames up to its count-th this frame (written to the GPU with the frame)
@@ -231,12 +246,28 @@ class RendererExtension {
     // The other worlds of a composition (merged by js/engine/compositor.js: display colour + view depth in metres) into the
     // scene where they are nearer than its own surfaces: their depth into the depth buffer (reversed-Z, near / z), their
     // colour back to scene radiance through the inverse of this engine's display transform (gamma, ACES, exposure), so
-    // after the clouds, haze, rain and tonemapping it shows as it was rendered, under this sky
+    // after the clouds, haze, rain and tonemapping it shows as it was rendered, under this sky. Where none of them
+    // draws, this sky shows, within what of the outdoors the camera sees (fx.outdoors); elsewhere, inside another world,
+    // that world's own background (the merge's) stays, at the eye. What of them lies beyond its air (this.air:
+    // AppExtension.airShell) drops out where its daytime sky hides it, as their labels do (airHides): the Sun and the
+    // planets of a solar system it stands in
     encodeInject(enc, inj) {
         const d = this.device;
         if (!this.pInject) {
             const module = d.createShaderModule({ label: 'inject', code: /* wgsl */`
-                @group(0) @binding(0) var<uniform> P: vec4f;          // near, exposure
+                // rect: the outdoors seen (px); fwd, right, up: the view (right, up scaled to the screen's edges), w: the
+                // screen's size and how much the sky hides beyond the air; shell: AppExtension.airShell
+                struct I { near: f32, exposure: f32, _a: f32, _b: f32, rect: vec4f, fwd: vec4f, right: vec4f, up: vec4f, shell: vec4f }
+                @group(0) @binding(0) var<uniform> P: I;
+                // how far along dir the view ray leaves the air (stably: no difference of two planet-sized numbers)
+                fn airOut(dir: vec3f) -> f32 {
+                    if (P.shell.x > 0.5) {
+                        let b = P.shell.y * dir.y;
+                        let s = sqrt(max(b * b + P.shell.z, 0.0));
+                        return select(-b + s, P.shell.z / (b + s), b > 0.0);
+                    }
+                    return select(3.0e38, P.shell.w / dir.y, dir.y > 0.0);
+                }
                 @group(0) @binding(1) var injC: texture_2d<f32>;
                 @group(0) @binding(2) var injZ: texture_2d<f32>;
                 @vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
@@ -247,7 +278,14 @@ class RendererExtension {
                 @fragment fn fs(@builtin(position) fp: vec4f) -> O {
                     let q = vec2i(fp.xy);
                     let z = textureLoad(injZ, q, 0).x;
-                    if (z >= 3.0e38) { discard; }
+                    let open = fp.x >= P.rect.x && fp.x < P.rect.z && fp.y >= P.rect.y && fp.y < P.rect.w;
+                    var beyond = false;
+                    if (P.up.w > 0.5 && z < 3.0e38) {
+                        let ndc = vec2f(fp.x / P.fwd.w * 2.0 - 1.0, 1.0 - fp.y / P.right.w * 2.0);
+                        let dir = normalize(P.fwd.xyz + P.right.xyz * ndc.x + P.up.xyz * ndc.y);
+                        beyond = z / max(dot(dir, P.fwd.xyz), 1e-4) > airOut(dir);
+                    }
+                    if ((z >= 3.0e38 || beyond) && open) { discard; }
                     // y = aces(x): a x^2 + b x + c = 0
                     let y = clamp(pow(textureLoad(injC, q, 0).rgb, vec3f(2.2)), vec3f(0.0), vec3f(0.985));
                     let a = 2.51 - 2.43 * y;
@@ -255,8 +293,8 @@ class RendererExtension {
                     let c = -0.14 * y;
                     let x = (-b + sqrt(b * b - 4.0 * a * c)) / (2.0 * a);
                     var o: O;
-                    o.c = vec4f(x / max(P.y, 1e-4), 1.0);
-                    o.d = clamp(P.x / max(z, P.x), 0.0, 1.0);
+                    o.c = vec4f(x / max(P.exposure, 1e-4), 1.0);
+                    o.d = select(clamp(P.near / max(z, P.near), 0.0, 1.0), 1.0, z >= 3.0e38);
                     return o;
                 }` });
             this.injectLayout = d.createBindGroupLayout({ entries: [
@@ -270,15 +308,20 @@ class RendererExtension {
                 fragment: { module, entryPoint: 'fs', targets: [{ format: 'rgba16float' }] },
                 depthStencil: { format: this.depthFormat, depthWriteEnabled: true, depthCompare: 'greater' },
             });
-            this.injectBuf = d.createBuffer({ size: 16, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
+            this.injectBuf = d.createBuffer({ size: 96, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         }
         if (this.injectKey !== inj.colorView) {
             this.injectGroup = d.createBindGroup({ layout: this.injectLayout, entries: [
                 { binding: 0, resource: { buffer: this.injectBuf } }, { binding: 1, resource: inj.colorView }, { binding: 2, resource: inj.zView }] });
             this.injectKey = inj.colorView;
         }
-        const F = this.frame.data, o = this.frame.offsets;
-        d.queue.writeBuffer(this.injectBuf, 0, new Float32Array([F[o.fwd + 3], F[o.sunCol + 3], 0, 0]));
+        const F = this.frame.data, o = this.frame.offsets, W = this.width, H = this.height;
+        const od = kits.world.Outdoors.scaled(this.fx.outdoors, W, H);
+        const rect = !od || (od.seen && !od.rect) ? [0, 0, W, H] : od.seen ? od.rect : [0, 0, 0, 0];
+        const a = this.air, shell = a?.shell || [0, 0, 0, 0];
+        d.queue.writeBuffer(this.injectBuf, 0, new Float32Array([F[o.fwd + 3], F[o.sunCol + 3], 0, 0, ...rect,
+            F[o.fwd], F[o.fwd + 1], F[o.fwd + 2], W, F[o.right], F[o.right + 1], F[o.right + 2], H,
+            F[o.up], F[o.up + 1], F[o.up + 2], a && a.hides > 0.5 ? 1 : 0, ...shell]));
         const pass = enc.beginRenderPass({
             label: 'inject',
             colorAttachments: [{ view: this.hdrView, loadOp: 'load', storeOp: 'store' }],
@@ -286,6 +329,47 @@ class RendererExtension {
         });
         pass.setPipeline(this.pInject);
         pass.setBindGroup(0, this.injectGroup);
+        pass.draw(3);
+        pass.end();
+    }
+
+    // What lies behind the air above it (render.airTop: AppExtension.airAt): the other worlds' merged picture in a
+    // composition (fx.inject: their sky the sky world's, space), alone the black of space; over the finished frame by k
+    // (0 none of it .. 1 only it), or (clear) in place of a frame
+    encodeSpace(enc, k, clear = false) {
+        const d = this.device;
+        if (!this.pSpace) {
+            const module = d.createShaderModule({ label: 'space', code: /* wgsl */`
+                @group(0) @binding(0) var behind: texture_2d<f32>;
+                @vertex fn vs(@builtin(vertex_index) i: u32) -> @builtin(position) vec4f {
+                    let p = vec2f(f32((i << 1u) & 2u), f32(i & 2u));
+                    return vec4f(p * 2.0 - 1.0, 0.0, 1.0);
+                }
+                @fragment fn fs(@builtin(position) fp: vec4f) -> @location(0) vec4f {
+                    let n = vec2i(textureDimensions(behind));
+                    return vec4f(textureLoad(behind, min(vec2i(fp.xy), n - 1), 0).rgb, 1.0);
+                }` });
+            this.spaceLayout = d.createBindGroupLayout({ entries: [{ binding: 0, visibility: GPUShaderStage.FRAGMENT, texture: { sampleType: 'float' } }] });
+            const blend = { color: { srcFactor: 'constant', dstFactor: 'one-minus-constant' }, alpha: { srcFactor: 'one', dstFactor: 'zero' } };
+            this.pSpace = d.createRenderPipeline({
+                label: 'space', layout: d.createPipelineLayout({ bindGroupLayouts: [this.spaceLayout] }),
+                vertex: { module, entryPoint: 'vs' },
+                fragment: { module, entryPoint: 'fs', targets: [{ format: this.format, blend }] },
+            });
+            // (a new texture reads as zero: black)
+            this.spaceBlack = d.createTexture({ size: [1, 1], format: 'rgba8unorm', usage: GPUTextureUsage.TEXTURE_BINDING }).createView();
+        }
+        const view = this.fx.inject?.colorView || this.spaceBlack;
+        if (this.spaceKey !== view) {
+            this.spaceGroup = d.createBindGroup({ layout: this.spaceLayout, entries: [{ binding: 0, resource: view }] });
+            this.spaceKey = view;
+        }
+        const pass = enc.beginRenderPass({
+            label: 'space', colorAttachments: [{ view: this.fx.target(), loadOp: clear ? 'clear' : 'load', storeOp: 'store', clearValue: [0, 0, 0, 1] }],
+        });
+        pass.setPipeline(this.pSpace);
+        pass.setBindGroup(0, this.spaceGroup);
+        pass.setBlendConstant([k, k, k, k]);
         pass.draw(3);
         pass.end();
     }
@@ -316,6 +400,7 @@ class RendererExtension {
 
     render(enc, probeTexel, particles, bolts, interleave, shadowSlices, froxels, volumetrics = true, tiles = true, bloom = true) {
         const q = this.device.queue, prof = this.profiler, X = this.renderer.extensions;
+        this.bindBehind();
         q.writeBuffer(this.frameBuf, 0, this.frame.data);
         q.writeBuffer(this.cellBuf, 0, this.cellData);
         if (this.framesUsed) q.writeBuffer(this.busUBuf, 0, this.busData, 0, this.framesUsed * BUS_UNIFORM / 4);

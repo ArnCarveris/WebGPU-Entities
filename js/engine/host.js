@@ -12,6 +12,13 @@
 //      it is alone, else into its layer); the Compositor merges the layers (or hands them to the atmosphere world);
 //      then links and sound read the frame's stats, and the handheld draws over the finished frame
 //
+// Every world of a composition is always there and always runs: what keeps them out of each other's way is the
+// composition's own rules, not hiding one. The camera inside one world's interior is inside for all of them (inside():
+// the others see the outdoors only through its portals, fx.outdoors, and the atmosphere's rain stays off); a world takes
+// its sun from the world it stands in (lights(): layer.sun); an atmosphere knows where its air ends (its own data: the
+// cloud world's render.airTop), and what of the others it hides beyond it (veilOf(): in daylight its sky hides what is
+// in space, and their in-world labels there fade out with it).
+//
 // Engine entities: camera, view, link, hud.toast, handheld, handheld.page, sound.* (see camera.js, audio.js, hud.js,
 // handheld.js). A link sets a world's parameter
 // from an expression every frame: { type: "link", to: "<world id>.<param>", value: expr }.
@@ -185,8 +192,31 @@ class Host {
             const inst = this.createInstance(root, scenario, module, features);
             this.instances.push(inst);
         }
-        // atmosphere worlds render last, over the merged others
-        for (const inst of this.instances) await inst.world.init();
+        // the worlds, then the atmospheres (they render last, over the merged others), each making room in its terrain
+        // for the ground the others cover (fx.footprints)
+        const scene = this.instances.filter(i => i.role !== 'atmosphere');
+        for (const inst of scene) { await inst.world.init(); inst.ready = true; }
+        for (const inst of this.instances.filter(i => i.role === 'atmosphere')) {
+            inst.ctx.footprints = this.footprintsIn(inst, scene);
+            await inst.world.init();
+            inst.ready = true;
+        }
+    }
+
+    // the ground each world of `worlds` covers (FeatureWorld.footprint), in world a's frame: [{ id, pos: [x, z] (its
+    // centre), size: [w, d], yaw (deg, as a terrain stamp turns), floor (its lowest ground's height), ground }]
+    footprintsIn(a, worlds) {
+        const Fa = this.frameOf(a), out = [];
+        for (const i of worlds) {
+            let fp = null;
+            try { fp = i.world.footprint?.(); } catch (err) { console.warn(`${i.id}: footprint()`, err); }
+            if (!fp) continue;
+            const Fi = this.frameOf(i), p = Fa.local(Fi.point([(fp.lo[0] + fp.hi[0]) / 2, fp.floor, (fp.lo[1] + fp.hi[1]) / 2]));
+            const x = Fa.localDir(Fi.dir([1, 0, 0]));
+            out.push({ id: i.id, pos: [p[0], p[2]], size: [fp.hi[0] - fp.lo[0], fp.hi[1] - fp.lo[1]], yaw: Math.atan2(x[2], x[0]) * 180 / Math.PI,
+                floor: p[1], ground: !!fp.ground });
+        }
+        return out;
     }
 
     createInstance(root, scenario, module, features = {}) {
@@ -202,10 +232,12 @@ class Host {
             type: root.type,
             label: def.label || def.name || root.id,
             def, layer,
-            visible: layer.visible !== false,
             role: layer.role || 'scene',
             frameDef: layer.transform || {},
-            ui: { root: ui, $: name => ui.querySelector(`[data-hud="${name}"]`) },
+            // (region(): what of the screen its in-world labels may show, fx.outdoors; veil(): how much the other worlds
+            // hide of a point on it, veilOf)
+            ui: { root: ui, $: name => ui.querySelector(`[data-hud="${name}"]`), region: () => inst.ctx.outdoors,
+                veil: (x, y, W, H, d) => this.veilOf(inst, x, y, W, H, d) },
         };
         const native = ScenarioFormat.toNative(scenario, root);
         const ctx = inst.ctx = {
@@ -219,6 +251,8 @@ class Host {
             composed: this.composed,
             cameraLocked: false,           // set while another world (or the engine) drives the camera
             inject: null,                  // atmosphere worlds: the merged other worlds this frame
+            outdoors: null,                // while the camera is inside another world's interior, what of the outdoors it
+                                           // sees from there: { seen, rect ([x0, y0, x1, y1] px; null: all), W, H }
             size: () => [this.width, this.height],
             target: () => this.targetFor(inst),
             emit: (name, payload) => this.emit(root.id, name, payload),
@@ -248,12 +282,17 @@ class Host {
         for (const o of this.owners) o.savedView = o.world.view;
         this.setCameraOwner(this.owners[0] || null);
         if (cam.mode) this.setMove(cam.mode, false);
-        const focus = this.instances.find(i => i.layer.focus) || this.cameraOwner || this.instances[0];
-        this.focusInstance(focus);
         this.router.onFocus = () => this.refreshHuds();
-        // (no keys of the engine's own: focus and walk / fly are the handheld's; a key only starts the sound)
+        this.focusCamera();
+        // (no keys of the engine's own: walk / fly is the handheld's; a key only starts the sound)
         window.addEventListener('keydown', () => this.audio.start());
         window.addEventListener('pointerdown', () => this.audio.start());
+        // walking, a click on the world takes the mouse to look (pointer lock); Esc gives it back. Not a press the
+        // handheld took (it stops it) or a world's GUI did (its screens: preventDefault)
+        window.addEventListener('pointerdown', e => {
+            if (e.button !== 0 || e.target !== this.canvas || e.defaultPrevented || this.move !== 'walk' || this.handheld.shown) return;
+            if (!document.pointerLockElement) this.canvas.requestPointerLock?.()?.catch?.(() => {});
+        });
         // links between worlds
         for (const e of ents.filter(e => e.type === 'link')) {
             const [id, ...param] = String(e.to).split('.');
@@ -261,6 +300,7 @@ class Host {
             if (!inst) { console.warn(`link: no world "${id}"`); continue; }
             this.links.push({ inst, param: param.join('.'), value: Expr.compile(e.value), last: undefined });
         }
+        this.configureSuns();
         this.hud.configure(ents);
         this.hud.toast(() => this.keyHelp(), 7000, this.hud.toastsEnd(ents));
         this.handheld.rebuild();
@@ -269,26 +309,103 @@ class Host {
         this.refreshHuds();
     }
 
+    // ------------------------------------------------------------------------------------------- suns
+    // Whose sun lights each world of a composition: its layer.sun (a world's id, or false: its own), by default the
+    // atmosphere's for the worlds under it and the sky world's (layer.sky: its own) for the atmosphere, or for every
+    // world when there is no atmosphere; none where a link drives its sunDir. Passed on in that order every frame (lights())
+    configureSuns() {
+        const all = this.instances, byId = id => all.find(i => i.id === id);
+        const atmos = all.find(i => i.role === 'atmosphere'), sky = all.find(i => i.layer.sky);
+        for (const i of all) {
+            const s = i.layer.sun;
+            i.sunFrom = s === false || !this.composed ? null : s ? byId(s) : i === sky ? null : i.role === 'atmosphere' ? sky : atmos || sky;
+            if (i.sunFrom === i || this.links.some(l => l.inst === i && l.param === 'sunDir')) i.sunFrom = null;
+        }
+        const depth = (i, seen = new Set()) => (!i.sunFrom || seen.has(i) ? 0 : (seen.add(i), 1 + depth(i.sunFrom, seen)));
+        this.lit = all.filter(i => i.sunFrom).sort((a, b) => depth(a) - depth(b));
+    }
+
+    // each lit world's sun: the direction to its sun's world's sun (FeatureWorld.sunDir) at the world's origin, through
+    // the two frames into its own (set('sunDir')), when it moves
+    lights() {
+        for (const i of this.lit) {
+            const s = i.sunFrom, Fs = this.frameOf(s), Fi = this.frameOf(i);
+            let d;
+            try { d = s.world.sunDir?.(Fs.local(Fi.pos)); } catch { continue; }
+            if (!d) continue;
+            const local = Fi.localDir(Fs.dir(d));
+            if (Host.same(local, i.sunLast)) continue;
+            i.sunLast = local;
+            i.world.set?.('sunDir', local);
+        }
+    }
+
     // ------------------------------------------------------------------------------------------- worlds
     setCameraOwner(inst) {
         const mode = this.cameraOwner && this.move;
         this.cameraOwner = inst;
         for (const i of this.instances) i.ctx.cameraLocked = !!this.fly || (inst ? i !== inst : false);
         // the new camera world goes on walking (or flying) if it can
-        if (mode && this.moves.includes(mode) && this.move !== mode) this.setMove(mode, false);
+        const w = inst?.world;
+        if (mode && !this.fly && (w.moves || ['fly']).includes(mode) && w.move !== mode) w.setMove(mode);
     }
 
     // ------------------------------------------------------------------------------------------- walk / fly
-    // The camera's mode, the engine's to switch (the handheld, camera.mode): the engine's camera walks on every shown
-    // world's ground; a world with the camera walks its own way (FeatureWorld.moves / move / setMove), on fx.floor
-    get moves() { return this.fly ? ['fly', 'walk'] : this.cameraOwner?.world.moves || ['fly']; }
+    // The camera's mode, the engine's to switch (the handheld's Walk, camera.mode): the engine's camera walks on every
+    // world's ground; a world with the camera walks its own way (FeatureWorld.moves / move / setMove), on fx.floor.
+    // Walking always starts where the camera is: when the camera's world cannot walk, the world that can walk there
+    // (walkerAt: the one whose interior holds the camera, else the one with the highest ground under it) borrows the
+    // camera, from the current view, and flying gives it back to the world it came from, from where the walk ended. Only
+    // with no such world does a mode go to another camera world (camera.from: a floating-origin flight, far from any
+    // ground, walks as the facility's player). Walking looks with the mouse taken (pointer lock), flying by dragging
+    get moves() {
+        if (this.fly) return ['fly', 'walk'];
+        const can = (this.owners || []).concat(this.instances.filter(i => i.ready)).flatMap(o => o.world.moves || ['fly']);
+        return ['fly', 'walk'].filter(m => can.includes(m));
+    }
     get move() { return this.fly ? this.fly.eye.mode : this.cameraOwner?.world.move || 'fly'; }
 
+    // the world that walks the camera where it is: the one holding it (inside()), else the one with the highest ground
+    // under it within its footprint (FeatureWorld.footprint; the worlds before the atmospheres on a tie), or null
+    walkerAt() {
+        const v = this.worldView(), walks = i => i.ready && (i.world.moves || ['fly']).includes('walk');
+        if (!v) return null;
+        this.inside();
+        if (this.holder && walks(this.holder)) return this.holder;
+        let best = null, top = -Infinity;
+        for (const i of this.byRole) {
+            if (!walks(i) || !i.world.ground) continue;
+            const F = this.frameOf(i), lp = F.local(v.pos), fp = i.world.footprint?.();
+            if (fp && (lp[0] < fp.lo[0] || lp[0] > fp.hi[0] || lp[2] < fp.lo[1] || lp[2] > fp.hi[1])) continue;
+            const g = i.world.ground(lp);
+            if (g == null || g === -Infinity) continue;
+            const h = F.point([lp[0], g, lp[2]])[1];
+            if (h > top) { top = h; best = i; }
+        }
+        return best;
+    }
+
     setMove(mode, say = true) {
-        if (!this.moves.includes(mode)) { if (say) this.hud.toast(`${this.cameraOwner?.label || 'This camera'} cannot ${mode}`, 1500); return; }
         if (mode === this.move) return;     // already (a fly-only world's camera has no setMode)
-        if (this.fly) this.fly.eye.setMode(mode);
-        else this.cameraOwner.world.setMove(mode);
+        if (!this.moves.includes(mode)) { if (say) this.hud.toast(`${this.cameraOwner?.label || 'This camera'} cannot ${mode}`, 1500); return; }
+        if (!this.fly) {
+            const can = i => (i.world.moves || ['fly']).includes(mode), cur = this.cameraOwner;
+            if (mode === 'walk' && !can(cur)) {
+                const here = this.walkerAt();
+                if (here) { this.lender = cur; this.handTo(here, true); }
+                else this.handTo(this.owners.find(can));
+            } else if (mode === 'fly' && this.lender && !this.owners.includes(cur)) {
+                // a borrowed walker gives the camera back, from where the walk ended
+                const to = this.lender;
+                this.lender = null;
+                this.handTo(to, true);
+            } else if (!can(cur)) this.handTo(this.owners.find(can));
+        }
+        if (mode !== this.move) {
+            if (this.fly) this.fly.eye.setMode(mode);
+            else this.cameraOwner.world.setMove(mode);
+        }
+        if (mode !== 'walk' && document.pointerLockElement === this.canvas) document.exitPointerLock();
         if (say) this.hud.toast(`${mode === 'walk' ? 'Walking' : 'Flying'}: ${this.keyHelp()}`, 4000);
     }
 
@@ -300,12 +417,12 @@ class Host {
         return [...keys, ['Tab', 'handheld (every option)']].map(([k, what]) => `${k} ${what}`).join(' · ');
     }
 
-    // the floor at composition-space point (x, y, z): the highest thing to stand on at or below y over every shown
-    // world (each world's ground(), in its own frame), or -Infinity
+    // the floor at composition-space point (x, y, z): the highest thing to stand on at or below y over every world
+    // (each world's ground(), in its own frame), or -Infinity
     floorAt(x, y, z) {
         let best = -Infinity;
         for (const i of this.instances) {
-            if (!i.visible || !i.world.ground) continue;
+            if (!i.world.ground) continue;
             const F = this.frameOf(i), lp = F.local([x, y, z]), g = i.world.ground(lp);
             if (g == null || g === -Infinity) continue;
             const h = F.point([lp[0], g, lp[2]])[1];
@@ -314,18 +431,67 @@ class Host {
         return best;
     }
 
-    // Weather shelter by default: while the camera is inside an interior of a shown world (FeatureWorld.sheltered: a
-    // building, a vehicle's cabin, a portal area), every atmosphere world keeps its rain and snow off it (set('indoors')),
-    // unless a scenario link drives that itself. One point query per world, O(1) in what the worlds hold
-    shelter() {
+    // The camera inside an interior of a world (FeatureWorld.sheltered: a building, a vehicle's cabin, a portal area) is
+    // inside for every world: that world holds it, the others see the outdoors only as it does (FeatureWorld.outdoors:
+    // through its portals, or not at all, as their fx.outdoors: an atmosphere draws its sky, clouds and weather only
+    // there, and every world's in-world labels show only there), and an atmosphere that doesn't hold it keeps its rain
+    // and snow off it (set('indoors'), unless a scenario link drives that itself). One point query per world, O(1) in
+    // what the worlds hold
+    inside() {
         if (!this.composed) return;
-        const atmos = this.instances.filter(i => i.role === 'atmosphere' && !this.links.some(l => l.inst === i && l.param === 'indoors'));
-        if (!atmos.length) return;
         const v = this.fly ? this.fly.view : this.worldView();
-        if (!v) return;
-        const inside = this.instances.some(i => i.visible && i.role !== 'atmosphere' && !!i.world.sheltered?.(this.frameOf(i).local(v.pos)));
-        for (const i of atmos) if (i.sheltered !== inside) { i.sheltered = inside; i.world.set?.('indoors', inside); }
+        let holder = null, region = null;
+        if (v) for (const i of this.byRole) {
+            const p = this.frameOf(i).local(v.pos);
+            if (!i.world.sheltered?.(p)) continue;
+            holder = i;
+            const od = i.world.outdoors?.(p);
+            region = od ? { seen: od.seen, rect: od.rect || null, W: this.width, H: this.height } : null;
+            break;
+        }
+        this.holder = holder;
+        this.region = region;
+        this.focusCamera();
+        for (const i of this.instances) {
+            i.ctx.outdoors = holder && i !== holder ? region : null;
+            if (i.role !== 'atmosphere' || this.links.some(l => l.inst === i && l.param === 'indoors')) continue;
+            const indoors = !!holder && holder !== i;
+            if (i.sheltered !== indoors) { i.sheltered = indoors; i.world.set?.('indoors', indoors); }
+        }
     }
+
+    // How much the composition's other worlds hide (FeatureWorld.veil: an atmosphere's air, its daytime sky what is in
+    // space) a point d m from the eye seen at pixel [x, y] of inst's W x H screen: 0 .. 1, the most any of them does. The
+    // ray through that pixel of this frame's view, in each one's frame: no world has to say where its points are
+    veilOf(inst, x, y, W, H, d) {
+        const v = this.composed && this.eye;
+        if (!v) return 0;
+        let most = 0, dir = null;
+        for (const i of this.instances) {
+            if (i === inst || !i.ready) continue;
+            if (!dir) {
+                const M = CamMath, t = Math.tan((v.fov || Math.PI / 3) / 2), u = (2 * x / W - 1) * t * W / H, w = (1 - 2 * y / H) * t;
+                dir = M.norm(M.add(v.fwd, M.add(M.mul(M.cross(v.fwd, v.up), u), M.mul(v.up, w))));
+            }
+            const F = this.frameOf(i);
+            let a = 0;
+            try { a = i.world.veil?.(F.local(v.pos), F.localDir(dir), d) || 0; } catch { a = 0; }
+            if (a > most) most = a;
+        }
+        return Math.min(most, 1);
+    }
+
+    // where no world of `scene` draws (Compositor.merge): the sky world's sky (layer.sky, else the first's) within what of
+    // the outdoors the camera sees, the background of the world holding it elsewhere
+    skyOf(scene) {
+        const index = Math.max(0, scene.findIndex(i => i.layer.sky)), h = this.holder, own = scene.indexOf(h);
+        if (own < 0) return { index };
+        const od = this.region;
+        return { index, own, rect: !od || (od.seen && !od.rect) ? null : od.seen ? od.rect : [0, 0, 0, 0] };
+    }
+
+    // the worlds, the atmospheres last (an interior of a world standing in the air holds the camera first)
+    get byRole() { return this.instances.filter(i => i.role !== 'atmosphere').concat(this.instances.filter(i => i.role === 'atmosphere')); }
 
     // ... at a point of inst's frame, in its frame (fx.floor)
     floorIn(inst, x, y, z) {
@@ -333,40 +499,28 @@ class Host {
         return g === -Infinity ? g : F.local([w[0], g, w[2]])[1];
     }
 
-    focusInstance(inst) {
-        this.router.setFocus(inst.id);
-        if (this.owners.includes(inst) && inst !== this.cameraOwner) {
-            // the new owner takes over from the current view (or, with camera.carry false, goes on from its own)
-            const v = this.worldView(), prev = this.cameraOwner;
-            if (prev) prev.savedView = prev.world.view;
-            this.setCameraOwner(inst);
-            if (this.cameraDef.carry === false) { if (inst.savedView) inst.world.setView(inst.savedView); }
-            else if (v) this.setView(inst, v);
-        }
-        this.refreshHuds();
+    // the camera to another of its worlds (camera.from), or lent to a world walking it (setMove): it takes over from the
+    // current view (or, with camera.carry false and not `carry`, goes on from its own)
+    handTo(inst, carry = this.cameraDef.carry !== false) {
+        if (!inst || inst === this.cameraOwner) return;
+        const v = this.worldView(), prev = this.cameraOwner;
+        if (prev) prev.savedView = prev.world.view;
+        if (this.owners.includes(inst)) this.lender = null;
+        this.setCameraOwner(inst);
+        if (!carry) { if (inst.savedView) inst.world.setView(inst.savedView); }
+        else if (v) this.setView(inst, v);
+        this.focusCamera();
     }
 
-    setVisible(inst, on) {
-        inst.visible = on;
-        if (!on && this.router.focus === inst.id) {
-            const other = this.instances.find(i => i.visible);
-            if (other) this.focusInstance(other);
-        }
-        this.refreshHuds();
-    }
-
-    solo(inst) {
-        for (const i of this.instances) i.visible = i === inst;
-        this.focusInstance(inst);
-        this.refreshHuds();
+    // The keys go with the camera, the same ones whatever the world: to the world driving it, or, while the engine flies
+    // it, to the world holding it (inside()), else the one with layer.focus (or the first). Nobody picks who has them
+    focusCamera() {
+        const inst = this.cameraOwner || this.holder || this.instances.find(i => i.layer.focus) || this.instances[0];
+        if (inst && inst.id !== this.router.focus) this.router.setFocus(inst.id);
     }
 
     refreshHuds() {
-        for (const i of this.instances) {
-            const focused = this.router.focus === i.id;
-            i.ui.root.classList.toggle('hidden', !i.visible);
-            i.ui.root.classList.toggle('unfocused', this.composed && !focused);
-        }
+        for (const i of this.instances) i.ui.root.classList.toggle('unfocused', this.composed && this.router.focus !== i.id);
     }
 
     // the frame of a world in composition space (anchors resolved against the world they ride on)
@@ -391,7 +545,7 @@ class Host {
     get viewList() {
         const out = (this.scenario?.entities || []).filter(e => e.type === 'view' && ScenarioFormat.isEngine(e))
             .map((v, i) => ({ key: `engine/${i}`, name: v.name || `view ${i + 1}`, group: this.scenario.name, go: () => this.jumpView(v) }));
-        for (const inst of this.instances) {
+        for (const inst of this.instances.filter(i => i.ready)) {
             let list = [];
             try { list = inst.world.views?.() || []; } catch (err) { console.warn(`${inst.id}: views()`, err); }
             list.forEach((v, i) => out.push({ ...v, key: `${inst.id}/${v.key ?? i}`, group: inst.label, inst }));
@@ -403,7 +557,7 @@ class Host {
     // hand the camera on (an atmosphere) has its view copied to the camera
     goView(v) {
         const inst = v.inst;
-        if (inst && this.owners.includes(inst) && inst !== this.cameraOwner) this.focusInstance(inst);
+        if (inst && this.owners.includes(inst) && inst !== this.cameraOwner) this.handTo(inst);
         v.go();
         this.viewKey = v.key;
         if (inst && inst !== this.cameraOwner && inst.world.view) {
@@ -437,7 +591,7 @@ class Host {
     }
 
     targetFor(inst) {
-        if (!this.composed || inst.role === 'atmosphere' || this.directOut === inst) return this.swapView();
+        if (!this.composed || inst.role === 'atmosphere') return this.swapView();
         return this.compositor.target(inst);
     }
 
@@ -476,16 +630,15 @@ class Host {
             if (!this.failed) { this.failed = true; showFallback(err); }
             return;
         }
-        // weather shelter by default; then links, sound and the handheld read what the worlds did
-        this.shelter();
+        // the suns passed on; then links, sound and the handheld read what the worlds did
+        if (this.composed) this.lights();
         const scope = this.scope = this.buildScope();
         for (const l of this.links) {
             let v;
             try { v = l.value(scope); } catch { continue; }
             if (Host.same(v, l.last)) continue;
             l.last = Array.isArray(v) ? [...v] : v;
-            // (every world's `visible`: shown or hidden as by its tick in the bar; the rest is the world's own)
-            if (l.param === 'visible') { if (!!v !== l.inst.visible) this.setVisible(l.inst, !!v); } else l.inst.world.set?.(l.param, v);
+            l.inst.world.set?.(l.param, v);
         }
         this.audio.update(scope);
         this.sidePanels(now);
@@ -496,59 +649,57 @@ class Host {
         }
     }
 
-    // the worlds' readouts kept on the screen (EngineHud side panels): each world of areas' portal traversal tree while
-    // its inspector's `tree` option is on, a few times a second
+    // the worlds' readouts kept on the screen (EngineHud side panels), a few times a second: the portal traversal tree of
+    // the world the camera is inside (else of the one with the keys), while its inspector's `tree` option is on
     sidePanels(now) {
         if (now - (this.sideAt || 0) < 200) return;
         this.sideAt = now;
+        const at = this.holder || this.instances.find(i => i.id === this.router.focus);
         for (const inst of this.instances) {
-            const I = inst.visible ? inst.world.inspector : null;
+            const I = inst === at ? inst.world.inspector : null;
             this.hud?.side(inst.id, I && I.opts.tree ? I.tree() : null);
         }
     }
 
     frameWorlds(now, dt) {
-        const visible = this.instances.filter(i => i.visible);
         if (!this.composed) {
             const inst = this.instances[0];
             inst.world.frame(now, dt);
             return;
         }
         // the camera: the engine's, or its world's after that world's own update
-        const atmos = visible.filter(i => i.role === 'atmosphere');
-        const scene = visible.filter(i => i.role !== 'atmosphere');
+        const atmos = this.instances.filter(i => i.role === 'atmosphere');
+        const scene = this.instances.filter(i => i.role !== 'atmosphere');
         const owner = this.cameraOwner;
         if (this.fly) this.fly.update(dt);
         this.compositor.resize(this.width, this.height, this.instances);
-        // a world shown alone (no atmosphere over it) renders straight into the canvas
-        this.directOut = scene.length === 1 && !atmos.length ? scene[0] : null;
         // the camera's world moves first (its update only), so every world renders this frame's view
         let view = this.fly ? this.fly.view : null;
         if (owner) {
             owner.world.frame(now, dt, { render: false });
             view = this.worldView();
         }
+        this.eye = view;
         const step = (inst, render) => {
             if (inst === owner) { if (render) inst.world.frame(now, dt, { update: false }); return; }
             if (view) this.setView(inst, view);
             inst.world.frame(now, dt, { render });
         };
-        // hidden worlds don't run (bar the camera's)
-        const rendered = [];
-        for (const inst of scene) { step(inst, true); rendered.push(inst); }
-        if (!atmos.length && this.directOut) return;
+        for (const inst of scene) step(inst, true);
+        // where the camera is (inside a world's interior, or out), before the atmospheres draw the outdoors
+        this.inside();
         const enc = this.device.createCommandEncoder({ label: 'composite' });
-        for (const inst of rendered) this.compositor.linearize(enc, inst);
-        const skyIdx = Math.max(0, rendered.findIndex(i => i.layer.sky));
+        for (const inst of scene) this.compositor.linearize(enc, inst);
+        const sky = this.skyOf(scene);
         if (atmos.length) {
-            const inj = rendered.length ? this.compositor.merge(enc, rendered, null, skyIdx) : null;
+            const inj = scene.length ? this.compositor.merge(enc, scene, null, sky) : null;
             this.device.queue.submit([enc.finish()]);
             for (const a of atmos) {
                 a.ctx.inject = inj;
                 step(a, true);
             }
         } else {
-            this.compositor.merge(enc, rendered, this.swapView(), skyIdx);
+            this.compositor.merge(enc, scene, this.swapView(), sky);
             this.device.queue.submit([enc.finish()]);
         }
     }

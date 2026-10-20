@@ -22,8 +22,7 @@
 // WGSL and LOD lists are the imposter kit's (js/kits/imposter/, docs/imposter.md).
 
 Features.world('imposter', (engine, kit) => {
-const { Common, kits } = engine;
-const { DEG, clamp, v3 } = Common;
+const { kits } = engine;
 const { FeatureWorld } = kits.world, { HUD } = FeatureWorld;
 const { MSAA, CASCADES, LOD_MODES, ATLAS_VIEWS, GRID_CHOICES, RES_CHOICES, AppExtension, phonePages } = kit;
 const { App } = engine.kits.world;
@@ -65,6 +64,18 @@ const imposterWorld = {
     // the readout and every control, on the engine's handheld (js/engine/handheld.js)
     handheld() { return phonePages(this.app); },
 
+    // its terrain's square, down to its lowest ground (FeatureWorld.footprint)
+    footprint() {
+        const t = (this.app.world || this.app.next)?.terrain;
+        if (!t) return null;
+        let floor = Infinity;
+        for (const h of t.heights) if (h < floor) floor = h;
+        return { lo: [-t.size / 2, -t.size / 2], hi: [t.size / 2, t.size / 2], floor, ground: true };
+    },
+
+    // toward its sun (its lighting's), the same everywhere
+    sunDir() { return this.app?.lighting ? [...this.app.lighting.env.sunDir] : null; },
+
     // the keys there are (FeatureWorld.keys; every option is on the handheld)
     get keys() {
         if (this.move === 'walk') return FeatureWorld.WALK_KEYS;
@@ -76,12 +87,8 @@ const imposterWorld = {
         if (key === 'light' && g.lighting.names.includes(v) && v !== g.lighting.name) g.relight('preset', v);
         else if (key === 'lod' && LOD_MODES.includes(v)) g.set('lodMode', v);
         else if (key === 'shadows') g.set('shadows', !!v);
-        else if (key === 'sunDir' && Array.isArray(v)) {
-            // a direction in this world's frame (another world's sun, through a link): the sun's azimuth and elevation
-            const d = v3.norm(v), el = Math.asin(clamp(d[1], -1, 1)) / DEG, az = (Math.atan2(d[0], d[2]) / DEG + 360) % 360;
-            g.lighting.tweak('azimuth', az);
-            g.lighting.tweak('elevation', Math.max(el, 2));
-        }
+        // a direction in this world's frame (another world's sun: Host.lights, or a link), kept whatever preset
+        else if (key === 'sunDir' && Array.isArray(v)) g.lighting.follow(v);
     },
 };
 

@@ -8,7 +8,8 @@ const MAX_BODIES = 32;
 const ORIGIN_BYTES = 80;            // the entire floating-origin state on the GPU
 const INSTANCE_FLOATS = 24;         // 96 bytes per instance
 const BODY_FLOATS = 16;
-const FRAME_FLOATS = 44;
+const MAX_COVERS = 4;              // the ground of other worlds shown on the bodies (AppExtension.writeCovers)
+const FRAME_FLOATS = 44 + MAX_COVERS * 8;
 const VERTEX_FLOATS = 7;            // pos, normal, material
 const SAMPLES = 4;
 const NEAR = 0.05;                  // near plane, origin units
@@ -17,7 +18,7 @@ const PATTERNS = { flat: 0, panels: 1, rock: 2, blink: 3, windows: 4, solar: 5, 
 const SURFACES = { star: 0, rocky: 1, earth: 2, gas: 3, ice: 4, mars: 5 };
 
 return {
-    CELL, MAX_CELL, MAX_BODIES, ORIGIN_BYTES, INSTANCE_FLOATS, BODY_FLOATS, FRAME_FLOATS, VERTEX_FLOATS, SAMPLES,
+    CELL, MAX_CELL, MAX_BODIES, MAX_COVERS, ORIGIN_BYTES, INSTANCE_FLOATS, BODY_FLOATS, FRAME_FLOATS, VERTEX_FLOATS, SAMPLES,
     NEAR, AU, PATTERNS, SURFACES,
 };
 });

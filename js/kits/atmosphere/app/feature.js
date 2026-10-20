@@ -28,7 +28,7 @@ const atmosphereWorld = type => ({
 
     // the keys there are (FeatureWorld.keys): moving, on foot or flying; E at a door, lift or seat, F at a bus's wheel
     get keys() {
-        const a = this.app, keys = a.walker.active ? [['drag', 'look'], ['WASD', 'walk'], ['Shift', 'run'], ['Alt', 'slow']]
+        const a = this.app, keys = a.walker.active ? [...FeatureWorld.WALK_KEYS, ['Alt', 'slow']]
             : [...FeatureWorld.FLY_KEYS, ['Alt', 'slow']];
         if (a.doors || a.liftControl) keys.push(['E', 'use']);
         if (a.drive) keys.push(['F', 'drive a bus']);
@@ -65,7 +65,7 @@ const atmosphereWorld = type => ({
             name: w.scenario.name, fps: a.fps, paused: a.paused, time: a.time, weather: w.weather.target, light: a.lightName,
             rain: a.near.rain, snow: a.near.snow, inside: !!a.indoors || !!a.inBus || !!a.forceIndoors, sheltered: !!a.sheltered, inBus: !!a.inBus,
             walking: a.walker.active, wind: Math.hypot(c.wind[0], c.wind[1]), agl: cam[1] - w.field.surface(cam[0], cam[2]),
-            temperature: c.temperature, coverage: c.coverage, flashes: w.flashCount, veil: a.flashVeil,
+            temperature: c.temperature, coverage: c.coverage, flashes: w.flashCount, veil: a.flashVeil, air: a.airHere ?? 1,
         };
         for (const x of a.extensions) x.stats?.(out);
         return out;
@@ -77,6 +77,22 @@ const atmosphereWorld = type => ({
     // its planned buildings' portal visibility (the building kit's RoomVis): floor map, traversal, frames on the handheld
     get inspector() { return this.app?.frameWriter?.roomVis?.inspector || null; },
 
+    // toward its sun (or moon by night), the same everywhere: what lights the worlds under it in a composition
+    sunDir() {
+        const s = this.app?.sun;
+        return s ? [Math.cos(s.elevation) * Math.sin(s.azimuth), Math.sin(s.elevation), -Math.cos(s.elevation) * Math.cos(s.azimuth)] : null;
+    },
+
+    // how much its air hides a point beyond it (AppExtension.airHides): its daytime sky what is in space
+    veil(p, dir, d) { return this.app?.airHides(p, dir, d) ?? 0; },
+
+    // the ground it covers (FeatureWorld.footprint): its terrain's map, with its colour from afar (groundAlbedo): a planet
+    // it stands on in a composition shows it there
+    footprint() {
+        const w = this.app?.world, f = w?.field;
+        return f ? { lo: [f.origin, f.origin], hi: [f.origin + f.size, f.origin + f.size], floor: f.base, ground: true, albedo: kit.groundAlbedo(w.terrain) } : null;
+    },
+
     set(key, v) {
         const a = this.app;
         if (a.extensions.some(x => x.set?.(key, v))) return;
@@ -86,6 +102,7 @@ const atmosphereWorld = type => ({
         else if (key === 'quality' && QUALITY[v]) a.controls.setQuality(+v);
         else if (key === 'timeScale' && +v > 0) a.timeScale = +v;
         else if (key === 'indoors') a.forceIndoors = !!v;
+        else if (key === 'sunDir' && Array.isArray(v)) a.controls.follow(v);
         else if (key === 'radar') a.radar = !!v;
     },
 });

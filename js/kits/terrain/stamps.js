@@ -124,22 +124,28 @@ function terrainStamps(Base, { peakLabel = 10, lake: lakeOpts = {} } = {}) {
     }
 
     // Levels the ground to `level` over a rectangle (size [x, z] m, yaw degrees) or a disc (radius): a site where another
-    // world of a composition stands (js/engine/compositor.js). The ground eases back to the terrain over `blend` m,
-    // outside the site; with `inset` inside it instead, so the terrain meets the other world's edge at its own height
-    // and the levelled ground stays hidden under that world. `water` paints the site as water.
+    // world of a composition stands (an atmosphere makes one under each world's footprint: Host.footprintsIn). The ground
+    // eases back to the terrain over `blend` m, outside the site; with `inset` inside it instead, so the terrain meets the
+    // other world's edge at its own height and the levelled ground stays hidden under that world. `water` paints the
+    // site as water; `bare` keeps plants and the procedural detail off it.
     class Clearing extends Base {
         stamp(f) {
             const d = this.def, [cx, cz] = d.pos, blend = d.blend ?? 600, yaw = (d.yaw || 0) * DEG, cs = Math.cos(yaw), sn = Math.sin(yaw);
             const [hx, hz] = d.size ? [d.size[0] / 2, d.size[1] / 2] : [d.radius || 1000, d.radius || 1000], reach = Math.hypot(hx, hz) + blend;
-            f.each(cx - reach, cz - reach, cx + reach, cz + reach, (idx, x, z) => {
+            // signed distance to the site's edge (negative inside)
+            const edge = (x, z) => {
                 const rx = x - cx, rz = z - cz, lx = rx * cs + rz * sn, lz = -rx * sn + rz * cs;
-                // signed distance to the site's edge (negative inside)
                 const ox = Math.abs(lx) - hx, oz = Math.abs(lz) - hz;
-                const sd = d.size ? Math.hypot(Math.max(ox, 0), Math.max(oz, 0)) + Math.min(Math.max(ox, oz), 0) : Math.hypot(lx, lz) - hx;
+                return d.size ? Math.hypot(Math.max(ox, 0), Math.max(oz, 0)) + Math.min(Math.max(ox, oz), 0) : Math.hypot(lx, lz) - hx;
+            };
+            f.each(cx - reach, cz - reach, cx + reach, cz + reach, (idx, x, z) => {
+                const sd = edge(x, z);
                 const k = d.inset ? smoothstep(-blend, 0, sd) : smoothstep(0, blend, sd);
                 f.h[idx] = lerp(d.level, f.h[idx], k);
                 if (d.water) f.wet(idx, 1 - smoothstep(0, f.cell, sd));
             });
+            // `bare`: nothing grows on the site (another world covers it)
+            if (d.bare) f.keepBare?.(cx - reach, cz - reach, cx + reach, cz + reach, (x, z) => edge(x, z) < 0);
         }
     }
 

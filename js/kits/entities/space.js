@@ -8,14 +8,15 @@ const { mulberry32 } = kits.noise;
 const { spinQuat } = kit;
 
 // An entity its world places: spawn() takes its frame ({ pos: a WorldPos, q }) from world.resolve(def) (pos, or on a
-// parent entity: lat / lon / alt...), so an entity can use any earlier one as its parent. `radius` is its size, and
-// `spacing` the proximity floor inside it (fields).
+// parent entity: lat / lon / alt...), so an entity can use any earlier one as its parent. `radius` is its size,
+// `spacing` the proximity floor inside it (fields), and `speed` how fast it travels (m/s; flight near it keeps ahead).
 class SpaceEntity extends kits.world.Entity {
     constructor(def, world) {
         super(def, world);
         this.frame = null;          // { pos: WorldPos, q }
         this.radius = 0;
         this.spacing = 0;           // proximity floor inside volumes (fields)
+        this.speed = 0;             // m/s it travels at (orbiters)
     }
 
     get pos() { return this.frame.pos; }
@@ -126,6 +127,7 @@ function spaceTypes(Base) {
             this.parent = this.world.get(o.parent);
             this.instance(this.parent.pos, this.parent.frame.q);
             this.phase = (o.angle || 0) * DEG;
+            this.speed = Math.abs(2 * Math.PI * o.radius / (o.period || 60)) + (this.parent.speed || 0);
             this.update(0, 0);
             if (this.label) this.world.landmarks.push(this);
             this.world.addDynamic(this);

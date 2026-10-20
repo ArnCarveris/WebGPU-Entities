@@ -6,7 +6,7 @@
 // worlds don't get the mouse.
 //
 // Its root page: a section per world (the pages that world offers, see below, and the scenario's pages tied to it), the
-// scenario's own pages, then the engine's options (scenario, worlds, view, move, sound, GPU).
+// scenario's own pages, then the engine's options (scenario, view, walk, sound, GPU).
 //
 //   handheld       { startShown, title, fovDeg, showSeconds, pose, screen, virtual, zOffset, model, materials, sounds }
 //                  merged over HANDHELD_DEFAULTS, later entities winning (a composition overrides what it includes)
@@ -210,8 +210,8 @@ class Handheld {
             const [kind, name] = inst.label.split(' · ');
             return section((host.instances.length > 1 || !name ? kind : name).toUpperCase());
         };
-        // what each world offers
-        for (const inst of host.instances) {
+        // what each world offers (once it has started)
+        for (const inst of host.instances.filter(i => i.ready)) {
             let offered = [];
             try { offered = inst.world.handheld?.() || []; } catch (err) { console.warn(`${inst.id}: handheld()`, err); }
             // a world built of areas and portals: its visibility (the interior kit's VisInspector), the same pages in every
@@ -243,31 +243,17 @@ class Handheld {
     // the engine's own options, as offered cells
     engineOptions() {
         const host = this.host, cat = host.catalog || [], inst = host.instances;
-        const short = i => i.label.split(' · ')[0];
         const cells = [{ choice: 'Scenario', options: cat.map(s => ({ label: s.name, sub: s.group })), index: cat.findIndex(s => s.id === host.currentId),
             value: host.scenario?.name, pick: i => host.pickScenario(cat[i].id) }];
-        if (inst.length > 1) {
-            const focus = inst.findIndex(i => i.id === host.router.focus);
-            this.pages['engine:worlds'] = this.toPage('engine:worlds', { title: 'Worlds', sections: [
-                { header: 'SHOWN', cells: inst.map(i => ({ toggle: i.label, on: i.visible, set: v => host.setVisible(i, v) })),
-                    footer: 'Hide a world to see the others without it.' },
-                { header: 'KEYS', cells: [
-                    { choice: 'Keys', options: inst.map(i => i.label), index: focus, pick: k => host.focusInstance(inst[k]) },
-                    { action: 'Show only that one', run: () => host.solo(inst[Math.max(0, inst.findIndex(i => i.id === host.router.focus))]) },
-                    { action: 'Show all', run: () => inst.forEach(i => host.setVisible(i, true)) }],
-                    footer: '` gives the keys to the next world.' },
-            ] });
-            cells.push({ nav: 'Worlds', page: 'engine:worlds', sub: `${inst.filter(i => i.visible).length} of ${inst.length} shown · keys: ${focus >= 0 ? short(inst[focus]) : '-'}` });
-        }
         const views = inst.length ? host.viewList : [];
         if (views.length) {
             const multi = inst.length > 1 || views.some(v => !v.inst);
             cells.push({ choice: 'View', options: views.map(v => ({ label: v.name, sub: [multi && v.group, v.sub].filter(Boolean).join(' · ') || undefined })),
                 index: views.findIndex(v => v.key === host.viewKey), value: '-', pick: i => host.goView(views[i]) });
         }
-        const moves = host.moves;
-        if (inst.length) cells.push({ choice: 'Move', options: moves.map(m => ({ label: m, sub: moves.length > 1 ? 'H' : undefined })),
-            index: moves.indexOf(host.move), value: host.move, pick: i => host.setMove(moves[i]) });
+        // walking or flying (the keys go with the camera, the same in every world: Host.focusCamera)
+        if (inst.length && host.moves.length > 1) cells.push({ toggle: 'Walk', on: host.move === 'walk', set: v => host.setMove(v ? 'walk' : 'fly') });
+        else if (inst.length) cells.push({ label: 'Move', value: host.move === 'walk' ? 'walking' : 'flying' });
         cells.push({ toggle: 'Sound', on: host.audio.on, set: () => host.audio.toggle() });
         const names = GpuChoice.names || {};
         cells.push({ choice: 'GPU', options: GpuChoice.CHOICES.map(c => ({ label: c.label, sub: names[c.id] === null ? 'none here' : names[c.id] || '' })),
@@ -282,7 +268,7 @@ class Handheld {
         cells.push({ choice: 'GUI', options: GuiMode.MODES.map(m => ({ label: m.label, sub: m.sub })), index: GuiMode.MODES.findIndex(m => m.id === GuiMode.id),
             value: GuiMode.label(), pick: i => { GuiMode.set(GuiMode.MODES[i].id); host.hud.toast(`GUI: ${GuiMode.label()}`); } });
         cells.push({ label: 'Frame rate', value: `${Math.round(host.fps)} fps` });
-        return [{ header: 'ENGINE', cells, footer: 'TAB takes the handheld out, Esc puts it away. Drop a scenario .json on the page to load it.' }];
+        return [{ header: 'ENGINE', cells, footer: 'TAB takes the handheld out, Esc puts it away. Walking, a click on the world takes the mouse to look, Esc frees it. Drop a scenario .json on the page to load it.' }];
     }
 
     // ------------------------------------------------------------------------------------------- offered cells -> pages
