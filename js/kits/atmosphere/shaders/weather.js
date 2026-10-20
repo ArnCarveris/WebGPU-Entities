@@ -176,6 +176,47 @@ fn weather(@builtin(global_invocation_id) g: vec3u) {
 }
 `;
 
+// the sun's optical depth through the clouds (the shadow maps')
+const WGSL_SUN_DEPTH = /* wgsl */`
+// the sun ray up from xz at the lowest cloud's height: its optical depth through the slab, and the part below sunSplit()
+fn sunDepth(xz: vec2f) -> vec2f {
+    let s = shadowSunDir();
+    let base = F.layerInfo.z;
+    let top = F.noise.w;
+    let N = 24;
+    let ds = (top - base) / s.y / f32(N);
+    var od = 0.0;
+    var odLow = 0.0;
+    for (var i = 0; i < N; i++) {
+        let p = vec3f(xz.x, base, xz.y) + s * (f32(i) + 0.5) * ds;
+        let d = cloudDensity(p, weatherAt(p.xz)) * ds;
+        od += d;
+        if (p.y < sunSplit()) { odLow += d; }
+        if (od > 12.0) { break; }
+    }
+    return vec2f(od, odLow);
+}
+`;
+
+const WGSL_SHADOW_NEAR = /* wgsl */`
+// The near shadow maps (F.sdomain[k], one per gid.z): the sun's transmittance alone, over a few km about where the sun
+// rays from the ground around the eye cross the cloud base, 16 and 60 m a texel against the whole map's 330: cloud
+// shadows near the eye with their edges, not the map's texels. Time sliced as the whole map, F.sdomain[k].w rows apart
+// (the dispatch covers the fewest)
+@group(1) @binding(0) var nearOut: texture_storage_2d_array<rgba16float, write>;
+
+@compute @workgroup_size(8, 8)
+fn shadowNear(@builtin(global_invocation_id) gid: vec3u) {
+    let dim = textureDimensions(nearOut);
+    let d = F.sdomain[gid.z];
+    let S = u32(max(d.w, 1.0));
+    let tex = vec2u(gid.x, gid.y * S + select(0u, u32(F.lod.z) % S, S > 1u));
+    if (tex.x >= dim.x || tex.y >= dim.y) { return; }
+    let xz = d.xy + (vec2f(tex) + 0.5) / vec2f(dim) * d.z;
+    textureStore(nearOut, tex, gid.z, vec4f(exp(-sunDepth(xz).x), 0.0, 0.0, 0.0));
+}
+`;
+
 // cloud shadow map: sun transmittance from the cloud base plane up through the slab, sky occlusion of the column, the
 // transmittance of the low cloud (lowest 1.5 km above the base), which decides where precipitation can fall, and the
 // optical depth of the sun ray's part below sunSplit(), for sunDepthAbove()
@@ -190,20 +231,10 @@ fn shadow(@builtin(global_invocation_id) gid: vec3u) {
     let tex = vec2u(gid.x, gid.y * S + u32(F.lod.z));
     if (tex.x >= dim.x || tex.y >= dim.y) { return; }
     let xz = F.wdomain.xy + (vec2f(tex) + 0.5) / vec2f(dim) * F.wdomain.z;
-    let s = shadowSunDir();
     let base = F.layerInfo.z;
-    let top = F.noise.w;
-    let N = 24;
-    let ds = (top - base) / s.y / f32(N);
-    var od = 0.0;
-    var odLow = 0.0;                                                  // the part below sunSplit()
-    for (var i = 0; i < N; i++) {
-        let p = vec3f(xz.x, base, xz.y) + s * (f32(i) + 0.5) * ds;
-        let d = cloudDensity(p, weatherAt(p.xz)) * ds;
-        od += d;
-        if (p.y < sunSplit()) { odLow += d; }
-        if (od > 12.0) { break; }
-    }
+    let sd = sunDepth(xz);
+    let od = sd.x;
+    let odLow = sd.y;
     let w = weatherAt(xz);
     var ov = 0.0;
     let M = 10;
@@ -247,5 +278,5 @@ fn groundUpdate(@builtin(global_invocation_id) gid: vec3u) {
 }
 `;
 
-return { WGSL_WEATHER, WGSL_SHADOW, WGSL_GROUND };
+return { WGSL_WEATHER, WGSL_SUN_DEPTH, WGSL_SHADOW, WGSL_SHADOW_NEAR, WGSL_GROUND };
 });

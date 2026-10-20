@@ -6,7 +6,7 @@ Features.kit('settlement', (engine, kit) => {
 const { Common, kits } = engine;
 const { clamp } = Common;
 const { GridHash } = kits.interior;
-const { BLOCK_RANGE, MAX_BLOCKERS, BLOCK_GRID, MAX_DRIPS, DRIP_DENSITY, DRIP_PARTICLES } = kit;
+const { BLOCK_RANGE, MAX_BLOCKERS, BLOCK_GRID, MAX_DRIPS, DRIP_DENSITY, DRIP_PARTICLES, SHADE_SOFT, SKY_CONE, SKY_REACH } = kit;
 
 class ShelterBoxes {
     constructor() {
@@ -87,13 +87,16 @@ class ShelterBoxes {
         if (snow) fall = 1.35;
         const sunL = Math.hypot(sunDir[0], sunDir[2]), sunUp = sunDir[1] > 0 && sunL > 1e-4;
         const sunSlant = sunUp ? Math.min(sunL / Math.max(sunDir[1], 0.05), 20) : 0, rainSlant = wl * 0.8 / fall;
+        // (wider where the edges are soft: the sun's penumbra grows along the shadow, SHADE_SOFT per metre, and a box that
+        // hides sky darkens the ground around it as far as the cone up from there reaches its top, SKY_REACH at most)
         const caps = list.map(b => {
             const h = b.y1 + Math.abs(b.slope) * b.hx - b.base, r = Math.hypot(b.hx, b.hz) + 1;
             const ls = Math.min(h * sunSlant, 400), lr = Math.min(h * rainSlant, 400);
             const sunEnd = sunUp ? [b.x - sunDir[0] / sunL * ls, b.z - sunDir[2] / sunL * ls] : [b.x, b.z];
             const rainEnd = wl > 1e-4 ? [b.x + wind[0] / wl * lr, b.z + wind[1] / wl * lr] : [b.x, b.z];
-            return { r, segs: [sunEnd, rainEnd], x0: Math.min(b.x, sunEnd[0], rainEnd[0]) - r, x1: Math.max(b.x, sunEnd[0], rainEnd[0]) + r,
-                z0: Math.min(b.z, sunEnd[1], rainEnd[1]) - r, z1: Math.max(b.z, sunEnd[1], rainEnd[1]) + r };
+            const segs = [[sunEnd, r + ls * SHADE_SOFT], [rainEnd, r], [[b.x, b.z], b.ao > 0 ? r + Math.min(h, SKY_REACH) * SKY_CONE : r]];
+            return { segs, x0: Math.min(...segs.map(([e, w]) => e[0] - w)), x1: Math.max(...segs.map(([e, w]) => e[0] + w)),
+                z0: Math.min(...segs.map(([e, w]) => e[1] - w)), z1: Math.max(...segs.map(([e, w]) => e[1] + w)) };
         });
         const x0 = Math.min(...caps.map(c => c.x0)), x1 = Math.max(...caps.map(c => c.x1));
         const z0 = Math.min(...caps.map(c => c.z0)), z1 = Math.max(...caps.map(c => c.z1));
@@ -109,7 +112,7 @@ class ShelterBoxes {
             const j0 = clamp(Math.floor((c.z0 - z0) / ch), 0, G - 1), j1 = clamp(Math.floor((c.z1 - z0) / ch), 0, G - 1);
             for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) {
                 const px = x0 + (i + 0.5) * cw, pz = z0 + (j + 0.5) * ch;
-                if (c.segs.some(e => segDist(px, pz, b.x, b.z, e[0], e[1]) <= c.r + half)) grid[(j * G + i) * 4 + (k >> 5)] |= 1 << (k & 31);
+                if (c.segs.some(([e, w]) => segDist(px, pz, b.x, b.z, e[0], e[1]) <= w + half)) grid[(j * G + i) * 4 + (k >> 5)] |= 1 << (k & 31);
             }
         });
         F.set('blockers', this.data);

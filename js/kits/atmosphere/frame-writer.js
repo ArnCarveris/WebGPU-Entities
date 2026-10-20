@@ -10,7 +10,7 @@ Features.kit('atmosphere', (engine, kit) => {
 const { Common } = engine;
 const { clamp, sat01, v3, m4, frustumPlanes } = Common;
 const {
-    NEAR, WEATHER_RES, GROUND_RES, CELL_FLOATS, QUALITY, SHADOW_SLICES, FROXEL_NEAR, BUS_UNIFORM,
+    NEAR, WEATHER_RES, SHADOW_NEAR, GROUND_RES, CELL_FLOATS, QUALITY, SHADOW_SLICES, FROXEL_NEAR, BUS_UNIFORM,
 } = kit;
 const { rainFall, Sky } = engine.kits.weather;
 const { Outdoors } = engine.kits.world;
@@ -110,6 +110,18 @@ class FrameWriter {
         this.shadowKey = shadowKey;
         F.set('lod', [q.interleave, full ? 1 : SHADOW_SLICES, full ? 0 : a.frameNo % SHADOW_SLICES, q.detail]);
         this.shadowSlices = full ? 1 : SHADOW_SLICES;
+        // the near shadow maps, each about where the sun rays from the ground under the eye cross the lowest cloud's
+        // height (layerInfo.z, as the sky last wrote it: shadowAt's lookup), in steps of an eighth of its size; a step, a
+        // new sun or weather refreshes that map whole
+        const groundY = Math.min(cam.pos[1], f.sample(cam.pos[0], cam.pos[2]));
+        const lift = Math.max(F.data[F.offsets.layerInfo + 2] - groundY, 0) / Math.max(sky.dir[1], 0.08);
+        this.nearKeys ??= [];
+        F.set('sdomain', SHADOW_NEAR.flatMap((size, k) => {
+            const step = size / 8, no = [0, 2].map(i => Math.round((cam.pos[i] + sky.dir[i] * lift) / step) * step - size / 2);
+            const key = `${no},${sky.dir.map(v => v.toFixed(2))},${w.weather.target}`, whole = a.reset || key !== this.nearKeys[k];
+            this.nearKeys[k] = key;
+            return [no[0], no[1], size, whole ? 1 : SHADOW_SLICES];
+        }));
         F.set('froxel', [FROXEL_NEAR, cfg.maxDistance, a.froxels ? 1 : 0, 0]);
         F.set('post', [q.blur || 0, a.tiles ? 1 : 0, a.radarTop || 0, cfg.bloomBolt]);
         // how far the wind carried the clouds since the last frame: the resolve reprojects the history along with them

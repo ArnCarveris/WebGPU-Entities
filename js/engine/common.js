@@ -276,6 +276,7 @@ function bindLayoutEntry(binding, visibility, kind) {
     else if (k === 'depth') e.texture = { sampleType: 'depth', viewDimension: '2d' };
     else if (k === 'sampler') e.sampler = { type: 'filtering' };
     else if (k === 'write') e.storageTexture = { access: 'write-only', format: arg, viewDimension: '2d' };
+    else if (k === 'writearray') e.storageTexture = { access: 'write-only', format: arg, viewDimension: '2d-array' };
     else if (k === 'write3d') e.storageTexture = { access: 'write-only', format: arg, viewDimension: '3d' };
     else throw new Error(`layout kind ${kind}`);
     return e;

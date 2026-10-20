@@ -12,6 +12,9 @@ const BLOCK_RANGE = 2500;            // only boxes this close to the camera (m) 
 const MAX_DRIPS = 8;                 // roof edges near the camera that rain runs off (see vsPrecip)
 const DRIP_DENSITY = 100;           // at most this many of them per metre of edge
 const DRIP_PARTICLES = 40000;        // near-field drops falling off those edges, drawn after the rain
+const SHADE_SOFT = 0.015;            // the boxes' sun shadows: the penumbra's half width (m) per metre from the box (blockerSoft)
+const SKY_CONE = 1.0;                // the sky a box hides: tan of the half angle of the cone up from a point (45 degrees)
+const SKY_REACH = 40;                // how far up that cone (m) a box still hides sky
 
 const INTERIOR_DRAW = 160;   // m from a building's centre: its interior and see-through glass are drawn; further off, opaque panes (fsPane)
 const BUILDING_FLOATS = 32;  // per building in the `buildings` storage buffer (see WGSL_BUILDING): 16 static, 2 doors x 4, 8 plan
@@ -25,7 +28,7 @@ const DOOR_SPEED = 1.6;      // door swing, fraction of its travel per s
 const DOOR_REACH = 2.4;      // m: E opens or closes the door in view this close to the eye
 
 return {
-    STRUCT_FLOATS, MAX_BLOCKERS, BLOCK_GRID, BLOCK_RANGE, MAX_DRIPS, DRIP_DENSITY, DRIP_PARTICLES,
+    STRUCT_FLOATS, MAX_BLOCKERS, BLOCK_GRID, BLOCK_RANGE, MAX_DRIPS, DRIP_DENSITY, DRIP_PARTICLES, SHADE_SOFT, SKY_CONE, SKY_REACH,
     INTERIOR_DRAW, BUILDING_FLOATS, BUILDING_DOORS, BLD_ID, BLD_LIT, BLD_STACK, BLD_DARK, LIGHT_COLUMN_FLOATS, DOOR_SPEED, DOOR_REACH,
 };
 });

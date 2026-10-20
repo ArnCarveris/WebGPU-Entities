@@ -5,7 +5,7 @@ Features.kit('atmosphere', (engine, kit) => {
 const { Common } = engine;
 const { bindLayoutEntry, bindResource } = Common;
 const { MAX_LAYERS, MAX_FLASHES, MAX_RAIN_ZONES } = engine.kits.weather;
-const { MAX_MOTHERSHIPS, MAX_SHELVES, MAX_LIGHTS, LIGHT_GRID, MAX_GLOWS } = kit;
+const { MAX_MOTHERSHIPS, MAX_SHELVES, MAX_LIGHTS, LIGHT_GRID, MAX_GLOWS, SHADOW_NEAR } = kit;
 
 // GPU layout shared by JS and WGSL
 // Per-frame uniform block: the core's fields, then those of the features on in the world (RendererExtension.frame, the
@@ -29,6 +29,7 @@ const FRAME_LAYOUT = [
     ['wind', 'vec4f'],      // wind x, z (m/s), noise offset x, z (m)
     ['precip', 'vec4f'],    // freezing level, slant (s/m), rain extinction, snow extinction
     ['wdomain', 'vec4f'],   // weather map origin x, z, size, resolution
+    ['sdomain', `array<vec4f, ${SHADOW_NEAR.length}>`],   // near cloud shadow maps (shadowTex layers 1..), finest first: origin x, z, size, time slices
     ['tdomain', 'vec4f'],   // terrain origin x, z, size, resolution
     ['ground', 'vec4f'],    // field size, pivot chance, ground state resolution, render mode
     ['geo', 'vec4f'],       // the terrain's look: 1 natural ground (a real place's: no farm sections, no street grid), beyond the map 1 sea, the finest terrain lod's range (m: TerrainLod.range0), its moisture (0..1: how green)
@@ -96,7 +97,7 @@ const WORLD_BINDINGS = [
     ['shapeTex', 'tex3d', 'var shapeTex: texture_3d<f32>'],
     ['detailTex', 'tex3d', 'var detailTex: texture_3d<f32>'],
     ['weatherTex', 'tex', 'var weatherTex: texture_2d<f32>'],
-    ['shadowTex', 'tex', 'var shadowTex: texture_2d<f32>'],
+    ['shadowTex', 'array', 'var shadowTex: texture_2d_array<f32>'],  // the cloud shadow map (F.wdomain), and the sun's transmittance near the eye, finer (layers 1..: F.sdomain)
     ['heightTex', 'tex', 'var heightTex: texture_2d<f32>'],
     ['landTex', 'tex', 'var landTex: texture_2d<f32>'],
     ['canopyTex', 'tex', 'var canopyTex: texture_2d<f32>'],   // the tree canopy: cover (0..1), height (m / 255) (LandField.canopy)

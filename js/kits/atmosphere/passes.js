@@ -5,7 +5,7 @@ Features.kit('atmosphere', (engine, kit) => {
 const { Common } = engine;
 const { smoothstep, makeBuffer, bindLayout, bindGroup } = Common;
 const {
-    NOISE_SHAPE, NOISE_DETAIL, SHAPE_MIPS, OCC_RES, CLOUD_TILE, WEATHER_RES, SHADOW_RES, GROUND_RES, FROXEL,
+    NOISE_SHAPE, NOISE_DETAIL, SHAPE_MIPS, OCC_RES, CLOUD_TILE, WEATHER_RES, SHADOW_RES, SHADOW_NEAR, GROUND_RES, FROXEL,
     BindingSet, WGSL_MATH, WGSL_NOISE, WGSL_NOISE_DOWN,
 } = kit;
 const { fromHalf } = engine.kits.gpu;
@@ -62,7 +62,8 @@ class WeatherPass {
         const d = r.device, U = GPUTextureUsage, C = GPUShaderStage.COMPUTE;
         this.device = d;
         this.weather = d.createTexture({ size: [WEATHER_RES, WEATHER_RES], format: 'rgba16float', usage: U.TEXTURE_BINDING | U.STORAGE_BINDING | U.COPY_SRC });
-        this.shadow = d.createTexture({ size: [SHADOW_RES, SHADOW_RES], format: 'rgba16float', usage: U.TEXTURE_BINDING | U.STORAGE_BINDING | U.COPY_SRC });
+        // the cloud shadow map, and the near ones over it (layers 1..)
+        this.shadow = d.createTexture({ size: [SHADOW_RES, SHADOW_RES, 1 + SHADOW_NEAR.length], format: 'rgba16float', usage: U.TEXTURE_BINDING | U.STORAGE_BINDING | U.COPY_SRC });
         this.anvil = d.createTexture({ size: [WEATHER_RES, WEATHER_RES], format: 'rgba16float', usage: U.TEXTURE_BINDING | U.STORAGE_BINDING });
         this.weatherView = this.weather.createView();
         this.anvilView = this.anvil.createView();
@@ -70,7 +71,7 @@ class WeatherPass {
         this.styleMap = d.createTexture({ size: [WEATHER_RES, WEATHER_RES], format: 'rgba16float', usage: U.TEXTURE_BINDING | U.STORAGE_BINDING });
         this.layerView = this.layerMap.createView();
         this.styleView = this.styleMap.createView();
-        this.shadowView = this.shadow.createView();
+        this.shadowView = this.shadow.createView({ dimension: '2d-array' });
 
         const wSet = new BindingSet(d, ['F', 'cells']);
         const wOut = bindLayout(d, C, ['write:rgba16float', 'write:rgba16float', 'write:rgba16float', 'write:rgba16float']);
@@ -82,7 +83,11 @@ class WeatherPass {
         const sOut = bindLayout(d, C, ['write:rgba16float']);
         this.pShadow = computePipeline(d, 'shadow', [sSet.layout, sOut], shaderSource(r, sSet, r.wgsl.code('SKY', 'WEATHER_SAMPLE', 'DENSITY', 'SHADOW')), 'shadow');
         this.sGroup = sSet.group({ F: r.frameBuf, shapeTex: r.noise.shapeView, detailTex: r.noise.detailView, weatherTex: this.weatherView, anvilTex: this.anvilView, layerTex: this.layerView, styleTex: this.styleView, repSamp: r.repSamp, clampSamp: r.clampSamp }, 'shadow-in');
-        this.sOutGroup = bindGroup(d, sOut, [this.shadowView], 'shadow-out');
+        this.sOutGroup = bindGroup(d, sOut, [this.shadow.createView({ dimension: '2d', baseArrayLayer: 0, arrayLayerCount: 1 })], 'shadow-out');
+        // the near maps: the same inputs, one dispatch over their layers
+        const nOut = bindLayout(d, C, ['writearray:rgba16float']);
+        this.pShadowNear = computePipeline(d, 'shadow-near', [sSet.layout, nOut], shaderSource(r, sSet, r.wgsl.code('SKY', 'WEATHER_SAMPLE', 'DENSITY', 'SHADOW_NEAR')), 'shadowNear');
+        this.snOutGroup = bindGroup(d, nOut, [this.shadow.createView({ dimension: '2d-array', baseArrayLayer: 1, arrayLayerCount: SHADOW_NEAR.length })], 'shadow-near-out');
 
         // occupancy grid for the march's empty-space skipping
         this.occ = makeBuffer(d, OCC_RES * OCC_RES * 4, GPUBufferUsage.STORAGE);
@@ -96,7 +101,7 @@ class WeatherPass {
         this.probe = { coverage: 0, top: 0, precip: 0, virga: 0, cover: 0 };
     }
 
-    encode(enc, probeTexel, prof, shadowSlices = 1) {
+    encode(enc, probeTexel, prof, shadowSlices = 1, nearSlices = 1) {
         const pass = enc.beginComputePass({ label: 'weather', timestampWrites: prof.writes('weather') });
         pass.setPipeline(this.pWeather);
         pass.setBindGroup(0, this.wGroup);
@@ -110,6 +115,9 @@ class WeatherPass {
         pass.setBindGroup(0, this.sGroup);
         pass.setBindGroup(1, this.sOutGroup);
         pass.dispatchWorkgroups(Math.ceil(SHADOW_RES / 8), Math.ceil(SHADOW_RES / shadowSlices / 8));
+        pass.setPipeline(this.pShadowNear);
+        pass.setBindGroup(1, this.snOutGroup);
+        pass.dispatchWorkgroups(Math.ceil(SHADOW_RES / 8), Math.ceil(SHADOW_RES / nearSlices / 8), SHADOW_NEAR.length);
         pass.end();
         this.pending = null;
         const slot = this.probes.find(p => !p.busy);

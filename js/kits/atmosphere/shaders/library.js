@@ -49,8 +49,10 @@ function atmosphereWgsl() {
     L.define('SHELTERED_RAY', NO_SHELTERED_RAY);
     L.define('DRIP', NO_DRIP);
     L.define('FINAL', k.WGSL_FINAL, { needs: ['DRIP'] });
-    for (const name of ['WEATHER_SAMPLE', 'DENSITY', 'SHADOW_SAMPLE', 'TERRAIN', 'SCENE', 'BLOOM', 'OCCUPANCY', 'WEATHER', 'SHADOW', 'GROUND',
+    for (const name of ['WEATHER_SAMPLE', 'DENSITY', 'SHADOW_SAMPLE', 'TERRAIN', 'SCENE', 'BLOOM', 'OCCUPANCY', 'WEATHER', 'SUN_DEPTH', 'GROUND',
         'FROXEL', 'SKIP_SAMPLE', 'TILES', 'HAZE', 'HAZE_INTEGRATE', 'MARCH', 'RESOLVE', 'HISTORY_COPY', 'FOREST']) L.define(name, k[`WGSL_${name}`]);
+    L.define('SHADOW', k.WGSL_SHADOW, { needs: ['SUN_DEPTH'] });
+    L.define('SHADOW_NEAR', k.WGSL_SHADOW_NEAR, { needs: ['SUN_DEPTH'] });
     // an object's frame (Renderer.busData), for what a feature draws in its own: bound as group 1 in the scene module,
     // group 2 in the final one
     L.define('OBJECT1', k.wgslObject(1));

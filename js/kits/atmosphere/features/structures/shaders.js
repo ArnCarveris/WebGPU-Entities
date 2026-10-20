@@ -5,7 +5,7 @@
 
 Features.feature('atmosphere/structures', (engine, kit) => {
 const { LIGHT_CABIN, LIGHT_ROOM, POOL_ALBEDO, POLE_DRAW } = kit;
-const { BLOCK_GRID, INTERIOR_DRAW, BLD_ID, BLD_LIT, BLD_STACK, BLD_DARK } = engine.kits.settlement;
+const { BLOCK_GRID, INTERIOR_DRAW, BLD_ID, BLD_LIT, BLD_STACK, BLD_DARK, SHADE_SOFT, SKY_CONE, SKY_REACH } = engine.kits.settlement;
 
 // needs F. Structures (houses, the bus stop, bridge decks) stand in the shaders as up to MAX_BLOCKERS boxes, each turned
 // by its yaw and sheared along its local x by a slope (bridge decks follow their arch). Box k in F.blockers:
@@ -29,20 +29,57 @@ fn blockCell(p: vec3f) -> vec4u {
     return F.blockGrid[c.y * ${BLOCK_GRID}u + c.x];
 }
 
-// where the ray from o along d is inside box k: [t in, t out]
-fn blockerSpan(k: i32, o: vec3f, d: vec3f) -> vec2f {
+// box k's frame: o and d turned into it (local x along the yaw, y sheared by the slope), and the box's corners there
+struct BoxRay { o: vec3f, d: vec3f, lo: vec3f, hi: vec3f };
+fn blockerRay(k: i32, o: vec3f, d: vec3f) -> BoxRay {
     let A = F.blockers[k * 3];
     let B = F.blockers[k * 3 + 1];
     let slope = F.blockers[k * 3 + 2].y;
     let r = o.xz - A.xy;
     let lx = r.x * B.x + r.y * B.y;
     let dx = d.x * B.x + d.z * B.y;
-    let lo = vec3f(lx, o.y - slope * lx, -r.x * B.y + r.y * B.x);
-    let ld = vec3f(dx, d.y - slope * dx, -d.x * B.y + d.z * B.x);
-    let inv = 1.0 / select(ld, vec3f(1e-6), abs(ld) < vec3f(1e-6));
-    let a = (vec3f(-A.z, B.z, -A.w) - lo) * inv;
-    let b = (vec3f(A.z, B.w, A.w) - lo) * inv;
-    return vec2f(max(max(min(a.x, b.x), min(a.y, b.y)), min(a.z, b.z)), min(min(max(a.x, b.x), max(a.y, b.y)), max(a.z, b.z)));
+    return BoxRay(vec3f(lx, o.y - slope * lx, -r.x * B.y + r.y * B.x), vec3f(dx, d.y - slope * dx, -d.x * B.y + d.z * B.x),
+        vec3f(-A.z, B.z, -A.w), vec3f(A.z, B.w, A.w));
+}
+
+// where the ray is inside the box grown by pad: [t in, t out]
+fn boxRaySpan(b: BoxRay, pad: f32) -> vec2f {
+    let inv = 1.0 / select(b.d, vec3f(1e-6), abs(b.d) < vec3f(1e-6));
+    let a = (b.lo - pad - b.o) * inv;
+    let c = (b.hi + pad - b.o) * inv;
+    return vec2f(max(max(min(a.x, c.x), min(a.y, c.y)), min(a.z, c.z)), min(min(max(a.x, c.x), max(a.y, c.y)), max(a.z, c.z)));
+}
+
+// signed distance (m) from the ray's point at t to the box (negative inside)
+fn boxRayDist(b: BoxRay, t: f32) -> f32 {
+    let h = (b.hi - b.lo) * 0.5;
+    let q = abs(b.o + b.d * t - (b.lo + b.hi) * 0.5) - h;
+    return length(max(q, vec3f(0.0))) + min(max(q.x, max(q.y, q.z)), 0.0);
+}
+
+// where the ray from o along d is inside box k: [t in, t out]
+fn blockerSpan(k: i32, o: vec3f, d: vec3f) -> vec2f { return boxRaySpan(blockerRay(k, o, d), 0.0); }
+
+// How much of a soft light (a disc of half angle atan(cone) about unit d: the sun) box k leaves seen from o: the ray's
+// closest pass by the box, as a share of the cone's width there (distance / (t cone), taken as a disc's coverage: -1
+// covered, +1 clear), so the shadow is sharp where it touches the box and softens with distance from it. The pass is
+// sought over the stretch where the ray is within the cone's reach of the box, at a few points and the middle of the
+// box itself (a thin deck cannot slip between them). A ray from inside the box, or that starts on its face, leaves it
+// alone, as blockerHit: surfaces do not shade themselves
+fn blockerSoft(k: i32, o: vec3f, d: vec3f, cone: f32) -> f32 {
+    let b = blockerRay(k, o, d);
+    let s = boxRaySpan(b, 0.0);
+    if (s.x <= 0.02 && s.y > 0.0) { return 1.0; }
+    let w = boxRaySpan(b, (length(b.o - (b.lo + b.hi) * 0.5) + length(b.hi - b.lo) * 0.5) * cone);
+    let t0 = max(w.x, 0.02);
+    if (w.y <= t0) { return 1.0; }
+    var v = 1.0;
+    if (s.x <= s.y) { let t = (s.x + s.y) * 0.5; v = boxRayDist(b, t) / (t * cone); }
+    for (var i = 0; i < 4; i++) {
+        let t = mix(t0, w.y, (f32(i) + 0.5) / 4.0);
+        v = min(v, boxRayDist(b, t) / (t * cone));
+    }
+    return smoothstep(-1.0, 1.0, v);
 }
 
 // the ray from o along d enters box k (a ray starting inside a box does not count, so surfaces do not shade themselves)
@@ -75,7 +112,8 @@ fn rainReaches(p: vec3f) -> f32 {
     return 1.0;
 }
 
-// at a surface point p: x the sun reaches it, y the rain reaches it, z sky light left (less under roofs and decks).
+// at a surface point p: x the sun reaches it (soft edged), y the rain reaches it, z sky light left (less under roofs and
+// decks, softly less near them).
 // sun / rain false skip those tests (sun already shadowed by cloud, or the ground is dry anyway)
 fn structureLight(p: vec3f, sun: bool, rain: bool) -> vec3f {
     var o = vec3f(1.0);
@@ -84,16 +122,26 @@ fn structureLight(p: vec3f, sun: bool, rain: bool) -> vec3f {
     let doSun = sun && s.y > 0.0;
     let r = rainBack(p.y);
     let m = blockCell(p);
+    let up = vec3f(0.0, 1.0, 0.0);
     for (var w = 0u; w < 4u; w++) {
         var bits = m[w];
         while (bits != 0u) {
             let k = i32(w * 32u + countTrailingZeros(bits));
             bits &= bits - 1u;
-            if (doSun && o.x > 0.0 && blockerHit(k, p, s)) { o.x = 0.0; }
+            if (doSun && o.x > 0.0) { o.x = min(o.x, blockerSoft(k, p, s, ${SHADE_SOFT})); }
             // a moving box (the bus) does not leave a dry patch: the ground it passes over stays wet
             if (rain && o.y > 0.0 && F.blockers[k * 3 + 2].z < 0.5 && blockerRain(k, p, r)) { o.y = 0.0; }
+            // the sky it hides, up a wide cone: all of it under a roof, less beside a wall and fading away from it. Up
+            // the cone's axis the closest pass is where it reaches the box's top (or SKY_REACH): one distance there. A
+            // box's own walls and roof (p at its face, above its foot) leave their sky to the surface's facing
             let ao = F.blockers[k * 3 + 2].x;
-            if (ao > 0.0 && blockerHit(k, p, vec3f(0.0, 1.0, 0.0))) { o.z = min(o.z, 1.0 - ao); }
+            if (ao > 0.0 && o.z > 1.0 - ao) {
+                let b = blockerRay(k, p, up);
+                let y = min(b.hi.y - b.o.y, ${SKY_REACH}.0);
+                if (y > 0.02 && !(boxRayDist(b, 0.0) < 0.3 && b.o.y > b.lo.y + 0.3)) {
+                    o.z = min(o.z, 1.0 - ao * (1.0 - smoothstep(-1.0, 1.0, boxRayDist(b, y) / (y * ${SKY_CONE}))));
+                }
+            }
         }
     }
     return o;

@@ -49,6 +49,9 @@ const CLOUD_TILE = 4;
 const TILE_COVER_PAD = 0.15;
 const WEATHER_RES = 512;
 const SHADOW_RES = 384;
+// the near cloud shadow maps (the shadow map's layers 1.., SHADOW_RES^2 as well), finest first: each over its size (m) about
+// where the eye's ground sends its sun rays (WGSL shadowNear), moved in steps of an eighth of it (a move refreshes it whole)
+const SHADOW_NEAR = [6000, 24000];
 const GROUND_RES = 256;
 
 return {
@@ -56,6 +59,6 @@ return {
     LIGHT_ROOM, FLASHLIGHT, ROOM_LIGHTS, ROOM_RANGE, FAR_FLOATS, POOL_ALBEDO, MAX_FAR_DYN, FAR_LAMP_PITCH, TOWN_BLOCK, FAR_LAMP_SIDE,
     FAR_LAMP_H, FAR_LAMP_REACH, POLE_DRAW, MAX_POLES, MAX_GLOWS, GLOW_GAIN, SPLASH_RADIUS, SPLASH_GRID, SPLASH_PIECES,
     SPLASH_MIST, SPLASH_PARTICLES, SPRAY, SPRAY_LAYERS, SPRAY_MIST, SPLASH_FADE, NOISE_SHAPE, NOISE_DETAIL,
-    SHAPE_MIPS, OCC_RES, CLOUD_TILE, TILE_COVER_PAD, WEATHER_RES, SHADOW_RES, GROUND_RES,
+    SHAPE_MIPS, OCC_RES, CLOUD_TILE, TILE_COVER_PAD, WEATHER_RES, SHADOW_RES, SHADOW_NEAR, GROUND_RES,
 };
 });

@@ -8,7 +8,7 @@ const { Common, kits } = engine;
 const { makeBuffer, bindLayout, bindGroup, frustumPlanes } = Common;
 const {
     MAX_CELLS, CELL_FLOATS, BLOOM_LEVELS, FrameBlock, WORLD_BINDINGS, BindingSet, BUS_UNIFORM, NoiseVolumes, shaderSource, atmosphereWgsl,
-    WeatherPass, GroundPass, FroxelPass, CloudPass,
+    WeatherPass, GroundPass, FroxelPass, CloudPass, SHADOW_NEAR,
 } = kit;
 const { MAX_BOLT_SEGS } = kits.weather;
 const { GpuProfiler } = kits.gpu;
@@ -406,7 +406,9 @@ class RendererExtension {
         if (this.framesUsed) q.writeBuffer(this.busUBuf, 0, this.busData, 0, this.framesUsed * BUS_UNIFORM / 4);
         this.framesUsed = 0;
         for (const x of X) x.prepare?.(enc);
-        this.weatherPass.encode(enc, probeTexel, prof, shadowSlices);
+        // (the near shadow maps' slices: the fewest of the frame's sdomain[k].w, FrameWriter's)
+        const sd = this.frame.data, so = this.frame.offsets.sdomain, nearSlices = Math.min(...SHADOW_NEAR.map((_, k) => sd[so + k * 4 + 3] || 1));
+        this.weatherPass.encode(enc, probeTexel, prof, shadowSlices, nearSlices);
         this.groundPass.encode(enc, prof);
         for (const x of X) x.encode?.(enc, prof);
 

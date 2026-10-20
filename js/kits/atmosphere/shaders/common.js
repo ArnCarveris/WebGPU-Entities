@@ -5,6 +5,7 @@ Features.kit('atmosphere', (engine, kit) => {
 const { kits } = engine;
 const { NoiseWGSL } = kits.noise;
 const { MAX_LAYERS, MAX_FLASHES } = kits.weather;
+const { SHADOW_NEAR } = kit;
 
 // WGSL
 
@@ -508,7 +509,7 @@ fn sunDepthAbove(p: vec3f) -> f32 {
     if (p.y >= top) { return 0.0; }
     let uv = (p.xz - s.xz * (max(p.y, base) - base) / s.y - F.wdomain.xy) / F.wdomain.z;
     if (any(uv < vec2f(0.0)) || any(uv > vec2f(1.0))) { return 0.0; }
-    let t = textureSampleLevel(shadowTex, clampSamp, uv, 0.0);
+    let t = textureSampleLevel(shadowTex, clampSamp, uv, 0, 0.0);
     let total = -log(max(t.x, 1e-6));
     let low = min(t.w, total);
     let split = sunSplit();
@@ -517,7 +518,52 @@ fn sunDepthAbove(p: vec3f) -> f32 {
     return max(total - below, 0.0);
 }
 
-// x: sun transmittance through the cloud slab, y: sky light left under the cloud column above p
+// the shadow map's layer read through a cubic B-spline (four bilinear fetches): smooth across texels, where bilinear
+// shows each one as a diamond and its edges as steps
+fn shadowSmooth(uv: vec2f, layer: i32) -> vec4f {
+    let n = vec2f(textureDimensions(shadowTex));
+    let st = uv * n - 0.5;
+    let i = floor(st);
+    let f = st - i;
+    let g = 1.0 - f;
+    let w0 = g * g * g / 6.0;
+    let w1 = (4.0 - 6.0 * f * f + 3.0 * f * f * f) / 6.0;
+    let w3 = f * f * f / 6.0;
+    let w2 = 1.0 - w0 - w1 - w3;
+    let g0 = w0 + w1;
+    let g1 = w2 + w3;
+    let p0 = (i - 0.5 + w1 / g0) / n;
+    let p1 = (i + 1.5 + w3 / g1) / n;
+    return g0.y * (g0.x * textureSampleLevel(shadowTex, clampSamp, p0, layer, 0.0) + g1.x * textureSampleLevel(shadowTex, clampSamp, vec2f(p1.x, p0.y), layer, 0.0))
+         + g1.y * (g0.x * textureSampleLevel(shadowTex, clampSamp, vec2f(p0.x, p1.y), layer, 0.0) + g1.x * textureSampleLevel(shadowTex, clampSamp, p1, layer, 0.0));
+}
+
+// the shadow map's layer read through a Catmull-Rom spline (five bilinear fetches, the corners' small weights left
+// out): through the texels' values, smooth between them, as sharp as the map holds (the B-spline above blurs a texel)
+fn shadowSharp(uv: vec2f, layer: i32) -> vec4f {
+    let n = vec2f(textureDimensions(shadowTex));
+    let st = uv * n - 0.5;
+    let i = floor(st);
+    let f = st - i;
+    let w0 = f * (-0.5 + f * (1.0 - 0.5 * f));
+    let w1 = 1.0 + f * f * (-2.5 + 1.5 * f);
+    let w2 = f * (0.5 + f * (2.0 - 1.5 * f));
+    let w3 = f * f * (-0.5 + 0.5 * f);
+    let w12 = w1 + w2;
+    let c = i + 0.5;
+    let t0 = (c - 1.0) / n;
+    let t12 = (c + w2 / w12) / n;
+    let t3 = (c + 2.0) / n;
+    let sum = textureSampleLevel(shadowTex, clampSamp, t12, layer, 0.0) * w12.x * w12.y
+        + textureSampleLevel(shadowTex, clampSamp, vec2f(t0.x, t12.y), layer, 0.0) * w0.x * w12.y
+        + textureSampleLevel(shadowTex, clampSamp, vec2f(t3.x, t12.y), layer, 0.0) * w3.x * w12.y
+        + textureSampleLevel(shadowTex, clampSamp, vec2f(t12.x, t0.y), layer, 0.0) * w12.x * w0.y
+        + textureSampleLevel(shadowTex, clampSamp, vec2f(t12.x, t3.y), layer, 0.0) * w12.x * w3.y;
+    return sum / (w12.x * w12.y + (w0.x + w3.x) * w12.y + w12.x * (w0.y + w3.y));
+}
+
+// x: sun transmittance through the cloud slab, y: sky light left under the cloud column above p. Near the eye the sun's
+// comes from the near maps (F.sdomain: 16 and 60 m a texel), each fading into the coarser one over its last eighth
 fn shadowAt(p: vec3f) -> vec2f {
     let s = F.sunDir.xyz;
     let base = F.layerInfo.z;
@@ -525,17 +571,30 @@ fn shadowAt(p: vec3f) -> vec2f {
     let xz = p.xz + s.xz * lift / max(s.y, 0.08);
     let ua = (xz - F.wdomain.xy) / F.wdomain.z;
     let ub = (p.xz - F.wdomain.xy) / F.wdomain.z;
-    let a = textureSampleLevel(shadowTex, clampSamp, ua, 0.0).x;
-    let b = 0.12 + 0.88 * textureSampleLevel(shadowTex, clampSamp, ub, 0.0).y;
+    let b = 0.12 + 0.88 * shadowSmooth(ub, 0).y;
     // beyond the map: no cloud shadows instead of its edge texels smeared outwards
-    let ea = sat(min(min(ua.x, 1.0 - ua.x), min(ua.y, 1.0 - ua.y)) * 12.0);
     let eb = sat(min(min(ub.x, 1.0 - ub.x), min(ub.y, 1.0 - ub.y)) * 12.0);
+    // the finest map that holds xz, a coarser one only where it fades out
+    var sun = 0.0;
+    var left = 1.0;
+    for (var k = 0; k < ${SHADOW_NEAR.length}; k++) {
+        let d = F.sdomain[k];
+        let un = (xz - d.xy) / d.z;
+        let en = sat(min(min(un.x, 1.0 - un.x), min(un.y, 1.0 - un.y)) * 8.0);
+        if (en > 0.0) { sun += left * en * shadowSharp(un, k + 1).x; left *= 1.0 - en; }
+        if (left <= 0.0) { break; }
+    }
+    if (left > 0.0) {
+        let ea = sat(min(min(ua.x, 1.0 - ua.x), min(ua.y, 1.0 - ua.y)) * 12.0);
+        sun += left * mix(1.0, shadowSharp(ua, 0).x, ea);
+    }
+    sun = sat(sun);
     // inside the slab the map's march from its base overstates the cloud toward the sun; that only starts at the real
     // cloud base (the lowest layer or the convective base), not at layerInfo.z, which is padded down for wall clouds and
     // shelf lips and can lie below the ground (which then got a tenth of the sun under a full overcast)
     let cb = min(F.layerInfo.x, F.cloud.x);
     let above = sat((p.y - cb) / max(F.noise.w - cb, 1.0));
-    return vec2f(mix(mix(1.0, a, ea), 1.0, above), mix(mix(1.0, b, eb), 1.0, above));
+    return vec2f(mix(sun, 1.0, above), mix(mix(1.0, b, eb), 1.0, above));
 }
 
 // Diffuse light inside a cloud: sky light reaching p through the cloud above it, from the shadow map's column (its
@@ -546,7 +605,7 @@ fn shadowAt(p: vec3f) -> vec2f {
 fn cloudAbove(p: vec3f, top: f32) -> vec2f {
     let uv = (p.xz - F.wdomain.xy) / F.wdomain.z;
     let e = sat(min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y)) * 12.0);
-    let c = textureSampleLevel(shadowTex, clampSamp, uv, 0.0);
+    let c = textureSampleLevel(shadowTex, clampSamp, uv, 0, 0.0);
     let frac = sat((top - p.y) / max(top - F.layerInfo.z, 1.0));
     let od = -log(max(c.y, 1e-6)) / 0.03 * frac;                      // optical depth above p
     return mix(vec2f(1.0), vec2f(1.0 / (1.0 + 0.11 * od), c.x), e);
@@ -571,7 +630,7 @@ fn flashLit(p: vec3f) -> f32 {
         let uv = (f.xz - F.wdomain.xy) / F.wdomain.z;
         let base = F.layerInfo.z;
         let top = max(weatherAt(f.xz).y, base + 400.0);
-        let colOD = -log(max(textureSampleLevel(shadowTex, clampSamp, uv, 0.0).y, 1e-6)) / 0.03;
+        let colOD = -log(max(textureSampleLevel(shadowTex, clampSamp, uv, 0, 0.0).y, 1e-6)) / 0.03;
         let sigma = colOD / (top - base);                               // mean extinction of the storm column (1/m)
         let y0 = min(p.y, f.y);
         let y1 = max(p.y, f.y);
@@ -588,7 +647,7 @@ fn flashLit(p: vec3f) -> f32 {
 // its flank and the wind carries the shaft further, so without this some of it would fall from clear sky beside the
 // cloud. The shadow map's z term measures the low cloud above (1 clear .. 0 thick): an anvil overhead does not count
 fn rainCover(xz: vec2f) -> f32 {
-    let low = textureSampleLevel(shadowTex, clampSamp, (xz - F.wdomain.xy) / F.wdomain.z, 0.0).z;
+    let low = textureSampleLevel(shadowTex, clampSamp, (xz - F.wdomain.xy) / F.wdomain.z, 0, 0.0).z;
     return smoothstep(0.03, 0.3, 1.0 - low);
 }
 // the weather precipitation at p fell from. Storms move with the wind aloft and the slower air below holds the falling

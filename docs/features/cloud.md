@@ -72,6 +72,9 @@ Each frame runs these passes. All distances are metres and heights are above sea
      part of the ray below a point (`sunDepthAbove`).
    - Low cloud: the transmittance of the lowest 1.5 km of cloud above the base. Precipitation only falls where
      there is low cloud above the point it left the base (an anvil overhead does not count).
+   - Near maps (`WGSL_SHADOW_NEAR`, the texture's layers 1 and 2, `SHADOW_NEAR`): the sun transmittance alone over
+     6 km and 24 km (16 m and 60 m a texel against the whole map's 330 m), about where the sun rays from the ground
+     under the eye cross the cloud base. Each moves in steps of an eighth of its size.
 
    Terrain, precipitation and haze sample it, so cloud shadows sweep across the ground and sunlit gaps
    cut crepuscular rays.
@@ -200,7 +203,9 @@ Each frame runs these passes. All distances are metres and heights are above sea
    - A weather radar inset, showing the precipitation that leaves the cloud base. Rain shows in green, yellow and red, snow in blues, and virga aloft in
      grey-blue.
 
-Under cloud, the ground's sun light is the shadow map's transmittance. Points inside the cloud slab get progressively
+Under cloud, the ground's sun light is the shadow map's transmittance (`shadowAt`): the finest near map that holds the
+point, fading into the next coarser one over its last eighth, read through a Catmull-Rom spline (five bilinear fetches)
+so the shadows' edges are the clouds' and not the texels'. The column's sky light is read through a B-spline. Points inside the cloud slab get progressively
 more sun (the map's march from the slab's base overstates the cloud toward the sun there), measured from the real
 cloud base: the lowest genus layer or the convective base, not the march's padded lower bound.
 
@@ -248,8 +253,8 @@ offers them.
   - The weather map skips storm cells beyond their reach, and skips each cell's noise where it cannot matter.
 - **Froxel lighting**: the precipitation and haze light is computed once per froxel (about 2 million, about 0.1 ms)
   instead of at every march step.
-- **Time slicing**: the cloud shadow map refreshes a quarter of its rows per frame. It refreshes fully when the map
-  moves, the sun moves, or the weather changes.
+- **Time slicing**: the cloud shadow map refreshes a sixteenth of its rows per frame. It refreshes fully when the map
+  moves, the sun moves, or the weather changes; each near map likewise, when it moves a step.
 
 On the test machine (Brave, about 1925 × 925 pixels), GPU time per frame dropped from 11–13 ms to 4–6 ms at medium,
 and from 25–28 ms to 10–12 ms at high.
@@ -336,13 +341,18 @@ curved deck, and the bus station about 31 (canopy, fascia, clerestory, pillars, 
   - Near-field drops and flakes: none inside the dry volume (`vsPrecip` tests each particle along its own fall).
   - Rain and snow shafts: rays through the boxes' bounds take the shaft density out wherever it is sheltered.
   - The HUD says `sheltered` when the camera is, and `in the bus` when it is in the bus's cabin.
-- **Sun shadows**: the ray toward the sun, so houses shade the street and each other, and decks the river bank.
-- **Sky occlusion**: under roofs and decks (a box's `ao`), less sky light reaches the ground.
+- **Sun shadows**: the ray toward the sun, so houses shade the street and each other, and decks the river bank. Soft
+  edged (`blockerSoft`): the ray's closest pass by the box, as a share of a cone `SHADE_SOFT` wide per metre, so a
+  shadow is sharp where it meets the box and softens with distance from it.
+- **Sky occlusion**: under roofs and decks (a box's `ao`), less sky light reaches the ground; beside them it fades out
+  over a 45° cone up from the point (`SKY_CONE`, up to `SKY_REACH` m), from the box's distance where the cone's axis
+  reaches its top. A box's own walls and roof keep their sky (their facing already takes it).
 
 A ray starting inside a box does not count, so surfaces do not shade themselves. Only boxes within 2.5 km of the camera
 go into the frame (the village and the bus station lie 9 km apart). Each frame a 32 × 32 grid over the
 boxes' bounds lists, per cell, the boxes that can shade it: a capsule from each box toward where its sun shadow and its
-rain shadow fall, as far as a ray from the ground under it to its top runs sideways. A point tests only its cell's
+rain shadow fall, as far as a ray from the ground under it to its top runs sideways, widened by the penumbra at its
+end, and a disc about a box that hides sky as wide as the sky cone reaches. A point tests only its cell's
 boxes, which keeps the structures at about 0.2 ms of scene time at street level.
 
 ### Buildings
