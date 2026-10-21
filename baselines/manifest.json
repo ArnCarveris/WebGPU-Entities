@@ -1,0 +1,2034 @@
+{
+ "scenarios": {
+  "compose-storm-riverlands": {
+   "views": [
+    {
+     "key": "start",
+     "name": "start",
+     "file": "start.png"
+    },
+    {
+     "key": "river/0",
+     "name": "Overview",
+     "file": "view-river-0.png"
+    },
+    {
+     "key": "river/1",
+     "name": "Dam & lake",
+     "file": "view-river-1.png"
+    },
+    {
+     "key": "river/2",
+     "name": "Upper river",
+     "file": "view-river-2.png"
+    },
+    {
+     "key": "river/3",
+     "name": "Delta",
+     "file": "view-river-3.png"
+    },
+    {
+     "key": "river/4",
+     "name": "Lake shore",
+     "file": "view-river-4.png"
+    }
+   ],
+   "counts": {
+    "Renderer": 3,
+    "App": 2,
+    "World": 2
+   },
+   "submitsPerFrame": [
+    3,
+    3
+   ],
+   "writesPerFrame": [
+    11,
+    13
+   ],
+   "kits": [
+    "atmosphere",
+    "building",
+    "curvature",
+    "gpu",
+    "gui",
+    "hydrology",
+    "interior",
+    "mesh",
+    "noise",
+    "settlement",
+    "terrain",
+    "transit",
+    "view",
+    "weather",
+    "world"
+   ],
+   "noise": 0,
+   "noiseMax": 0,
+   "noiseByView": {},
+   "errors": [],
+   "warnings": []
+  },
+  "compose-valley-weather": {
+   "views": [
+    {
+     "key": "start",
+     "name": "start",
+     "file": "start.png"
+    },
+    {
+     "key": "valley/0",
+     "name": "Start",
+     "file": "view-valley-0.png"
+    },
+    {
+     "key": "valley/1",
+     "name": "Mesh vs imposter",
+     "file": "view-valley-1.png"
+    },
+    {
+     "key": "valley/2",
+     "name": "Showcase",
+     "file": "view-valley-2.png"
+    },
+    {
+     "key": "valley/3",
+     "name": "Over the village",
+     "file": "view-valley-3.png"
+    },
+    {
+     "key": "valley/4",
+     "name": "Forest edge",
+     "file": "view-valley-4.png"
+    },
+    {
+     "key": "valley/5",
+     "name": "Valley overview",
+     "file": "view-valley-5.png"
+    }
+   ],
+   "counts": {
+    "Renderer": 3,
+    "App": 2,
+    "World": 2
+   },
+   "submitsPerFrame": [
+    3,
+    3
+   ],
+   "writesPerFrame": [
+    86,
+    86
+   ],
+   "kits": [
+    "atmosphere",
+    "building",
+    "curvature",
+    "entities",
+    "gpu",
+    "gui",
+    "imposter",
+    "interior",
+    "mesh",
+    "noise",
+    "settlement",
+    "terrain",
+    "transit",
+    "view",
+    "weather",
+    "world"
+   ],
+   "noise": 0.029505208333333335,
+   "noiseMax": 4,
+   "noiseByView": {
+    "start.png": {
+     "frac": 0.025694444444444443,
+     "max": 4
+    },
+    "view-valley-0.png": {
+     "frac": 0.021918402777777776,
+     "max": 4
+    },
+    "view-valley-1.png": {
+     "frac": 0.029505208333333335,
+     "max": 4
+    },
+    "view-valley-2.png": {
+     "frac": 0.01642708333333333,
+     "max": 4
+    },
+    "view-valley-3.png": {
+     "frac": 0.01984722222222222,
+     "max": 2
+    },
+    "view-valley-4.png": {
+     "frac": 0.013114583333333334,
+     "max": 2
+    },
+    "view-valley-5.png": {
+     "frac": 0.003390625,
+     "max": 1
+    }
+   },
+   "errors": [],
+   "warnings": []
+  },
+  "compose-bunker-reservoir": {
+   "views": [
+    {
+     "key": "start",
+     "name": "start",
+     "file": "start.png"
+    },
+    {
+     "key": "bunker/0",
+     "name": "Outside the bunker",
+     "file": "view-bunker-0.png"
+    },
+    {
+     "key": "bunker/1",
+     "name": "Compound overview",
+     "file": "view-bunker-1.png"
+    },
+    {
+     "key": "bunker/2",
+     "name": "Entrance Hall",
+     "file": "view-bunker-2.png"
+    },
+    {
+     "key": "bunker/3",
+     "name": "Control Room",
+     "file": "view-bunker-3.png"
+    },
+    {
+     "key": "bunker/4",
+     "name": "Loft",
+     "file": "view-bunker-4.png"
+    },
+    {
+     "key": "bunker/5",
+     "name": "Atrium",
+     "file": "view-bunker-5.png"
+    },
+    {
+     "key": "bunker/6",
+     "name": "Storage",
+     "file": "view-bunker-6.png"
+    },
+    {
+     "key": "bunker/7",
+     "name": "Brick Shed",
+     "file": "view-bunker-7.png"
+    },
+    {
+     "key": "bunker/8",
+     "name": "Generator Room",
+     "file": "view-bunker-8.png"
+    },
+    {
+     "key": "bunker/9",
+     "name": "Basement Hall",
+     "file": "view-bunker-9.png"
+    },
+    {
+     "key": "bunker/10",
+     "name": "Vault",
+     "file": "view-bunker-10.png"
+    },
+    {
+     "key": "bunker/11",
+     "name": "Barracks",
+     "file": "view-bunker-11.png"
+    },
+    {
+     "key": "bunker/12",
+     "name": "Barracks quarters",
+     "file": "view-bunker-12.png"
+    }
+   ],
+   "counts": {
+    "Renderer": 3,
+    "App": 2,
+    "World": 2
+   },
+   "submitsPerFrame": [
+    3,
+    3
+   ],
+   "writesPerFrame": [
+    12,
+    12
+   ],
+   "kits": [
+    "atmosphere",
+    "building",
+    "curvature",
+    "entities",
+    "gpu",
+    "gui",
+    "interior",
+    "media",
+    "mesh",
+    "noise",
+    "settlement",
+    "terrain",
+    "transit",
+    "view",
+    "weather",
+    "world"
+   ],
+   "noise": 0.00011111111111111112,
+   "noiseMax": 2,
+   "noiseByView": {
+    "view-bunker-3.png": {
+     "frac": 0.00009201388888888889,
+     "max": 1
+    },
+    "view-bunker-8.png": {
+     "frac": 0.00011111111111111112,
+     "max": 2
+    }
+   },
+   "errors": [],
+   "warnings": []
+  },
+  "compose-planetfall": {
+   "views": [
+    {
+     "key": "start",
+     "name": "start",
+     "file": "start.png"
+    },
+    {
+     "key": "sol/0",
+     "name": "Gateway Station, low Earth orbit",
+     "file": "view-sol-0.png"
+    },
+    {
+     "key": "sol/1",
+     "name": "Shackleton Base, Moon surface",
+     "file": "view-sol-1.png"
+    },
+    {
+     "key": "sol/2",
+     "name": "Kuiper Outpost, Neptune orbit (4.5e12 m out)",
+     "file": "view-sol-2.png"
+    },
+    {
+     "key": "sol/3",
+     "name": "Saturn ringlet",
+     "file": "view-sol-3.png"
+    },
+    {
+     "key": "sol/4",
+     "name": "Earth and Moon",
+     "file": "view-sol-4.png"
+    },
+    {
+     "key": "sol/5",
+     "name": "The Sun",
+     "file": "view-sol-5.png"
+    },
+    {
+     "key": "sol/6",
+     "name": "Solar system overview",
+     "file": "view-sol-6.png"
+    },
+    {
+     "key": "sol/7",
+     "name": "Imposter Valley, Earth",
+     "file": "view-sol-7.png"
+    },
+    {
+     "key": "sol/8",
+     "name": "Above the valley",
+     "file": "view-sol-8.png"
+    },
+    {
+     "key": "valley/0",
+     "name": "Start",
+     "file": "view-valley-0.png"
+    },
+    {
+     "key": "valley/1",
+     "name": "Mesh vs imposter",
+     "file": "view-valley-1.png"
+    },
+    {
+     "key": "valley/2",
+     "name": "Showcase",
+     "file": "view-valley-2.png"
+    },
+    {
+     "key": "valley/3",
+     "name": "Over the village",
+     "file": "view-valley-3.png"
+    },
+    {
+     "key": "valley/4",
+     "name": "Forest edge",
+     "file": "view-valley-4.png"
+    },
+    {
+     "key": "valley/5",
+     "name": "Valley overview",
+     "file": "view-valley-5.png"
+    }
+   ],
+   "counts": {
+    "Renderer": 3,
+    "App": 2,
+    "World": 2
+   },
+   "submitsPerFrame": [
+    3,
+    3
+   ],
+   "writesPerFrame": [
+    89,
+    99
+   ],
+   "kits": [
+    "entities",
+    "gpu",
+    "gui",
+    "imposter",
+    "mesh",
+    "noise",
+    "terrain",
+    "view",
+    "world"
+   ],
+   "noise": 0.043067708333333336,
+   "noiseMax": 8,
+   "noiseByView": {
+    "start.png": {
+     "frac": 0.036229166666666666,
+     "max": 5
+    },
+    "view-sol-7.png": {
+     "frac": 0.036229166666666666,
+     "max": 5
+    },
+    "view-valley-0.png": {
+     "frac": 0.02961284722222222,
+     "max": 8
+    },
+    "view-valley-1.png": {
+     "frac": 0.043067708333333336,
+     "max": 6
+    },
+    "view-valley-2.png": {
+     "frac": 0.021237847222222224,
+     "max": 8
+    },
+    "view-valley-3.png": {
+     "frac": 0.01675347222222222,
+     "max": 2
+    },
+    "view-valley-4.png": {
+     "frac": 0.016182291666666668,
+     "max": 2
+    },
+    "view-valley-5.png": {
+     "frac": 0.001963541666666667,
+     "max": 1
+    }
+   },
+   "errors": [],
+   "warnings": []
+  },
+  "compose-moonbase-sector07": {
+   "views": [
+    {
+     "key": "start",
+     "name": "start",
+     "file": "start.png"
+    },
+    {
+     "key": "sol/0",
+     "name": "Gateway Station, low Earth orbit",
+     "file": "view-sol-0.png"
+    },
+    {
+     "key": "sol/1",
+     "name": "Shackleton Base, Moon surface",
+     "file": "view-sol-1.png"
+    },
+    {
+     "key": "sol/2",
+     "name": "Kuiper Outpost, Neptune orbit (4.5e12 m out)",
+     "file": "view-sol-2.png"
+    },
+    {
+     "key": "sol/3",
+     "name": "Saturn ringlet",
+     "file": "view-sol-3.png"
+    },
+    {
+     "key": "sol/4",
+     "name": "Earth and Moon",
+     "file": "view-sol-4.png"
+    },
+    {
+     "key": "sol/5",
+     "name": "The Sun",
+     "file": "view-sol-5.png"
+    },
+    {
+     "key": "sol/6",
+     "name": "Solar system overview",
+     "file": "view-sol-6.png"
+    },
+    {
+     "key": "sol/7",
+     "name": "Sector 07, Shackleton Base",
+     "file": "view-sol-7.png"
+    },
+    {
+     "key": "sector/0",
+     "name": "Start",
+     "file": "view-sector-0.png"
+    },
+    {
+     "key": "sector/1",
+     "name": "Ops terminal",
+     "file": "view-sector-1.png"
+    },
+    {
+     "key": "sector/2",
+     "name": "Hatch B",
+     "file": "view-sector-2.png"
+    },
+    {
+     "key": "sector/3",
+     "name": "Storage bay",
+     "file": "view-sector-3.png"
+    },
+    {
+     "key": "sector/4",
+     "name": "Main hall",
+     "file": "view-sector-4.png"
+    },
+    {
+     "key": "sector/5",
+     "name": "Lamp rig",
+     "file": "view-sector-5.png"
+    }
+   ],
+   "counts": {
+    "Renderer": 3,
+    "App": 2,
+    "World": 2
+   },
+   "submitsPerFrame": [
+    3,
+    3
+   ],
+   "writesPerFrame": [
+    12,
+    13
+   ],
+   "kits": [
+    "entities",
+    "gpu",
+    "gui",
+    "interior",
+    "media",
+    "mesh",
+    "noise",
+    "paint",
+    "view",
+    "world"
+   ],
+   "noise": 0,
+   "noiseMax": 0,
+   "noiseByView": {},
+   "errors": [],
+   "warnings": []
+  },
+  "compose-grand-tour": {
+   "views": [
+    {
+     "key": "start",
+     "name": "start",
+     "file": "start.png"
+    },
+    {
+     "key": "engine/0",
+     "name": "Over the plains",
+     "file": "view-engine-0.png"
+    },
+    {
+     "key": "engine/1",
+     "name": "Riverlands",
+     "file": "view-engine-1.png"
+    },
+    {
+     "key": "engine/2",
+     "name": "Imposter Valley",
+     "file": "view-engine-2.png"
+    },
+    {
+     "key": "engine/3",
+     "name": "Bunker island",
+     "file": "view-engine-3.png"
+    },
+    {
+     "key": "engine/4",
+     "name": "Above the anvils",
+     "file": "view-engine-4.png"
+    },
+    {
+     "key": "river/0",
+     "name": "Overview",
+     "file": "view-river-0.png"
+    },
+    {
+     "key": "river/1",
+     "name": "Dam & lake",
+     "file": "view-river-1.png"
+    },
+    {
+     "key": "river/2",
+     "name": "Upper river",
+     "file": "view-river-2.png"
+    },
+    {
+     "key": "river/3",
+     "name": "Delta",
+     "file": "view-river-3.png"
+    },
+    {
+     "key": "river/4",
+     "name": "Lake shore",
+     "file": "view-river-4.png"
+    },
+    {
+     "key": "valley/0",
+     "name": "Start",
+     "file": "view-valley-0.png"
+    },
+    {
+     "key": "valley/1",
+     "name": "Mesh vs imposter",
+     "file": "view-valley-1.png"
+    },
+    {
+     "key": "valley/2",
+     "name": "Showcase",
+     "file": "view-valley-2.png"
+    },
+    {
+     "key": "valley/3",
+     "name": "Over the village",
+     "file": "view-valley-3.png"
+    },
+    {
+     "key": "valley/4",
+     "name": "Forest edge",
+     "file": "view-valley-4.png"
+    },
+    {
+     "key": "valley/5",
+     "name": "Valley overview",
+     "file": "view-valley-5.png"
+    },
+    {
+     "key": "bunker/0",
+     "name": "Outside the bunker",
+     "file": "view-bunker-0.png"
+    },
+    {
+     "key": "bunker/1",
+     "name": "Compound overview",
+     "file": "view-bunker-1.png"
+    },
+    {
+     "key": "bunker/2",
+     "name": "Entrance Hall",
+     "file": "view-bunker-2.png"
+    },
+    {
+     "key": "bunker/3",
+     "name": "Control Room",
+     "file": "view-bunker-3.png"
+    },
+    {
+     "key": "bunker/4",
+     "name": "Loft",
+     "file": "view-bunker-4.png"
+    },
+    {
+     "key": "bunker/5",
+     "name": "Atrium",
+     "file": "view-bunker-5.png"
+    },
+    {
+     "key": "bunker/6",
+     "name": "Storage",
+     "file": "view-bunker-6.png"
+    },
+    {
+     "key": "bunker/7",
+     "name": "Brick Shed",
+     "file": "view-bunker-7.png"
+    },
+    {
+     "key": "bunker/8",
+     "name": "Generator Room",
+     "file": "view-bunker-8.png"
+    },
+    {
+     "key": "bunker/9",
+     "name": "Basement Hall",
+     "file": "view-bunker-9.png"
+    },
+    {
+     "key": "bunker/10",
+     "name": "Vault",
+     "file": "view-bunker-10.png"
+    },
+    {
+     "key": "bunker/11",
+     "name": "Barracks",
+     "file": "view-bunker-11.png"
+    },
+    {
+     "key": "bunker/12",
+     "name": "Barracks quarters",
+     "file": "view-bunker-12.png"
+    }
+   ],
+   "counts": {
+    "Renderer": 5,
+    "App": 4,
+    "World": 4
+   },
+   "submitsPerFrame": [
+    5,
+    5
+   ],
+   "writesPerFrame": [
+    97,
+    99
+   ],
+   "kits": [
+    "atmosphere",
+    "building",
+    "curvature",
+    "entities",
+    "gpu",
+    "gui",
+    "hydrology",
+    "imposter",
+    "interior",
+    "media",
+    "mesh",
+    "noise",
+    "settlement",
+    "terrain",
+    "transit",
+    "view",
+    "weather",
+    "world"
+   ],
+   "noise": 0.03273784722222222,
+   "noiseMax": 16,
+   "noiseByView": {
+    "view-engine-2.png": {
+     "frac": 0.03273784722222222,
+     "max": 8
+    },
+    "view-valley-0.png": {
+     "frac": 0.022053819444444445,
+     "max": 7
+    },
+    "view-valley-1.png": {
+     "frac": 0.02943576388888889,
+     "max": 7
+    },
+    "view-valley-2.png": {
+     "frac": 0.019041666666666665,
+     "max": 16
+    },
+    "view-valley-3.png": {
+     "frac": 0.020921875,
+     "max": 2
+    },
+    "view-valley-4.png": {
+     "frac": 0.013354166666666667,
+     "max": 2
+    },
+    "view-valley-5.png": {
+     "frac": 0.0035277777777777777,
+     "max": 1
+    },
+    "view-bunker-3.png": {
+     "frac": 0.00019270833333333333,
+     "max": 1
+    },
+    "view-bunker-8.png": {
+     "frac": 0.00010590277777777777,
+     "max": 2
+    }
+   },
+   "errors": [],
+   "warnings": []
+  },
+  "compose-every-kit": {
+   "views": [
+    {
+     "key": "start",
+     "name": "start",
+     "file": "start.png"
+    },
+    {
+     "key": "sol/0",
+     "name": "Gateway Station, low Earth orbit",
+     "file": "view-sol-0.png"
+    },
+    {
+     "key": "sol/1",
+     "name": "Shackleton Base, Moon surface",
+     "file": "view-sol-1.png"
+    },
+    {
+     "key": "sol/2",
+     "name": "Kuiper Outpost, Neptune orbit (4.5e12 m out)",
+     "file": "view-sol-2.png"
+    },
+    {
+     "key": "sol/3",
+     "name": "Saturn ringlet",
+     "file": "view-sol-3.png"
+    },
+    {
+     "key": "sol/4",
+     "name": "Earth and Moon",
+     "file": "view-sol-4.png"
+    },
+    {
+     "key": "sol/5",
+     "name": "The Sun",
+     "file": "view-sol-5.png"
+    },
+    {
+     "key": "sol/6",
+     "name": "Solar system overview",
+     "file": "view-sol-6.png"
+    },
+    {
+     "key": "sol/7",
+     "name": "Over the plains",
+     "file": "view-sol-7.png"
+    },
+    {
+     "key": "sol/8",
+     "name": "Riverlands",
+     "file": "view-sol-8.png"
+    },
+    {
+     "key": "sol/9",
+     "name": "High over the plains",
+     "file": "view-sol-9.png"
+    },
+    {
+     "key": "river/0",
+     "name": "Overview",
+     "file": "view-river-0.png"
+    },
+    {
+     "key": "river/1",
+     "name": "Dam & lake",
+     "file": "view-river-1.png"
+    },
+    {
+     "key": "river/2",
+     "name": "Upper river",
+     "file": "view-river-2.png"
+    },
+    {
+     "key": "river/3",
+     "name": "Delta",
+     "file": "view-river-3.png"
+    },
+    {
+     "key": "river/4",
+     "name": "Lake shore",
+     "file": "view-river-4.png"
+    },
+    {
+     "key": "valley/0",
+     "name": "Start",
+     "file": "view-valley-0.png"
+    },
+    {
+     "key": "valley/1",
+     "name": "Mesh vs imposter",
+     "file": "view-valley-1.png"
+    },
+    {
+     "key": "valley/2",
+     "name": "Showcase",
+     "file": "view-valley-2.png"
+    },
+    {
+     "key": "valley/3",
+     "name": "Over the village",
+     "file": "view-valley-3.png"
+    },
+    {
+     "key": "valley/4",
+     "name": "Forest edge",
+     "file": "view-valley-4.png"
+    },
+    {
+     "key": "valley/5",
+     "name": "Valley overview",
+     "file": "view-valley-5.png"
+    },
+    {
+     "key": "bunker/0",
+     "name": "Outside the bunker",
+     "file": "view-bunker-0.png"
+    },
+    {
+     "key": "bunker/1",
+     "name": "Compound overview",
+     "file": "view-bunker-1.png"
+    },
+    {
+     "key": "bunker/2",
+     "name": "Entrance Hall",
+     "file": "view-bunker-2.png"
+    },
+    {
+     "key": "bunker/3",
+     "name": "Control Room",
+     "file": "view-bunker-3.png"
+    },
+    {
+     "key": "bunker/4",
+     "name": "Loft",
+     "file": "view-bunker-4.png"
+    },
+    {
+     "key": "bunker/5",
+     "name": "Atrium",
+     "file": "view-bunker-5.png"
+    },
+    {
+     "key": "bunker/6",
+     "name": "Storage",
+     "file": "view-bunker-6.png"
+    },
+    {
+     "key": "bunker/7",
+     "name": "Brick Shed",
+     "file": "view-bunker-7.png"
+    },
+    {
+     "key": "bunker/8",
+     "name": "Generator Room",
+     "file": "view-bunker-8.png"
+    },
+    {
+     "key": "bunker/9",
+     "name": "Basement Hall",
+     "file": "view-bunker-9.png"
+    },
+    {
+     "key": "bunker/10",
+     "name": "Vault",
+     "file": "view-bunker-10.png"
+    },
+    {
+     "key": "bunker/11",
+     "name": "Barracks",
+     "file": "view-bunker-11.png"
+    },
+    {
+     "key": "bunker/12",
+     "name": "Barracks quarters",
+     "file": "view-bunker-12.png"
+    },
+    {
+     "key": "sector/0",
+     "name": "Start",
+     "file": "view-sector-0.png"
+    },
+    {
+     "key": "sector/1",
+     "name": "Ops terminal",
+     "file": "view-sector-1.png"
+    },
+    {
+     "key": "sector/2",
+     "name": "Hatch B",
+     "file": "view-sector-2.png"
+    },
+    {
+     "key": "sector/3",
+     "name": "Storage bay",
+     "file": "view-sector-3.png"
+    },
+    {
+     "key": "sector/4",
+     "name": "Main hall",
+     "file": "view-sector-4.png"
+    },
+    {
+     "key": "sector/5",
+     "name": "Lamp rig",
+     "file": "view-sector-5.png"
+    }
+   ],
+   "counts": {
+    "Renderer": 7,
+    "App": 6,
+    "World": 6
+   },
+   "submitsPerFrame": [
+    7,
+    7
+   ],
+   "writesPerFrame": [
+    106,
+    108
+   ],
+   "kits": [
+    "atmosphere",
+    "building",
+    "curvature",
+    "entities",
+    "geo",
+    "gpu",
+    "gui",
+    "hydrology",
+    "imposter",
+    "interior",
+    "media",
+    "mesh",
+    "noise",
+    "paint",
+    "settlement",
+    "terrain",
+    "transit",
+    "view",
+    "weather",
+    "world"
+   ],
+   "noise": 0.019203125,
+   "noiseMax": 2,
+   "noiseByView": {
+    "view-valley-0.png": {
+     "frac": 0.014934027777777777,
+     "max": 2
+    },
+    "view-valley-1.png": {
+     "frac": 0.019203125,
+     "max": 2
+    },
+    "view-valley-2.png": {
+     "frac": 0.012324652777777778,
+     "max": 2
+    },
+    "view-valley-3.png": {
+     "frac": 0.013826388888888888,
+     "max": 2
+    },
+    "view-valley-4.png": {
+     "frac": 0.014479166666666666,
+     "max": 2
+    },
+    "view-valley-5.png": {
+     "frac": 0.003840277777777778,
+     "max": 1
+    },
+    "view-bunker-3.png": {
+     "frac": 0.000024305555555555554,
+     "max": 1
+    },
+    "view-bunker-8.png": {
+     "frac": 0.00008680555555555556,
+     "max": 2
+    },
+    "view-bunker-11.png": {
+     "frac": 0.0000034722222222222224,
+     "max": 1
+    }
+   },
+   "errors": [],
+   "warnings": []
+  },
+  "cloud-high-plains": {
+   "views": [
+    {
+     "key": "start",
+     "name": "start",
+     "file": "start.png"
+    },
+    {
+     "key": "cloud/0",
+     "name": "Airliner (photo view)",
+     "file": "view-cloud-0.png"
+    },
+    {
+     "key": "cloud/1",
+     "name": "Under the shaft",
+     "file": "view-cloud-1.png"
+    },
+    {
+     "key": "cloud/2",
+     "name": "Plains overview",
+     "file": "view-cloud-2.png"
+    },
+    {
+     "key": "cloud/3",
+     "name": "Above the anvils",
+     "file": "view-cloud-3.png"
+    },
+    {
+     "key": "cloud/4",
+     "name": "Front Range",
+     "file": "view-cloud-4.png"
+    },
+    {
+     "key": "cloud/5",
+     "name": "Town street level",
+     "file": "view-cloud-5.png"
+    },
+    {
+     "key": "cloud/6",
+     "name": "Village bus stop",
+     "file": "view-cloud-6.png"
+    },
+    {
+     "key": "cloud/7",
+     "name": "Village bridges",
+     "file": "view-cloud-7.png"
+    },
+    {
+     "key": "cloud/8",
+     "name": "Under the bridge",
+     "file": "view-cloud-8.png"
+    },
+    {
+     "key": "cloud/9",
+     "name": "Bus station platform",
+     "file": "view-cloud-9.png"
+    },
+    {
+     "key": "cloud/10",
+     "name": "Bus station forecourt",
+     "file": "view-cloud-10.png"
+    },
+    {
+     "key": "cloud/11",
+     "name": "Bus station overview",
+     "file": "view-cloud-11.png"
+    },
+    {
+     "key": "cloud/12",
+     "name": "On foot at the bus station",
+     "file": "view-cloud-12.png"
+    },
+    {
+     "key": "cloud/13",
+     "name": "Riding the bus",
+     "file": "view-cloud-13.png"
+    },
+    {
+     "key": "cloud/14",
+     "name": "Spire lobby (on foot)",
+     "file": "view-cloud-14.png"
+    },
+    {
+     "key": "cloud/15",
+     "name": "Spire sky lobby (on foot)",
+     "file": "view-cloud-15.png"
+    },
+    {
+     "key": "cloud/16",
+     "name": "Spire observation deck (on foot)",
+     "file": "view-cloud-16.png"
+    },
+    {
+     "key": "cloud/17",
+     "name": "Spire from the plaza",
+     "file": "view-cloud-17.png"
+    },
+    {
+     "key": "cloud/18",
+     "name": "Spire above the clouds",
+     "file": "view-cloud-18.png"
+    },
+    {
+     "key": "cloud/19.0",
+     "name": "Bus 7",
+     "file": "view-cloud-19.0.png"
+    },
+    {
+     "key": "cloud/19.1",
+     "name": "Bus 7 #2",
+     "file": "view-cloud-19.1.png"
+    },
+    {
+     "key": "cloud/19.2",
+     "name": "Bus 7 #3",
+     "file": "view-cloud-19.2.png"
+    },
+    {
+     "key": "cloud/19.3",
+     "name": "Bus 7 #4",
+     "file": "view-cloud-19.3.png"
+    },
+    {
+     "key": "cloud/19.4",
+     "name": "Bus 7 #5",
+     "file": "view-cloud-19.4.png"
+    },
+    {
+     "key": "cloud/20",
+     "name": "Shelf cloud",
+     "file": "view-cloud-20.png"
+    },
+    {
+     "key": "cloud/21",
+     "name": "Mothership",
+     "file": "view-cloud-21.png"
+    },
+    {
+     "key": "cloud/22",
+     "name": "Hurricane eye",
+     "file": "view-cloud-22.png"
+    },
+    {
+     "key": "cloud/23",
+     "name": "Hurricane from above",
+     "file": "view-cloud-23.png"
+    }
+   ],
+   "counts": {
+    "Renderer": 2,
+    "App": 1,
+    "World": 1
+   },
+   "submitsPerFrame": [
+    1,
+    1
+   ],
+   "writesPerFrame": [
+    4,
+    4
+   ],
+   "kits": [
+    "atmosphere",
+    "building",
+    "curvature",
+    "gpu",
+    "gui",
+    "interior",
+    "mesh",
+    "noise",
+    "settlement",
+    "terrain",
+    "transit",
+    "view",
+    "weather",
+    "world"
+   ],
+   "noise": 0,
+   "noiseMax": 0,
+   "noiseByView": {},
+   "errors": [],
+   "warnings": []
+  },
+  "cloud-oahu": {
+   "views": [
+    {
+     "key": "start",
+     "name": "start",
+     "file": "start.png"
+    },
+    {
+     "key": "cloud/0",
+     "name": "Island from the south (airliner)",
+     "file": "view-cloud-0.png"
+    },
+    {
+     "key": "cloud/1",
+     "name": "Waikīkī Beach",
+     "file": "view-cloud-1.png"
+    },
+    {
+     "key": "cloud/2",
+     "name": "Kalākaua Avenue on foot",
+     "file": "view-cloud-2.png"
+    },
+    {
+     "key": "cloud/3",
+     "name": "By the bus on Kalākaua Avenue",
+     "file": "view-cloud-3.png"
+    },
+    {
+     "key": "cloud/4",
+     "name": "Driving the bus on Kalākaua Avenue",
+     "file": "view-cloud-4.png"
+    },
+    {
+     "key": "cloud/5",
+     "name": "Diamond Head summit",
+     "file": "view-cloud-5.png"
+    },
+    {
+     "key": "cloud/6",
+     "name": "Downtown Honolulu",
+     "file": "view-cloud-6.png"
+    },
+    {
+     "key": "cloud/7",
+     "name": "Honolulu from above",
+     "file": "view-cloud-7.png"
+    },
+    {
+     "key": "cloud/8",
+     "name": "Nuʻuanu Pali Lookout",
+     "file": "view-cloud-8.png"
+    },
+    {
+     "key": "cloud/9",
+     "name": "H-3 over North Hālawa Valley",
+     "file": "view-cloud-9.png"
+    },
+    {
+     "key": "cloud/10",
+     "name": "Koʻolau windward cliffs",
+     "file": "view-cloud-10.png"
+    },
+    {
+     "key": "cloud/11",
+     "name": "Hanauma Bay",
+     "file": "view-cloud-11.png"
+    },
+    {
+     "key": "cloud/12",
+     "name": "Makapuʻu Point",
+     "file": "view-cloud-12.png"
+    },
+    {
+     "key": "cloud/13",
+     "name": "Kualoa and Mokoliʻi",
+     "file": "view-cloud-13.png"
+    },
+    {
+     "key": "cloud/14",
+     "name": "Waimea Bay",
+     "file": "view-cloud-14.png"
+    },
+    {
+     "key": "cloud/15",
+     "name": "Kaʻena Point",
+     "file": "view-cloud-15.png"
+    },
+    {
+     "key": "cloud/16",
+     "name": "Kaʻala summit",
+     "file": "view-cloud-16.png"
+    },
+    {
+     "key": "cloud/17",
+     "name": "Pearl Harbor from above",
+     "file": "view-cloud-17.png"
+    },
+    {
+     "key": "cloud/18",
+     "name": "Kona storm over Honolulu",
+     "file": "view-cloud-18.png"
+    },
+    {
+     "key": "cloud/19",
+     "name": "Sunset off Waiʻanae",
+     "file": "view-cloud-19.png"
+    }
+   ],
+   "counts": {
+    "Renderer": 2,
+    "App": 1,
+    "World": 1
+   },
+   "submitsPerFrame": [
+    1,
+    1
+   ],
+   "writesPerFrame": [
+    5,
+    5
+   ],
+   "kits": [
+    "atmosphere",
+    "building",
+    "curvature",
+    "geo",
+    "gpu",
+    "gui",
+    "imposter",
+    "interior",
+    "mesh",
+    "noise",
+    "settlement",
+    "terrain",
+    "transit",
+    "view",
+    "weather",
+    "world"
+   ],
+   "noise": 0,
+   "noiseMax": 0,
+   "noiseByView": {},
+   "errors": [],
+   "warnings": []
+  },
+  "water-riverlands": {
+   "views": [
+    {
+     "key": "start",
+     "name": "start",
+     "file": "start.png"
+    },
+    {
+     "key": "water/0",
+     "name": "Overview",
+     "file": "view-water-0.png"
+    },
+    {
+     "key": "water/1",
+     "name": "Dam & lake",
+     "file": "view-water-1.png"
+    },
+    {
+     "key": "water/2",
+     "name": "Upper river",
+     "file": "view-water-2.png"
+    },
+    {
+     "key": "water/3",
+     "name": "Delta",
+     "file": "view-water-3.png"
+    },
+    {
+     "key": "water/4",
+     "name": "Lake shore",
+     "file": "view-water-4.png"
+    }
+   ],
+   "counts": {
+    "Renderer": 2,
+    "App": 1,
+    "World": 1
+   },
+   "submitsPerFrame": [
+    1,
+    1
+   ],
+   "writesPerFrame": [
+    4,
+    6
+   ],
+   "kits": [
+    "gpu",
+    "gui",
+    "hydrology",
+    "noise",
+    "terrain",
+    "view",
+    "world"
+   ],
+   "noise": 0,
+   "noiseMax": 0,
+   "noiseByView": {},
+   "errors": [],
+   "warnings": []
+  },
+  "origin-sol-transit": {
+   "views": [
+    {
+     "key": "start",
+     "name": "start",
+     "file": "start.png"
+    },
+    {
+     "key": "origin/0",
+     "name": "Gateway Station, low Earth orbit",
+     "file": "view-origin-0.png"
+    },
+    {
+     "key": "origin/1",
+     "name": "Shackleton Base, Moon surface",
+     "file": "view-origin-1.png"
+    },
+    {
+     "key": "origin/2",
+     "name": "Kuiper Outpost, Neptune orbit (4.5e12 m out)",
+     "file": "view-origin-2.png"
+    },
+    {
+     "key": "origin/3",
+     "name": "Saturn ringlet",
+     "file": "view-origin-3.png"
+    },
+    {
+     "key": "origin/4",
+     "name": "Earth and Moon",
+     "file": "view-origin-4.png"
+    },
+    {
+     "key": "origin/5",
+     "name": "The Sun",
+     "file": "view-origin-5.png"
+    },
+    {
+     "key": "origin/6",
+     "name": "Solar system overview",
+     "file": "view-origin-6.png"
+    }
+   ],
+   "counts": {
+    "Renderer": 2,
+    "App": 1,
+    "World": 1
+   },
+   "submitsPerFrame": [
+    1,
+    1
+   ],
+   "writesPerFrame": [
+    7,
+    8
+   ],
+   "kits": [
+    "entities",
+    "gpu",
+    "gui",
+    "mesh",
+    "noise",
+    "view",
+    "world"
+   ],
+   "noise": 0,
+   "noiseMax": 0,
+   "noiseByView": {},
+   "errors": [],
+   "warnings": []
+  },
+  "imposter-valley": {
+   "views": [
+    {
+     "key": "start",
+     "name": "start",
+     "file": "start.png"
+    },
+    {
+     "key": "imposter/0",
+     "name": "Start",
+     "file": "view-imposter-0.png"
+    },
+    {
+     "key": "imposter/1",
+     "name": "Mesh vs imposter",
+     "file": "view-imposter-1.png"
+    },
+    {
+     "key": "imposter/2",
+     "name": "Showcase",
+     "file": "view-imposter-2.png"
+    },
+    {
+     "key": "imposter/3",
+     "name": "Over the village",
+     "file": "view-imposter-3.png"
+    },
+    {
+     "key": "imposter/4",
+     "name": "Forest edge",
+     "file": "view-imposter-4.png"
+    },
+    {
+     "key": "imposter/5",
+     "name": "Valley overview",
+     "file": "view-imposter-5.png"
+    }
+   ],
+   "counts": {
+    "Renderer": 2,
+    "App": 1,
+    "World": 1
+   },
+   "submitsPerFrame": [
+    1,
+    1
+   ],
+   "writesPerFrame": [
+    79,
+    88
+   ],
+   "kits": [
+    "entities",
+    "gpu",
+    "gui",
+    "imposter",
+    "mesh",
+    "noise",
+    "terrain",
+    "view",
+    "world"
+   ],
+   "noise": 0.043972222222222225,
+   "noiseMax": 17,
+   "noiseByView": {
+    "start.png": {
+     "frac": 0.031015625,
+     "max": 12
+    },
+    "view-imposter-0.png": {
+     "frac": 0.030725694444444444,
+     "max": 17
+    },
+    "view-imposter-1.png": {
+     "frac": 0.043972222222222225,
+     "max": 11
+    },
+    "view-imposter-2.png": {
+     "frac": 0.020857638888888887,
+     "max": 10
+    },
+    "view-imposter-3.png": {
+     "frac": 0.019307291666666667,
+     "max": 2
+    },
+    "view-imposter-4.png": {
+     "frac": 0.016131944444444445,
+     "max": 2
+    },
+    "view-imposter-5.png": {
+     "frac": 0.0019479166666666666,
+     "max": 1
+    }
+   },
+   "errors": [],
+   "warnings": []
+  },
+  "portal-bunker-compound": {
+   "views": [
+    {
+     "key": "start",
+     "name": "start",
+     "file": "start.png"
+    },
+    {
+     "key": "portal/0",
+     "name": "Outside the bunker",
+     "file": "view-portal-0.png"
+    },
+    {
+     "key": "portal/1",
+     "name": "Compound overview",
+     "file": "view-portal-1.png"
+    },
+    {
+     "key": "portal/2",
+     "name": "Entrance Hall",
+     "file": "view-portal-2.png"
+    },
+    {
+     "key": "portal/3",
+     "name": "Control Room",
+     "file": "view-portal-3.png"
+    },
+    {
+     "key": "portal/4",
+     "name": "Loft",
+     "file": "view-portal-4.png"
+    },
+    {
+     "key": "portal/5",
+     "name": "Atrium",
+     "file": "view-portal-5.png"
+    },
+    {
+     "key": "portal/6",
+     "name": "Storage",
+     "file": "view-portal-6.png"
+    },
+    {
+     "key": "portal/7",
+     "name": "Brick Shed",
+     "file": "view-portal-7.png"
+    },
+    {
+     "key": "portal/8",
+     "name": "Generator Room",
+     "file": "view-portal-8.png"
+    },
+    {
+     "key": "portal/9",
+     "name": "Basement Hall",
+     "file": "view-portal-9.png"
+    },
+    {
+     "key": "portal/10",
+     "name": "Vault",
+     "file": "view-portal-10.png"
+    },
+    {
+     "key": "portal/11",
+     "name": "Barracks",
+     "file": "view-portal-11.png"
+    },
+    {
+     "key": "portal/12",
+     "name": "Barracks quarters",
+     "file": "view-portal-12.png"
+    }
+   ],
+   "counts": {
+    "Renderer": 2,
+    "App": 1,
+    "World": 1
+   },
+   "submitsPerFrame": [
+    1,
+    1
+   ],
+   "writesPerFrame": [
+    5,
+    5
+   ],
+   "kits": [
+    "building",
+    "entities",
+    "gpu",
+    "gui",
+    "interior",
+    "media",
+    "mesh",
+    "noise",
+    "transit",
+    "view",
+    "world"
+   ],
+   "noise": 0.0002690972222222222,
+   "noiseMax": 29,
+   "noiseByView": {
+    "view-portal-1.png": {
+     "frac": 0.00002604166666666667,
+     "max": 14
+    },
+    "view-portal-2.png": {
+     "frac": 0.00002604166666666667,
+     "max": 29
+    },
+    "view-portal-3.png": {
+     "frac": 0.00009027777777777777,
+     "max": 29
+    },
+    "view-portal-4.png": {
+     "frac": 0.00002604166666666667,
+     "max": 26
+    },
+    "view-portal-5.png": {
+     "frac": 0.00002604166666666667,
+     "max": 23
+    },
+    "view-portal-8.png": {
+     "frac": 0.0002690972222222222,
+     "max": 26
+    },
+    "view-portal-9.png": {
+     "frac": 0.00002604166666666667,
+     "max": 28
+    },
+    "view-portal-11.png": {
+     "frac": 0.00002604166666666667,
+     "max": 13
+    }
+   },
+   "errors": [],
+   "warnings": []
+  },
+  "gui-stress": {
+   "views": [
+    {
+     "key": "start",
+     "name": "start",
+     "file": "start.png"
+    },
+    {
+     "key": "gui/0",
+     "name": "2 m",
+     "file": "view-gui-0.png"
+    },
+    {
+     "key": "gui/1",
+     "name": "4 m",
+     "file": "view-gui-1.png"
+    },
+    {
+     "key": "gui/2",
+     "name": "8 m",
+     "file": "view-gui-2.png"
+    },
+    {
+     "key": "gui/3",
+     "name": "16 m",
+     "file": "view-gui-3.png"
+    },
+    {
+     "key": "gui/4",
+     "name": "32 m",
+     "file": "view-gui-4.png"
+    },
+    {
+     "key": "gui/5",
+     "name": "64 m",
+     "file": "view-gui-5.png"
+    },
+    {
+     "key": "gui/6",
+     "name": "128 m",
+     "file": "view-gui-6.png"
+    },
+    {
+     "key": "gui/7",
+     "name": "256 m",
+     "file": "view-gui-7.png"
+    },
+    {
+     "key": "gui/8",
+     "name": "512 m",
+     "file": "view-gui-8.png"
+    }
+   ],
+   "counts": {
+    "Renderer": 2,
+    "App": 1,
+    "World": 1
+   },
+   "submitsPerFrame": [
+    1,
+    1
+   ],
+   "writesPerFrame": [
+    3,
+    8
+   ],
+   "kits": [
+    "entities",
+    "gpu",
+    "gui",
+    "interior",
+    "media",
+    "mesh",
+    "noise",
+    "view",
+    "world"
+   ],
+   "noise": 0,
+   "noiseMax": 0,
+   "noiseByView": {},
+   "errors": [],
+   "warnings": []
+  },
+  "gui-swarm": {
+   "views": [
+    {
+     "key": "start",
+     "name": "start",
+     "file": "start.png"
+    },
+    {
+     "key": "gui/0",
+     "name": "Overview",
+     "file": "view-gui-0.png"
+    },
+    {
+     "key": "gui/1",
+     "name": "Plaza ring",
+     "file": "view-gui-1.png"
+    },
+    {
+     "key": "gui/2",
+     "name": "Plaza from outside",
+     "file": "view-gui-2.png"
+    },
+    {
+     "key": "gui/3",
+     "name": "Video wall",
+     "file": "view-gui-3.png"
+    },
+    {
+     "key": "gui/4",
+     "name": "Video wall, close",
+     "file": "view-gui-4.png"
+    },
+    {
+     "key": "gui/5",
+     "name": "Swarm",
+     "file": "view-gui-5.png"
+    },
+    {
+     "key": "gui/6",
+     "name": "Inside the swarm",
+     "file": "view-gui-6.png"
+    },
+    {
+     "key": "gui/7",
+     "name": "Overlap stack",
+     "file": "view-gui-7.png"
+    },
+    {
+     "key": "gui/8",
+     "name": "Overlap stack, grazing",
+     "file": "view-gui-8.png"
+    },
+    {
+     "key": "gui/9",
+     "name": "Easel gallery",
+     "file": "view-gui-9.png"
+    },
+    {
+     "key": "gui/10",
+     "name": "Giant x16",
+     "file": "view-gui-10.png"
+    },
+    {
+     "key": "gui/11",
+     "name": "Giants",
+     "file": "view-gui-11.png"
+    }
+   ],
+   "counts": {
+    "Renderer": 2,
+    "App": 1,
+    "World": 1
+   },
+   "submitsPerFrame": [
+    1,
+    1
+   ],
+   "writesPerFrame": [
+    7,
+    90
+   ],
+   "kits": [
+    "entities",
+    "gpu",
+    "gui",
+    "interior",
+    "media",
+    "mesh",
+    "noise",
+    "paint",
+    "view",
+    "world"
+   ],
+   "noise": 0.00006770833333333333,
+   "noiseMax": 5,
+   "noiseByView": {
+    "view-gui-2.png": {
+     "frac": 0.0000017361111111111112,
+     "max": 1
+    },
+    "view-gui-8.png": {
+     "frac": 0.000005208333333333333,
+     "max": 5
+    },
+    "view-gui-9.png": {
+     "frac": 0.00006770833333333333,
+     "max": 1
+    }
+   },
+   "errors": [],
+   "warnings": []
+  },
+  "gui-sector-07": {
+   "views": [
+    {
+     "key": "start",
+     "name": "start",
+     "file": "start.png"
+    },
+    {
+     "key": "gui/0",
+     "name": "Start",
+     "file": "view-gui-0.png"
+    },
+    {
+     "key": "gui/1",
+     "name": "Ops terminal",
+     "file": "view-gui-1.png"
+    },
+    {
+     "key": "gui/2",
+     "name": "Hatch B",
+     "file": "view-gui-2.png"
+    },
+    {
+     "key": "gui/3",
+     "name": "Storage bay",
+     "file": "view-gui-3.png"
+    },
+    {
+     "key": "gui/4",
+     "name": "Main hall",
+     "file": "view-gui-4.png"
+    },
+    {
+     "key": "gui/5",
+     "name": "Lamp rig",
+     "file": "view-gui-5.png"
+    }
+   ],
+   "counts": {
+    "Renderer": 2,
+    "App": 1,
+    "World": 1
+   },
+   "submitsPerFrame": [
+    2,
+    2
+   ],
+   "writesPerFrame": [
+    4,
+    5
+   ],
+   "kits": [
+    "entities",
+    "gpu",
+    "gui",
+    "interior",
+    "media",
+    "mesh",
+    "noise",
+    "paint",
+    "view",
+    "world"
+   ],
+   "noise": 0,
+   "noiseMax": 0,
+   "noiseByView": {},
+   "errors": [],
+   "warnings": []
+  }
+ },
+ "browser": "Chrome/155.0.8059.85",
+ "size": [
+  960,
+  600
+ ],
+ "frames": 40,
+ "viewFrames": 20,
+ "runs": 3,
+ "query": []
+}

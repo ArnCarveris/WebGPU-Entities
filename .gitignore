@@ -1,0 +1,4 @@
+# the pixel harness's captures (tools/pixel-harness.mjs record): GPU- and machine-specific, kept beside the checkout;
+# its manifest.json (counters, kits, noise) and the format goldens are tracked
+/baselines/*/
+!/baselines/format/

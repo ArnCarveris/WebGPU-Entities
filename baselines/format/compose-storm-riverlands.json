@@ -1,0 +1,4468 @@
+{
+ "sky": {
+  "type": "cloud",
+  "kits": [
+   "terrain",
+   "curvature",
+   "atmosphere",
+   "weather",
+   "world",
+   "settlement",
+   "interior",
+   "building",
+   "transit"
+  ],
+  "features": [
+   "curvature",
+   "structures",
+   "buses"
+  ],
+  "native": {
+   "name": "High Plains",
+   "terrain": {
+    "size": 64000,
+    "resolution": 512,
+    "base": 1500,
+    "fieldSize": 805,
+    "pivots": 0.22
+   },
+   "curvature": {
+    "radius": 6371000
+   },
+   "render": {
+    "quality": 1,
+    "shapeScale": 8000,
+    "detailScale": 1400,
+    "detailStrength": 0.5,
+    "maxTop": 12500,
+    "maxDistance": 60000,
+    "weatherSize": 128000,
+    "rainExtinction": 0.0024,
+    "snowExtinction": 0.0036,
+    "slant": 0.05,
+    "fallSpeed": 40,
+    "timeScale": 20,
+    "particles": 24000,
+    "gui": {
+     "$comment": "world-space GUIs (the lift panels): world-space while the stencil has a value free, else render targets",
+     "mode": "auto",
+     "max": 16,
+     "rtMax": 512,
+     "glass": [
+      0.004,
+      0.005,
+      0.006
+     ]
+    },
+    "radar": false
+   },
+   "weather": {
+    "start": "showers",
+    "transition": 12,
+    "cycle": {
+     "enabled": false,
+     "hold": 45
+    },
+    "states": {
+     "clear": {
+      "coverage": 0.04,
+      "base": 3600,
+      "top": 4300,
+      "density": 0.06,
+      "cirrus": 0.4,
+      "wind": [
+       6,
+       -2
+      ],
+      "temperature": 24,
+      "haze": 0.6,
+      "drizzle": 0,
+      "storms": 0,
+      "power": 1,
+      "lightning": 0
+     },
+     "fair cumulus": {
+      "coverage": 0.36,
+      "base": 3800,
+      "top": 5200,
+      "density": 0.07,
+      "cirrus": 0.15,
+      "wind": [
+       8,
+       -3
+      ],
+      "layers": {
+       "altocumulus": 0.1
+      },
+      "temperature": 24,
+      "haze": 0.8,
+      "drizzle": 0,
+      "storms": 0.2,
+      "power": 0.5,
+      "lightning": 0
+     },
+     "mackerel sky": {
+      "coverage": 0.1,
+      "base": 3800,
+      "top": 4800,
+      "density": 0.06,
+      "cirrus": 0.5,
+      "wind": [
+       10,
+       -2
+      ],
+      "layers": {
+       "altocumulus": 0.75
+      },
+      "temperature": 20,
+      "haze": 0.7,
+      "drizzle": 0,
+      "storms": 0,
+      "power": 0.5,
+      "lightning": 0
+     },
+     "warm front": {
+      "coverage": 0.08,
+      "base": 3400,
+      "top": 4400,
+      "density": 0.06,
+      "cirrus": 0.75,
+      "wind": [
+       11,
+       3
+      ],
+      "layers": {
+       "altostratus": 0.85,
+       "altocumulus": 0.2,
+       "nimbostratus": 0.2
+      },
+      "temperature": 15,
+      "haze": 1.2,
+      "drizzle": 0,
+      "storms": 0.1,
+      "power": 0.6,
+      "lightning": 0
+     },
+     "stratus deck": {
+      "coverage": 0.04,
+      "base": 2600,
+      "top": 3400,
+      "density": 0.06,
+      "cirrus": 0,
+      "wind": [
+       4,
+       2
+      ],
+      "layers": {
+       "stratus": 0.95
+      },
+      "temperature": 12,
+      "haze": 1.8,
+      "drizzle": 0,
+      "storms": 0,
+      "power": 0.5,
+      "lightning": 0
+     },
+     "showers": {
+      "coverage": 0.3,
+      "base": 4100,
+      "top": 6000,
+      "density": 0.08,
+      "cirrus": 0.25,
+      "wind": [
+       9,
+       -4
+      ],
+      "layers": {
+       "altocumulus": 0.15
+      },
+      "temperature": 22,
+      "haze": 1,
+      "drizzle": 0,
+      "storms": 1,
+      "power": 1,
+      "lightning": 0.4
+     },
+     "thunderstorm": {
+      "coverage": 0.48,
+      "base": 3700,
+      "top": 6200,
+      "density": 0.09,
+      "cirrus": 0.5,
+      "wind": [
+       12,
+       -5
+      ],
+      "layers": {
+       "altostratus": 0.2
+      },
+      "temperature": 24,
+      "haze": 1.2,
+      "drizzle": 0,
+      "storms": 2.2,
+      "power": 1.4,
+      "lightning": 1.6
+     },
+     "snow squalls": {
+      "coverage": 0.5,
+      "base": 2700,
+      "top": 4800,
+      "density": 0.08,
+      "cirrus": 0.1,
+      "wind": [
+       14,
+       4
+      ],
+      "layers": {
+       "stratus": 0.3,
+       "altostratus": 0.4
+      },
+      "temperature": 4,
+      "haze": 0.9,
+      "drizzle": 0.12,
+      "storms": 1.6,
+      "power": 1.1,
+      "lightning": 0
+     },
+     "overcast rain": {
+      "coverage": 0.25,
+      "base": 2500,
+      "top": 4300,
+      "density": 0.06,
+      "cirrus": 0,
+      "wind": [
+       7,
+       -6
+      ],
+      "layers": {
+       "nimbostratus": 0.95,
+       "stratus": 0.45
+      },
+      "temperature": 16,
+      "haze": 1.6,
+      "drizzle": 0.2,
+      "storms": 0.3,
+      "power": 0.8,
+      "lightning": 0.1
+     },
+     "severe storms": {
+      "coverage": 0.5,
+      "base": 3600,
+      "top": 6200,
+      "density": 0.09,
+      "cirrus": 0.2,
+      "wind": [
+       12,
+       -4
+      ],
+      "layers": {
+       "altostratus": 0.75
+      },
+      "temperature": 25,
+      "haze": 0.7,
+      "drizzle": 0,
+      "storms": 1.5,
+      "power": 1.4,
+      "lightning": 2
+     },
+     "drizzle": {
+      "coverage": 0.04,
+      "base": 2600,
+      "top": 3300,
+      "density": 0.06,
+      "cirrus": 0,
+      "wind": [
+       3,
+       -1
+      ],
+      "layers": {
+       "stratus": 1,
+       "nimbostratus": 0.25
+      },
+      "temperature": 12,
+      "haze": 2.2,
+      "drizzle": 0,
+      "storms": 0,
+      "power": 0.5,
+      "lightning": 0,
+      "rain": 0.8,
+      "drops": 0
+     },
+     "light rain": {
+      "coverage": 0.1,
+      "base": 2500,
+      "top": 3800,
+      "density": 0.06,
+      "cirrus": 0,
+      "wind": [
+       4,
+       -3
+      ],
+      "layers": {
+       "nimbostratus": 0.85,
+       "stratus": 0.35
+      },
+      "temperature": 14,
+      "haze": 1.5,
+      "drizzle": 0,
+      "storms": 0,
+      "power": 0.5,
+      "lightning": 0,
+      "rain": 0.38,
+      "drops": 0.35
+     },
+     "medium rain": {
+      "coverage": 0.15,
+      "base": 2500,
+      "top": 4000,
+      "density": 0.06,
+      "cirrus": 0,
+      "wind": [
+       5,
+       -3
+      ],
+      "layers": {
+       "nimbostratus": 0.95,
+       "stratus": 0.45
+      },
+      "temperature": 15,
+      "haze": 1.7,
+      "drizzle": 0,
+      "storms": 0.2,
+      "power": 0.7,
+      "lightning": 0,
+      "rain": 1,
+      "drops": 0.6
+     },
+     "downpour": {
+      "coverage": 0.3,
+      "base": 2300,
+      "top": 4600,
+      "density": 0.07,
+      "cirrus": 0,
+      "wind": [
+       6,
+       -4
+      ],
+      "layers": {
+       "nimbostratus": 1,
+       "stratus": 0.6
+      },
+      "temperature": 18,
+      "haze": 2,
+      "drizzle": 0,
+      "storms": 0.4,
+      "power": 1.2,
+      "lightning": 0.2,
+      "rain": 2.6,
+      "drops": 1
+     },
+     "mixed rain": {
+      "coverage": 0.12,
+      "base": 2500,
+      "top": 4000,
+      "density": 0.06,
+      "cirrus": 0,
+      "wind": [
+       5,
+       -3
+      ],
+      "layers": {
+       "nimbostratus": 0.95,
+       "stratus": 0.45
+      },
+      "temperature": 15,
+      "haze": 1.7,
+      "drizzle": 0,
+      "storms": 0,
+      "power": 0.7,
+      "lightning": 0,
+      "rain": 0.38,
+      "drops": 0.35,
+      "zones": {
+       "along": "bus",
+       "variants": [
+        "drizzle",
+        "light rain",
+        "medium rain",
+        "downpour"
+       ],
+       "length": 1200,
+       "hold": [
+        40,
+        100
+       ],
+       "dry": {
+        "state": "clear",
+        "count": 2
+       }
+      }
+     }
+    }
+   },
+   "lighting": {
+    "start": "afternoon",
+    "presets": {
+     "storm dusk": {
+      "azimuth": 272,
+      "elevation": 3,
+      "intensity": 11,
+      "exposure": 0.7
+     },
+     "afternoon": {
+      "azimuth": 62,
+      "elevation": 14,
+      "intensity": 12,
+      "exposure": 0.44
+     },
+     "noon": {
+      "azimuth": 170,
+      "elevation": 62,
+      "intensity": 12,
+      "exposure": 0.36
+     },
+     "golden": {
+      "azimuth": 285,
+      "elevation": 7,
+      "intensity": 11,
+      "exposure": 0.55
+     },
+     "morning": {
+      "azimuth": 95,
+      "elevation": 14,
+      "intensity": 11,
+      "exposure": 0.48
+     },
+     "full moon": {
+      "azimuth": 160,
+      "elevation": 40,
+      "intensity": 2.4,
+      "exposure": 0.32,
+      "moon": 1
+     },
+     "moonrise": {
+      "azimuth": 100,
+      "elevation": 5,
+      "intensity": 2.2,
+      "exposure": 0.9,
+      "moon": 0.97
+     },
+     "half moon": {
+      "azimuth": 215,
+      "elevation": 30,
+      "intensity": 1.3,
+      "exposure": 0.65,
+      "moon": 0.5
+     },
+     "crescent": {
+      "azimuth": 255,
+      "elevation": 12,
+      "intensity": 0.6,
+      "exposure": 1.6,
+      "moon": 0.18
+     }
+    }
+   },
+   "hurricane": {
+    "pos": [
+     2000,
+     -8000
+    ]
+   },
+   "streetLights": {
+    "radius": 4000,
+    "density": 0.95
+   },
+   "buildings": {
+    "house": {
+     "storeyHeight": 2.8,
+     "plinth": 0.35,
+     "wall": 0.25,
+     "slab": 0.22,
+     "window": {
+      "width": 1.1,
+      "height": 1.25,
+      "sill": 0.9,
+      "pitch": 3.2
+     },
+     "door": {
+      "width": 1,
+      "height": 2.1,
+      "color": "door"
+     },
+     "stairs": {
+      "width": 0.95
+     },
+     "furnish": "home",
+     "lamps": 0.5,
+     "porch": 0.6,
+     "shelter": true,
+     "inner": [
+      0.84,
+      0.8,
+      0.72
+     ],
+     "floorColor": [
+      0.4,
+      0.28,
+      0.18
+     ],
+     "ceiling": [
+      0.9,
+      0.89,
+      0.86
+     ]
+    },
+    "terminal": {
+     "storeyHeight": 3.8,
+     "plinth": 0.15,
+     "wall": 0.3,
+     "slab": 0.3,
+     "window": {
+      "width": 2.2,
+      "height": 2.1,
+      "sill": 0.8,
+      "pitch": 3.4
+     },
+     "door": {
+      "width": 1.6,
+      "height": 2.4,
+      "color": "metal"
+     },
+     "stairs": {
+      "width": 1.4
+     },
+     "furnish": "hall",
+     "lamps": 1,
+     "porch": 1,
+     "shelter": true,
+     "inner": [
+      0.8,
+      0.79,
+      0.75
+     ],
+     "floorColor": [
+      0.52,
+      0.5,
+      0.46
+     ],
+     "ceiling": [
+      0.88,
+      0.88,
+      0.86
+     ],
+     "plan": "terminal"
+    },
+    "block": {
+     "storeyHeight": 3.3,
+     "plinth": 0.3,
+     "wall": 0.3,
+     "slab": 0.25,
+     "window": {
+      "width": 1.6,
+      "height": 1.6,
+      "sill": 0.9,
+      "pitch": 3.6
+     },
+     "door": {
+      "width": 1.2,
+      "height": 2.3,
+      "color": "metal"
+     },
+     "stairs": {
+      "width": 1.2
+     },
+     "furnish": "office",
+     "lamps": 0.6,
+     "porch": 1,
+     "shelter": true,
+     "inner": [
+      0.82,
+      0.82,
+      0.8
+     ],
+     "floorColor": [
+      0.38,
+      0.4,
+      0.42
+     ],
+     "ceiling": [
+      0.9,
+      0.9,
+      0.88
+     ],
+     "plan": "office-block"
+    },
+    "kiosk": {
+     "storeyHeight": 2.4,
+     "plinth": 0,
+     "wall": 0.08,
+     "slab": 0.1,
+     "window": {
+      "width": 1.5,
+      "height": 1.25,
+      "sill": 0.95,
+      "pitch": 1.75
+     },
+     "door": {
+      "width": 0.9,
+      "height": 2.1,
+      "color": "metal"
+     },
+     "stairs": false,
+     "furnish": "kiosk",
+     "lamps": 1,
+     "porch": 0,
+     "shelter": true,
+     "inner": [
+      0.78,
+      0.78,
+      0.74
+     ],
+     "floorColor": [
+      0.3,
+      0.31,
+      0.3
+     ],
+     "ceiling": [
+      0.86,
+      0.86,
+      0.84
+     ]
+    },
+    "tower": {
+     "storeyHeight": 4,
+     "plinth": 0.2,
+     "wall": 0.35,
+     "slab": 0.35,
+     "window": {
+      "width": 2.75,
+      "height": 3.05,
+      "sill": 0.3,
+      "pitch": 3
+     },
+     "door": {
+      "width": 2,
+      "height": 3,
+      "color": "metal"
+     },
+     "stairs": {
+      "width": 1.3
+     },
+     "furnish": "office",
+     "lamps": 0.9,
+     "porch": 1,
+     "shelter": true,
+     "inner": [
+      0.9,
+      0.89,
+      0.86
+     ],
+     "floorColor": [
+      0.05,
+      0.05,
+      0.06
+     ],
+     "ceiling": [
+      0.8,
+      0.86,
+      0.93
+     ],
+     "lobbyFloor": [
+      0.9,
+      0.9,
+      0.89
+     ],
+     "curtain": true,
+     "style": {
+      "$comment": "Mirror's Edge: white walls and ceilings, a dark glossy floor, each kind of room colour-coded by an accent wall; every colour where two surfaces meet is picked to stand out from both (frames, doors, skirting, furniture)",
+      "accents": {
+       "office": [
+        0.93,
+        0.4,
+        0.08
+       ],
+       "open": [
+        0.93,
+        0.4,
+        0.08
+       ],
+       "meeting": [
+        0.8,
+        0.1,
+        0.09
+       ],
+       "kitchen": [
+        0.45,
+        0.78,
+        0.12
+       ],
+       "wc": [
+        0.1,
+        0.42,
+        0.82
+       ],
+       "server": [
+        0.1,
+        0.42,
+        0.82
+       ],
+       "store": [
+        0.95,
+        0.74,
+        0.08
+       ],
+       "plant": [
+        0.95,
+        0.74,
+        0.08
+       ],
+       "lobby": [
+        0.45,
+        0.78,
+        0.12
+       ],
+       "sky": {
+        "wall": [
+         0.62,
+         0.18,
+         0.72
+        ],
+        "ceiling": [
+         0.97,
+         0.8,
+         0.08
+        ]
+       },
+       "deck": [
+        0.62,
+        0.18,
+        0.72
+       ]
+      },
+      "floor": {
+       "color": [
+        0.05,
+        0.05,
+        0.06
+       ],
+       "gloss": true,
+       "inlay": {
+        "margin": 0.8,
+        "min": 3.2,
+        "max": 9,
+        "tile": 3,
+        "gap": 1.4,
+        "border": 0.12,
+        "colors": [
+         [
+          0.22,
+          0.22,
+          0.24
+         ],
+         [
+          0.86,
+          0.86,
+          0.85
+         ],
+         [
+          0.45,
+          0.78,
+          0.12
+         ],
+         [
+          0.93,
+          0.4,
+          0.08
+         ],
+         [
+          0.1,
+          0.42,
+          0.82
+         ]
+        ]
+       },
+       "stripe": {
+        "width": 0.24,
+        "colors": [
+         [
+          0.45,
+          0.78,
+          0.12
+         ]
+        ]
+       }
+      },
+      "ceiling": {
+       "soffit": {
+        "width": 0.5,
+        "drop": 0.16,
+        "colors": [
+         [
+          0.62,
+          0.63,
+          0.65
+         ],
+         [
+          0.32,
+          0.33,
+          0.35
+         ]
+        ]
+       },
+       "guide": {
+        "width": 0.4,
+        "color": [
+         [
+          0.45,
+          0.78,
+          0.12
+         ],
+         [
+          0.86,
+          0.87,
+          0.88
+         ]
+        ]
+       },
+       "entrance": {
+        "length": 1.6
+       }
+      },
+      "lift": {
+       "car": [
+        0.45,
+        0.85,
+        0.1
+       ],
+       "floor": [
+        0.84,
+        0.9,
+        0.9
+       ],
+       "trim": [
+        0.74,
+        0.76,
+        0.78
+       ],
+       "rail": [
+        0.3,
+        0.31,
+        0.33
+       ],
+       "seam": [
+        0.16,
+        0.32,
+        0.05
+       ],
+       "roof": [
+        0.9,
+        0.9,
+        0.9
+       ],
+       "door": [
+        0.72,
+        0.74,
+        0.76
+       ],
+       "frame": [
+        0.3,
+        0.31,
+        0.33
+       ],
+       "landing": [
+        [
+         0.82,
+         0.08,
+         0.07
+        ],
+        [
+         0.1,
+         0.42,
+         0.82
+        ],
+        [
+         0.16,
+         0.16,
+         0.18
+        ]
+       ]
+      },
+      "frame": [
+       [
+        0.97,
+        0.97,
+        0.96
+       ],
+       [
+        0.16,
+        0.16,
+        0.18
+       ]
+      ],
+      "doors": [
+       [
+        0.82,
+        0.08,
+        0.07
+       ],
+       [
+        0.1,
+        0.42,
+        0.82
+       ],
+       [
+        0.97,
+        0.97,
+        0.96
+       ],
+       [
+        0.16,
+        0.16,
+        0.18
+       ]
+      ],
+      "trim": [
+       [
+        0.16,
+        0.16,
+        0.18
+       ],
+       [
+        0.97,
+        0.97,
+        0.96
+       ]
+      ],
+      "furniture": {
+       "neutral": [
+        [
+         0.95,
+         0.95,
+         0.94
+        ],
+        [
+         0.62,
+         0.82,
+         0.55
+        ],
+        [
+         0.58,
+         0.74,
+         0.88
+        ]
+       ],
+       "trims": [
+        [
+         0.16,
+         0.16,
+         0.18
+        ],
+        [
+         0.82,
+         0.08,
+         0.07
+        ]
+       ],
+       "keep": [
+        "planter"
+       ]
+      },
+      "rail": [
+       0.8,
+       0.1,
+       0.09
+      ]
+     },
+     "light": {
+      "intensity": 2.4,
+      "bounce": 0.8
+     },
+     "spandrel": [
+      0.15,
+      0.17,
+      0.2
+     ],
+     "mullion": [
+      0.55,
+      0.57,
+      0.6
+     ]
+    },
+    "barracks": {
+     "storeyHeight": 3.2,
+     "plinth": 0,
+     "wall": 0.3,
+     "slab": 0.3,
+     "window": {
+      "width": 1.2,
+      "height": 1,
+      "sill": 1.1,
+      "pitch": 4
+     },
+     "door": {
+      "width": 1.2,
+      "height": 2.2,
+      "color": "metal"
+     },
+     "stairs": {
+      "width": 1.1
+     },
+     "lamps": 1,
+     "porch": 1,
+     "shelter": true,
+     "inner": [
+      0.7,
+      0.71,
+      0.68
+     ],
+     "floorColor": [
+      0.34,
+      0.35,
+      0.33
+     ],
+     "ceiling": [
+      0.8,
+      0.8,
+      0.78
+     ],
+     "interiorDoor": {
+      "auto": true
+     },
+     "light": {
+      "ambient": [
+       0.008,
+       0.008,
+       0.01
+      ],
+      "color": [
+       1,
+       0.82,
+       0.6
+      ],
+      "intensity": 0.9
+     }
+    }
+   },
+   "plans": {
+    "furniture": {
+     "sofa": {
+      "w": 2,
+      "d": 0.85,
+      "parts": [
+       [
+        -1,
+        1,
+        0,
+        0.85,
+        0,
+        0.42,
+        [
+         0.3,
+         0.34,
+         0.42
+        ]
+       ],
+       [
+        -1,
+        1,
+        0,
+        0.22,
+        0.42,
+        0.85,
+        [
+         0.3,
+         0.34,
+         0.42
+        ]
+       ],
+       [
+        -1,
+        -0.82,
+        0.22,
+        0.85,
+        0.42,
+        0.62,
+        [
+         0.3,
+         0.34,
+         0.42
+        ]
+       ],
+       [
+        0.82,
+        1,
+        0.22,
+        0.85,
+        0.42,
+        0.62,
+        [
+         0.3,
+         0.34,
+         0.42
+        ]
+       ]
+      ]
+     },
+     "counter": {
+      "w": 2.4,
+      "d": 0.62,
+      "parts": [
+       [
+        -1.2,
+        1.2,
+        0,
+        0.6,
+        0,
+        0.88,
+        [
+         0.82,
+         0.81,
+         0.78
+        ]
+       ],
+       [
+        -1.2,
+        1.2,
+        0,
+        0.62,
+        0.88,
+        0.92,
+        [
+         0.16,
+         0.16,
+         0.17
+        ]
+       ]
+      ]
+     },
+     "cabinet": {
+      "w": 1.2,
+      "d": 0.45,
+      "parts": [
+       [
+        -0.6,
+        0.6,
+        0,
+        0.45,
+        0,
+        0.95,
+        [
+         0.46,
+         0.32,
+         0.2
+        ]
+       ]
+      ]
+     },
+     "shelf": {
+      "w": 1.6,
+      "d": 0.4,
+      "parts": [
+       [
+        -0.8,
+        0.8,
+        0,
+        0.4,
+        0,
+        1.9,
+        [
+         0.46,
+         0.32,
+         0.2
+        ]
+       ]
+      ]
+     },
+     "wardrobe": {
+      "w": 1.3,
+      "d": 0.6,
+      "parts": [
+       [
+        -0.65,
+        0.65,
+        0,
+        0.6,
+        0,
+        2,
+        [
+         0.82,
+         0.81,
+         0.78
+        ]
+       ]
+      ]
+     },
+     "bed": {
+      "w": 1.5,
+      "d": 2.05,
+      "parts": [
+       [
+        -0.75,
+        0.75,
+        0,
+        2.05,
+        0,
+        0.32,
+        [
+         0.46,
+         0.32,
+         0.2
+        ]
+       ],
+       [
+        -0.72,
+        0.72,
+        0.05,
+        2,
+        0.32,
+        0.5,
+        [
+         0.86,
+         0.84,
+         0.8
+        ]
+       ],
+       [
+        -0.75,
+        0.75,
+        0,
+        0.06,
+        0,
+        0.95,
+        [
+         0.46,
+         0.32,
+         0.2
+        ]
+       ]
+      ]
+     },
+     "desk": {
+      "w": 1.4,
+      "d": 0.7,
+      "parts": [
+       [
+        -0.7,
+        0.7,
+        0,
+        0.7,
+        0.72,
+        0.76,
+        [
+         0.46,
+         0.32,
+         0.2
+        ]
+       ],
+       [
+        -0.68,
+        -0.62,
+        0.05,
+        0.65,
+        0,
+        0.72,
+        [
+         0.4,
+         0.42,
+         0.44
+        ],
+        "metal"
+       ],
+       [
+        0.62,
+        0.68,
+        0.05,
+        0.65,
+        0,
+        0.72,
+        [
+         0.4,
+         0.42,
+         0.44
+        ],
+        "metal"
+       ],
+       [
+        -0.25,
+        0.25,
+        0.8,
+        1.2,
+        0,
+        0.45,
+        [
+         0.16,
+         0.16,
+         0.17
+        ]
+       ]
+      ]
+     },
+     "table": {
+      "w": 1.5,
+      "d": 1.9,
+      "parts": [
+       [
+        -0.75,
+        0.75,
+        0.5,
+        1.4,
+        0.72,
+        0.76,
+        [
+         0.46,
+         0.32,
+         0.2
+        ]
+       ],
+       [
+        -0.7,
+        -0.64,
+        0.55,
+        0.61,
+        0,
+        0.72,
+        [
+         0.46,
+         0.32,
+         0.2
+        ]
+       ],
+       [
+        0.64,
+        0.7,
+        0.55,
+        0.61,
+        0,
+        0.72,
+        [
+         0.46,
+         0.32,
+         0.2
+        ]
+       ],
+       [
+        -0.7,
+        -0.64,
+        1.29,
+        1.35,
+        0,
+        0.72,
+        [
+         0.46,
+         0.32,
+         0.2
+        ]
+       ],
+       [
+        0.64,
+        0.7,
+        1.29,
+        1.35,
+        0,
+        0.72,
+        [
+         0.46,
+         0.32,
+         0.2
+        ]
+       ],
+       [
+        -0.45,
+        -0.05,
+        0.02,
+        0.42,
+        0,
+        0.45,
+        [
+         0.3,
+         0.34,
+         0.42
+        ]
+       ],
+       [
+        -0.45,
+        -0.05,
+        0,
+        0.05,
+        0.45,
+        0.9,
+        [
+         0.46,
+         0.32,
+         0.2
+        ]
+       ],
+       [
+        0.05,
+        0.45,
+        1.48,
+        1.88,
+        0,
+        0.45,
+        [
+         0.3,
+         0.34,
+         0.42
+        ]
+       ],
+       [
+        0.05,
+        0.45,
+        1.85,
+        1.9,
+        0.45,
+        0.9,
+        [
+         0.46,
+         0.32,
+         0.2
+        ]
+       ]
+      ]
+     },
+     "bench": {
+      "w": 2.2,
+      "d": 0.5,
+      "parts": [
+       [
+        -1.1,
+        1.1,
+        0,
+        0.5,
+        0.4,
+        0.46,
+        [
+         0.46,
+         0.32,
+         0.2
+        ]
+       ],
+       [
+        -1,
+        -0.94,
+        0.05,
+        0.45,
+        0,
+        0.4,
+        [
+         0.4,
+         0.42,
+         0.44
+        ],
+        "metal"
+       ],
+       [
+        0.94,
+        1,
+        0.05,
+        0.45,
+        0,
+        0.4,
+        [
+         0.4,
+         0.42,
+         0.44
+        ],
+        "metal"
+       ]
+      ]
+     },
+     "planter": {
+      "w": 0.8,
+      "d": 0.8,
+      "parts": [
+       [
+        -0.4,
+        0.4,
+        0,
+        0.8,
+        0,
+        0.6,
+        [
+         0.55,
+         0.54,
+         0.5
+        ]
+       ],
+       [
+        -0.32,
+        0.32,
+        0.08,
+        0.72,
+        0.6,
+        1.5,
+        [
+         0.18,
+         0.34,
+         0.16
+        ]
+       ]
+      ]
+     },
+     "stall": {
+      "w": 1,
+      "d": 1.5,
+      "parts": [
+       [
+        -0.5,
+        -0.47,
+        0,
+        1.5,
+        0.1,
+        2,
+        [
+         0.82,
+         0.81,
+         0.78
+        ]
+       ],
+       [
+        0.47,
+        0.5,
+        0,
+        1.5,
+        0.1,
+        2,
+        [
+         0.82,
+         0.81,
+         0.78
+        ]
+       ],
+       [
+        -0.2,
+        0.2,
+        0,
+        0.55,
+        0,
+        0.42,
+        [
+         0.92,
+         0.92,
+         0.9
+        ]
+       ]
+      ]
+     },
+     "basin": {
+      "w": 0.6,
+      "d": 0.45,
+      "parts": [
+       [
+        -0.3,
+        0.3,
+        0,
+        0.45,
+        0.78,
+        0.88,
+        [
+         0.92,
+         0.92,
+         0.9
+        ]
+       ],
+       [
+        -0.08,
+        0.08,
+        0,
+        0.1,
+        0.88,
+        1.05,
+        [
+         0.55,
+         0.57,
+         0.6
+        ],
+        "metal"
+       ],
+       [
+        -0.3,
+        0.3,
+        0,
+        0.03,
+        1.1,
+        1.9,
+        [
+         0.55,
+         0.57,
+         0.6
+        ],
+        "metal"
+       ]
+      ]
+     },
+     "fridge": {
+      "w": 0.7,
+      "d": 0.7,
+      "parts": [
+       [
+        -0.35,
+        0.35,
+        0,
+        0.68,
+        0,
+        1.85,
+        [
+         0.82,
+         0.81,
+         0.78
+        ]
+       ],
+       [
+        -0.3,
+        -0.27,
+        0.68,
+        0.7,
+        0.9,
+        1.5,
+        [
+         0.55,
+         0.57,
+         0.6
+        ],
+        "metal"
+       ]
+      ]
+     },
+     "rack": {
+      "w": 0.8,
+      "d": 1.1,
+      "parts": [
+       [
+        -0.4,
+        0.4,
+        0,
+        1.1,
+        0,
+        2.1,
+        [
+         0.06,
+         0.06,
+         0.07
+        ],
+        "metal"
+       ],
+       [
+        -0.36,
+        0.36,
+        1.08,
+        1.1,
+        0.1,
+        2,
+        [
+         0.16,
+         0.16,
+         0.17
+        ]
+       ]
+      ]
+     },
+     "storage": {
+      "w": 1.8,
+      "d": 0.6,
+      "parts": [
+       [
+        -0.9,
+        -0.86,
+        0,
+        0.6,
+        0,
+        2.2,
+        [
+         0.55,
+         0.57,
+         0.6
+        ],
+        "metal"
+       ],
+       [
+        0.86,
+        0.9,
+        0,
+        0.6,
+        0,
+        2.2,
+        [
+         0.55,
+         0.57,
+         0.6
+        ],
+        "metal"
+       ],
+       [
+        -0.9,
+        0.9,
+        0,
+        0.6,
+        0.4,
+        0.44,
+        [
+         0.55,
+         0.57,
+         0.6
+        ],
+        "metal"
+       ],
+       [
+        -0.9,
+        0.9,
+        0,
+        0.6,
+        1.1,
+        1.14,
+        [
+         0.55,
+         0.57,
+         0.6
+        ],
+        "metal"
+       ],
+       [
+        -0.9,
+        0.9,
+        0,
+        0.6,
+        1.8,
+        1.84,
+        [
+         0.55,
+         0.57,
+         0.6
+        ],
+        "metal"
+       ],
+       [
+        -0.7,
+        -0.1,
+        0.05,
+        0.55,
+        0.44,
+        0.8,
+        [
+         0.46,
+         0.32,
+         0.2
+        ]
+       ],
+       [
+        0.1,
+        0.8,
+        0.05,
+        0.55,
+        1.14,
+        1.5,
+        [
+         0.46,
+         0.32,
+         0.2
+        ]
+       ]
+      ]
+     },
+     "printer": {
+      "w": 0.9,
+      "d": 0.6,
+      "parts": [
+       [
+        -0.45,
+        0.45,
+        0,
+        0.6,
+        0,
+        0.95,
+        [
+         0.82,
+         0.81,
+         0.78
+        ]
+       ],
+       [
+        -0.4,
+        0.4,
+        0.05,
+        0.55,
+        0.95,
+        1.05,
+        [
+         0.16,
+         0.16,
+         0.17
+        ]
+       ]
+      ]
+     },
+     "armchair": {
+      "w": 0.85,
+      "d": 0.85,
+      "parts": [
+       [
+        -0.42,
+        0.42,
+        0,
+        0.85,
+        0,
+        0.42,
+        [
+         0.3,
+         0.34,
+         0.42
+        ]
+       ],
+       [
+        -0.42,
+        0.42,
+        0,
+        0.2,
+        0.42,
+        0.9,
+        [
+         0.3,
+         0.34,
+         0.42
+        ]
+       ],
+       [
+        -0.42,
+        -0.3,
+        0.2,
+        0.85,
+        0.42,
+        0.6,
+        [
+         0.3,
+         0.34,
+         0.42
+        ]
+       ],
+       [
+        0.3,
+        0.42,
+        0.2,
+        0.85,
+        0.42,
+        0.6,
+        [
+         0.3,
+         0.34,
+         0.42
+        ]
+       ]
+      ]
+     },
+     "reception": {
+      "w": 3.2,
+      "d": 0.9,
+      "parts": [
+       [
+        -1.6,
+        1.6,
+        0,
+        0.9,
+        0,
+        1.05,
+        [
+         0.46,
+         0.32,
+         0.2
+        ]
+       ],
+       [
+        -1.6,
+        1.6,
+        0,
+        0.4,
+        1.05,
+        1.12,
+        [
+         0.55,
+         0.54,
+         0.5
+        ]
+       ]
+      ]
+     },
+     "ahu": {
+      "w": 3.6,
+      "d": 1.6,
+      "parts": [
+       [
+        -1.8,
+        1.8,
+        0,
+        1.6,
+        0,
+        2.2,
+        [
+         0.55,
+         0.57,
+         0.6
+        ],
+        "metal"
+       ],
+       [
+        -1.7,
+        -0.9,
+        1.6,
+        1.62,
+        0.3,
+        1.9,
+        [
+         0.16,
+         0.16,
+         0.17
+        ]
+       ],
+       [
+        1.4,
+        1.6,
+        0.2,
+        1.4,
+        2.2,
+        2.9,
+        [
+         0.55,
+         0.57,
+         0.6
+        ],
+        "metal"
+       ]
+      ]
+     },
+     "pump": {
+      "w": 1.2,
+      "d": 0.8,
+      "parts": [
+       [
+        -0.6,
+        0.6,
+        0,
+        0.8,
+        0,
+        0.25,
+        [
+         0.4,
+         0.42,
+         0.44
+        ],
+        "metal"
+       ],
+       [
+        -0.4,
+        0.2,
+        0.15,
+        0.65,
+        0.25,
+        0.75,
+        [
+         0.22,
+         0.42,
+         0.3
+        ]
+       ],
+       [
+        0.2,
+        0.55,
+        0.25,
+        0.55,
+        0.25,
+        0.6,
+        [
+         0.55,
+         0.57,
+         0.6
+        ],
+        "metal"
+       ]
+      ]
+     },
+     "tank": {
+      "w": 1.8,
+      "d": 1.8,
+      "parts": [
+       [
+        -0.9,
+        0.9,
+        0,
+        1.8,
+        0,
+        2.4,
+        [
+         0.55,
+         0.57,
+         0.6
+        ],
+        "metal"
+       ],
+       [
+        -0.95,
+        0.95,
+        -0.05,
+        1.85,
+        2.4,
+        2.5,
+        [
+         0.4,
+         0.42,
+         0.44
+        ],
+        "metal"
+       ]
+      ]
+     },
+     "switchboard": {
+      "w": 2.4,
+      "d": 0.6,
+      "parts": [
+       [
+        -1.2,
+        1.2,
+        0,
+        0.6,
+        0,
+        2.1,
+        [
+         0.4,
+         0.42,
+         0.44
+        ],
+        "metal"
+       ],
+       [
+        -1.15,
+        1.15,
+        0.6,
+        0.62,
+        0.2,
+        2,
+        [
+         0.16,
+         0.16,
+         0.17
+        ]
+       ]
+      ]
+     },
+     "locker": {
+      "w": 1.2,
+      "d": 0.5,
+      "parts": [
+       [
+        -0.6,
+        0.6,
+        0,
+        0.5,
+        0,
+        1.9,
+        [
+         0.4,
+         0.42,
+         0.44
+        ],
+        "metal"
+       ]
+      ]
+     },
+     "bunk": {
+      "w": 0.95,
+      "d": 2,
+      "parts": [
+       [
+        -0.475,
+        0.475,
+        0,
+        2,
+        0.35,
+        0.5,
+        [
+         0.86,
+         0.84,
+         0.8
+        ]
+       ],
+       [
+        -0.475,
+        0.475,
+        0,
+        2,
+        1.45,
+        1.6,
+        [
+         0.86,
+         0.84,
+         0.8
+        ]
+       ],
+       [
+        -0.475,
+        -0.43,
+        0,
+        0.05,
+        0,
+        1.9,
+        [
+         0.55,
+         0.57,
+         0.6
+        ],
+        "metal"
+       ],
+       [
+        0.43,
+        0.475,
+        0,
+        0.05,
+        0,
+        1.9,
+        [
+         0.55,
+         0.57,
+         0.6
+        ],
+        "metal"
+       ],
+       [
+        -0.475,
+        -0.43,
+        1.95,
+        2,
+        0,
+        1.9,
+        [
+         0.55,
+         0.57,
+         0.6
+        ],
+        "metal"
+       ],
+       [
+        0.43,
+        0.475,
+        1.95,
+        2,
+        0,
+        1.9,
+        [
+         0.55,
+         0.57,
+         0.6
+        ],
+        "metal"
+       ]
+      ]
+     }
+    },
+    "furnishings": {
+     "home": {
+      "storeys": [
+       {
+        "wall": [
+         [
+          "sofa",
+          1
+         ],
+         [
+          "counter",
+          1
+         ],
+         [
+          "cabinet",
+          1
+         ]
+        ],
+        "free": [
+         [
+          "table",
+          1
+         ]
+        ]
+       },
+       {
+        "wall": [
+         [
+          "bed",
+          1
+         ],
+         [
+          "wardrobe",
+          1
+         ],
+         [
+          "desk",
+          1
+         ]
+        ],
+        "free": []
+       }
+      ]
+     },
+     "office": {
+      "storeys": [
+       {
+        "wall": [
+         [
+          "counter",
+          1
+         ],
+         [
+          "cabinet",
+          2
+         ]
+        ],
+        "free": [
+         [
+          "bench",
+          2
+         ]
+        ]
+       },
+       {
+        "wall": [
+         [
+          "cabinet",
+          3
+         ]
+        ],
+        "free": [
+         [
+          "desk",
+          4
+         ]
+        ]
+       }
+      ]
+     },
+     "hall": {
+      "storeys": [
+       {
+        "wall": [
+         [
+          "counter",
+          1
+         ],
+         [
+          "bench",
+          3
+         ]
+        ],
+        "free": [
+         [
+          "bench",
+          3
+         ]
+        ]
+       },
+       {
+        "wall": [
+         [
+          "cabinet",
+          3
+         ]
+        ],
+        "free": [
+         [
+          "desk",
+          4
+         ]
+        ]
+       }
+      ]
+     },
+     "kiosk": {
+      "storeys": [
+       {
+        "wall": [
+         [
+          "counter",
+          1
+         ],
+         [
+          "shelf",
+          1
+         ]
+        ],
+        "free": []
+       }
+      ]
+     }
+    },
+    "rooms": {
+     "office": {
+      "label": "Office",
+      "furniture": {
+       "wall": [
+        [
+         "cabinet",
+         1
+        ],
+        [
+         "shelf",
+         1
+        ]
+       ],
+       "free": [
+        [
+         "desk",
+         2
+        ]
+       ]
+      }
+     },
+     "open": {
+      "label": "Open office",
+      "furniture": {
+       "wall": [
+        [
+         "cabinet",
+         2
+        ],
+        [
+         "counter",
+         1
+        ],
+        [
+         "printer",
+         1
+        ]
+       ],
+       "grid": "desk"
+      }
+     },
+     "meeting": {
+      "label": "Meeting room",
+      "furniture": {
+       "wall": [
+        [
+         "cabinet",
+         1
+        ]
+       ],
+       "free": [
+        [
+         "table",
+         1
+        ]
+       ]
+      }
+     },
+     "store": {
+      "label": "Store",
+      "furniture": {
+       "wall": [
+        [
+         "storage",
+         3
+        ]
+       ]
+      },
+      "lit": 0.3
+     },
+     "wc": {
+      "label": "Washroom",
+      "furniture": {
+       "row": "stall",
+       "wall": [
+        [
+         "basin",
+         2
+        ]
+       ]
+      },
+      "floor": [
+       0.62,
+       0.64,
+       0.66
+      ]
+     },
+     "kitchen": {
+      "label": "Kitchen",
+      "furniture": {
+       "wall": [
+        [
+         "counter",
+         1
+        ],
+        [
+         "fridge",
+         1
+        ]
+       ],
+       "free": [
+        [
+         "table",
+         1
+        ]
+       ]
+      },
+      "floor": [
+       0.58,
+       0.56,
+       0.52
+      ]
+     },
+     "server": {
+      "label": "Server room",
+      "furniture": {
+       "row": "rack"
+      },
+      "floor": [
+       0.42,
+       0.44,
+       0.46
+      ],
+      "lit": 1
+     },
+     "plant": {
+      "label": "Plant room",
+      "furniture": {
+       "wall": [
+        [
+         "switchboard",
+         1
+        ],
+        [
+         "pump",
+         2
+        ]
+       ],
+       "free": [
+        [
+         "ahu",
+         1
+        ],
+        [
+         "tank",
+         1
+        ]
+       ]
+      },
+      "floor": [
+       0.36,
+       0.37,
+       0.38
+      ],
+      "lit": 0.6
+     },
+     "hall": {
+      "label": "Hall",
+      "furniture": {
+       "wall": [
+        [
+         "counter",
+         1
+        ],
+        [
+         "bench",
+         4
+        ],
+        [
+         "shelf",
+         1
+        ]
+       ],
+       "free": [
+        [
+         "bench",
+         4
+        ],
+        [
+         "planter",
+         4
+        ]
+       ]
+      }
+     },
+     "lobby": {
+      "label": "Lobby",
+      "furniture": {
+       "wall": [
+        [
+         "reception",
+         1
+        ],
+        [
+         "bench",
+         4
+        ]
+       ],
+       "free": [
+        [
+         "armchair",
+         4
+        ],
+        [
+         "planter",
+         6
+        ]
+       ]
+      },
+      "lit": 1
+     },
+     "sky": {
+      "label": "Sky lobby",
+      "furniture": {
+       "wall": [
+        [
+         "counter",
+         1
+        ],
+        [
+         "bench",
+         4
+        ]
+       ],
+       "free": [
+        [
+         "armchair",
+         6
+        ],
+        [
+         "planter",
+         4
+        ]
+       ]
+      },
+      "lit": 1
+     },
+     "deck": {
+      "label": "Observation deck",
+      "furniture": {
+       "free": [
+        [
+         "bench",
+         6
+        ],
+        [
+         "planter",
+         4
+        ]
+       ]
+      },
+      "lit": 1
+     },
+     "corridor": {
+      "label": "Corridor"
+     },
+     "dorm": {
+      "label": "Bunk room",
+      "furniture": {
+       "wall": [
+        [
+         "bunk",
+         3
+        ],
+        [
+         "locker",
+         2
+        ]
+       ]
+      }
+     },
+     "mess": {
+      "label": "Mess",
+      "furniture": {
+       "wall": [
+        [
+         "counter",
+         1
+        ],
+        [
+         "fridge",
+         1
+        ]
+       ],
+       "free": [
+        [
+         "table",
+         2
+        ]
+       ]
+      }
+     },
+     "cabin": {
+      "label": "Cabin",
+      "furniture": {
+       "wall": [
+        [
+         "bed",
+         1
+        ],
+        [
+         "wardrobe",
+         1
+        ],
+        [
+         "desk",
+         1
+        ]
+       ]
+      }
+     },
+     "ops": {
+      "label": "Operations",
+      "furniture": {
+       "wall": [
+        [
+         "switchboard",
+         1
+        ],
+        [
+         "rack",
+         2
+        ]
+       ],
+       "free": [
+        [
+         "desk",
+         3
+        ]
+       ]
+      }
+     }
+    },
+    "storeys": {
+     "office": {
+      "label": "Offices",
+      "layout": "rooms",
+      "ring": 2,
+      "corridor": 1.8,
+      "door": 0.95,
+      "rooms": {
+       "depth": [
+        3.4,
+        6.4
+       ],
+       "module": 3.6,
+       "outer": {
+        "office": 5,
+        "meeting": 1,
+        "open": 1
+       },
+       "inner": {
+        "meeting": 2,
+        "store": 2,
+        "wc": 2,
+        "kitchen": 1,
+        "server": 1,
+        "office": 2
+       }
+      }
+     },
+     "office-small": {
+      "label": "Offices",
+      "layout": "rooms",
+      "ring": 1.6,
+      "corridor": 1.6,
+      "door": 0.9,
+      "rooms": {
+       "depth": [
+        3,
+        5.6
+       ],
+       "module": 3.3,
+       "outer": {
+        "office": 5,
+        "meeting": 1
+       },
+       "inner": {
+        "store": 1,
+        "wc": 1,
+        "kitchen": 1,
+        "meeting": 1
+       }
+      }
+     },
+     "plant": {
+      "label": "Plant",
+      "layout": "rooms",
+      "ring": 2,
+      "corridor": 2,
+      "door": 1.4,
+      "lit": 0.25,
+      "rooms": {
+       "depth": [
+        4,
+        9
+       ],
+       "module": 9,
+       "outer": {
+        "plant": 1
+       },
+       "inner": {
+        "plant": 2,
+        "store": 1
+       }
+      }
+     },
+     "lobby": {
+      "label": "Lobby",
+      "layout": "hall",
+      "hall": "lobby",
+      "lit": 1
+     },
+     "sky": {
+      "label": "Sky lobby",
+      "layout": "hall",
+      "hall": "sky",
+      "lit": 1
+     },
+     "deck": {
+      "label": "Observation deck",
+      "layout": "hall",
+      "hall": "deck",
+      "lit": 1,
+      "stairs": false
+     },
+     "ground-hall": {
+      "label": "Hall",
+      "layout": "hall",
+      "hall": "hall"
+     },
+     "quarters": {
+      "label": "Quarters",
+      "layout": "rooms",
+      "ring": 1.4,
+      "corridor": 1.4,
+      "door": 0.9,
+      "rooms": {
+       "depth": [
+        2.6,
+        4.6
+       ],
+       "module": 3,
+       "outer": {
+        "dorm": 3,
+        "cabin": 1
+       },
+       "inner": {
+        "wc": 1,
+        "store": 1
+       }
+      }
+     },
+     "ops": {
+      "label": "Operations",
+      "entrances": [
+       "-z"
+      ],
+      "layout": "rooms",
+      "ring": 1.4,
+      "corridor": 1.4,
+      "door": 1,
+      "rooms": {
+       "depth": [
+        2.6,
+        5
+       ],
+       "module": 4,
+       "outer": {
+        "ops": 2,
+        "mess": 1,
+        "meeting": 1
+       },
+       "inner": {
+        "store": 1,
+        "wc": 1
+       }
+      }
+     },
+     "cabins": {
+      "label": "Cabins",
+      "entrances": [
+       "-z"
+      ],
+      "layout": "rooms",
+      "ring": 1.2,
+      "corridor": 1.2,
+      "door": 0.8,
+      "rooms": {
+       "depth": [
+        2.2,
+        4.2
+       ],
+       "module": 2.6,
+       "outer": {
+        "cabin": 4,
+        "mess": 1
+       },
+       "inner": {
+        "wc": 1,
+        "store": 1
+       }
+      }
+     }
+    },
+    "cores": {
+     "highrise": {
+      "stairs": {
+       "lane": 1.3,
+       "landing": 1.25
+      },
+      "lobby": 4,
+      "pit": 1.6,
+      "overrun": 1.1,
+      "machine": 2.2,
+      "ladder": true,
+      "shaftLight": {
+       "perStorey": 1,
+       "y": 2.4,
+       "color": [
+        1,
+        0.84,
+        0.62
+       ],
+       "intensity": 0.08,
+       "range": 7
+      },
+      "banks": [
+       {
+        "shafts": 2,
+        "shaft": {
+         "width": 3.4,
+         "depth": 2.6,
+         "tech": 0.8
+        },
+        "car": {
+         "width": 2.2,
+         "depth": 2.2,
+         "height": 2.8
+        },
+        "door": {
+         "width": 1.2,
+         "height": 2.3
+        }
+       },
+       {
+        "shafts": 2,
+        "shaft": {
+         "width": 3.1,
+         "depth": 2.4,
+         "tech": 0.75
+        },
+        "car": {
+         "width": 2,
+         "depth": 2,
+         "height": 2.7
+        },
+        "door": {
+         "width": 1.1,
+         "height": 2.2
+        }
+       }
+      ]
+     },
+     "midrise": {
+      "shaftLight": {
+       "perStorey": 1,
+       "y": 2.2,
+       "color": [
+        1,
+        0.86,
+        0.66
+       ],
+       "intensity": 0.08,
+       "range": 7
+      },
+      "stairs": {
+       "lane": 1.2,
+       "landing": 1.2
+      },
+      "lobby": 2.8,
+      "pit": 1.4,
+      "overrun": 1,
+      "machine": 2,
+      "ladder": true,
+      "banks": [
+       {
+        "shafts": 0
+       },
+       {
+        "shafts": 1,
+        "shaft": {
+         "width": 2.7,
+         "depth": 2.1,
+         "tech": 0.6
+        },
+        "car": {
+         "width": 1.7,
+         "depth": 1.7,
+         "height": 2.4
+        },
+        "door": {
+         "width": 1,
+         "height": 2.1
+        }
+       }
+      ]
+     },
+     "compact": {
+      "shaftLight": {
+       "perStorey": 1,
+       "y": 2.2,
+       "color": [
+        1,
+        0.86,
+        0.66
+       ],
+       "intensity": 0.08,
+       "range": 7
+      },
+      "stairs": {
+       "lane": 1.1,
+       "landing": 1.1
+      },
+      "lobby": 2.4,
+      "pit": 1.2,
+      "overrun": 0.9,
+      "machine": 1.8,
+      "ladder": true,
+      "banks": [
+       {
+        "shafts": 0
+       },
+       {
+        "shafts": 1,
+        "shaft": {
+         "width": 2.45,
+         "depth": 1.9,
+         "tech": 0.55
+        },
+        "car": {
+         "width": 1.5,
+         "depth": 1.5,
+         "height": 2.3
+        },
+        "door": {
+         "width": 0.95,
+         "height": 2.05
+        }
+       }
+      ]
+     },
+     "walkup": {
+      "stairs": {
+       "lane": 1,
+       "landing": 1
+      },
+      "lobby": 1.6,
+      "banks": []
+     }
+    },
+    "buildings": {
+     "spire": {
+      "name": "Spire",
+      "archetype": "tower",
+      "core": "highrise",
+      "ground": "L",
+      "sections": [
+       {
+        "id": "podium",
+        "width": 62,
+        "storeyHeight": 6,
+        "window": {
+         "height": 5,
+         "sill": 0.3
+        },
+        "doors": [
+         {
+          "face": "-z",
+          "at": -6
+         },
+         {
+          "face": "-z",
+          "at": 6
+         }
+        ],
+        "storeys": [
+         {
+          "plan": "lobby",
+          "label": "L",
+          "tags": [
+           "stop",
+           "lobby"
+          ]
+         }
+        ]
+       },
+       {
+        "width": 52,
+        "storeys": [
+         {
+          "plan": "office",
+          "repeat": 38,
+          "tags": [
+           "stop"
+          ]
+         },
+         {
+          "plan": "plant",
+          "tags": [
+           "plant"
+          ]
+         },
+         {
+          "repeat": 5,
+          "of": [
+           {
+            "plan": "sky",
+            "zone": true,
+            "label": "S{sky}",
+            "tags": [
+             "stop",
+             "sky"
+            ]
+           },
+           {
+            "plan": "office",
+            "repeat": 138,
+            "tags": [
+             "stop"
+            ]
+           },
+           {
+            "plan": "plant",
+            "tags": [
+             "plant"
+            ]
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "width": 46,
+        "storeys": [
+         {
+          "repeat": 6,
+          "of": [
+           {
+            "plan": "sky",
+            "zone": true,
+            "label": "S{sky}",
+            "tags": [
+             "stop",
+             "sky"
+            ]
+           },
+           {
+            "plan": "office",
+            "repeat": 138,
+            "tags": [
+             "stop"
+            ]
+           },
+           {
+            "plan": "plant",
+            "tags": [
+             "plant"
+            ]
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "width": 40,
+        "storeys": [
+         {
+          "repeat": 6,
+          "of": [
+           {
+            "plan": "sky",
+            "zone": true,
+            "label": "S{sky}",
+            "tags": [
+             "stop",
+             "sky"
+            ]
+           },
+           {
+            "plan": "office",
+            "repeat": 138,
+            "tags": [
+             "stop"
+            ]
+           },
+           {
+            "plan": "plant",
+            "tags": [
+             "plant"
+            ]
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "width": 34,
+        "storeys": [
+         {
+          "repeat": 6,
+          "of": [
+           {
+            "plan": "sky",
+            "zone": true,
+            "label": "S{sky}",
+            "tags": [
+             "stop",
+             "sky"
+            ]
+           },
+           {
+            "plan": "office",
+            "repeat": 138,
+            "tags": [
+             "stop"
+            ]
+           },
+           {
+            "plan": "plant",
+            "tags": [
+             "plant"
+            ]
+           }
+          ]
+         }
+        ]
+       },
+       {
+        "width": 28,
+        "roof": {
+         "kind": "flat",
+         "overhang": 0.4,
+         "thick": 1.2
+        },
+        "storeys": [
+         {
+          "repeat": 5,
+          "of": [
+           {
+            "plan": "sky",
+            "zone": true,
+            "label": "S{sky}",
+            "tags": [
+             "stop",
+             "sky"
+            ]
+           },
+           {
+            "plan": "office",
+            "repeat": 138,
+            "tags": [
+             "stop"
+            ]
+           },
+           {
+            "plan": "plant",
+            "tags": [
+             "plant"
+            ]
+           }
+          ]
+         },
+         {
+          "plan": "sky",
+          "zone": true,
+          "label": "S{sky}",
+          "tags": [
+           "stop",
+           "sky"
+          ]
+         },
+         {
+          "plan": "office",
+          "repeat": 138,
+          "tags": [
+           "stop"
+          ]
+         },
+         {
+          "plan": "deck",
+          "label": "TOP",
+          "tags": [
+           "stop",
+           "deck"
+          ]
+         }
+        ]
+       }
+      ],
+      "lifts": [
+       {
+        "bank": 0,
+        "kind": "express",
+        "group": "{building} express",
+        "name": "Express {n}",
+        "stops": [
+         "lobby",
+         "sky",
+         "deck"
+        ],
+        "speed": 60,
+        "accel": 2.5,
+        "door": 2,
+        "dwell": 6
+       },
+       {
+        "bank": 1,
+        "kind": "local",
+        "zoned": true,
+        "group": "{building} zone {zone}",
+        "name": "Zone {zone} {letter}",
+        "stops": [
+         "stop"
+        ],
+        "speed": 7,
+        "accel": 1.4,
+        "door": 1.6,
+        "dwell": 4
+       }
+      ],
+      "crown": {
+       "kind": "spire",
+       "width": 14,
+       "height": 6,
+       "spire": 120
+      }
+     },
+     "office-block": {
+      "name": "Office block",
+      "archetype": "block",
+      "core": "midrise",
+      "ground": "G",
+      "sections": [
+       {
+        "storeys": [
+         {
+          "plan": "ground-hall",
+          "tags": [
+           "stop",
+           "ground"
+          ]
+         },
+         {
+          "plan": "office-small",
+          "repeat": "*",
+          "tags": [
+           "stop"
+          ]
+         }
+        ]
+       }
+      ],
+      "lifts": [
+       {
+        "bank": 1,
+        "kind": "local",
+        "group": "{building}",
+        "name": "{building} lift {n}",
+        "stops": [
+         "stop"
+        ],
+        "speed": 2.5,
+        "accel": 1,
+        "door": 1.6,
+        "dwell": 4
+       }
+      ]
+     },
+     "terminal": {
+      "name": "Terminal",
+      "archetype": "terminal",
+      "core": "compact",
+      "ground": "G",
+      "sections": [
+       {
+        "storeys": [
+         {
+          "plan": "ground-hall",
+          "tags": [
+           "stop",
+           "ground"
+          ]
+         },
+         {
+          "plan": "office-small",
+          "repeat": "*",
+          "tags": [
+           "stop"
+          ]
+         }
+        ]
+       }
+      ],
+      "lifts": [
+       {
+        "bank": 1,
+        "kind": "local",
+        "group": "{building}",
+        "name": "{building} lift",
+        "stops": [
+         "stop"
+        ],
+        "speed": 2,
+        "accel": 1,
+        "door": 1.6,
+        "dwell": 4
+       }
+      ]
+     }
+    }
+   },
+   "clouds": [
+    {
+     "name": "stratus",
+     "kind": "sheet",
+     "base": 1750,
+     "top": 2300,
+     "density": 0.03,
+     "mapScale": 26000,
+     "shapeScale": 9000,
+     "stretch": 2.5,
+     "erosion": 0.15,
+     "ambient": 0.75,
+     "precip": 0.12
+    },
+    {
+     "name": "nimbostratus",
+     "kind": "sheet",
+     "base": 2100,
+     "top": 5600,
+     "density": 0.02,
+     "mapScale": 40000,
+     "shapeScale": 12000,
+     "stretch": 2,
+     "erosion": 0.2,
+     "ambient": 0.45,
+     "precip": 0.55
+    },
+    {
+     "name": "altostratus",
+     "kind": "sheet",
+     "base": 5800,
+     "top": 6900,
+     "density": 0.004,
+     "mapScale": 50000,
+     "shapeScale": 14000,
+     "stretch": 4,
+     "erosion": 0.1,
+     "ambient": 0.9,
+     "precip": 0
+    },
+    {
+     "name": "altocumulus",
+     "kind": "cellular",
+     "base": 5200,
+     "top": 5750,
+     "density": 0.035,
+     "mapScale": 18000,
+     "shapeScale": 5000,
+     "stretch": 0.45,
+     "erosion": 0.35,
+     "ambient": 1,
+     "precip": 0
+    }
+   ],
+   "entities": [
+    {
+     "type": "tilt",
+     "dir": [
+      1,
+      0
+     ],
+     "drop": 260
+    },
+    {
+     "type": "hills",
+     "amplitude": 60,
+     "scale": 9000,
+     "octaves": 5,
+     "seed": 7
+    },
+    {
+     "type": "hills",
+     "amplitude": 14,
+     "scale": 1400,
+     "octaves": 3,
+     "seed": 21,
+     "ridged": true
+    },
+    {
+     "type": "range",
+     "id": "front-range",
+     "label": "Front Range",
+     "labelPos": [
+      -27000,
+      -4000
+     ],
+     "path": [
+      [
+       -30000,
+       -34000
+      ],
+      [
+       -27500,
+       -16000
+      ],
+      [
+       -28500,
+       0
+      ],
+      [
+       -26500,
+       14000
+      ],
+      [
+       -29000,
+       34000
+      ]
+     ],
+     "width": 9000,
+     "height": 2500,
+     "roughness": 0.6,
+     "seed": 4
+    },
+    {
+     "type": "mountain",
+     "label": "Longs Peak",
+     "pos": [
+      -28500,
+      -9000
+     ],
+     "radius": 4500,
+     "height": 900,
+     "roughness": 0.5
+    },
+    {
+     "type": "mountain",
+     "pos": [
+      -25000,
+      21000
+     ],
+     "radius": 4000,
+     "height": 650,
+     "roughness": 0.5
+    },
+    {
+     "type": "river",
+     "id": "platte",
+     "label": "South Platte",
+     "path": [
+      [
+       -24000,
+       6000
+      ],
+      [
+       -15000,
+       4000
+      ],
+      [
+       -6000,
+       6500
+      ],
+      [
+       3000,
+       3000
+      ],
+      [
+       12000,
+       5500
+      ],
+      [
+       22000,
+       1500
+      ],
+      [
+       34000,
+       3000
+      ]
+     ],
+     "width": 90,
+     "depth": 8,
+     "bank": 900
+    },
+    {
+     "type": "lake",
+     "label": "Reservoir",
+     "pos": [
+      -11000,
+      15000
+     ],
+     "radius": 1600,
+     "level": 1520
+    },
+    {
+     "type": "town",
+     "id": "town",
+     "label": "Brightfield",
+     "pos": [
+      -4000,
+      9000
+     ],
+     "radius": 4200,
+     "density": 0.95
+    },
+    {
+     "type": "town",
+     "label": "Greeley Flats",
+     "pos": [
+      11000,
+      -9000
+     ],
+     "radius": 2400,
+     "density": 0.85
+    },
+    {
+     "type": "town",
+     "pos": [
+      19000,
+      12000
+     ],
+     "radius": 1500,
+     "density": 0.7
+    },
+    {
+     "type": "forest",
+     "pos": [
+      -24000,
+      -2000
+     ],
+     "radius": 9000,
+     "density": 0.9,
+     "seed": 3
+    },
+    {
+     "type": "village",
+     "id": "village",
+     "label": "Millbrook",
+     "pos": [
+      -12500,
+      4700
+     ],
+     "radius": 380,
+     "river": "platte",
+     "houses": 28,
+     "footbridge": 170,
+     "seed": 9
+    },
+    {
+     "type": "busStation",
+     "id": "station",
+     "label": "Brightfield bus station",
+     "pos": [
+      -3600,
+      8400
+     ],
+     "yaw": 20,
+     "length": 96,
+     "bays": 20,
+     "buses": 5,
+     "seed": 3
+    },
+    {
+     "type": "skyscraper",
+     "id": "spire",
+     "label": "Brightfield Spire",
+     "plan": "spire",
+     "pos": [
+      -3643,
+      8517
+     ],
+     "yaw": 20,
+     "level": 0,
+     "seed": 5
+    },
+    {
+     "type": "bus",
+     "id": "bus",
+     "label": "Bus 7",
+     "from": "station",
+     "to": "village",
+     "speed": 22,
+     "village": 10,
+     "dwell": [
+      60,
+      30
+     ],
+     "livery": [
+      0.12,
+      0.36,
+      0.62
+     ]
+    },
+    {
+     "type": "supercell",
+     "id": "hero",
+     "label": "Supercell",
+     "pos": [
+      1500,
+      -2500
+     ],
+     "radius": 6200,
+     "top": 11800,
+     "precip": 1,
+     "core": 0.75,
+     "coreOffset": [
+      900,
+      800
+     ],
+     "life": [
+      900,
+      2400,
+      1200
+     ],
+     "lightning": 5,
+     "virga": 0.12,
+     "pinned": true,
+     "stackRadius": 1,
+     "stackDrop": 1300,
+     "stackHeight": 6000,
+     "plates": 5,
+     "twist": 0.5,
+     "spin": 0.03,
+     "wallCloud": 700,
+     "wallRadius": 0.3,
+     "green": 0.45
+    },
+    {
+     "type": "squall",
+     "id": "squall",
+     "label": "Squall line",
+     "from": [
+      -26000,
+      -36000
+     ],
+     "to": [
+      -20000,
+      34000
+     ],
+     "count": 7,
+     "radius": 4500,
+     "top": 10500,
+     "precip": 0.9,
+     "shelf": 1,
+     "lip": 650,
+     "shelfDepth": 7000,
+     "tiers": 3,
+     "bow": 5000,
+     "lightning": 3,
+     "drift": 0.6,
+     "travel": 50000,
+     "seed": 5
+    },
+    {
+     "type": "storm",
+     "label": "Virga cell",
+     "pos": [
+      -14000,
+      -15000
+     ],
+     "radius": 3800,
+     "top": 7200,
+     "precip": 0.55,
+     "core": 0.55,
+     "life": [
+      600,
+      1800,
+      900
+     ],
+     "lightning": 0,
+     "virga": 0.75,
+     "pinned": true
+    },
+    {
+     "type": "spawner",
+     "id": "plains-cells",
+     "area": [
+      -40000,
+      -40000,
+      40000,
+      40000
+     ],
+     "rate": 9,
+     "max": 22,
+     "initial": 9,
+     "seed": 12,
+     "template": {
+      "radius": [
+       2200,
+       5200
+      ],
+      "top": [
+       5500,
+       11000
+      ],
+      "precip": [
+       0.25,
+       0.95
+      ],
+      "core": [
+       0.35,
+       0.6
+      ],
+      "grow": [
+       500,
+       1000
+      ],
+      "mature": [
+       900,
+       2400
+      ],
+      "decay": [
+       700,
+       1400
+      ],
+      "lightning": [
+       0,
+       4
+      ],
+      "virga": [
+       0,
+       0.6
+      ],
+      "drift": [
+       0.8,
+       1.2
+      ]
+     }
+    },
+    {
+     "type": "lake",
+     "label": "",
+     "pos": [
+      5300,
+      7900
+     ],
+     "radius": 1300,
+     "level": 1397
+    },
+    {
+     "type": "lake",
+     "label": "",
+     "pos": [
+      6700,
+      7900
+     ],
+     "radius": 1300,
+     "level": 1397
+    }
+   ]
+  }
+ },
+ "river": {
+  "type": "water",
+  "kits": [
+   "terrain",
+   "world",
+   "hydrology"
+  ],
+  "features": [
+   "waves",
+   "debris"
+  ],
+  "native": {
+   "name": "Riverlands",
+   "terrain": {
+    "size": 2048,
+    "resolution": 512,
+    "base": 80,
+    "snowLine": 250
+   },
+   "sim": {
+    "stepsPerFrame": 1,
+    "stepTime": 0.12,
+    "gravity": 9.81,
+    "acceleration": 0.4,
+    "diffusion": 0.06,
+    "linDamping": 0.99,
+    "sqrDamping": 0.05,
+    "absorption": 1,
+    "evaporation": 10,
+    "frictionMinDepth": 0,
+    "frictionMaxDepth": 1,
+    "frictionAmount": 0.9,
+    "minDepth": 0.03,
+    "wetDecay": 0.9998,
+    "warmup": 24000,
+    "edges": "open",
+    "cfl": 0.3,
+    "turbulenceSpeed": 8
+   },
+   "waves": {
+    "speed": 5,
+    "damping": 0.985,
+    "noise": 1,
+    "foam": 1,
+    "layers": [
+     {
+      "size": 192,
+      "resolution": 512,
+      "height": 0.07
+     },
+     {
+      "size": 768,
+      "resolution": 512,
+      "height": 0.22
+     }
+    ]
+   },
+   "water": {
+    "deep": [
+     0.03,
+     0.085,
+     0.08
+    ],
+    "absorb": [
+     0.38,
+     0.13,
+     0.11
+    ],
+    "refraction": 0.035,
+    "foam": 1,
+    "detail": 1,
+    "flowScale": 3
+   },
+   "lighting": {
+    "start": "plains day",
+    "day": {
+     "sun": {
+      "azimuth": 150,
+      "elevation": 38,
+      "color": [
+       1,
+       0.95,
+       0.86
+      ],
+      "intensity": 3.2
+     },
+     "sky": {
+      "top": [
+       0.22,
+       0.42,
+       0.78
+      ],
+      "horizon": [
+       0.62,
+       0.74,
+       0.86
+      ]
+     },
+     "ground": [
+      0.24,
+      0.22,
+      0.18
+     ],
+     "ambient": 0.55,
+     "fog": 0.00022,
+     "exposure": 0.6
+    },
+    "golden": {
+     "sun": {
+      "azimuth": 250,
+      "elevation": 9,
+      "color": [
+       1,
+       0.62,
+       0.32
+      ],
+      "intensity": 3
+     },
+     "sky": {
+      "top": [
+       0.16,
+       0.26,
+       0.52
+      ],
+      "horizon": [
+       0.92,
+       0.62,
+       0.42
+      ]
+     },
+     "ground": [
+      0.22,
+      0.16,
+      0.12
+     ],
+     "ambient": 0.45,
+     "fog": 0.0003,
+     "exposure": 0.7
+    },
+    "overcast": {
+     "sun": {
+      "azimuth": 120,
+      "elevation": 55,
+      "color": [
+       0.9,
+       0.92,
+       0.95
+      ],
+      "intensity": 0.9
+     },
+     "sky": {
+      "top": [
+       0.46,
+       0.5,
+       0.56
+      ],
+      "horizon": [
+       0.62,
+       0.65,
+       0.68
+      ]
+     },
+     "ground": [
+      0.26,
+      0.26,
+      0.25
+     ],
+     "ambient": 1,
+     "fog": 0.00045,
+     "exposure": 0.75
+    },
+    "plains day": {
+     "sun": {
+      "color": [
+       1,
+       0.84,
+       0.66
+      ],
+      "intensity": 3
+     },
+     "sky": {
+      "top": [
+       0.3,
+       0.45,
+       0.72
+      ],
+      "horizon": [
+       0.72,
+       0.74,
+       0.78
+      ]
+     },
+     "ground": [
+      0.24,
+      0.22,
+      0.18
+     ],
+     "ambient": 0.55,
+     "fog": 0.000004,
+     "exposure": 0.62
+    },
+    "plains golden": {
+     "sun": {
+      "color": [
+       1,
+       0.6,
+       0.32
+      ],
+      "intensity": 3
+     },
+     "sky": {
+      "top": [
+       0.18,
+       0.26,
+       0.5
+      ],
+      "horizon": [
+       0.9,
+       0.6,
+       0.42
+      ]
+     },
+     "ground": [
+      0.22,
+      0.16,
+      0.12
+     ],
+     "ambient": 0.45,
+     "fog": 0.000005,
+     "exposure": 0.7
+    },
+    "plains night": {
+     "sun": {
+      "color": [
+       0.6,
+       0.7,
+       1
+      ],
+      "intensity": 0.35
+     },
+     "sky": {
+      "top": [
+       0.02,
+       0.03,
+       0.06
+      ],
+      "horizon": [
+       0.05,
+       0.06,
+       0.09
+      ]
+     },
+     "ground": [
+      0.05,
+      0.05,
+      0.05
+     ],
+     "ambient": 0.25,
+     "fog": 0.000005,
+     "exposure": 1.2
+    }
+   },
+   "tools": [
+    {
+     "type": "pour",
+     "key": "1",
+     "rate": 40
+    },
+    {
+     "type": "splash",
+     "key": "2",
+     "strength": 0.9
+    },
+    {
+     "type": "raise",
+     "key": "3",
+     "rate": 6
+    },
+    {
+     "type": "dig",
+     "key": "4",
+     "rate": 6
+    },
+    {
+     "type": "drain",
+     "key": "5",
+     "rate": 40
+    }
+   ],
+   "views": [
+    {
+     "name": "Overview",
+     "pos": [
+      -820,
+      420,
+      1020
+     ],
+     "look": [
+      60,
+      40,
+      -60
+     ]
+    },
+    {
+     "name": "Dam & lake",
+     "pos": [
+      300,
+      110,
+      560
+     ],
+     "look": [
+      120,
+      55,
+      300
+     ]
+    },
+    {
+     "name": "Upper river",
+     "pos": [
+      -520,
+      180,
+      -160
+     ],
+     "look": [
+      -360,
+      110,
+      -440
+     ]
+    },
+    {
+     "name": "Delta",
+     "pos": [
+      520,
+      90,
+      1000
+     ],
+     "look": [
+      200,
+      0,
+      820
+     ]
+    },
+    {
+     "name": "Lake shore",
+     "pos": [
+      -160,
+      80,
+      220
+     ],
+     "look": [
+      60,
+      60,
+      20
+     ]
+    }
+   ],
+   "entities": [
+    {
+     "type": "tilt",
+     "dir": [
+      0,
+      1
+     ],
+     "drop": 110
+    },
+    {
+     "type": "hills",
+     "amplitude": 26,
+     "scale": 520,
+     "octaves": 5,
+     "seed": 7
+    },
+    {
+     "type": "hills",
+     "amplitude": 7,
+     "scale": 90,
+     "octaves": 3,
+     "seed": 21,
+     "ridged": true
+    },
+    {
+     "type": "mountain",
+     "id": "north-peak",
+     "label": "Stormhorn",
+     "pos": [
+      -560,
+      -820
+     ],
+     "radius": 520,
+     "height": 270,
+     "roughness": 0.45
+    },
+    {
+     "type": "mountain",
+     "pos": [
+      380,
+      -900
+     ],
+     "radius": 460,
+     "height": 220,
+     "roughness": 0.5
+    },
+    {
+     "type": "mountain",
+     "pos": [
+      920,
+      -380
+     ],
+     "radius": 380,
+     "height": 150,
+     "roughness": 0.5
+    },
+    {
+     "type": "mountain",
+     "pos": [
+      -960,
+      60
+     ],
+     "radius": 360,
+     "height": 120,
+     "roughness": 0.4
+    },
+    {
+     "type": "mountain",
+     "pos": [
+      760,
+      520
+     ],
+     "radius": 340,
+     "height": 90,
+     "roughness": 0.4
+    },
+    {
+     "type": "mountain",
+     "pos": [
+      40,
+      80
+     ],
+     "radius": 620,
+     "height": 30,
+     "roughness": 0.2
+    },
+    {
+     "type": "coast",
+     "dir": [
+      0.15,
+      1
+     ],
+     "at": 760,
+     "width": 200,
+     "floor": -14
+    },
+    {
+     "type": "basin",
+     "id": "lake-bed",
+     "pos": [
+      40,
+      70
+     ],
+     "radius": 290,
+     "floor": 30,
+     "rim": 72,
+     "rimWidth": 170
+    },
+    {
+     "type": "valley",
+     "id": "upper-river",
+     "path": [
+      [
+       -470,
+       -700
+      ],
+      [
+       -330,
+       -520
+      ],
+      [
+       -410,
+       -330
+      ],
+      [
+       -220,
+       -170
+      ],
+      [
+       -60,
+       -40
+      ]
+     ],
+     "width": 18,
+     "channel": 4,
+     "bank": 70,
+     "levels": [
+      170,
+      58
+     ],
+     "wiggle": 18
+    },
+    {
+     "type": "valley",
+     "id": "east-creek",
+     "path": [
+      [
+       520,
+       -700
+      ],
+      [
+       390,
+       -500
+      ],
+      [
+       240,
+       -330
+      ],
+      [
+       70,
+       -150
+      ],
+      [
+       20,
+       -60
+      ]
+     ],
+     "width": 12,
+     "channel": 3,
+     "bank": 55,
+     "levels": [
+      100,
+      60
+     ],
+     "wiggle": 14
+    },
+    {
+     "type": "valley",
+     "id": "lower-river",
+     "path": [
+      [
+       100,
+       200
+      ],
+      [
+       150,
+       320
+      ],
+      [
+       270,
+       480
+      ],
+      [
+       140,
+       640
+      ],
+      [
+       230,
+       840
+      ],
+      [
+       200,
+       1060
+      ]
+     ],
+     "width": 22,
+     "channel": 4,
+     "bank": 80,
+     "levels": [
+      50,
+      -8
+     ],
+     "wiggle": 16
+    },
+    {
+     "type": "dam",
+     "id": "dam",
+     "label": "Dam (X: breach)",
+     "from": [
+      30,
+      430
+     ],
+     "to": [
+      290,
+      300
+     ],
+     "crest": 66,
+     "top": 8,
+     "side": 1.6,
+     "spillway": {
+      "width": 22,
+      "depth": 2.5
+     },
+     "gap": {
+      "at": 0.52,
+      "width": 46
+     },
+     "breachTime": 12
+    },
+    {
+     "type": "sea",
+     "label": "Sea",
+     "level": 2,
+     "labelPos": [
+      -300,
+      930
+     ]
+    },
+    {
+     "type": "lake",
+     "id": "lake",
+     "label": "Lake",
+     "pos": [
+      40,
+      70
+     ],
+     "level": 63
+    },
+    {
+     "type": "spring",
+     "id": "spring-west",
+     "label": "West spring",
+     "pos": [
+      -470,
+      -700
+     ],
+     "rate": 40,
+     "radius": 18
+    },
+    {
+     "type": "spring",
+     "id": "spring-east",
+     "label": "East spring",
+     "pos": [
+      520,
+      -700
+     ],
+     "rate": 30,
+     "radius": 14
+    },
+    {
+     "type": "spring",
+     "label": "Cliff spring",
+     "pos": [
+      -880,
+      -230
+     ],
+     "rate": 8,
+     "radius": 10
+    },
+    {
+     "type": "rain",
+     "label": "",
+     "rate": 60,
+     "enabled": false
+    },
+    {
+     "type": "drain",
+     "label": "Sinkhole",
+     "pos": [
+      -850,
+      -170
+     ],
+     "rate": 5,
+     "radius": 12
+    },
+    {
+     "type": "debris",
+     "label": "",
+     "pos": [
+      -330,
+      -520
+     ],
+     "radius": 30,
+     "count": 500,
+     "size": 2.6,
+     "color": [
+      0.36,
+      0.24,
+      0.14
+     ],
+     "life": 900
+    },
+    {
+     "type": "debris",
+     "label": "",
+     "pos": [
+      390,
+      -500
+     ],
+     "radius": 20,
+     "count": 300,
+     "size": 1.8,
+     "color": [
+      0.3,
+      0.34,
+      0.16
+     ],
+     "life": 900
+    },
+    {
+     "type": "debris",
+     "label": "",
+     "pos": [
+      200,
+      520
+     ],
+     "radius": 24,
+     "count": 400,
+     "size": 2.2,
+     "color": [
+      0.4,
+      0.28,
+      0.16
+     ],
+     "life": 900
+    }
+   ]
+  }
+ }
+}
