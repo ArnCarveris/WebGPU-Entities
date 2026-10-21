@@ -36,7 +36,7 @@ class AppMenus {
         ]);
         this.rain.set(isRain ? wx.target : 'none', rain.map(n => radio(n, n === wx.target, () => c.setWeather(n))), rain.length > 0);
         this.time.set(`×${a.timeScale}${a.paused ? ' (paused)' : ''}`, TIME_SCALES.map(t => radio(`×${t}`, t === a.timeScale, () => c.setTimeScale(t))));
-        for (const x of a.extensions) x.syncMenus?.();
+        a.each('syncMenus');
 
         const lights = a.lightNames || [];
         this.lighting.set(a.lightName, lights.map(n => radio(n, n === a.lightName, () => c.pickLight(n))), lights.length > 1);

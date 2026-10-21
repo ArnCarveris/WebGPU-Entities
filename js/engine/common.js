@@ -350,53 +350,134 @@ class PointerInput {
     }
 }
 
-// Composite: there is one World (kits.world), one App (kits.world) and one Renderer (kits.gpu); what a world type makes
-// of each is its extension (a WorldExtension, AppExtension, RendererExtension), composed in, never a class of its own.
-// Composite.of(host) wraps a host so that what it has not itself its base answers: the type's extension, which mounts
-// itself first thing in its constructor (this.world = world.mount(this)): its members, getters and setters, and its
-// methods (bound to it); a name neither has is set on the base. The base passes the host, not itself, to what it makes.
-// compose(host, list, ...args): the other extensions (the features' on in its world: new E(host, ...args)), kept as
-// host.ext[E.key], in order in host.extensions; the base calls its hooks where it runs them.
-const BOUND = new WeakMap();
+// Composite: there is one World (kits.world), one App (kits.world) and one Renderer (kits.gpu); what a kit makes of
+// each is its extensions (WorldExtensions, AppExtensions, RendererExtensions), composed in, never a class of its own.
+// Composite.of(host) wraps a host (a Proxy) so that its extensions answer for it, none of them special:
+//
+//   static key       the extension's name on the host: host.ext[key]. A key already composed is skipped (two features
+//                    may both bring a shared extension: it is made once)
+//   static exposes   the members it answers on the host itself (host.terrain, host.frame(...)): its fields, getters,
+//                    setters and methods (bound to it). Two extensions exposing one name throw when composed, naming
+//                    both. Setting an exposed name sets it on its extension; any other name is the host's own
+//   hooks            host.each(name, ...args) calls every extension's `name` (those that have it), in compose order;
+//                    host.first(...) the first truthy result, host.most(...) the largest number, host.all(...) every
+//                    result (arrays flattened), null and undefined left out
+//
+// An extension gets the host as its constructor's first argument and keeps it (this.world = world, this.app = app,
+// this.renderer = renderer): from that line on the host answers its exposed names, so its constructor may already use
+// them through the host. It passes the host, not itself, to what it makes. compose(host, list, ...args): new E(host,
+// ...args) for each, in order (host.extensions). The host's own constructor composes its own extension (own: new
+// World(E, ...args)), which runs its hooks from its own code: host.extensions and the hook lists hold the others, the
+// ones it composes in turn (its features').
+//
+// A member no extension exposes reads undefined; while the host's own extension still has it without saying so, it is
+// answered from there with a console error naming it (an exposes list to complete), so nothing breaks on the way.
+const ROLE = { World: 'world', App: 'app', Renderer: 'renderer' };
+const STATE = new WeakMap();        // host -> { owner: Map(name -> extension), bound: Map(name -> { fn, x, call }), own, told }
+const TARGET = new WeakMap();       // a host's Proxy -> the host
+// the extension answering name k for host t: who exposes it, else (with an error, once) its own extension if it has it
+function owner(t, k) {
+    const S = STATE.get(t), x = S.owner.get(k), e = S.own;
+    if (x || typeof k !== 'string' || !e || !(k in e)) return x;
+    if (!S.told.has(k)) { S.told.add(k); console.error(`${t.constructor.name}.${k}: answered by ${e.constructor.name} (${e.constructor.key}), which does not expose it`); }
+    return e;
+}
 const FORWARD = {
     get(t, k, r) {
         if (k in t) return Reflect.get(t, k, r);
-        const b = t.base;
-        if (!b || !(k in b)) return undefined;
-        const v = b[k];
+        const x = owner(t, k);
+        if (!x) return undefined;
+        const v = x[k];
         if (typeof v !== 'function') return v;
-        const bound = BOUND.get(t);
+        const bound = STATE.get(t).bound;
         let m = bound.get(k);
-        if (!m || m.fn !== v) bound.set(k, m = { fn: v, call: v.bind(b) });
+        if (!m || m.fn !== v || m.x !== x) bound.set(k, m = { fn: v, x, call: v.bind(x) });
         return m.call;
     },
     set(t, k, v, r) {
-        if (k in t || !t.base) return Reflect.set(t, k, v, r);
-        t.base[k] = v;
+        if (k in t) return Reflect.set(t, k, v, r);
+        const x = owner(t, k);
+        if (!x) return Reflect.set(t, k, v, r);
+        x[k] = v;
         return true;
     },
-    has(t, k) { return k in t || !!t.base && k in t.base; },
+    has(t, k) { return k in t || !!owner(t, k); },
 };
 const Composite = {
     of(host) {
-        host.base = null;
         host.ext = {};
         host.extensions = [];
-        BOUND.set(host, new Map());
-        return new Proxy(host, FORWARD);
+        STATE.set(host, { owner: new Map(), bound: new Map(), own: null, told: new Set() });
+        const p = new Proxy(host, FORWARD);
+        TARGET.set(p, host);
+        return p;
     },
-    mount(host, base) {
-        if (host.base) throw new Error(`${host.constructor.name}: a second base (${base.constructor.name})`);
-        host.base = base;
-        return host;
+    // the host's own extension (its constructor's: new World(E, ...args))
+    own(host, E, ...args) {
+        const x = Composite.make(host, E, args);
+        STATE.get(Composite.target(host)).own = x;
+        return x;
     },
     compose(host, list, ...args) {
-        return list.map(E => {
-            const x = new E(host, ...args);
-            if (E.key) host.ext[E.key] = x;
+        const out = [];
+        for (const E of list.flat()) {
+            if (E.key && E.key in host.ext) continue;
+            const x = Composite.make(host, E, args);
             host.extensions.push(x);
-            return x;
+            out.push(x);
+        }
+        return out;
+    },
+    // new E(host, ...args), adopted by the host as soon as its constructor keeps the host (this.<role> = host: a setter
+    // on its class, made once, does it), else when it returns
+    make(host, E, args) {
+        const role = ROLE[Composite.target(host).constructor.name];
+        let adopted = false;
+        const keep = role && !Object.prototype.hasOwnProperty.call(E.prototype, role);
+        if (keep) Object.defineProperty(E.prototype, role, {
+            configurable: true,
+            set(h) {
+                Object.defineProperty(this, role, { value: h, writable: true, enumerable: true, configurable: true });
+                if (h === host && !adopted) { adopted = true; Composite.adopt(host, E, this); }
+            },
         });
+        try {
+            const x = new E(host, ...args);
+            if (!adopted) Composite.adopt(host, E, x);
+            return x;
+        } finally {
+            if (keep) delete E.prototype[role];
+        }
+    },
+    adopt(host, E, x) {
+        const t = Composite.target(host), S = STATE.get(t);
+        if (E.key) host.ext[E.key] = x;
+        for (const k of E.exposes || []) {
+            const was = S.owner.get(k);
+            if (was && was !== x) throw new Error(`${t.constructor.name}.${k}: exposed by both ${was.constructor.name} (${was.constructor.key}) and ${E.name} (${E.key})`);
+            S.owner.set(k, x);
+        }
+    },
+    // the host behind its Proxy (`this` in its methods is the Proxy)
+    target(host) { return TARGET.get(host) || host; },
+    each(host, name, ...args) { for (const x of host.extensions) x[name]?.(...args); },
+    first(host, name, ...args) {
+        for (const x of host.extensions) { const v = x[name]?.(...args); if (v) return v; }
+        return null;
+    },
+    most(host, name, ...args) {
+        let m = -Infinity;
+        for (const x of host.extensions) { const v = x[name]?.(...args); if (typeof v === 'number' && v > m) m = v; }
+        return m;
+    },
+    all(host, name, ...args) {
+        const out = [];
+        for (const x of host.extensions) {
+            const v = x[name]?.(...args);
+            if (Array.isArray(v)) out.push(...v);
+            else if (v != null) out.push(v);
+        }
+        return out;
     },
 };
 

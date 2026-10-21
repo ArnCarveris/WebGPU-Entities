@@ -33,9 +33,13 @@ const { StencilLayout, buildPipelines, RenderExtensions } = engine.kits.gpu;
 // group 0), bind group layouts (bgl0, bgl1), buffers, blends, and `region`, the slots a draw in its entry's region tests.
 
 class RendererExtension {
+    static key = 'interior';
+    // what it answers on the Renderer (Common.Composite)
+    static exposes = ['H', 'W', 'bgl0', 'bgl1', 'depth', 'depthSample', 'device', 'format', 'fx', 'info', 'init',
+        'onError', 'overlays', 'pipes', 'regions', 'render', 'resize', 'stencil', 'upload'];
     // fx: the feature context (the host's device and canvas target; see js/engine/host.js)
     constructor(renderer, fx) {
-        this.renderer = renderer.mount(this);
+        this.renderer = renderer;
         this.fx = fx;
         this.onError = (msg) => console.error(msg);
         this.stencil = new StencilLayout();
@@ -89,7 +93,7 @@ class RendererExtension {
         // its shaders: the core's chunks, the extensions' over them, each module the chunks it names
         this.wgsl = portalWgsl();
         const modules = Object.fromEntries(Object.entries(PORTAL_MODULES).map(([k, v]) => [k, [...v]]));
-        for (const x of this.renderer.extensions) x.wgsl?.(this.wgsl, modules);
+        this.renderer.each('wgsl', this.wgsl, modules);
         const mod = names => device.createShaderModule({ code: this.wgsl.code(...names) });
         const ctx = {
             device, format: this.format, depthFormat: DEPTH_FORMAT, samples: 4, stencil: this.stencil,
@@ -227,7 +231,7 @@ class RendererExtension {
         if (lineVerts) q.writeBuffer(this.lineBuf, 0, f.lines, 0, lineVerts * 7);
 
         const enc = d.createCommandEncoder();
-        for (const x of this.renderer.extensions) x.prepare?.(f, enc, target);
+        this.renderer.each('prepare', f, enc, target);
         const pass = enc.beginRenderPass({
             colorAttachments: [{ view: into.msaa, resolveTarget: into.resolve,
                 clearValue: { r: 0.004, g: 0.005, b: 0.007, a: 1 }, loadOp: 'clear', storeOp: 'discard' }],

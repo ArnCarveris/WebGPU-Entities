@@ -28,7 +28,7 @@ class LightWriter {
             all.push({ pos: v3.add(cam, v3.add(v3.mul(right, hand[0]), v3.mul(up, hand[1]))), dir: v3.norm(v3.add(fwd, v3.mul(up, 0.02))), color: L.color,
                 intensity: L.intensity, range: L.range, size: L.size, cone: [Math.cos(L.cone[0] * DEG), Math.cos(L.cone[1] * DEG)], first: true });
         }
-        if (night) for (const x of a.extensions) x.lights?.(all, cam);
+        if (night) a.each('lights', all, cam);
         const reach = l => l.first ? -1 : Math.max(v3.len(v3.sub(l.pos, cam)) - l.range, 0);
         const list = all.map(l => [reach(l), l]).filter(e => e[0] < LIGHT_RANGE).sort((p, q) => p[0] - q[0]);
         const cut = list.length > MAX_LIGHTS ? Math.max(list[MAX_LIGHTS][0], 1) : LIGHT_RANGE;
@@ -40,7 +40,7 @@ class LightWriter {
             data.set([...l.pos, l.range, ...l.color.map(x => x * k), c ? c[0] : -2, ...l.dir, c ? c[1] : 1, (l.cabin ? LIGHT_CABIN : 0) | (c ? LIGHT_SPOT : 0) | (l.room ? LIGHT_ROOM : 0), (l.size ?? 0.5) ** 2], i * 16);
         });
         const taken = list.slice(0, MAX_LIGHTS).map(e => e[1]), G = LIGHT_GRID, grid = this.grid;
-        for (const x of a.extensions) x.lightMasks?.(taken, mask);
+        a.each('lightMasks', taken, mask);
         // a grid over their reach, each cell listing the lights that reach into it (a light's circle against the cell)
         grid.fill(0);
         let lb = [0, 0, 0, 0];
@@ -73,7 +73,7 @@ class LightWriter {
     // light-pollution domes, the buses' lights among them); none without them
     writeFar(F, night, adapt) {
         F.set('glowInfo', [0, 0, 0, 0]);
-        for (const x of this.app.extensions) x.writeFar?.(F, night, adapt);
+        this.app.each('writeFar', F, night, adapt);
     }
 }
 

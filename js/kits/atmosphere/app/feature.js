@@ -54,8 +54,7 @@ const atmosphereWorld = type => ({
     // what its world's extensions say shelters p (the structures feature's: its buildings' and buses' interiors, the
     // InteriorIndex, O(1))
     sheltered(p) {
-        for (const x of this.app.world?.extensions || []) { const s = x.sheltered?.(p); if (s) return s; }
-        return null;
+        return this.app.world?.first('sheltered', p) || null;
     },
 
     // what the sound beds, HUD panels and links read (and what the extensions add: the buses' busDist, busSpeed...)
@@ -67,7 +66,7 @@ const atmosphereWorld = type => ({
             walking: a.walker.active, wind: Math.hypot(c.wind[0], c.wind[1]), agl: cam[1] - w.field.surface(cam[0], cam[2]),
             temperature: c.temperature, coverage: c.coverage, flashes: w.flashCount, veil: a.flashVeil, air: a.airHere ?? 1,
         };
-        for (const x of a.extensions) x.stats?.(out);
+        a.each('stats', out);
         return out;
     },
 
@@ -95,7 +94,7 @@ const atmosphereWorld = type => ({
 
     set(key, v) {
         const a = this.app;
-        if (a.extensions.some(x => x.set?.(key, v))) return;
+        if (a.first('set', key, v)) return;
         if (key === 'weather' && a.world.weather.states[v] && a.world.weather.target !== v) a.controls.setWeather(v);
         else if (key === 'light' && a.lightPresets[v] && a.lightName !== v) a.controls.pickLight(v);
         else if (key === 'paused') a.paused = !!v;

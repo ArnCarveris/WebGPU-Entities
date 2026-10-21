@@ -11,8 +11,13 @@ const {
 const PACE_REACH = 30;      // s
 
 class WorldExtension {
+    static key = 'origin';
+    // what it answers on the World (Common.Composite)
+    static exposes = ['addDynamic', 'bodies', 'density', 'destroy', 'dynamic', 'geometry', 'instanceCount', 'landmarks',
+        'materials', 'meshes', 'modelList', 'models', 'proximity', 'resolve', 'scenario', 'store', 'sun', 'sunPos',
+        'surfaces', 'types', 'update'];
     constructor(world, scenario, device, density = 1) {
-        this.world = world.mount(this);
+        this.world = world;
         this.scenario = scenario;
         this.types = ENTITY_TYPES;
         this.density = density;

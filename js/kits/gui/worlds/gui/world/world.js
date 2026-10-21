@@ -14,8 +14,13 @@ const { ENTITY_TYPES, TerminalGUI } = kit;
 const NO_WAVES = { list: [], emit() {}, prune() {} };
 
 class WorldExtension {
+    static key = 'gui';
+    // what it answers on the World (Common.Composite)
+    static exposes = ['alarm', 'alarmPulse', 'collide', 'frameState', 'game', 'guiKinds', 'guis', 'init', 'instances',
+        'lampScale', 'lightsOn', 'log', 'mesh', 'meshes', 'ofType', 'placeLabel', 'pushLog', 'render', 'renderer',
+        'scenario', 'setAlarm', 'setDoor', 'setLights', 'types', 'update', 'waves', 'writeInstances'];
     constructor(world, game, scenario) {
-        this.world = world.mount(this);
+        this.world = world;
         this.types = ENTITY_TYPES;
         this.game = game;
         this.scenario = scenario;

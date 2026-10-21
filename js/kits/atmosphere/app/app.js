@@ -23,11 +23,20 @@ const { Hud, AppMenus, Controls, KeyCommands, SPLASH_PARTICLES, RENDER_DEFAULTS,
 const { DynamicScale, Renderer } = kits.gpu;
 
 class AppExtension {
+    static key = 'atmosphere';
+    // what it answers on the App (Common.Composite)
+    static exposes = ['airAt', 'airHere', 'airHides', 'airShell', 'bloom', 'busFast', 'camera', 'canvas', 'cfg',
+        'controls', 'doors', 'drive', 'flashVeil', 'flashlight', 'forceIndoors', 'fps', 'frame', 'frameNo',
+        'frameWriter', 'froxels', 'fx', 'hud', 'inBus', 'indoors', 'input', 'inspect', 'keys', 'liftControl',
+        'lightName', 'lightNames', 'lightPresets', 'lights', 'load', 'menus', 'mode', 'near', 'nearBus', 'paused',
+        'probe', 'quality', 'radar', 'radarTop', 'renderer', 'reset', 'rideBus', 'rideCar', 'scenario', 'sheltered',
+        'start', 'sun', 'sunAlong', 'tiles', 'time', 'timeScale', 'title', 'viewIndex', 'views', 'walker',
+        'weatherTime', 'world'];
 
     // world(scenario): the world (World, with the world type's extensions); extensions: AppExtension classes; title: the
     // readout's
     constructor(app, fx, { world, extensions = [], title = 'ENTITIES' }) {
-        this.app = app.mount(this);
+        this.app = app;
         this.fx = fx;
         this.createWorld = world;
         this.title = title;
@@ -138,9 +147,9 @@ class AppExtension {
         this.quality = clamp(this.cfg.quality, 0, QUALITY.length - 1);
         this.timeScale = this.cfg.timeScale;
         this.radar = this.cfg.radar ?? false;       // off unless the scenario wants it: the screen stays clean
-        for (const x of this.app.extensions) x.configure?.(this.cfg);
+        this.app.each('configure', this.cfg);
         this.renderer.setWorld(world);
-        for (const x of this.app.extensions) x.load?.(world);
+        this.app.each('load', world);
         const L = scenario.lighting || {};
         this.lightPresets = L.presets || { default: {} };
         this.lightNames = Object.keys(this.lightPresets);
@@ -168,13 +177,13 @@ class AppExtension {
             if (!this.paused) { this.time += dt; this.weatherTime += wdt; }
             w.busBoost = this.busFast ? 10 : 1;     // the bus menu's ×10: the buses run ten times as fast
             w.update(this.paused ? 0 : dt, wdt, this.time);
-            for (const x of this.app.extensions) x.update?.(dt, io);
+            this.app.each('update', dt, io);
             // on foot after the bus has moved, so a rider's eye is where the bus is this frame
             if (this.walker.active && !locked) this.walker.update(dt, io, this.input, this.app);
-            for (const x of this.app.extensions) x.afterWalk?.(dt, io, now);
+            this.app.each('afterWalk', dt, io, now);
             if (v3.len(v3.sub(before, this.camera.pos)) > 3000) this.reset = true;
             this.surroundings.update(dt);
-            for (const x of this.app.extensions) x.sounds?.();
+            this.app.each('sounds');
             this.footsteps.update();
         }
         if (!render) return;

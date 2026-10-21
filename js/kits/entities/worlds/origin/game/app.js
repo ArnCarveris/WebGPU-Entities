@@ -9,8 +9,13 @@ const { DEG, clamp, v3, PointerInput } = Common;
 const { BODY_FLOATS, MAX_COVERS, NEAR, quat, m4, RendererExtension, WorldExtension, FloatingOrigin, Camera, CameraController, Hud } = kit;
 
 class AppExtension {
+    static key = 'origin';
+    // what it answers on the App (Common.Composite)
+    static exposes = ['bookmarks', 'camera', 'canvas', 'controller', 'density', 'floating', 'fps', 'frame', 'fx',
+        'handleKeys', 'hud', 'input', 'jump', 'lighting', 'load', 'paused', 'prox', 'renderer', 'scenario', 'start',
+        'time', 'viewProj', 'world', 'writeCovers'];
     constructor(app, fx) {
-        this.app = app.mount(this);
+        this.app = app;
         this.fx = fx;
         this.canvas = fx.canvas;
         this.renderer = new Renderer(RendererExtension, fx);

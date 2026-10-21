@@ -16,9 +16,14 @@ const {
 // env, st, aspect, casterTop) (its uniforms, before the frame's cull), passes(enc, archs, st, cam) (its passes after
 // the cull, before the main one), gpuTimes(t, ms) (its share of the timestamp readout)
 class RendererExtension {
+    static key = 'imposter';
+    // what it answers on the Renderer (Common.Composite)
+    static exposes = ['cascadePlanes', 'clampSampler', 'depthView', 'device', 'drawLists', 'format', 'fx', 'globalBG',
+        'gpuTimes', 'height', 'impPipe', 'init', 'makeGlobalBG', 'matBgl', 'meshPipe', 'patternTexture', 'render',
+        'repSampler', 'resize', 'stamps', 'viewBG', 'viewData', 'whiteTexture', 'width'];
     // fx: the feature context (the host's device, canvas size, target; see js/engine/host.js)
     constructor(renderer, fx) {
-        this.renderer = renderer.mount(this);
+        this.renderer = renderer;
         this.fx = fx;
         renderer.compose(kits.gpu.extensionsOf(fx.features, 'renderer'));
         this.onError = msg => console.error(msg);
@@ -75,7 +80,7 @@ class RendererExtension {
         // its shaders: the core's chunks, the extensions' over them, each module the chunks it names
         this.wgsl = imposterWgsl();
         const modules = Object.fromEntries(Object.entries(IMPOSTER_MODULES).map(([k, v]) => [k, [...v]]));
-        for (const x of this.renderer.extensions) x.wgsl?.(this.wgsl, modules);
+        this.renderer.each('wgsl', this.wgsl, modules);
         const M = Object.fromEntries(Object.entries(modules).map(([k, names]) => [k, device.createShaderModule({ code: this.wgsl.code(...names) })]));
         const vertexLayout = MESH_BUFFERS;          // the imposter kit's standard mesh: + per-vertex AO
         const mainDepth = (write, compare) => ({ format: DEPTH_FORMAT, depthWriteEnabled: write, depthCompare: compare });
@@ -232,7 +237,7 @@ class RendererExtension {
         this.resize();
         const d = this.device, archs = world ? world.list : [];
         this.writeGlobals(cam, env, st, time);
-        for (const x of this.renderer.extensions) x.frame?.(cam, env, st, this.width / this.height, world?.casterTop ?? 0);
+        this.renderer.each('frame', cam, env, st, this.width / this.height, world?.casterTop ?? 0);
         for (let k = 0; k < LISTS; k++) d.queue.writeBuffer(this.viewBuf, k * 256, this.viewData, k * 64, 24);
         const enc = d.createCommandEncoder();
         for (const a of archs) a.upload(this.renderer);
@@ -256,7 +261,7 @@ class RendererExtension {
             archs.forEach((a, i) => { if (!a.static) enc.copyBufferToBuffer(a.lists.args, 0, this.readBuf, offsets[i], a.lists.setStride * LISTS); });
         }
 
-        for (const x of this.renderer.extensions) x.passes?.(enc, archs, st, cam);
+        this.renderer.each('passes', enc, archs, st, cam);
 
         const pass = enc.beginRenderPass({
             timestampWrites: this.stamps(10),

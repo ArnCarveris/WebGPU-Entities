@@ -30,9 +30,9 @@ class Hud extends kits.world.WorldHud {
             `<span class="t">${app.title} // ${w.scenario.name || 'scenario'}</span> <span class="m">· ${app.fps.toFixed(0)} fps${prof.enabled ? ` · gpu ${prof.total.toFixed(1)} ms` : ''} · ${cw.w}×${cw.h} · ${app.lightName}</span>`,
             `weather ${wx.blend < 1 ? `<span class="w">${wx.target} ${pc(wx.blend)}</span>` : wx.target}${w.rainZones.fade > 0 && wx.cur.zones ? ` <span class="m">(${zone ? `${zone} here` : 'off the route'} · reshuffle ${Math.max(0, w.rainZones.clock).toFixed(0)} s)</span>` : ''}${wx.cycle.enabled ? ' <span class="m">(auto)</span>' : ''} · ×${app.timeScale}${app.paused ? ' <span class="w">paused</span>' : ''}`,
             `sky     ${fx(c.base)}-${fx(c.top)} km · ${w.clouds.active(c).map(([n, v]) => `${n} ${pc(v)}`).join(' · ') || 'clear'}`,
-            `air     ${c.temperature.toFixed(0)} °C · freezing ${fx(wx.freezingLevel)} km · wind ${wind.toFixed(0)} m/s ${from} · ${[...app.extensions.map(x => x.air?.()).filter(Boolean), `${w.flashCount} flashes`].join(', ')}`,
+            `air     ${c.temperature.toFixed(0)} °C · freezing ${fx(wx.freezingLevel)} km · wind ${wind.toFixed(0)} m/s ${from} · ${[...app.all('air').filter(Boolean), `${w.flashCount} flashes`].join(', ')}`,
             `here    ${here}${app.sheltered || app.indoors ? ` <span class="w">${app.inBus ? 'in the bus' : app.indoors ? `indoors, storey ${Math.min(app.indoors.n, 1 + Math.floor((app.camera.pos[1] - app.indoors.floor) / app.indoors.H))} of ${app.indoors.n}` : 'sheltered'}</span>` : ''} · alt ${fx(app.camera.pos[1], 2)} km · snow ${app.frameWriter.groundSnowHint}`,
-            ...app.extensions.flatMap(x => x.lines?.() || []),
+            ...app.all('lines'),
         ];
         if (app.renderer.lastError) lines.push(`<span class="off">${app.renderer.lastError.slice(0, 90)}</span>`);
         this.lines = lines;

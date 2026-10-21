@@ -55,7 +55,7 @@ class FrameWriter {
         // the camera inside another world of a composition sees it only as that world does (fx.outdoors)
         this.outdoors = null;
         const view = { proj, near, basis: { fwd, right, up }, aspect, planes: frustumPlanes(this.viewProj, { reversed: true }) };
-        for (const x of a.extensions) x.draws?.(this, view);
+        a.each('draws', this, view);
         this.outdoors = r.outdoors = Outdoors.meet(this.outdoors, a.fx.outdoors, r.width, r.height);
         // the cabin the rain and the march leave out (the features': AppExtension.cabin() { rank, inv (world to its frame),
         // lo, hi }, the lowest rank's: the lift car the camera is in, the bus ridden or the nearest, the building it is in),
@@ -136,7 +136,7 @@ class FrameWriter {
         // what shelters from the weather (AppExtension.shelter: the structures' boxes, their sun and rain shadows, the roof
         // edges the rain drips off: this.drips of them, this.dripParticles the drops falling off them)
         this.drips = this.dripParticles = 0;
-        for (const x of a.extensions) x.shelter?.(this, F, { cam: cam.pos, sun: sky.dir, wind: c.wind, freezing: w.weather.freezingLevel, fall: rainFall(drops) });
+        a.each('shelter', this, F, { cam: cam.pos, sun: sky.dir, wind: c.wind, freezing: w.weather.freezingLevel, fall: rainFall(drops) });
         a.lights.write(F, cam.pos, fwd, right, up);
         this.splashStart = this.rainParticles + (this.drips && a.near.rain > 0.02 ? this.dripParticles : 0);
         F.set('drips', [this.splashStart], 1);

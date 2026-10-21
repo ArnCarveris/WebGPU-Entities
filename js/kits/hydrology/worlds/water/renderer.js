@@ -11,9 +11,13 @@ const { FRAME_FLOATS, waterWgsl, TU, BU, makeTex } = kit;
 // chunks over the core's stubs; modules: the scene and surface modules' chunk names), pipelines(ctx) (ctx { scene,
 // surface, layoutA, layoutB, pipe }), surface(pass) (its draws in the surface pass, after the water)
 class RendererExtension {
+    static key = 'water';
+    // what it answers on the Renderer (Common.Composite)
+    static exposes = ['createPipelines', 'debrisCount', 'depth', 'depthCView', 'depthView', 'device', 'format',
+        'frameData', 'fx', 'height', 'init', 'modules', 'render', 'resize', 'sampler', 'setSim', 'width'];
     // the host's device and canvas (fx: the world context, see js/engine/host.js; fx.features: the features on in its world)
     constructor(renderer, fx) {
-        this.renderer = renderer.mount(this);
+        this.renderer = renderer;
         this.fx = fx;
         renderer.compose(engine.kits.gpu.extensionsOf(fx.features, 'renderer'));
     }
@@ -37,7 +41,7 @@ class RendererExtension {
         // its shaders: the core's chunks, the features' over them
         this.wgsl = waterWgsl();
         this.modules = { scene: ['COMMON', 'SCENE'], surface: ['COMMON', 'SURFACE'] };
-        for (const x of this.renderer.extensions) x.wgsl?.(this.wgsl, this.modules);
+        this.renderer.each('wgsl', this.wgsl, this.modules);
         const scene = d.createShaderModule({ label: 'scene', code: this.wgsl.code(...this.modules.scene) });
         const surface = d.createShaderModule({ label: 'surface', code: this.wgsl.code(...this.modules.surface) });
         const layoutA = d.createPipelineLayout({ bindGroupLayouts: [this.worldLayout] });
@@ -62,7 +66,7 @@ class RendererExtension {
         });
         // (its storage buffers' stand-ins: no debris)
         this.noParticles = makeBuffer(d, 64, BU().STORAGE);
-        for (const x of this.renderer.extensions) x.pipelines?.({ scene, surface, layoutA, layoutB, pipe });
+        this.renderer.each('pipelines', { scene, surface, layoutA, layoutB, pipe });
     }
 
     setSim(world, flow, waves, debris) {
@@ -125,7 +129,7 @@ class RendererExtension {
         b.setPipeline(this.pWater);
         b.setIndexBuffer(this.waterIndex, 'uint32');
         b.drawIndexed(this.waterCount);
-        for (const x of this.renderer.extensions) x.surface?.(b);
+        this.renderer.each('surface', b);
         b.end();
         if (this.depthC) {
             enc.copyTextureToTexture({ texture: this.depth }, { texture: this.depthC }, [this.width, this.height]);

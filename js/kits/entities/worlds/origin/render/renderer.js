@@ -5,9 +5,13 @@ Features.world('origin', (engine, kit) => {
 const { MAX_BODIES, ORIGIN_BYTES, BODY_FLOATS, FRAME_FLOATS, VERTEX_FLOATS, SAMPLES, WGSL } = kit;
 
 class RendererExtension {
+    static key = 'origin';
+    // what it answers on the Renderer (Common.Composite)
+    static exposes = ['bodyData', 'depth', 'depthView', 'device', 'draws', 'format', 'frameData', 'fx', 'height',
+        'init', 'layout', 'render', 'resize', 'setWorld', 'width', 'writeOrigin'];
     // the host's device and canvas (fx: the feature context, see js/engine/host.js)
     constructor(renderer, fx) {
-        this.renderer = renderer.mount(this);
+        this.renderer = renderer;
         this.fx = fx;
     }
 

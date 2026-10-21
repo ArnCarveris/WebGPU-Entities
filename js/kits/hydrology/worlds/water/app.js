@@ -22,8 +22,14 @@ const NO_DEBRIS = { count: 0, particles: null, emitters: null, encode() {} };
 // each hook optional: load(scenario) (a new world: the waves feature's cascade as app.waves, the debris feature's logs as
 // app.debris, over the stand-ins)
 class AppExtension {
+    static key = 'water';
+    // what it answers on the App (Common.Composite)
+    static exposes = ['acting', 'brush', 'camera', 'canvas', 'debris', 'extraSources', 'flow', 'fps', 'frame',
+        'frameNo', 'fx', 'handleKeys', 'hit', 'hud', 'input', 'jump', 'light', 'lightName', 'lightNames', 'load',
+        'mode', 'paused', 'renderer', 'scenario', 'setLight', 'start', 'stepsPerFrame', 'sunAlong', 'time', 'tool',
+        'tools', 'viewIndex', 'viewProj', 'views', 'water', 'waves', 'world'];
     constructor(app, fx) {
-        this.app = app.mount(this);
+        this.app = app;
         this.fx = fx;
         app.compose(engine.kits.gpu.extensionsOf(fx.features, 'app'));
         this.canvas = fx.canvas;
@@ -48,7 +54,7 @@ class AppExtension {
         const world = new World(WorldExtension, scenario);
         const flow = new FlowSim(d, world);
         Object.assign(this.app, { world, flow, waves: NO_WAVES, debris: NO_DEBRIS, scenario });
-        for (const x of this.app.extensions) x.load?.(scenario);
+        this.app.each('load', scenario);
         this.renderer.setSim(world, flow, this.waves, this.debris);
         this.stepsPerFrame = flow.cfg.stepsPerFrame;
         this.water = { ...WATER_DEFAULTS, ...(scenario.water || {}) };

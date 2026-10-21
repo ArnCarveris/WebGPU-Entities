@@ -30,8 +30,13 @@ const NO_LINES = new Float32Array(0);
 const MASK_MODES = ['stencil', 'scissor', 'none'];
 
 class AppExtension {
+    static key = 'interior';
+    // what it answers on the App (Common.Composite)
+    static exposes = ['cam', 'canvas', 'frame', 'frameBuilder', 'frameMode', 'frameNo', 'frameStats', 'fx', 'globals',
+        'hud', 'input', 'inspector', 'interaction', 'load', 'onError', 'onKey', 'opts', 'player', 'renderView',
+        'renderer', 'start', 'stats', 'ui', 'vis', 'world'];
     constructor(app, fx) {
-        this.app = app.mount(this);
+        this.app = app;
         this.fx = fx;
         this.ui = fx.ui;
         this.canvas = fx.canvas;
@@ -73,7 +78,7 @@ class AppExtension {
         this.opts.freeze = false;
         this.inspector = this.createInspector(world);
         this.player = new PlayerController(this.app, scn.camera, scn.player);
-        for (const x of this.app.extensions) x.load?.(scn, world);
+        this.app.each('load', scn, world);
         if (world.warnings.length) this.hud.toast(`${world.warnings.length} scenario warning(s), see console`);
         else this.hud.toast(`Loaded "${scn.name || 'scenario'}": ${world.areas.length - 1} areas, ${world.portals.length} portals`);
     }
@@ -115,14 +120,14 @@ class AppExtension {
                         path([[p[0] + d[0] * F, p[1] + d[1] * F], [p[0] + d[0] * F + n[0] * F, p[1] + d[1] * F + n[1] * F], [p[0] - d[0] * F + n[0] * F, p[1] - d[1] * F + n[1] * F], [p[0] - d[0] * F, p[1] - d[1] * F]]);
                         c.fillStyle = 'rgba(40,110,150,0.35)'; c.fill();
                     }
-                    for (const x of g.extensions) x.mapUnder?.(c, { X, Y, path });
+                    g.each('mapUnder', c, { X, Y, path });
                     for (const h of w.hulls) {
                         const veh = h.vehicle;
                         path(veh ? h.outline.map(q => { const r = veh.toWorld([q[0], h.deck, q[1]]); return [r[0], r[2]]; }) : h.outline);
                         c.fillStyle = 'rgba(150,50,35,0.45)'; c.fill();
                     }
                 },
-                over: (c, draw) => { for (const x of g.extensions) x.mapOver?.(c, draw); },
+                over: (c, draw) => { g.each('mapOver', c, draw); },
             },
             options: () => [
                 { choice: 'Masking', options: MASK_MODES, index: MASK_MODES.indexOf(g.opts.mode), pick: i => { g.opts.mode = MASK_MODES[i]; } },
@@ -202,7 +207,7 @@ class AppExtension {
         stats.objs = fr.objs.length;
         this.frameStats = fr.stats;
         this.frameMode = mode;
-        for (const x of this.app.extensions) x.frame?.(now, { eye, fwd, viewProj, height: H });
+        this.app.each('frame', now, { eye, fwd, viewProj, height: H });
 
         const lines = I.lines();
         R.render({ globals: this.globals(viewProj, eye, t, W, H, mode === 'stencil'), areas: w.lightingTable(t, eye), draws: fr.draws, cmds: fr.cmds, polys: fr.polys, stencil: mode === 'stencil', lines: lines.data, lineDepthCount: lines.depthCount });
@@ -219,7 +224,7 @@ class AppExtension {
         if (!o.occluders) vis.occluders = [];
         const mode = o.culling ? o.mode : 'none';
         const fr = this.viewBuilder.build(vis, mode, W, H);
-        for (const x of this.app.extensions) x.view?.(this.viewBuilder.stamp, this.frameNow);
+        this.app.each('view', this.viewBuilder.stamp, this.frameNow);
         this.renderer.render({
             globals: this.globals(viewProj, s.eye, t, W, H, mode === 'stencil'), areas: w.lightingTable(t, s.eye), draws: fr.draws, cmds: fr.cmds,
             polys: fr.polys, stencil: mode === 'stencil', lines: NO_LINES, lineDepthCount: 0,

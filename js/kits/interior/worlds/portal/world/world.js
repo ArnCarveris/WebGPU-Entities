@@ -26,10 +26,19 @@ const {
 // drones feature's navigation graph).
 
 class WorldExtension extends AreaSet {
+    static key = 'interior';
+    // what it answers on the World (Common.Composite)
+    static exposes = ['addDynamic', 'addModel', 'addPortal', 'addStatic', 'areaAt', 'areaById', 'areaIndex',
+        'areaTrees', 'areas', 'areasIn', 'areasOverlapping', 'cameras', 'col', 'collide', 'collisionSet', 'doors',
+        'drones', 'dynamic', 'dynamicByArea', 'groundAt', 'guiKinds', 'helms', 'hulls', 'indexAreas',
+        'indexOutdoorPortals', 'ladderAt', 'lightingTable', 'mat', 'materials', 'maxLights', 'meshes', 'nav', 'objects',
+        'occluders', 'outdoorTree', 'outdoors', 'pool', 'portalById', 'portals', 'power', 'scn', 'screenGuis',
+        'screens', 'shelterAt', 'sunAlong', 'sunDir', 'time', 'totalTris', 'types', 'update', 'vehicleGrid', 'vehicles',
+        'vehiclesAt', 'visGraph', 'warnings', 'water'];
     // features: the features on in its world (fx.features)
     constructor(world, scn, features = {}) {
         super();
-        this.world = world.mount(this);
+        this.world = world;
         this.types = ENTITY_TYPES;
         // the planned buildings (`structures`: placements of the floor plans in its `plans`) built into its own areas,
         // portals, models and entities first (the building kit)
@@ -68,7 +77,7 @@ class WorldExtension extends AreaSet {
         this.water = this.outdoors.water;
         this.outdoors.build();
         this.spawnEntities();
-        this.vehicles = this.world.extensions.flatMap(x => x.vehicles?.() || []);
+        this.vehicles = this.world.all('vehicles');
         for (const veh of this.vehicles) veh.claim();
         this.indexAreas();
         // the vehicles in a GridHash by their bounding spheres (re-bucketed as they cross cells, Vehicle.update): point
@@ -282,7 +291,7 @@ class WorldExtension extends AreaSet {
         this.time = t;
         for (const veh of this.vehicles) veh.update(dt, t);
         this.power.update(dt, t);
-        const all = actors.concat(this.world.extensions.flatMap(x => x.actors?.() || []));
+        const all = actors.concat(this.world.all('actors'));
         for (const e of this.dynamic) e.update(dt, t, all);
         for (const list of this.dynamicByArea) list.length = 0;
         for (const e of this.dynamic) for (const o of e.owners) this.dynamicByArea[o].push(e);

@@ -210,9 +210,11 @@ only list of kits, entity types, data types and worlds, and everything else is l
   returns `{ create: fx => new FeatureWorld(fx, spec) }`, the spec its HUD, its app and whichever of the host's hooks it
   has (depth, stats, views, ground, sheltered, outdoors, sunDir, veil, footprint, set...) over the defaults. There is one `World`, one `App` (the world
   kit's) and one `Renderer` (the gpu kit's), never a class of a world's own: what a world type makes of each is its
-  `WorldExtension`, `AppExtension` and `RendererExtension`, which mounts itself on the one class and answers for it
-  (`Common.Composite`: what the host has not itself, its base has), and the features' extensions are composed into the
-  same host (`host.compose(list)`: `host.ext[key]`, `host.extensions`).
+  `WorldExtension`, `AppExtension` and `RendererExtension`, which keeps the host its constructor is given and answers
+  for it what it says it does (`Common.Composite`: each extension's `static key` names it, `host.ext[key]`, and its
+  `static exposes` lists the members it answers on the host; two extensions exposing one name are an error), and the
+  features' extensions are composed into the same host (`host.compose(list)`, a key composed once, in order in
+  `host.extensions`), their hooks run as lists (`host.each('update', dt)`, `first`, `most`, `all`).
 - **A feature** is what a world is made of beyond its core, built only when the world's data asks for it (`when`: an
   entity of a type, an entity whose implementation needs something, a data path, through a list in any of its items
   (`entities.screen`), another feature; `requires`), its

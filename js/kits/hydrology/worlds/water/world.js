@@ -6,8 +6,12 @@ Features.world('water', (engine, kit) => {
 const { Heightfield, ENTITY_TYPES } = kit;
 
 class WorldExtension {
+    static key = 'water';
+    // what it answers on the World (Common.Composite)
+    static exposes = ['boost', 'emitters', 'field', 'gather', 'rainOn', 'scenario', 'seaLevel', 'snowLine', 'types',
+        'update', 'water'];
     constructor(world, scenario) {
-        this.world = world.mount(this);
+        this.world = world;
         this.scenario = scenario;
         this.types = ENTITY_TYPES;
         const t = { size: 2048, resolution: 512, base: 0, ...(scenario.terrain || {}) };

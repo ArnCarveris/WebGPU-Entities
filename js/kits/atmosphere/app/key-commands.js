@@ -16,13 +16,13 @@ class KeyCommands {
     // the keyboard: F at the wheel of a bus (the buses feature's); E, the doors, lifts and seats, is theirs (DoorControl,
     // LiftControl, Walker); everything else is on the handheld
     keyboard(pressed) {
-        for (const code of pressed) if (code === 'KeyF') this.app.extensions.some(x => x.key?.(code));
+        for (const code of pressed) if (code === 'KeyF') this.app.first('key', code);
     }
 
     handle(pressed) {
         const a = this.app, c = a.controls, w = a.world, wx = w.weather;
         for (const code of pressed) {
-            if (a.extensions.some(x => x.key?.(code))) continue;
+            if (a.first('key', code)) continue;
             const digit = code.match(/^(?:Digit|Numpad)(\d)$/);
             if (digit) {
                 const k = +digit[1];
@@ -67,7 +67,7 @@ class KeyCommands {
             const cv = a.world.curvature;
             const hit = a.world.field.raycast(a.camera.pos, a.camera.ray(cx - rect.left, cy - rect.top, rect.width, rect.height), undefined, cv.on ? p => cv.toWorld(p) : null);
             if (!hit) { a.hud.toast('Click on the ground'); continue; }
-            a.extensions.some(x => x.click?.(hit));
+            a.first('click', hit);
         }
     }
 }

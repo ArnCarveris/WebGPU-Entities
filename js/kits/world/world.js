@@ -1,25 +1,31 @@
 'use strict';
 // World: the one world every world type is (Common.Composite). What a type makes of it is its WorldExtension (the
-// atmosphere's, the water's, the facility's...), which mounts itself on it and answers for it: its terrain, its systems,
-// its update. The World holds what every world has: its entities, by id.
+// atmosphere's, the water's, the facility's...), which answers for it what it exposes: its terrain, its systems, its
+// update. The World holds what every world has: its entities, by id.
 
 Features.kit('world', (engine, kit) => {
 const { Composite } = engine.Common;
 const { addEntity } = kit;
 
 class World {
-    // Base: the world type's WorldExtension, new Base(world, ...args): it mounts itself (this.world = world.mount(this)),
-    // builds the world and composes in its features' (world.compose(list): new E(world), world.ext[E.key])
-    constructor(Base, ...args) {
+    // E: its own WorldExtension, new E(world, ...args): it keeps the world (this.world = world), builds it and composes
+    // in its features' (world.compose(list): new F(world), world.ext[F.key])
+    constructor(E, ...args) {
         const world = Composite.of(this);
         this.entities = [];
         this.byId = new Map();
-        new Base(world, ...args);
+        Composite.own(world, E, ...args);
         return world;
     }
 
-    mount(base) { return Composite.mount(this, base); }
     compose(list, ...args) { return Composite.compose(this, list, ...args); }
+
+    // its extensions' hooks, in compose order (Common.Composite): every one's, the first truthy result, the largest
+    // number, every result
+    each(name, ...args) { return Composite.each(this, name, ...args); }
+    first(name, ...args) { return Composite.first(this, name, ...args); }
+    most(name, ...args) { return Composite.most(this, name, ...args); }
+    all(name, ...args) { return Composite.all(this, name, ...args); }
 
     // a scenario entity of one of its types (its base's `types`: the entity classes by type name), spawned unless not
     // (opts: kits.world addEntity's)

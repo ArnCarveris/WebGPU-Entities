@@ -55,9 +55,17 @@ async function checkShaderModule(module) {
 }
 
 class RendererExtension {
+    static key = 'gui';
+    // what it answers on the Renderer (Common.Composite)
+    static exposes = ['allocInstances', 'aspect', 'beginFrame', 'beginScenePass', 'bindGui', 'createBuffer',
+        'createMesh', 'createPipelines', 'createView', 'depthSample', 'depthView', 'device', 'encoder', 'endFrame',
+        'finalizeInstances', 'format', 'fx', 'groupFor', 'height', 'init', 'materials', 'mirrorTo', 'pipelines',
+        'registerMaterial', 'reserveSurfaces', 'resize', 'sampler', 'setInstance', 'setMaterialTexture',
+        'setWorldMaterials', 'shadings', 'stencil', 'surfaces', 'swapView', 'targets', 'updateGuiTargets', 'width',
+        'worldMaterials', 'writeGui'];
     // fx: the feature context (the host's device, canvas size and target; see js/engine/host.js)
     constructor(renderer, fx) {
-        this.renderer = renderer.mount(this);
+        this.renderer = renderer;
         this.fx = fx;
         this.pipelines = {};
         this.materials = new Map();     // name -> { shading, view, version }

@@ -14,8 +14,9 @@ Features.kit('gpu', (engine, kit) => {
 const registry = new Map();
 
 // what the features on in a world (fx.features: { <name>: their exports }) add to one of its parts (a renderer kind, a
-// world's World or App: any role its kit names), in the features' order: each feature's extensions[role], if it has one
-const extensionsOf = (features, role) => Object.values(features || {}).map(f => f.extensions?.[role]).filter(Boolean);
+// world's World or App: any role its kit names), in the features' order: each feature's extensions[role], one or a list
+// (two features may list the same extension: Composite.compose makes it once, by its key)
+const extensionsOf = (features, role) => Object.values(features || {}).flatMap(f => [].concat(f.extensions?.[role] ?? [])).filter(Boolean);
 
 const RenderExtensions = {
     register(kind, factory) {

@@ -13,8 +13,14 @@ const {
 } = kit;
 
 class AppExtension {
+    static key = 'imposter';
+    // what it answers on the App (Common.Composite)
+    static exposes = ['action', 'bake', 'bakes', 'bakesAfterRelight', 'baking', 'camera', 'canvas', 'cpuMs',
+        'focusInfo', 'frame', 'fx', 'hud', 'input', 'last', 'lib', 'lighting', 'loadFiles', 'loadScenario', 'loading',
+        'next', 'onKey', 'panel', 'relight', 'renderer', 'scenario', 'set', 'settings', 'start', 'time', 'toast', 'ui',
+        'world'];
     constructor(app, fx) {
-        this.app = app.mount(this);
+        this.app = app;
         const scenario = fx.native;
         this.fx = fx;
         this.ui = fx.ui;

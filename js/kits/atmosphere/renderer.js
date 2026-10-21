@@ -35,10 +35,18 @@ const { TerrainLod, TERRAIN_MAX_NODES, terrainPatchIndices } = kits.terrain;
 //   late(pass)               the outdoors after the indoors (scissored as outdoor's)
 //   final(pass)              its draws in the final pass, after the composite and the precipitation
 class RendererExtension {
+    static key = 'atmosphere';
+    // what it answers on the Renderer (Common.Composite)
+    static exposes = ['air', 'bloom', 'bloomViews', 'boltBuf', 'busData', 'busGroup', 'busLayout', 'cellBuf',
+        'cellData', 'clampSamp', 'cloudPass', 'createPipelines', 'depth', 'depthFormat', 'depthSampleView', 'depthView',
+        'device', 'encodeBloom', 'encodeInject', 'encodeSpace', 'format', 'frame', 'frameBuf', 'froxelPass', 'fx',
+        'height', 'heightView', 'init', 'lineLayer', 'modules', 'noise', 'outdoors', 'profiler', 'render', 'repSamp',
+        'resize', 'scale', 'sceneModule', 'setWorld', 'stencilBits', 'terrainIndex', 'terrainLod', 'terrainNodes',
+        'useFrames', 'vegetation', 'weatherPass', 'wgsl', 'width', 'worldGroup', 'worldSet'];
     // fx: the world context (the host's device, canvas size, target, the features on in its world (fx.features), and in
     // a composition the other worlds to put under the clouds: fx.inject; see js/engine/host.js)
     constructor(renderer, fx) {
-        this.renderer = renderer.mount(this);
+        this.renderer = renderer;
         this.fx = fx;
         renderer.compose(kits.gpu.extensionsOf(fx.features, 'renderer'));
         this.outdoors = null;           // the outdoors seen from inside ({ seen, rect }: a feature's portal traversal), or all of it
@@ -52,7 +60,7 @@ class RendererExtension {
             scene: ['SKY', 'WEATHER_SAMPLE', 'SHADOW_SAMPLE', 'SHELTER', 'TERRAIN', 'FOREST', 'SCENE'],
             final: ['SKY', 'WEATHER_SAMPLE', 'SHADOW_SAMPLE', 'SHELTER', 'TERRAIN', 'FINAL'],
         };
-        for (const x of this.renderer.extensions) x.wgsl?.(this.wgsl, this.modules);
+        this.renderer.each('wgsl', this.wgsl, this.modules);
         this.profiler = new GpuProfiler(this.device, ['weather', 'ground', 'vegetation', 'scene', 'froxel', 'tiles', 'march', 'resolve', 'bloom', 'final']);
         this.format = this.fx.format;
         // the scene's depth: with a stencil when the device has one to share out (StencilLayout: the world-space GUIs'
@@ -133,7 +141,7 @@ class RendererExtension {
             primitive: { topology: 'triangle-list' },
         });
         const ctx = { scene, final, layoutA, layoutB, layoutBus, layoutGlass, pipe, blendAlpha };
-        for (const x of this.renderer.extensions) x.pipelines?.(ctx);
+        this.renderer.each('pipelines', ctx);
     }
 
     setWorld(world) {
@@ -171,7 +179,7 @@ class RendererExtension {
         this.busUBuf = d.createBuffer({ size: this.busData.byteLength, usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
         this.busGroup = d.createBindGroup({ label: 'object frames', layout: this.busLayout, entries: [{ binding: 0, resource: { buffer: this.busUBuf, size: 208 } }] });
         this.framesUsed = 0;
-        for (const x of this.renderer.extensions) x.setWorld?.(world);
+        this.renderer.each('setWorld', world);
         const res = {
             F: this.frameBuf, shapeTex: this.noise.shapeView, detailTex: this.noise.detailView, weatherTex: this.weatherPass.weatherView,
             shadowTex: this.weatherPass.shadowView, heightTex: this.heightView, landTex: this.landMap.createView(), smoothTex: this.smoothMap.createView(), canopyTex: this.canopyMap.createView(), repSamp: this.repSamp,
@@ -179,7 +187,7 @@ class RendererExtension {
             layerTex: this.weatherPass.layerView, styleTex: this.weatherPass.styleView, occ: this.weatherPass.occ, buildings: this.noBuildings,
             behindTex: this.behindView(),
         };
-        for (const x of this.renderer.extensions) x.bindings?.(res);
+        this.renderer.each('bindings', res);
         this.worldRes = res;
         this.worldGroup = this.worldSet.group(res, 'world');
     }

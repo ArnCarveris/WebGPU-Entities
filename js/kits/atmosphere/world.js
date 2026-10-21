@@ -49,10 +49,15 @@ class FlatCurvature {
 }
 
 class WorldExtension {
+    static key = 'atmosphere';
+    // what it answers on the World (Common.Composite)
+    static exposes = ['busBoost', 'buses', 'centre', 'clouds', 'curvature', 'far', 'features', 'field', 'flashCount',
+        'gpuCells', 'hurricaneData', 'lamps', 'lightning', 'meshes', 'rainZones', 'scenario', 'streetLights',
+        'structures', 'terrain', 'types', 'update', 'water', 'weather'];
     // types: the entity classes by type name; town: the class the lit town (scenario streetLights) is painted with (a
     // town entity's); extensions: the other WorldExtension classes
     constructor(world, scenario, { types, town, extensions = [] }) {
-        this.world = world.mount(this);
+        this.world = world;
         this.scenario = scenario;
         this.types = types;
         world.compose(extensions);
@@ -66,20 +71,20 @@ class WorldExtension {
         this.weather = new WeatherSystem(scenario.weather);
         this.clouds = new CloudLayers(scenario.clouds);
         this.lightning = new Lightning();
-        for (const x of world.extensions) x.created?.();
+        world.each('created');
         this.flashCount = 0;
         this.buses = [];                 // the vehicles to board and ride (the buses feature's: every bus of every BusLine)
         this.busBoost = 1;               // their time runs this many times as fast (the bus menu's ×10)
         for (const def of scenario.entities || []) world.add(def, { spawn: false });
         for (const e of this.world.entities) { e.stamp(this.field); this.field.updateRange(); }
-        for (const x of this.world.extensions) x.build?.();
+        this.world.each('build');
         // the lit town (streetLights): painted like a town entity (the structures feature gives its streets the fake lamps)
         const sl = scenario.streetLights;
         this.streetLights = sl ? { pos: sl.pos || this.centre, radius: sl.radius || 4000, density: sl.density ?? 0.95 } : null;
         if (this.streetLights) new town(this.streetLights, world).stamp(this.field);
-        for (const x of this.world.extensions) x.townLit?.();
+        this.world.each('townLit');
         for (const e of [...this.world.entities]) e.spawn();
-        for (const x of this.world.extensions) x.spawned?.();
+        this.world.each('spawned');
         this.rainZones = new RainZones(world);
     }
 
@@ -100,22 +105,21 @@ class WorldExtension {
     features() {
         const out = { ms: [], shelves: [], tornado: null };
         for (const e of this.world.entities) e.features(out);
-        for (const x of this.world.extensions) x.features?.(out);
+        this.world.each('features', out);
         return { ms: out.ms.slice(0, MAX_MOTHERSHIPS), shelves: out.shelves.slice(0, MAX_SHELVES), tornado: out.tornado };
     }
 
     // a hurricane for the GPU, or null
     hurricaneData(maxTop) {
-        for (const x of this.world.extensions) { const h = x.hurricane?.(maxTop); if (h) return h; }
-        return null;
+        return this.world.first('hurricane', maxTop);
     }
 
     update(dt, wdt, t) {
         this.weather.update(dt, wdt);
         this.rainZones.update(dt);
-        for (const x of this.world.extensions) x.advance?.(dt, wdt);
+        this.world.each('advance', dt, wdt);
         for (const e of [...this.world.entities]) e.update(dt, wdt, t);
-        for (const x of this.world.extensions) x.after?.(dt, wdt, t);
+        this.world.each('after', dt, wdt, t);
         if (this.world.entities.some(e => e.dead)) {
             this.world.entities = this.world.entities.filter(e => !e.dead);
             for (const [k, e] of this.world.byId) if (e.dead) this.world.byId.delete(k);

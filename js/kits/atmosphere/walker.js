@@ -92,7 +92,7 @@ class Walker {
     // structure's boxes, lift cars, shut doors); the walls and floors of the buses near it too
     floorAt(app, p, below) {
         const w = app.world, boxes = [];
-        for (const x of w.extensions) x.colliders?.(p, boxes);
+        w.each('colliders', p, boxes);
         for (const bus of w.buses) {
             if (Math.hypot(p[0] - bus.pose.x, p[2] - bus.pose.z) > 10) continue;
             for (const b of bus.colliders()) {

@@ -20,7 +20,7 @@ class Surroundings {
         a.nearBus = { bus: null, dist: Infinity };
         a.rideBus = null;
         a.inBus = false;
-        for (const x of a.extensions) x.surround?.(cp);
+        a.each('surround', cp);
         a.probe = a.renderer.weatherPass.probe;
         // another world's roof (a composition's link: set('indoors')) keeps the rain off as this world's own do
         const target = a.forceIndoors ? { rain: 0, snow: 0 } : this.nearPrecip();
@@ -34,7 +34,7 @@ class Surroundings {
         // under a roof or a deck: the way the drops come (as rainBack in WGSL) is blocked; or in the bus
         const c = w.weather.cur, fall = a.near.snow > a.near.rain ? 1.35 : rainFall(c.drops);
         const dir = v3.norm([-c.wind[0] * 0.8, fall, -c.wind[1] * 0.8]);
-        a.sheltered = a.near.rain + a.near.snow > 0.01 && (a.inBus || !!a.indoors || a.extensions.some(x => x.shelters?.(cp, dir)));
+        a.sheltered = a.near.rain + a.near.snow > 0.01 && (a.inBus || !!a.indoors || a.first('shelters', cp, dir));
         a.flashVeil = w.lightning.veil(cp) * (a.indoors || a.inBus || a.forceIndoors ? 0.4 : 1);
     }
 

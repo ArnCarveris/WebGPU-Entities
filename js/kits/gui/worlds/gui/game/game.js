@@ -47,8 +47,13 @@ class FrameStats {
 }
 
 class AppExtension {
+    static key = 'gui';
+    // what it answers on the App (Common.Composite)
+    static exposes = ['atlas', 'audio', 'bindings', 'camera', 'cameras', 'canvas', 'cctv', 'dc', 'far', 'frame', 'fx',
+        'guis', 'handheld', 'input', 'interaction', 'iptv', 'phoneModel', 'placeLabel', 'player', 'render',
+        'renderView', 'renderer', 'scenario', 'scene', 'start', 'stats', 'update', 'views', 'world'];
     constructor(app, fx) {
-        this.app = app.mount(this);
+        this.app = app;
         this.fx = fx;
         this.scenario = fx.native;
         this.canvas = fx.canvas;
@@ -92,7 +97,7 @@ class AppExtension {
         });
         this.bindings = new Bindings(this.app);
 
-        for (const x of this.app.extensions) x.start?.(r);
+        this.app.each('start', r);
         this.world.init(r);
         r.finalizeInstances();
         this.mainView = r.createView();
@@ -108,7 +113,7 @@ class AppExtension {
             id: fx.id,
             pages: this.scenario.phone.pages,
             bindings: this.bindings,
-            apps: (phone) => Object.assign({}, ...this.app.extensions.map(x => x.apps?.(phone))),
+            apps: (phone) => Object.assign({}, ...this.app.all('apps', phone)),
             renderer: r,
             fullscreen: () => !!this.app.ext.media?.fullscreen,
             hidden: () => this.app.ext.media?.hidden(),
@@ -188,13 +193,13 @@ class AppExtension {
         const frame = this.frameState = world.frameState(t);
         const view = player.viewMatrix();
         this.mainView.update(M4.multiply(M4.perspective(player.fovy, r.aspect, 0.02, this.far), view), player.eye, frame);
-        for (const x of this.app.extensions) x.prepare?.();
+        this.app.each('prepare');
 
         world.writeInstances(r);
 
         // Passes
         r.beginFrame();
-        for (const x of this.app.extensions) x.passes?.(r, now);
+        this.app.each('passes', r, now);
         r.updateGuiTargets(r.encoder, world.guis);
         const pass = r.beginScenePass(r.swapView, r.depthView, this.mainView);
         world.render(pass, { showAvatar: false });

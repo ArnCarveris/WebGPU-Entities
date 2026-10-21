@@ -13,8 +13,12 @@ class GeoMesh {
 }
 
 class WorldExtension {
+    static key = 'imposter';
+    // what it answers on the World (Common.Composite)
+    static exposes = ['archetypes', 'build', 'casterTop', 'destroy', 'game', 'heightAt', 'lib', 'list', 'meshes',
+        'occupied', 'occupy', 'sc', 'terrain', 'types', 'update', 'warnings'];
     constructor(world, game, scenario) {
-        this.world = world.mount(this);
+        this.world = world;
         this.types = ENTITY_TYPES;
         this.game = game;
         this.sc = scenario;

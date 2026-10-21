@@ -131,7 +131,7 @@ class Controls {
     jump(v, member = null) {
         const a = this.app, cam = a.camera, e = member || (v.follow && a.world.get(v.follow));
         a.walker.active = false;
-        for (const x of a.extensions) x.beforeJump?.(v, e);
+        a.each('beforeJump', v, e);
         if (e?.board) e.board(a, v.spot);
         else if (v.spot && e?.spots?.[v.spot]) {
             cam.pos = [...e.spots[v.spot].pos];
@@ -150,7 +150,7 @@ class Controls {
         if (v.walk && !a.walker.active) { a.walker.place(a, cam.pos[0], cam.pos[2], cam.pos[1] - WALK.eye); a.walker.eye(a); }
         if (v.lighting && a.lightPresets[v.lighting]) this.setLight(v.lighting);
         if (v.weather) a.world.weather.set(v.weather);
-        for (const x of a.extensions) x.afterJump?.(v, e);
+        a.each('afterJump', v, e);
         a.reset = true;
         a.hud.toast(member ? `${member.label}: ${member.describe?.() ?? ''}` : v.name);
     }

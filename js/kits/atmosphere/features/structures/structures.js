@@ -255,7 +255,7 @@ class StructuresApp {
         if (!night) { R.farCount = 0; F.set('glowInfo', [0, 0, 0, 0]); return; }
         // as many as there are slots: it stops there, however many there are
         const bl = [];
-        for (const x of a.extensions) x.farLights?.(bl, MAX_FAR_DYN);
+        a.each('farLights', bl, MAX_FAR_DYN);
         const n = Math.min(bl.length, MAX_FAR_DYN), dyn = this.farDyn;
         bl.slice(0, n).forEach((l, i) => dyn.set([...l.pos, l.size ?? 0.5, ...l.color.map(c => c * l.intensity), 0, ...l.dir, l.cone ? l.cone[0] : -2,
             l.cone ? l.cone[1] : 1, l.range, l.pos[1], 0], i * FAR_FLOATS));
