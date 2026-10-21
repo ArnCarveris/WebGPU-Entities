@@ -190,9 +190,7 @@ class AppExtension {
         // above its air (airAt), nothing of it: only what lies behind it (Renderer.encodeSpace)
         const air = this.airHere = this.airAt(this.camera.pos);
         if (air <= 0) {
-            const enc = r.device.createCommandEncoder();
-            r.encodeSpace(enc, 1, true);
-            r.device.queue.submit([enc.finish()]);
+            r.encodeSpace(r.frameEncoder(), 1, true);
             this.lastCam = [...this.camera.pos];
             this.frameNo++;
             this.hud.drawLabels(this.app);
@@ -204,17 +202,15 @@ class AppExtension {
         r.resize(q.dynamic && r.profiler.enabled ? this.dynamicScale.update(q, r.profiler.total, this.time) : q.scale);
         const fw = this.frameWriter;
         fw.write(dt, this.wdt ?? 0);
-        const enc = r.device.createCommandEncoder();
         const total = this.near.rain + this.near.snow;
         const particles = total > 0.001 ?fw.splashStart + (this.near.rain > 0.02 ? SPLASH_PARTICLES : 0) : 0;
         // (from inside, with the outdoors out of sight through the portals: no volumetrics, no rain; FrameWriter.outdoors)
         const out = fw.outdoors?.seen !== false;
         r.air = this.airShell(this.camera.pos);
-        r.render(enc, fw.probeTexel, out ? particles : 0, w.lightning.count, QUALITY[this.quality].interleave, fw.shadowSlices, this.froxels && out, this.mode !== 1 && out, this.tiles, this.bloom && this.cfg.bloom > 0);
-        if (air < 1) r.encodeSpace(enc, 1 - air);
-        r.device.queue.submit([enc.finish()]);
-        r.weatherPass.afterSubmit();
-        r.profiler.afterSubmit();
+        r.render({ probeTexel: fw.probeTexel, particles: out ? particles : 0, bolts: w.lightning.count, interleave: QUALITY[this.quality].interleave,
+            shadowSlices: fw.shadowSlices, froxels: this.froxels && out, volumetrics: this.mode !== 1 && out, tiles: this.tiles,
+            bloom: this.bloom && this.cfg.bloom > 0, space: air < 1 ? 1 - air : 0 });
+        r.afterSubmit(() => { r.weatherPass.afterSubmit(); r.profiler.afterSubmit(); });
         fw.advance();
         this.lastCam = [...this.camera.pos];
         this.frameNo++;

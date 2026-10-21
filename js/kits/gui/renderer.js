@@ -59,7 +59,7 @@ class RendererExtension {
     // what it answers on the Renderer (Common.Composite)
     static exposes = ['allocInstances', 'aspect', 'beginFrame', 'beginScenePass', 'bindGui', 'createBuffer',
         'createMesh', 'createPipelines', 'createView', 'depthSample', 'depthView', 'device', 'encoder', 'endFrame',
-        'finalizeInstances', 'format', 'fx', 'groupFor', 'height', 'init', 'materials', 'mirrorTo', 'pipelines',
+        'finalizeInstances', 'frame', 'format', 'fx', 'groupFor', 'height', 'init', 'materials', 'mirrorTo', 'pipelines',
         'registerMaterial', 'reserveSurfaces', 'resize', 'sampler', 'setInstance', 'setMaterialTexture',
         'setWorldMaterials', 'shadings', 'stencil', 'surfaces', 'swapView', 'targets', 'updateGuiTargets', 'width',
         'worldMaterials', 'writeGui'];
@@ -311,17 +311,33 @@ class RendererExtension {
     }
 
     // ---- frames & passes ----
+    // One frame of its app's (the gui world's, the handheld's), through Renderer.encode into the frame encoder: f {
+    // compute(enc) (what goes before the scene: a feature's passes, other views, the GUI targets), scene: { view, load,
+    // color, depth } (the scene pass: by default into the canvas and its depth; load keeps what is there), draw(pass) }
+    frame(f) {
+        this.beginFrame();
+        this.renderer.encode(f);
+        this.endFrame();
+    }
+
+    compute(f) { f.compute?.(f.enc); }
+
+    scene(f) {
+        const s = f.scene;
+        return s ? this.beginScenePass(s.color || this.swapView, s.depth || this.depthView, s.view, s) : null;
+    }
+
+    indoor(f) { f.draw?.(f.pass); }
+
+    // (this.encoder: the frame encoder while a frame is encoded)
     beginFrame() {
         this.device.queue.writeBuffer(this.instanceBuffer, 0, this.instanceData);
-        this.encoder = this.device.createCommandEncoder();
+        this.encoder = this.renderer.frameEncoder();
         this.swapView = this.fx.target();
         return this.encoder;
     }
 
-    endFrame() {
-        this.device.queue.submit([this.encoder.finish()]);
-        this.encoder = null;
-    }
+    endFrame() { this.encoder = null; }
 
     depthAttachment(view) {
         return {

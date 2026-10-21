@@ -64,7 +64,7 @@ class PortalMedia {
         return a ? (a.outdoor ? 'Outdoors' : a.name) : '';
     }
 
-    // per frame, after the main view's screens are built: what is shown decides what renders; views submit before
+    // per frame, after the main view's screens are built: what is shown decides what renders; views are encoded before
     // the main frame, so screens sample this frame's pictures
     frame(now) {
         const phone = this.handheld, tv = this.iptv;
@@ -75,10 +75,9 @@ class PortalMedia {
         this.cctv?.prepare();
         this.camera?.prepare();
         if (!this.cctv?.renderingCamera && !this.camera?.shot) return;
-        const device = this.renderer.device, enc = device.createCommandEncoder();
+        const enc = this.app.renderer.frameEncoder();
         this.cctv?.render(enc);
         this.camera?.render(enc, now);
-        device.queue.submit([enc.finish()]);
     }
 }
 

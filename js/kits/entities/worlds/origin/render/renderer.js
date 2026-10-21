@@ -112,18 +112,30 @@ class RendererExtension {
         this.depthView = this.depth.createView();
     }
 
+    // one frame (Renderer.encode, into the frame encoder): the scene pass: sky, outdoor (the bodies, the instanced meshes)
     render(world, bodyCount) {
         const d = this.device;
         d.queue.writeBuffer(this.frameBuf, 0, this.frameData);
         if (bodyCount) d.queue.writeBuffer(this.bodyBuf, 0, this.bodyData, 0, bodyCount * BODY_FLOATS);
-        const enc = d.createCommandEncoder();
-        const pass = enc.beginRenderPass({
+        this.renderer.encode({ world, bodyCount });
+    }
+
+    scene(f) {
+        const pass = f.enc.beginRenderPass({
             colorAttachments: [{ view: this.msaaView, resolveTarget: this.fx.target(), clearValue: { r: 0, g: 0, b: 0, a: 1 }, loadOp: 'clear', storeOp: 'discard' }],
             depthStencilAttachment: { view: this.depthView, depthClearValue: 0, depthLoadOp: 'clear', depthStoreOp: 'store' },
         });
         pass.setBindGroup(0, this.bindGroup);
-        pass.setPipeline(this.skyPipe);
-        pass.draw(3);
+        return pass;
+    }
+
+    sky(f) {
+        f.pass.setPipeline(this.skyPipe);
+        f.pass.draw(3);
+    }
+
+    outdoor(f) {
+        const { pass, world, bodyCount } = f;
         if (bodyCount) { pass.setPipeline(this.bodyPipe); pass.draw(36, bodyCount); }
         pass.setPipeline(this.meshPipe);
         pass.setVertexBuffer(0, this.vb);
@@ -134,8 +146,6 @@ class RendererExtension {
             pass.drawIndexed(m.indexCount, m.instances.length, m.firstIndex, 0, m.first);
             draws++;
         }
-        pass.end();
-        d.queue.submit([enc.finish()]);
         this.draws = draws + 1 + (bodyCount ? 1 : 0);
     }
 }

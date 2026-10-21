@@ -9,6 +9,9 @@
 //                                                  constructions and queue.submit calls per frame; exit 1 on a failure
 //   node tools/pixel-harness.mjs smoke [ids...]    the key smoke run: WASD, E, F, Tab, the Walk switch, click, Esc; no
 //                                                  errors, and the view moves
+//   node tools/pixel-harness.mjs perf [ids...]     GPU time per frame and per pass (timestamps on every pass), A/B
+//                                                  between two revisions (--revs a,b, HEAD~1,HEAD), alternated
+//                                                  scenario by scenario, --rounds times; <work>/perf-report.json
 //
 // Options: --frames N (stepped before the start view, 40), --view-frames N (after each view jump, 20), --runs N, --out
 // dir (record: baselines), --baseline dir (check: baselines), --work dir (the Brave profile, captures, diff heat maps;
@@ -38,9 +41,9 @@ import * as PNG from './png.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
-const mode = ['record', 'check', 'smoke'].includes(argv[0]) ? argv.shift() : 'check';
+const mode = ['record', 'check', 'smoke', 'perf'].includes(argv[0]) ? argv.shift() : 'check';
 const opt = { frames: 40, viewFrames: 20, runs: mode === 'record' ? 2 : 1, port: 9371, out: 'baselines', baseline: 'baselines',
-    work: path.join(os.tmpdir(), 'webgpu-entities-harness'), keep: false, trace: false, bindings: false, live: false, rev: null, servePort: 9381, only: null, query: [],
+    work: path.join(os.tmpdir(), 'webgpu-entities-harness'), keep: false, trace: false, bindings: false, live: false, rev: null, revs: 'HEAD~1,HEAD', rounds: 2, servePort: 9381, only: null, query: [],
     brave: process.env.BRAVE || 'C:/Program Files/BraveSoftware/Brave-Browser/Application/brave.exe' };
 const ids = [];
 for (let i = 0; i < argv.length; i++) {
@@ -59,7 +62,7 @@ fs.mkdirSync(opt.work, { recursive: true });
 const PRELUDE = `(() => {
   let clock = 1000, seed = 12345;
   const H = window.__harness = { counts: {}, submits: 0, writes: 0, frames: [] };
-  if (self.GPUSupportedFeatures) { const has = GPUSupportedFeatures.prototype.has; GPUSupportedFeatures.prototype.has = function (f) { return f !== 'timestamp-query' && has.call(this, f); }; }
+  if (self.GPUSupportedFeatures && !window.__perf) { const has = GPUSupportedFeatures.prototype.has; GPUSupportedFeatures.prototype.has = function (f) { return f !== 'timestamp-query' && has.call(this, f); }; }
   if (self.GPUQueue) {
     const submit = GPUQueue.prototype.submit, write = GPUQueue.prototype.writeBuffer;
     GPUQueue.prototype.submit = function (...a) { H.submits++; return submit.apply(this, a); };
@@ -79,6 +82,7 @@ const PRELUDE = `(() => {
       clock += 1000 / 60;
       const q = window.__raf; window.__raf = [];
       const s = H.submits, w = H.writes;
+      H.gpuFrame?.();
       for (const cb of q) cb(clock);
       H.frames.push({ submits: H.submits - s, writes: H.writes - w });
       const d = window.entities?.device;
@@ -167,23 +171,78 @@ const BINDINGS = `(() => {
 })();`;
 const LIMITS = { sampled: 16, samplers: 16, storage: 8, uniform: 12, storageTextures: 4 };
 
+// perf: GPU time per pass, whatever the renderer: every render and compute pass gets timestamps in a query set of the
+// harness's (over the pass's own: a renderer's profiler then reads nothing), resolved by a command buffer added to each
+// submit and read back; __harness.gpu: per stepped frame { ms (the passes' sum), passes: { label: ms } }
+const PERF = `(() => {
+  const H = window.__harness, MAX = 1024;
+  let dev = null, qs = null, res = null, used = 0, labels = [], frame = null;
+  const free = [];
+  H.gpu = [];
+  H.gpuFrame = () => { frame = { ms: 0, passes: {}, pending: 0 }; H.gpu.push(frame); };
+  const ad = GPUAdapter.prototype.requestDevice;
+  GPUAdapter.prototype.requestDevice = async function (d) {
+    const device = await ad.call(this, d);
+    if (device.features.has('timestamp-query')) {
+      dev = device;
+      qs = device.createQuerySet({ type: 'timestamp', count: MAX * 2 });
+      res = device.createBuffer({ size: MAX * 16, usage: GPUBufferUsage.QUERY_RESOLVE | GPUBufferUsage.COPY_SRC });
+    }
+    return device;
+  };
+  const stamp = (d, kind) => {
+    if (!qs || used >= MAX) return d;
+    const i = used++;
+    labels.push((d && d.label) || kind);
+    return { ...(d || {}), timestampWrites: { querySet: qs, beginningOfPassWriteIndex: i * 2, endOfPassWriteIndex: i * 2 + 1 } };
+  };
+  const rp = GPUCommandEncoder.prototype.beginRenderPass, cp = GPUCommandEncoder.prototype.beginComputePass;
+  GPUCommandEncoder.prototype.beginRenderPass = function (d) { return rp.call(this, stamp(d, 'render')); };
+  GPUCommandEncoder.prototype.beginComputePass = function (d) { return cp.call(this, stamp(d, 'compute')); };
+  const submit = GPUQueue.prototype.submit;
+  GPUQueue.prototype.submit = function (cbs) {
+    if (!qs || !used) return submit.call(this, cbs);
+    const n = used, names = labels, f = frame;
+    used = 0; labels = [];
+    const buf = free.pop() || dev.createBuffer({ size: MAX * 16, usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ });
+    const enc = dev.createCommandEncoder();
+    enc.resolveQuerySet(qs, 0, n * 2, res, 0);
+    enc.copyBufferToBuffer(res, 0, buf, 0, n * 16);
+    const r = submit.call(this, [...cbs, enc.finish()]);
+    if (f) f.pending++;
+    buf.mapAsync(GPUMapMode.READ).then(() => {
+      const t = new BigInt64Array(buf.getMappedRange(0, n * 16));
+      for (let i = 0; i < n; i++) {
+        const ms = Number(t[i * 2 + 1] - t[i * 2]) / 1e6;
+        if (!f || !(ms >= 0 && ms < 1000)) continue;
+        f.ms += ms;
+        f.passes[names[i]] = (f.passes[names[i]] || 0) + ms;
+      }
+      buf.unmap();
+      free.push(buf);
+      if (f) f.pending--;
+    });
+    return r;
+  };
+})();`;
+
 // ----------------------------------------------------------------------------------------------- static server
 // what the page is served from: a copy of the page's files made when the run starts, so an edit during a run never
 // reaches the scenarios still to come (--live: the checkout itself)
-function snapshot() {
-    if (opt.live) return ROOT;
-    const dir = path.join(opt.work, 'serve'), parts = ['index.html', 'css', 'js', 'scenarios'];
+function snapshot(rev = opt.rev, name = 'serve') {
+    if (opt.live && !rev) return ROOT;
+    const dir = path.join(opt.work, name), parts = ['index.html', 'css', 'js', 'scenarios'];
     fs.rmSync(dir, { recursive: true, force: true });
     fs.mkdirSync(dir, { recursive: true });
-    if (opt.rev) {
-        execFileSync('git', ['archive', '--format=tar', '-o', path.join(dir, 'snapshot.tar'), opt.rev, ...parts], { cwd: ROOT });
+    if (rev) {
+        execFileSync('git', ['archive', '--format=tar', '-o', path.join(dir, 'snapshot.tar'), rev, ...parts], { cwd: ROOT });
         execFileSync('tar', ['-xf', 'snapshot.tar'], { cwd: dir });
     }
     else for (const p of parts) fs.cpSync(path.join(ROOT, p), path.join(dir, p), { recursive: true });
     return dir;
 }
 
-function serve(root) {
+function serve(root, port = opt.servePort) {
     const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript', '.json': 'application/json', '.css': 'text/css',
         '.png': 'image/png', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg',
         '.glb': 'model/gltf-binary', '.gltf': 'model/gltf+json', '.bin': 'application/octet-stream' };
@@ -199,7 +258,7 @@ function serve(root) {
             });
         });
     });
-    return new Promise((r, j) => { server.once('error', j); server.listen(opt.servePort, '127.0.0.1', () => r(server)); });
+    return new Promise((r, j) => { server.once('error', j); server.listen(port, '127.0.0.1', () => r(server)); });
 }
 
 // ----------------------------------------------------------------------------------------------- Brave + CDP
@@ -342,6 +401,36 @@ async function capture(base, sid, dir) {
     } finally { await s.close(); }
 }
 
+// GPU time (§6.2 G7) of one scenario's start view: opt.frames stepped, then opt.viewFrames measured (the same frames for
+// every revision: the stepping is deterministic); { sid, median (ms per frame), passes: { label: median ms } }
+async function perf(base, sid) {
+    const s = await tab();
+    try {
+        await s.send('Runtime.enable'); await s.send('Network.enable'); await s.send('Network.setCacheDisabled', { cacheDisabled: true }); await s.send('Page.enable');
+        await s.send('Emulation.setDeviceMetricsOverride', { width: W, height: H, deviceScaleFactor: 1, mobile: false });
+        await s.send('Page.addScriptToEvaluateOnNewDocument', { source: 'window.__perf = true;' });
+        await s.send('Page.addScriptToEvaluateOnNewDocument', { source: PRELUDE });
+        await s.send('Page.addScriptToEvaluateOnNewDocument', { source: PERF });
+        await s.send('Page.navigate', { url: `${base}/index.html?scenario=${encodeURIComponent(sid)}` });
+        let state = null;
+        for (let k = 0; k < 240 && !state; k++) {
+            await sleep(500);
+            state = await s.evaluate(`document.getElementById('fallback')?.classList.contains('show') ? 'failed' : window.entities && entities.last !== undefined ? 'ready' : null`).catch(() => null);
+        }
+        if (state !== 'ready') return { sid, failed: state || 'timed out' };
+        await settle(s);
+        await s.send('Page.bringToFront');
+        await s.evaluate(`__step(${opt.frames})`);
+        const from = await s.evaluate('__harness.gpu.length');
+        await s.evaluate(`__step(${opt.viewFrames})`);
+        for (let k = 0; k < 40 && await s.evaluate(`__harness.gpu.slice(${from}).some(f => f.pending)`); k++) await sleep(50);
+        const frames = await s.evaluate(`__harness.gpu.slice(${from})`);
+        const med = xs => { const a = [...xs].sort((p, q) => p - q); return a.length ? a[a.length >> 1] : 0; };
+        const labels = [...new Set(frames.flatMap(f => Object.keys(f.passes)))];
+        return { sid, median: med(frames.map(f => f.ms)), passes: Object.fromEntries(labels.map(l => [l, med(frames.map(f => f.passes[l] || 0))])), errors: s.errors() };
+    } finally { await s.close(); }
+}
+
 // the key smoke run (§6.2 G6) on one scenario
 async function smoke(base, sid) {
     const s = await tab();
@@ -410,7 +499,29 @@ let failures = 0;
 const fail = msg => { failures++; console.log('  FAIL ' + msg); };
 
 try {
-    if (mode === 'smoke') {
+    if (mode === 'perf') {
+        // A/B: each revision (--revs a,b) served from its own snapshot and port, alternated scenario by scenario, rounds
+        // times (the laptop GPU's clocks drift between runs: compare neighbours, not runs)
+        const revs = opt.revs.split(','), bases = [];
+        for (const [i, rev] of revs.entries()) {
+            const srv = await serve(snapshot(rev, `serve-${i}`), opt.servePort + 2 + i);
+            bases.push({ rev, base: `http://127.0.0.1:${srv.address().port}`, srv });
+        }
+        const out = {};
+        for (const sid of list) {
+            const runs = Object.fromEntries(revs.map(r => [r, []]));
+            for (let k = 0; k < opt.rounds; k++) for (const b of (k % 2 ? [...bases].reverse() : bases)) {
+                const r = await perf(b.base, sid);
+                if (r.failed) { fail(`${sid} @ ${b.rev}: ${r.failed}`); continue; }
+                runs[b.rev].push(r);
+            }
+            const best = rs => rs.length ? Math.min(...rs.map(r => r.median)) : NaN;
+            out[sid] = Object.fromEntries(revs.map(r => [r, { ms: runs[r].map(x => +x.median.toFixed(3)), passes: runs[r][0]?.passes }]));
+            console.log(`${sid}: ${revs.map(r => `${r} ${runs[r].map(x => x.median.toFixed(2)).join(' / ')} ms`).join('   ')}   (best ${revs.map(r => best(runs[r]).toFixed(2)).join(' vs ')})`);
+        }
+        fs.writeFileSync(path.join(opt.work, 'perf-report.json'), JSON.stringify(out, null, 1));
+        for (const b of bases) b.srv.close();
+    } else if (mode === 'smoke') {
         for (const sid of list) {
             const r = await smoke(base, sid);
             console.log(`${sid}: ${r.failed ? 'FAILED ' + r.failed : r.steps.join(' · ')}`);

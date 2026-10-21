@@ -460,6 +460,8 @@ const Composite = {
     },
     // the host behind its Proxy (`this` in its methods is the Proxy)
     target(host) { return TARGET.get(host) || host; },
+    // the host's own extension
+    ownOf(host) { return STATE.get(Composite.target(host))?.own; },
     each(host, name, ...args) { for (const x of host.extensions) x[name]?.(...args); },
     first(host, name, ...args) {
         for (const x of host.extensions) { const v = x[name]?.(...args); if (v) return v; }

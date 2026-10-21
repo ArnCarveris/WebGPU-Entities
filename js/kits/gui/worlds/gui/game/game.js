@@ -197,14 +197,12 @@ class AppExtension {
 
         world.writeInstances(r);
 
-        // Passes
-        r.beginFrame();
-        this.app.each('passes', r, now);
-        r.updateGuiTargets(r.encoder, world.guis);
-        const pass = r.beginScenePass(r.swapView, r.depthView, this.mainView);
-        world.render(pass, { showAvatar: false });
-        pass.end();
-        r.endFrame();
+        // Passes: the features' (paint, the media views), the GUI targets, then the scene
+        r.frame({
+            compute: enc => { this.app.each('passes', r, now); r.updateGuiTargets(enc, world.guis); },
+            scene: { view: this.mainView },
+            draw: pass => world.render(pass, { showAvatar: false }),
+        });
 
         this.stats.tick(dt);
     }

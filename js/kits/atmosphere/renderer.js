@@ -406,78 +406,107 @@ class RendererExtension {
         for (let k = n - 2; k >= 0; k--) pass(this.pBloomUp, this.bloomGroups[k + 1], k, true);
     }
 
-    render(enc, probeTexel, particles, bolts, interleave, shadowSlices, froxels, volumetrics = true, tiles = true, bloom = true) {
-        const q = this.device.queue, prof = this.profiler, X = this.renderer.extensions;
+    // one frame (Renderer.encode: its stages, into the frame encoder): o { probeTexel, particles, bolts, interleave,
+    // shadowSlices, froxels, volumetrics, tiles, bloom, space (how much of what lies behind the air goes over the frame) }
+    render(o) {
+        this.renderer.encode({ volumetrics: true, tiles: true, bloom: true, space: 0, ...o });
+    }
+
+    // the frame's uniforms, the weather and ground passes, the features' passes
+    compute(f) {
+        const q = this.device.queue, prof = this.profiler, enc = f.enc;
         this.bindBehind();
         q.writeBuffer(this.frameBuf, 0, this.frame.data);
         q.writeBuffer(this.cellBuf, 0, this.cellData);
         if (this.framesUsed) q.writeBuffer(this.busUBuf, 0, this.busData, 0, this.framesUsed * BUS_UNIFORM / 4);
         this.framesUsed = 0;
-        for (const x of X) x.prepare?.(enc);
+        this.renderer.each('prepare', enc);
         // (the near shadow maps' slices: the fewest of the frame's sdomain[k].w, FrameWriter's)
         const sd = this.frame.data, so = this.frame.offsets.sdomain, nearSlices = Math.min(...SHADOW_NEAR.map((_, k) => sd[so + k * 4 + 3] || 1));
-        this.weatherPass.encode(enc, probeTexel, prof, shadowSlices, nearSlices);
+        this.weatherPass.encode(enc, f.probeTexel, prof, f.shadowSlices, nearSlices);
         this.groundPass.encode(enc, prof);
-        for (const x of X) x.encode?.(enc, prof);
+        this.renderer.each('encode', enc, prof);
+    }
 
-        const a = enc.beginRenderPass({
-            label: 'scene', timestampWrites: prof.writes('scene'),
+    // the scene pass; the outdoors (a feature's portal traversal, this.outdoors): from inside, only within the screen
+    // rectangle of the portals it passed out to it, or not at all; what is inside after it over the whole screen
+    scene(f) {
+        const a = f.enc.beginRenderPass({
+            label: 'scene', timestampWrites: this.profiler.writes('scene'),
             colorAttachments: [{ view: this.hdrView, loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 1] }],
             depthStencilAttachment: { view: this.depthView, depthLoadOp: 'clear', depthStoreOp: 'store', depthClearValue: 0, ...this.stencilOps('clear') },
         });
         a.setBindGroup(0, this.worldGroup);
-        // the outdoors (a feature's portal traversal, this.outdoors): from inside, only within the screen rectangle of the
-        // portals it passed out to it, or not at all; what is inside after it over the whole screen
-        const od = this.outdoors || { seen: true, rect: null }, W = this.width, H = this.height;
-        const outdoor = on => { if (od.rect) on ? a.setScissorRect(od.rect[0], od.rect[1], od.rect[2] - od.rect[0], od.rect[3] - od.rect[1]) : a.setScissorRect(0, 0, W, H); };
-        if (od.seen) {
-            outdoor(true);
-            a.setPipeline(this.pSky);
-            a.draw(3);
-            a.setPipeline(this.pTerrain);
-            a.setIndexBuffer(this.terrainIndex, 'uint32');
-            a.setVertexBuffer(0, this.terrainNodes);
-            const tDraws = this.terrainDraws();
-            const drawPatches = () => {
-                for (const [q, first, n] of tDraws) {
-                    if (q) a.drawIndexed(this.terrainQuarter, n, (q - 1) * this.terrainQuarter, 0, first);
-                    else a.drawIndexed(this.terrainQuarter * 4, n, 0, 0, first);
-                }
-            };
-            drawPatches();
-            for (const x of X) x.outdoor?.(a, { drawPatches });
-            outdoor(false);
-        }
-        for (const x of X) x.indoor?.(a);
-        if (od.seen) {
-            outdoor(true);
-            for (const x of X) x.late?.(a);
-            outdoor(false);
-        }
-        a.end();
+        const od = f.od = this.outdoors || { seen: true, rect: null }, W = this.width, H = this.height;
+        f.outdoor = on => { if (od.rect) on ? a.setScissorRect(od.rect[0], od.rect[1], od.rect[2] - od.rect[0], od.rect[3] - od.rect[1]) : a.setScissorRect(0, 0, W, H); };
+        return a;
+    }
 
-        // a composition's other worlds go into the scene here, so the volumetrics and the post cover them too
-        if (this.fx.inject) this.encodeInject(enc, this.fx.inject);
-        if (froxels && volumetrics) this.froxelPass.encode(enc, prof);
-        const hist = volumetrics ? this.cloudPass.encode(enc, prof, interleave, tiles) : this.cloudPass.cur;
-        if (bloom) this.encodeBloom(enc, hist, bolts);
+    sky(f) {
+        if (!f.od.seen) return;
+        f.outdoor(true);
+        f.pass.setPipeline(this.pSky);
+        f.pass.draw(3);
+    }
 
-        const b = enc.beginRenderPass({
-            label: 'final', timestampWrites: prof.writes('final'),
+    // the terrain, then the features' outdoors (still within the outdoors' rectangle)
+    outdoor(f) {
+        if (!f.od.seen) return;
+        const a = f.pass;
+        a.setPipeline(this.pTerrain);
+        a.setIndexBuffer(this.terrainIndex, 'uint32');
+        a.setVertexBuffer(0, this.terrainNodes);
+        const tDraws = this.terrainDraws();
+        const drawPatches = () => {
+            for (const [q, first, n] of tDraws) {
+                if (q) a.drawIndexed(this.terrainQuarter, n, (q - 1) * this.terrainQuarter, 0, first);
+                else a.drawIndexed(this.terrainQuarter * 4, n, 0, 0, first);
+            }
+        };
+        drawPatches();
+        this.renderer.each('outdoor', a, { drawPatches });
+        f.outdoor(false);
+    }
+
+    indoor(f) { this.renderer.each('indoor', f.pass); }
+
+    late(f) {
+        if (!f.od.seen) return;
+        f.outdoor(true);
+        this.renderer.each('late', f.pass);
+        f.outdoor(false);
+    }
+
+    // a composition's other worlds go into the scene here, so the volumetrics and the post cover them too
+    translucent(f) { if (this.fx.inject) this.encodeInject(f.enc, this.fx.inject); }
+
+    volumetric(f) {
+        if (f.froxels && f.volumetrics) this.froxelPass.encode(f.enc, this.profiler);
+        f.hist = f.volumetrics ? this.cloudPass.encode(f.enc, this.profiler, f.interleave, f.tiles) : this.cloudPass.cur;
+    }
+
+    post(f) { if (f.bloom) this.encodeBloom(f.enc, f.hist, f.bolts); }
+
+    final(f) {
+        const b = f.enc.beginRenderPass({
+            label: 'final', timestampWrites: this.profiler.writes('final'),
             colorAttachments: [{ view: this.fx.target(), loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 1] }],
             depthStencilAttachment: { view: this.depthView, depthReadOnly: true, ...(this.stencilBits ? { stencilReadOnly: true } : {}) },
         });
         b.setBindGroup(0, this.worldGroup);
-        b.setBindGroup(1, this.screenGroups[hist]);
+        b.setBindGroup(1, this.screenGroups[f.hist]);
         b.setPipeline(this.pComposite);
         b.draw(3);
-        if (particles) { b.setPipeline(this.pPrecip); b.draw(6, particles); }
-        for (const x of X) x.final?.(b);
-        if (bolts) { b.setPipeline(this.pBolt); b.draw(6, bolts); }
+        if (f.particles) { b.setPipeline(this.pPrecip); b.draw(6, f.particles); }
+        this.renderer.each('final', b);
+        if (f.bolts) { b.setPipeline(this.pBolt); b.draw(6, f.bolts); }
         this.lineLayer.draw(b);
         b.end();
-        prof.resolve(enc);
+        this.profiler.resolve(f.enc);
     }
+
+    // above its air: what lies behind it, over the finished frame by f.space
+    overlay(f) { if (f.space > 0) this.encodeSpace(f.enc, f.space); }
 }
 
 return { RendererExtension };

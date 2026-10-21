@@ -95,7 +95,11 @@ Each renderer has its own `WgslLibrary` (`atmosphereWgsl`, `portalWgsl`, `waterW
 - **water**: group 0 has 11 entries (7 sampled textures: terrain, surf, flow, 4 wave arrays), group 1 the screen
   (HDR + depth).
 - **gui**: per-view uniform + instances + sampler + material texture + material buffer.
-- **imposter / origin**: their own (to be counted in Phase 2; see §2.4).
+- **imposter**: 13 pipeline layouts, at most 5 sampled textures, 4 storage and 4 uniform buffers per stage, and **4 of 4
+  bind groups** (the main pass). **origin**: one layout, 3 read-only storage buffers and 2 uniforms. **gui** (the kit's,
+  also the handheld's): 3-9 layouts, 1 sampled texture, 1 storage and 1 uniform buffer, 2 groups; the phone camera and
+  the paint canvas build theirs with `layout: 'auto'` (not counted). Measured in Phase 2 (`pixel-harness.mjs check
+  --bindings`; see §2.4).
 
 Chunk names collide between libraries (`COMMON`, `SCENE`...). That doesn't matter while each library has its own
 renderer, and does matter once there is one (§2.1).
@@ -346,6 +350,11 @@ pixel-identical. Only frames that mix kits take the shared choices.
 - Budget after the change: atmosphere world group 11 sampled textures (without `behindTex`); final 15/16, glass 15/16,
   march 15/16; read-only storage 5/8; water 7 + 2. Phase 2 adds a check that prints every pipeline layout's sampled
   textures and storage buffers per stage and fails at > 16 / > 8, and fills in the imposter, origin and gui figures.
+  Measured (Phase 2, `pixel-harness.mjs check --bindings`, every scenario, nothing over a limit): atmosphere 16/16
+  sampled (fragment and compute), 5-7/8 storage buffers (the vegetation pass 7), **4/4 storage textures**, 3 groups;
+  water 9 sampled, 2 storage, 3 storage textures; imposter 5 sampled, 4 storage, **4/4 groups**; portal (interior) 1
+  sampled, 2 storage, 3 groups; origin 3 storage; gui 1 sampled, 1 storage; the compositor's merge 12 sampled (6 layers
+  x colour + depth). The imposter's main pass has no group to spare, and the atmosphere no storage texture.
   A kit that needs more uses the sdf plan's per-module binding sets (its Phase 0), not a shared texture.
 
 ---

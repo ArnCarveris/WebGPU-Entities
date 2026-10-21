@@ -152,7 +152,7 @@ class Handheld {
         const { Renderer } = Features.kits.gpu;
         const host = this.host;
         const r = this.renderer = new Renderer(RendererExtension, {
-            device: host.device, format: host.format,
+            device: host.device, format: host.format, frame: host.gpuFrame,
             size: () => [host.width, host.height],
             target: () => host.swapView(),
         });
@@ -458,12 +458,11 @@ class Handheld {
         this.view.update(M4.perspective(this.fovy, r.aspect, 0.02, 100), [0, 0, 0], frame);
         r.setInstance(this.instance, this.pose);
         g.writeInstances(r);
-        r.beginFrame();
-        r.updateGuiTargets(r.encoder, [g]);
-        const pass = r.beginScenePass(r.swapView, r.depthView, this.view, { load: true });
-        pass.mesh(this.mesh, this.instance);
-        g.render(pass);
-        pass.end();
-        r.endFrame();
+        // (over the finished frame: its scene pass loads the canvas)
+        r.frame({
+            compute: enc => r.updateGuiTargets(enc, [g]),
+            scene: { view: this.view, load: true },
+            draw: pass => { pass.mesh(this.mesh, this.instance); g.render(pass); },
+        });
     }
 }

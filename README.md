@@ -214,7 +214,11 @@ only list of kits, entity types, data types and worlds, and everything else is l
   for it what it says it does (`Common.Composite`: each extension's `static key` names it, `host.ext[key]`, and its
   `static exposes` lists the members it answers on the host; two extensions exposing one name are an error), and the
   features' extensions are composed into the same host (`host.compose(list)`, a key composed once, in order in
-  `host.extensions`), their hooks run as lists (`host.each('update', dt)`, `first`, `most`, `all`).
+  `host.extensions`), their hooks run as lists (`host.each('update', dt)`, `first`, `most`, `all`). A frame's GPU work
+  is one command encoder and one submit (the gpu kit's `GpuFrame`, `renderer.frameEncoder()`, readbacks in
+  `renderer.afterSubmit(fn)`), drawn in the Renderer's stages: `compute`, `views`, the scene pass (`background`,
+  `sky`, `outdoor`, `indoor`, `late`), `translucent`, `volumetric`, `post`, `final`, `overlay` (`renderer.encode(f)`,
+  js/kits/gpu/renderer.js).
 - **A feature** is what a world is made of beyond its core, built only when the world's data asks for it (`when`: an
   entity of a type, an entity whose implementation needs something, a data path, through a list in any of its items
   (`entities.screen`), another feature; `requires`), its

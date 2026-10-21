@@ -232,14 +232,20 @@ class RendererExtension {
     }
 
     // one frame: cull (compute: camera + cascades) -> counts into the indirect args -> shadow cascades ->
-    // sky, meshes, imposters, atlas overlay
+    // sky, meshes, imposters, atlas overlay. Its stages (Renderer.encode, into the frame encoder): compute (the cull,
+    // the counts' readback copy, the extensions' passes), the scene pass: sky, outdoor (the lists), late (the atlas
+    // overlay); final (its timestamps; it has no final pass of its own); the readbacks map once the frame is submitted
     render(world, cam, st, time, overlay, env) {
         this.resize();
         const d = this.device, archs = world ? world.list : [];
         this.writeGlobals(cam, env, st, time);
         this.renderer.each('frame', cam, env, st, this.width / this.height, world?.casterTop ?? 0);
         for (let k = 0; k < LISTS; k++) d.queue.writeBuffer(this.viewBuf, k * 256, this.viewData, k * 64, 24);
-        const enc = d.createCommandEncoder();
+        this.renderer.encode({ archs, cam, st, time, overlay });
+    }
+
+    compute(f) {
+        const d = this.device, enc = f.enc, { archs, st, cam, time } = f;
         for (const a of archs) a.upload(this.renderer);
         if (archs.length) {
             const cp = enc.beginComputePass({ timestampWrites: this.stamps(0) });
@@ -249,10 +255,11 @@ class RendererExtension {
             cp.end();
         }
         // a few times a second: copy the indirect args back for the HUD's counts
-        const doRead = archs.length > 0 && !this.readPending && time - this.lastRead > 0.25;
-        const offsets = [];
+        const doRead = f.doRead = archs.length > 0 && !this.readPending && time - this.lastRead > 0.25;
+        const offsets = f.offsets = [];
         let readBytes = 0;
         for (const a of archs) { offsets.push(readBytes); readBytes += a.static ? 0 : a.lists.setStride * LISTS; }
+        f.readBytes = readBytes;
         if (doRead) {
             if (!this.readBuf || this.readBuf.size < readBytes) {
                 this.readBuf?.destroy();
@@ -260,57 +267,68 @@ class RendererExtension {
             }
             archs.forEach((a, i) => { if (!a.static) enc.copyBufferToBuffer(a.lists.args, 0, this.readBuf, offsets[i], a.lists.setStride * LISTS); });
         }
-
         this.renderer.each('passes', enc, archs, st, cam);
+    }
 
-        const pass = enc.beginRenderPass({
+    scene(f) {
+        return f.enc.beginRenderPass({
             timestampWrites: this.stamps(10),
             colorAttachments: [{ view: this.msaaView, resolveTarget: this.fx.target(), clearValue: [0, 0, 0, 1], loadOp: 'clear', storeOp: 'discard' }],
             depthStencilAttachment: { view: this.depthView, depthClearValue: 0, depthLoadOp: 'clear', depthStoreOp: 'store' },
         });
-        pass.setPipeline(this.skyPipe);
-        pass.setBindGroup(0, this.globalBG);
-        pass.draw(3);
+    }
+
+    sky(f) {
+        f.pass.setPipeline(this.skyPipe);
+        f.pass.setBindGroup(0, this.globalBG);
+        f.pass.draw(3);
+    }
+
+    outdoor(f) {
+        const { pass, archs, st, cam } = f;
         pass.setBindGroup(3, this.viewBG, [0]);
         this.drawLists(pass, archs, 0, m => (m.doubleSided ? this.meshTwoSided : this.meshPipe), this.impPipe, false, st, cam);
         for (const a of archs) if (a.static) { a.casters[0] = st.shadows ? a.cpuCasters : 0; a.cpuCasters = 0; }
-        if (overlay) {
-            // bottom right, left of the control panel when that is showing
-            const W = this.width, H = this.height, dpr = W / Math.max(1, this.fx.canvas.clientWidth), m = 12 * dpr;
-            const right = (overlay.rightInset || 0) * dpr + m, px = Math.max(64, Math.min(H * 0.42, (W - right) * 0.45, 440 * dpr));
-            const s = overlay.sel, x0 = W - right - px, y0 = H - m - px;
-            d.queue.writeBuffer(this.overlayBuf, 0, new Float32Array([
-                x0 / W * 2 - 1, 1 - y0 / H * 2, (x0 + px) / W * 2 - 1, 1 - (y0 + px) / H * 2,
-                ...s.cells[0], ...s.cells[1], ...s.cells[2], overlay.atlas.grid, ATLAS_VIEWS.indexOf(overlay.view), ...s.w, 0,
-            ]));
-            pass.setPipeline(this.ovPipe);
-            pass.setBindGroup(0, this.overlayBG(overlay.atlas));
-            pass.draw(6);
-        }
-        pass.end();
+    }
+
+    // the selected model's atlas, bottom right, left of the control panel when that is showing
+    late(f) {
+        const overlay = f.overlay, pass = f.pass;
+        if (!overlay) return;
+        const W = this.width, H = this.height, dpr = W / Math.max(1, this.fx.canvas.clientWidth), m = 12 * dpr;
+        const right = (overlay.rightInset || 0) * dpr + m, px = Math.max(64, Math.min(H * 0.42, (W - right) * 0.45, 440 * dpr));
+        const s = overlay.sel, x0 = W - right - px, y0 = H - m - px;
+        this.device.queue.writeBuffer(this.overlayBuf, 0, new Float32Array([
+            x0 / W * 2 - 1, 1 - y0 / H * 2, (x0 + px) / W * 2 - 1, 1 - (y0 + px) / H * 2,
+            ...s.cells[0], ...s.cells[1], ...s.cells[2], overlay.atlas.grid, ATLAS_VIEWS.indexOf(overlay.view), ...s.w, 0,
+        ]));
+        pass.setPipeline(this.ovPipe);
+        pass.setBindGroup(0, this.overlayBG(overlay.atlas));
+        pass.draw(6);
+    }
+
+    // its GPU timestamps resolved, and the readbacks (timestamps, the HUD's counts) mapped once the frame is submitted
+    final(f) {
+        const enc = f.enc, { archs, st, doRead, offsets, readBytes, time } = f;
         const doTime = this.querySet && !this.queryPending && doRead;
         if (doTime) {
             enc.resolveQuerySet(this.querySet, 0, 12, this.queryBuf, 0);
             enc.copyBufferToBuffer(this.queryBuf, 0, this.queryRead, 0, 96);
-        }
-        d.queue.submit([enc.finish()]);
-        if (doTime) {
             this.queryPending = true;
             const parts = this.renderer.extensions.filter(x => x.gpuTimes).map(x => [x, x.timed?.(st, archs)]);
-            this.queryRead.mapAsync(GPUMapMode.READ).then(() => {
+            this.renderer.afterSubmit(() => this.queryRead.mapAsync(GPUMapMode.READ).then(() => {
                 const t = new BigUint64Array(this.queryRead.getMappedRange()), ms = k => Math.max(0, Number(t[k + 1] - t[k])) / 1e6;
                 this.gpuTimes = { cull: ms(0), shadow: null, main: ms(10) };
                 for (const [x, on] of parts) Object.assign(this.gpuTimes, x.gpuTimes(on, ms));
                 this.queryRead.unmap();
                 this.queryPending = false;
-            }).catch(() => { this.queryPending = false; });
+            }).catch(() => { this.queryPending = false; }));
         }
-
         if (doRead) {
             this.readPending = true;
             this.lastRead = time;
             const list = archs.slice(), buf = this.readBuf, n = readBytes;
-            buf.mapAsync(GPUMapMode.READ, 0, n).then(() => {
+            this.renderer.afterSubmit(() => buf.mapAsync(GPUMapMode.READ, 0, n).then(() => {
                 const u = new Uint32Array(buf.getMappedRange(0, n));
                 list.forEach((a, i) => {
                     if (a.static) return;
@@ -322,7 +340,7 @@ class RendererExtension {
                 });
                 buf.unmap();
                 this.readPending = false;
-            }).catch(() => { this.readPending = false; });
+            }).catch(() => { this.readPending = false; }));
         }
     }
 }

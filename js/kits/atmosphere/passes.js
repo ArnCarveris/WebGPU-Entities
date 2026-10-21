@@ -243,7 +243,7 @@ class CloudPass {
         this.hist = [0, 1].map(() => d.createTexture({ size: [w, h], format: 'rgba16float', usage: U.TEXTURE_BINDING | U.STORAGE_BINDING }));
         const hv = this.hist.map(t => t.createView());
         if (old) {
-            const enc = d.createCommandEncoder(), a = enc.beginComputePass({ label: 'history-copy' });
+            const enc = this.r.renderer.frameEncoder(), a = enc.beginComputePass({ label: 'history-copy' });
             a.setPipeline(this.pCopy);
             a.setBindGroup(0, this.rGroup);
             for (const v of hv) {
@@ -251,8 +251,8 @@ class CloudPass {
                 a.dispatchWorkgroups(Math.ceil(w / 8), Math.ceil(h / 8));
             }
             a.end();
-            d.queue.submit([enc.finish()]);
-            d.queue.onSubmittedWorkDone().then(() => old.forEach(t => t.destroy()));
+            // (freed once the frame that copies them is done)
+            this.r.renderer.afterSubmit(() => d.queue.onSubmittedWorkDone().then(() => old.forEach(t => t.destroy())));
         }
         this.tw = Math.ceil(w / CLOUD_TILE);
         this.th = Math.ceil(h / CLOUD_TILE);

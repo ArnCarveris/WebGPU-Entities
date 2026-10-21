@@ -216,7 +216,7 @@ class AppExtension {
     }
 
     // the scene contract of the media kit's views (js/kits/media/views.js): a view of the island into `target`, with the
-    // main view's culling and masking options; it submits its own frame, before the main one
+    // main view's culling and masking options, in this frame's encoder before the main view
     renderView(enc, target, s) {
         const w = this.world, o = this.opts, t = performance.now() / 1000, W = target.width, H = target.height;
         const viewProj = m4.mul(m4.perspective(s.fovY, target.aspect, s.near, s.far), m4.lookAt(s.eye, v3.add(s.eye, s.dir), s.up));

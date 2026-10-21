@@ -71,6 +71,7 @@ class RendererExtension {
 
     setSim(world, flow, waves, debris) {
         const d = this.device, n = world.field.n, U = BU();
+        this.sim = { flow, waves, debris };
         this.terrainIndex?.destroy();
         this.waterIndex?.destroy();
         const ti = gridIndices(n + 2), wi = gridIndices(n);
@@ -102,21 +103,47 @@ class RendererExtension {
         this.screenGroup = bindGroup(this.device, this.screenLayout, [this.hdrView, this.depthView], 'screen');
     }
 
-    render(enc) {
+    // one frame (Renderer.encode: its stages, into the frame encoder): f { sim: this frame's simulation step { steps, dt,
+    // eye, flowScale, time } or null (paused), uniforms() (its frame uniform's data, once the simulation has run) }
+    render(f) { this.renderer.encode(f); }
+
+    // the river: flow steps, the wave cascades, the debris
+    compute(f) {
+        const s = f.sim, { flow, waves, debris } = this.sim;
+        if (s) {
+            flow.encode(f.enc, s.steps);
+            waves.encode(f.enc, s.dt, s.eye, s.flowScale);
+            debris.encode(f.enc, s.dt * s.flowScale, s.time);
+        }
+        f.uniforms?.();
         this.device.queue.writeBuffer(this.frameBuf, 0, this.frameData);
-        const a = enc.beginRenderPass({
+    }
+
+    scene(f) {
+        const a = f.enc.beginRenderPass({
             label: 'scene',
             colorAttachments: [{ view: this.hdrView, loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 1] }],
             depthStencilAttachment: { view: this.depthView, depthLoadOp: 'clear', depthStoreOp: 'store', depthClearValue: 0 },
         });
         a.setBindGroup(0, this.worldGroup);
-        a.setPipeline(this.pSky);
-        a.draw(3);
+        return a;
+    }
+
+    sky(f) {
+        f.pass.setPipeline(this.pSky);
+        f.pass.draw(3);
+    }
+
+    outdoor(f) {
+        const a = f.pass;
         a.setPipeline(this.pTerrain);
         a.setIndexBuffer(this.terrainIndex, 'uint32');
         a.drawIndexed(this.terrainCount);
-        a.end();
+    }
 
+    // the surface pass: the scene composited, the water over it, the features' (debris); in a composition its depth too
+    translucent(f) {
+        const enc = f.enc;
         const b = enc.beginRenderPass({
             label: 'surface',
             colorAttachments: [{ view: this.fx.target(), loadOp: 'clear', storeOp: 'store', clearValue: [0, 0, 0, 1] }],

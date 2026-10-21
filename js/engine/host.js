@@ -10,7 +10,9 @@
 //      labels, toasts) and input scope; its options and readouts go on the handheld (world.handheld(), see handheld.js)
 //   4. the frame: the camera's world first, the camera passed to the others, each world renders (into the canvas when
 //      it is alone, else into its layer); the Compositor merges the layers (or hands them to the atmosphere world);
-//      then links and sound read the frame's stats, and the handheld draws over the finished frame
+//      then links and sound read the frame's stats, and the handheld draws over the finished frame. All of it goes into
+//      one command encoder, submitted once at the end of the frame (gpuFrame, the gpu kit's GpuFrame: every Renderer
+//      draws into it, fx.frame)
 //
 // Every world of a composition is always there and always runs: what keeps them out of each other's way is the
 // composition's own rules, not hiding one. The camera inside one world's interior is inside for all of them (inside():
@@ -155,6 +157,7 @@ class Host {
         await this.initGpu();
         this.engine = { Expr, GpuChoice, Common, CamMath, LayerFrame, host: this, kits: Features.kits };
         for (const k of Features.ENGINE_KITS) await Features.loadKit(k, this.engine);
+        this.gpuFrame = new Features.kits.gpu.GpuFrame(this.device);
         await this.handheld.init(scenario);
         await this.createWorlds(scenario);
         this.configure(scenario);
@@ -245,6 +248,7 @@ class Host {
             features,                      // its kit's features its data asks for: { <name>: their exports }
             host: this,
             device: this.device, format: this.format, adapter: this.adapter,
+            frame: this.gpuFrame,          // the frame's one encoder and submit (GpuFrame)
             canvas: this.canvas,
             ui: inst.ui,
             io: this.router.scope(root.id),
@@ -624,6 +628,9 @@ class Host {
         this.time += dt;
         this.frameNo++;
         this.resize();
+        // (what a failed frame left unsubmitted goes)
+        this.gpuFrame.encoder = null;
+        this.gpuFrame.after = [];
         try {
             this.frameWorlds(now, dt);
         } catch (err) {
@@ -644,6 +651,7 @@ class Host {
         this.sidePanels(now);
         try {
             this.handheld.frame(now, dt);
+            this.gpuFrame.submit();
         } catch (err) {
             if (!this.failed) { this.failed = true; showFallback(err); }
         }
@@ -688,20 +696,16 @@ class Host {
         for (const inst of scene) step(inst, true);
         // where the camera is (inside a world's interior, or out), before the atmospheres draw the outdoors
         this.inside();
-        const enc = this.device.createCommandEncoder({ label: 'composite' });
+        const enc = this.gpuFrame.enc;
         for (const inst of scene) this.compositor.linearize(enc, inst);
         const sky = this.skyOf(scene);
         if (atmos.length) {
             const inj = scene.length ? this.compositor.merge(enc, scene, null, sky) : null;
-            this.device.queue.submit([enc.finish()]);
             for (const a of atmos) {
                 a.ctx.inject = inj;
                 step(a, true);
             }
-        } else {
-            this.compositor.merge(enc, scene, this.swapView(), sky);
-            this.device.queue.submit([enc.finish()]);
-        }
+        } else this.compositor.merge(enc, scene, this.swapView(), sky);
     }
 }
 

@@ -204,18 +204,52 @@ class RendererExtension {
         return 0;
     }
 
-    // f.cmds: draw | sky | mark | glass | veil | water and the extensions' ops, executed in order (portal-tree DFS in
+    // The per-call buffers of a frame: render() runs once per view target too (CCTV, the phone camera) and every queue
+    // write lands before the frame's one submit, so each call of a frame writes a set of its own (the first one's are the
+    // renderer's own buffers): globals, areas, draw slots, portal polygons, lines, and their bind groups
+    callBuffers() {
+        if (this.setsFrame !== this.renderer.frameId) { this.setsFrame = this.renderer.frameId; this.setsUsed = 0; }
+        const i = this.setsUsed++;
+        if (!i) return { global: this.globalBuf, area: this.areaBuf, draw: this.drawBuf, poly: this.polyBuf, line: this.lineBuf, bg0: this.bg0, drawBG: this.drawBG };
+        const d = this.device, U = GPUBufferUsage;
+        let b = (this.sets ??= [])[i - 1];
+        if (!b) {
+            b = this.sets[i - 1] = {
+                global: d.createBuffer({ size: 224, usage: U.UNIFORM | U.COPY_DST }),
+                draw: d.createBuffer({ size: MAX_DRAWS * DRAW_STRIDE, usage: U.UNIFORM | U.COPY_DST }),
+                line: d.createBuffer({ size: MAX_LINE_VERTS * 28, usage: U.VERTEX | U.COPY_DST }),
+                poly: d.createBuffer({ size: MAX_POLY_VERTS * POLY_FLOATS * 4, usage: U.VERTEX | U.COPY_DST }),
+            };
+            b.drawBG = d.createBindGroup({ layout: this.bgl1, entries: [{ binding: 0, resource: { buffer: b.draw, size: DRAW_FLOATS * 4 } }] });
+        }
+        // (its areas follow the world's: upload() makes them anew)
+        if (b.areaOf !== this.areaBuf) {
+            b.area?.destroy();
+            b.areaOf = this.areaBuf;
+            b.area = d.createBuffer({ size: this.areaBuf.size, usage: U.STORAGE | U.COPY_DST });
+            b.bg0 = d.createBindGroup({ layout: this.bgl0, entries: [
+                { binding: 0, resource: { buffer: b.global } },
+                { binding: 1, resource: { buffer: b.area } },
+                { binding: 2, resource: { buffer: this.matBuf } },
+            ] });
+        }
+        return b;
+    }
+
+    // fr.cmds: draw | sky | mark | glass | veil | water and the extensions' ops, executed in order (portal-tree DFS in
     // stencil mode)
-    // f.draws: one { o, fog } per draw slot; fog = the portals it is seen through, nearest first
+    // fr.draws: one { o, fog } per draw slot; fog = the portals it is seen through, nearest first
     // target: a view target (js/kits/media/views.js) instead of the canvas
-    render(f, target = null) {
+    // Its stages (Renderer.encode, into the frame encoder): compute (the extensions' prepare), then the scene pass:
+    // indoor (the command list), late (the lines)
+    render(fr, target = null) {
         const d = this.device, q = d.queue, W = target ? target.width : this.W, H = target ? target.height : this.H;
-        const into = target ? { ...this.attachments(target), resolve: target.colorView } : { msaa: this.msaa.createView(), depth: this.depth.createView(), resolve: this.fx.target() };
-        q.writeBuffer(this.globalBuf, 0, f.globals);
-        q.writeBuffer(this.areaBuf, 0, f.areas);
-        const F = DRAW_STRIDE / 4, nSlots = Math.min(f.draws.length, MAX_DRAWS), D = this.drawData;
+        const B = this.callBuffers();
+        q.writeBuffer(B.global, 0, fr.globals);
+        q.writeBuffer(B.area, 0, fr.areas);
+        const F = DRAW_STRIDE / 4, nSlots = Math.min(fr.draws.length, MAX_DRAWS), D = this.drawData;
         for (let i = 0; i < nSlots; i++) {
-            const { o, fog } = f.draws[i], k = i * F, n = Math.min(fog.length, MAX_FOG_PORTALS);
+            const { o, fog } = fr.draws[i], k = i * F, n = Math.min(fog.length, MAX_FOG_PORTALS);
             D.set(o.model, k);
             D[k + 16] = o.lightArea; D[k + 17] = n; D[k + 18] = this.info(o); D[k + 19] = this.infoW(o);
             D[k + 20] = 1; D[k + 21] = 1; D[k + 22] = 1; D[k + 23] = 1;
@@ -224,34 +258,45 @@ class RendererExtension {
                 D.set(fog[j].fog, k + 24 + (MAX_FOG_PORTALS + j) * 4);
             }
         }
-        if (nSlots) q.writeBuffer(this.drawBuf, 0, this.drawData, 0, nSlots * F);
-        const polyVerts = Math.min(f.polys.length / POLY_FLOATS, MAX_POLY_VERTS);
-        if (polyVerts) q.writeBuffer(this.polyBuf, 0, f.polys, 0, polyVerts * POLY_FLOATS);
-        const lineVerts = Math.min(f.lines.length / 7, MAX_LINE_VERTS);
-        if (lineVerts) q.writeBuffer(this.lineBuf, 0, f.lines, 0, lineVerts * 7);
+        if (nSlots) q.writeBuffer(B.draw, 0, this.drawData, 0, nSlots * F);
+        const polyVerts = Math.min(fr.polys.length / POLY_FLOATS, MAX_POLY_VERTS);
+        if (polyVerts) q.writeBuffer(B.poly, 0, fr.polys, 0, polyVerts * POLY_FLOATS);
+        const lineVerts = Math.min(fr.lines.length / 7, MAX_LINE_VERTS);
+        if (lineVerts) q.writeBuffer(B.line, 0, fr.lines, 0, lineVerts * 7);
+        this.renderer.encode({ fr, target, B, W, H, lineVerts });
+    }
 
-        const enc = d.createCommandEncoder();
-        this.renderer.each('prepare', f, enc, target);
-        const pass = enc.beginRenderPass({
+    compute(f) { this.renderer.each('prepare', f.fr, f.enc, f.target); }
+
+    scene(f) {
+        const { target, W, H, B } = f;
+        const into = target ? { ...this.attachments(target), resolve: target.colorView } : { msaa: this.msaa.createView(), depth: this.depth.createView(), resolve: this.fx.target() };
+        const pass = f.enc.beginRenderPass({
             colorAttachments: [{ view: into.msaa, resolveTarget: into.resolve,
                 clearValue: { r: 0.004, g: 0.005, b: 0.007, a: 1 }, loadOp: 'clear', storeOp: 'discard' }],
             depthStencilAttachment: { view: into.depth, depthClearValue: 1, depthLoadOp: 'clear', depthStoreOp: 'store',
                 stencilClearValue: 0, stencilLoadOp: 'clear', stencilStoreOp: 'discard' },
         });
-        const scissor = r => {
+        f.scissor = r => {
             const x0 = Math.max(0, Math.floor(r[0])), y0 = Math.max(0, Math.floor(r[1])), x1 = Math.min(W, Math.ceil(r[2])), y1 = Math.min(H, Math.ceil(r[3]));
             if (x1 <= x0 || y1 <= y0) return false;
             pass.setScissorRect(x0, y0, x1 - x0, y1 - y0);
             return true;
         };
         let pipe = null, vb = null;
-        const use = (p, buffer) => {
+        f.use = (p, buffer) => {
             if (p !== pipe) { pass.setPipeline(p); pipe = p; }
             if (buffer && buffer !== vb) { pass.setVertexBuffer(0, buffer); vb = buffer; }
         };
-        pass.setBindGroup(0, this.bg0);
+        pass.setBindGroup(0, B.bg0);
         pass.setIndexBuffer(this.ibuf, 'uint32');
-        const P = this.pipes, variant = f.stencil ? 'stencil' : 'plain', L = this.stencil, R = this.regions;
+        return pass;
+    }
+
+    // the command list
+    indoor(f) {
+        const { fr, target, B, pass, scissor, use } = f;
+        const P = this.pipes, variant = fr.stencil ? 'stencil' : 'plain', L = this.stencil, R = this.regions;
         const worldPipe = P.world[variant], skyPipe = P.sky[variant];
         // what an extension's commands draw with: the pass, pipeline / vertex buffer switching, the mode's pipeline
         // variant, the stencil layout and region slot, the command's draw slot and an object's geometry, the target
@@ -259,7 +304,7 @@ class RendererExtension {
             pass, use, variant, stencil: L, regions: R, target,
             drawSlot: slot => {
                 if (slot >= MAX_DRAWS) return false;
-                pass.setBindGroup(1, this.drawBG, [slot * DRAW_STRIDE]);
+                pass.setBindGroup(1, B.drawBG, [slot * DRAW_STRIDE]);
                 return true;
             },
             drawChunk: (chunk, pipeline) => {
@@ -267,14 +312,14 @@ class RendererExtension {
                 pass.drawIndexed(chunk.count, 1, chunk.first, chunk.baseVertex, 0);
             },
         };
-        for (const c of f.cmds) {
+        for (const c of fr.cmds) {
             if (!scissor(c.rect)) continue;
             switch (c.op) {
                 case 'draw':
                     if (c.slot >= MAX_DRAWS) break;
                     use(worldPipe, this.vbuf);
                     pass.setStencilReference(R.ref(c.ref));
-                    pass.setBindGroup(1, this.drawBG, [c.slot * DRAW_STRIDE]);
+                    pass.setBindGroup(1, B.drawBG, [c.slot * DRAW_STRIDE]);
                     pass.drawIndexed(c.chunk.count, 1, c.chunk.first, c.chunk.baseVertex, 0);
                     break;
                 case 'sky':
@@ -283,32 +328,34 @@ class RendererExtension {
                     pass.draw(3);
                     break;
                 case 'mark':
-                    use(P.markA, this.polyBuf); pass.setStencilReference(R.ref(c.parent)); pass.draw(c.count, 1, c.first);
+                    use(P.markA, B.poly); pass.setStencilReference(R.ref(c.parent)); pass.draw(c.count, 1, c.first);
                     use(P.markB); pass.setStencilReference(L.compose({ 'portal.mark': 1, 'portal.regions': c.child })); pass.draw(c.count, 1, c.first);
                     use(P.markC); pass.setStencilReference(L.compose({ 'portal.mark': 1 })); pass.draw(c.count, 1, c.first);
                     break;
                 case 'water':
-                    use(P.water[variant], this.polyBuf);
+                    use(P.water[variant], B.poly);
                     pass.setStencilReference(R.ref(c.ref));
                     pass.draw(c.count, 1, c.first);
                     break;
                 case 'glass':
                 case 'veil':
-                    use(c.op === 'glass' ? P.glass : P.veil, this.polyBuf);
+                    use(c.op === 'glass' ? P.glass : P.veil, B.poly);
                     pass.draw(c.count, 1, c.first);
                     break;
                 default:
                     this.handlers.get(c.op)?.commands[c.op](c, x);
             }
         }
-        if (lineVerts) {
-            pass.setScissorRect(0, 0, W, H);
-            const nd = Math.min(f.lineDepthCount, lineVerts);
-            if (nd) { use(P.lineDepth, this.lineBuf); pass.draw(nd, 1, 0); }
-            if (lineVerts > nd) { use(P.lineOverlay, this.lineBuf); pass.draw(lineVerts - nd, 1, nd); }
-        }
-        pass.end();
-        q.submit([enc.finish()]);
+    }
+
+    // the lines (the inspector's frames), over everything
+    late(f) {
+        const { fr, pass, use, lineVerts, B, W, H } = f;
+        if (!lineVerts) return;
+        pass.setScissorRect(0, 0, W, H);
+        const P = this.pipes, nd = Math.min(fr.lineDepthCount, lineVerts);
+        if (nd) { use(P.lineDepth, B.line); pass.draw(nd, 1, 0); }
+        if (lineVerts > nd) { use(P.lineOverlay, B.line); pass.draw(lineVerts - nd, 1, nd); }
     }
 }
 

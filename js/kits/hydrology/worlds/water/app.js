@@ -158,7 +158,7 @@ class AppExtension {
     // update: input, camera, tools, world, sim; render: the frame. The host runs both, or (in a composition) the
     // camera's world updates before the others render
     frame(now, dt, { update = true, render = true } = {}) {
-        const r = this.renderer, w = this.world, flow = this.flow, d = r.device;
+        const r = this.renderer, w = this.world, flow = this.flow;
         if (update) {
             if (dt > 0) this.fps = this.fps * 0.95 + (1 / dt) * 0.05;
             if (!this.paused) this.time += dt;
@@ -179,21 +179,18 @@ class AppExtension {
         }
         if (!render) return;
         r.resize();
-        const enc = d.createCommandEncoder();
+        let sim = null;
         if (!this.paused) {
             const dts = this.simDt ?? dt;
             let steps = this.stepsPerFrame;
             if (flow.warmupLeft > 0) { const extra = Math.min(flow.warmupLeft, 600); flow.warmupLeft -= extra; steps += extra; }
             flow.writeParams(w.gather(), this.extraSources, this.frameNo++);
-            flow.encode(enc, steps);
-            this.waves.encode(enc, dts, this.camera.pos, this.water.flowScale);
-            this.debris.encode(enc, dts * this.water.flowScale, this.time);
+            sim = { steps, dt: dts, eye: this.camera.pos, flowScale: this.water.flowScale, time: this.time };
         }
         this.simDt = null;
-        this.writeFrame(this.hit);
-        r.render(enc);
-        d.queue.submit([enc.finish()]);
-        flow.afterSubmit();
+        // (its frame uniform after the compute passes: the wave cascades move with the camera as they run)
+        r.render({ sim, uniforms: () => this.writeFrame(this.hit) });
+        r.afterSubmit(() => flow.afterSubmit());
         this.hud.drawLabels(this.app);
         this.hud.update(this.app, now);
     }
