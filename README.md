@@ -101,7 +101,6 @@ A scenario is one flat list of entities:
     "name": "Riverlands",
     "group": "Entity Water",
     "entities": [
-        { "type": "water", "name": "Riverlands" },
         { "type": "terrain", "size": 2048, "resolution": 512, "base": 80 },
         { "type": "mountain", "label": "Stormhorn", "pos": [-560, -820], "radius": 520, "height": 270 },
         { "type": "spring", "label": "West spring", "pos": [-470, -700], "rate": 40, "radius": 18 },
@@ -116,24 +115,29 @@ A scenario is one flat list of entities:
 }
 ```
 
-- **A world** is a root entity of a world type (`cloud`, `water`, `origin`, `imposter`, `portal`, `gui`: the kits'
-  worlds), with an `id` (default: its type), a `label`, `layer` settings for compositions and `features` (below).
-- **Everything that world is made of** is an entity of a plain type: terrain stamps, lakes, storm cells, bodies, props,
+- **A site** is a named place in the world: `{ "type": "site", "id": "river", "kit": "hydrology", "label": "...",
+  "at": { "pos": [x, y, z], "yaw": deg, "on": "<entity>" } }` (`on`: an entity of another site it rides on, a pad on
+  a planet). A scenario of plain entities, like the one above, has no site: its entities imply one, of the kit that
+  takes them, with the id of that kit's world type (`water` here, as in `"of": "water"`). For now each site is one
+  world of its kit's world type (`cloud`, `water`, `origin`, `imposter`, `portal`, `gui`). A root entity of a world
+  type (`{ "type": "water", "id": "river" }`, what scenarios had before sites) is still read as a site of its kit;
+  `node tools/migrate-single-world.mjs` rewrites them.
+- **Everything there** is an entity of a plain type: terrain stamps, lakes, storm cells, bodies, props,
   areas and portals, materials, models, lighting presets, views, tools, config blocks (`light`, `building`, `mountain`,
   `door`...). Types are the kits', not the worlds': every one is listed in the kit manifest (`js/kits/manifest.js`)
   under the kit that implements it (an entity type) or reads it (a data type). A world takes the entity types whose
   implementation stands on an entity base it has and needs nothing it lacks (cloud: `terrain` entities that may need
   `structures` or `weather`; water: `terrain` ones that may need `water`; portal: `sector`; gui: `fixture`...), and
-  the data types of its schema. An entity belongs to the world named by `of`, else to the only world of the scenario
+  the data types of its schema. An entity stands in the site named by `of`, else in the only site of the scenario
   that takes its type: in a composition of a sky and a river, `{ "type": "lake", "of": "sky" }` (both take `lake`). An
-  included world's entities get its `of`. `camera` and `view` are the engine's unless they have `of`:
-  `{ "type": "camera", "of": "imposter", "fov": 60 }` is that world's camera block.
+  included site's entities get its `of`. `camera` and `view` are the engine's unless they have `of`:
+  `{ "type": "camera", "of": "imposter", "fov": 60 }` is that site's camera block.
 - **Any kit's entity works in any scenario.** An entity no world of the scenario takes brings in a world that does,
   composed with the others as the manifest says it joins (`implicit`): a `storm` in the bunker scenario puts a cloud
-  sky over it (as its atmosphere, on a plain at sea level), a list of `hills` and `spring`s with no root at all is a
+  sky over it (as its atmosphere, on a plain at sea level), a list of `hills` and `spring`s with no site at all is a
   water world.
-- **The engine's own entities** are plain types: `camera`, `view`, `link`, `include`, `handheld`, `handheld.page`,
-  `hud.toast`, `sound.*`.
+- **The engine's own entities** are plain types: `camera`, `view`, `link`, `include`, `site`, `features`, `handheld`,
+  `handheld.page`, `hud.toast`, `sound.*`.
 
 Each world still reads its own layout (materials as a map, views as a list...). Its schema (the manifest's
 `worlds.<type>.schema`) maps its entities onto that layout and back, without per-world code
@@ -165,7 +169,9 @@ the engines work) are the original READMEs, in [docs/features](docs/features).
 | `camera` | `from: "<world>"` or `["a", "b"]`, `carry` · or `controller: "fly"`, `pos`, `look`, `fov`, `speed` · `mode: "walk"` | which world's camera drives the others, or the engine's free camera (WASD, drag, wheel, Space / C); `mode` starts it walking (the handheld's Walk switches) |
 | `view` | `name`, `pos`, `look`, `fov` | a viewpoint in composition space, picked on the handheld's View |
 | `link` | `to: "<world>.<param>"`, `value: expr` | sets a world's parameter from an expression every frame (when it changes) |
-| `include` | `scenario`, `as`, `skip`, `only`, `root` | splices another scenario's entities, or a part kept in its own file (`"gui/<id>"`: a scenario's GUIs, under `scenarios/gui/`): `as` renames its world (and its name in expressions), `skip` / `only` filter by type (`"view"`, `"sound.*"`), `root` merges fields into its root |
+| `include` | `scenario`, `as`, `skip`, `only`, `site` | splices another scenario's entities, or a part kept in its own file (`"gui/<id>"`: a scenario's GUIs, under `scenarios/gui/`): `as` renames its site, the one it implies when it has none (and its name in expressions), `skip` / `only` filter by type (`"view"`, `"sound.*"`), `site` merges fields into it (`label`, `at`, `layer`) |
+| `site` | `id`, `kit`, `label`, `at: { pos, yaw, on }`, `features` | a named place in the world (above) |
+| `features` | `<name>: true \| false` | turns features on or off for every site, whatever the data says (a site's own `features` over it) |
 | `handheld` | `startShown`, `title`, `fovDeg`, `pose`, `screen`, `model`, `materials`, `lighting`, `sounds` | the engine's handheld, in every scenario (<kbd>TAB</kbd> / <kbd>Esc</kbd>, or the corner chip): merged over its defaults, later entities winning |
 | `handheld.page` | `id`, `of`, `title`, `nav: { section, sub, icon }`, `sections` | a page of the handheld, the scenario's HUD: cells `label` `text` `nav` `switch` `slider` `picker` `action`; `label` / `text` take `expr`, a template of the frame scope (`"{sky.rain\|pct}"`); `nav` lists it in that section of the root page, `of` ties it to a world |
 | `hud.toast` | `text`, `ms`, `delay` | a message once the scenario starts |
@@ -226,8 +232,8 @@ only list of kits, entity types, data types and worlds, and everything else is l
 - **A feature** is what a world is made of beyond its core, built only when the world's data asks for it (`when`: an
   entity of a type, an entity whose implementation needs something, a data path, through a list in any of its items
   (`entities.screen`), another feature; `requires`), its
-  parts under `features/<name>/` of its kit (or of its world, over the world's own exports). The root entity's
-  `features: { <name>: true | false }` turns one on or off whatever the data says. A feature plugs into the world's
+  parts under `features/<name>/` of its kit (or of its world, over the world's own exports). A `features` entity
+  (`{ "type": "features", "<name>": true | false }`, or a site's `features`) turns one on or off whatever the data says. A feature plugs into the world's
   parts as extensions (its World, App and Renderer: hooks they call in the features' order):
 
   | World | Feature | On with |
@@ -273,8 +279,9 @@ ground) and `render.airFade` (the band below it where the air thins out, by defa
 lies behind it with height, measured from the centre of its round planet; above it, and near the other bodies, it
 draws nothing of its own and the other worlds show bare (Every kit: 40 km, thinning from 20 km).
 
-Where a world sits: `layer.transform: { offset: [x, y, z], yaw }` in composition space, or `{ anchor: "<world>:<entity>",
-offset, yaw }` to ride on an entity of another world (a site on the Earth, a moon base). The camera passes between the
+Where a world sits: its site's `at: { pos: [x, y, z], yaw }` in composition space, with `on: "<entity>"` to ride on an
+entity of another site (a pad on the Earth, a moon base); a root entity's `layer.transform: { offset, yaw, anchor:
+"<world>:<entity>" }` says the same. The camera passes between the
 worlds as a view (position, forward, up, fov in metres) through those transforms, so a valley anchored on a real-scale
 planet stays exact under the floating origin.
 

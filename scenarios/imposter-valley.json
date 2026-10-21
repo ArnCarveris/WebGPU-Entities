@@ -2,7 +2,6 @@
     "name": "Imposter Valley",
     "group": "Entity Imposter",
     "entities": [
-        {"type":"imposter","name":"Imposter Valley"},
         {"type":"camera","of":"imposter","pos":[0,2.6,24],"yaw":0,"pitch":-3,"fov":60,"speed":14},
         {"type":"view","of":"imposter","name":"Start","pos":[0,2.6,24],"look":[0,1.3,-24]},
         {"type":"view","of":"imposter","name":"Mesh vs imposter","pos":[0,4,17],"look":[0,3.2,0]},

@@ -199,7 +199,7 @@ The players and cameras of the former worlds (portal/gui `game/player.js`, impos
 ### 1.6 A scenario without roots
 
 ```json
-{ "type": "site", "id": "bunker", "label": "Portal · Bunker", "at": { "pos": [-11000, 221.2, 15000], "on": "plains-site" } },
+{ "type": "site", "id": "bunker", "label": "Portal · Bunker", "at": { "pos": [-11000, 221.2, 15000], "on": "plains-pad" } },
 { "type": "area", "of": "bunker", ... }
 ```
 
@@ -208,7 +208,7 @@ The players and cameras of the former worlds (portal/gui `game/player.js`, impos
   So a single-world scenario loses its root entity and nothing else.
 - `of` names a site. Entities of a `sites: 'many'` kit go into that kit's native for that site:
   `ScenarioFormat.toNative(scenario, kit, site)`. Entities of a `sites: 'one'` kit with `of` set the frame of that
-  kit's one site (the atmosphere's terrain in `compose-every-kit` sits 1300 m under `plains-site`).
+  kit's one site (the atmosphere's terrain in `compose-every-kit` sits 1300 m under `plains-pad`).
 - The old root's fields map like this: `label` / `name` → the site's; `layer.transform` → `at`; `layer.role`, `sky`,
   `sun`, `focus` → **gone** (§1.7 gives the rules that replace them); `features` → one engine entity
   `{ "type": "features", ... }` for the whole world.
@@ -220,7 +220,7 @@ The players and cameras of the former worlds (portal/gui `game/player.js`, impos
 - `link.to: "<site>.<param>"` goes to the extension that owns that site's parameter (`world.set(site, param, v)`), so
   `river.rain` still works. `"<kit>.<param>"` addresses a kit-wide one.
 - Expression scope: `s[site]` holds the stats of what is in that site. `s[kitKey]` holds a kit's own. Site ids are kept
-  from the old world ids, so existing expressions (`sky.rain`, `sol.sunAt['valley-site']`) still resolve.
+  from the old world ids, so existing expressions (`sky.rain`, `sol.sunAt['valley-pad']`) still resolve.
 
 ### 1.7 What replaces each cross-world mechanism
 
@@ -373,7 +373,7 @@ pixel-identical. Only frames that mix kits take the shared choices.
 - A rebase calls `world.each('rebase', delta)` for state kept in absolute coordinates (the sdf clipmap's toroidal
   offset, a weather map that follows the eye). Today only the origin world itself has any.
 - `space` (entities kit) keeps bodies, orbiters, fields and props on bodies (`surface: { parent, lat, lon }`), and
-  answers `anchor(id)`. A site with `at.on: "plains-site"` rides on Earth's surface through it.
+  answers `anchor(id)`. A site with `at.on: "plains-pad"` rides on Earth's surface through it.
 - The `space` controller (§1.8) is the origin's current camera + floating code.
 
 **curvature kit** (exists: `kits.curvature`, data `curvature`):
@@ -464,7 +464,7 @@ from the legacy path to the one host, simplest first. Each step ships:
 | 6d | `compose-planetfall` | space + imposter: site on a body (`at.on`), the floating origin with one depth buffer, the sun from the star (`valley.light` deleted) |
 | 6e | `compose-moonbase-sector07` | space + gui: controllers `space` → `walk` in the sector (`camera.from` / `carry: false` gone) |
 | 6f | `compose-grand-tour` | four kits, the `fly` camera from the data |
-| 6g | `compose-every-kit` | everything: the atmosphere's site under `plains-site`, `terrain.outside: "none"` + `edge` over Earth (`background` stage), `airTop` over space, curvature from Earth's radius |
+| 6g | `compose-every-kit` | everything: the atmosphere's site under `plains-pad`, `terrain.outside: "none"` + `edge` over Earth (`background` stage), `airTop` over space, curvature from Earth's radius |
 
 After 6g: delete `js/engine/compositor.js`, the legacy host, `encodeInject` / `encodeSpace` / `behindTex`,
 `layer.*`, `complete` / `implicit`, `configureSuns` / `lights`, `inside` / `holder` / `veilOf` / `skyOf` / `byRole`,
@@ -521,10 +521,10 @@ The compositions keep their file names and ids (URLs and `localStorage` remember
 | `compose-storm-riverlands` | `sky` (cloud, atmosphere) + `river` (water, offset); `camera.from: river`; links `river.rain`, `river.light` | sites `sky` (atmosphere's one site), `river` at its offset; camera starts at the river's start view; `river.rain` kept; `river.light` deleted |
 | `compose-valley-weather` | `sky` + `valley` (imposter); `camera.from: valley`; link `valley.light` | sites `sky`, `valley`; `valley.light` deleted |
 | `compose-bunker-reservoir` | `sky` + `bunker` (portal, offset, focus); `camera.from: bunker` | sites `sky`, `bunker`; the atmosphere's outdoors through the bunker's portals via `world.shelter` |
-| `compose-planetfall` | `sol` (origin, sky) + `valley` anchored `sol:valley-site`; link `valley.light` | no `sol` site (space is the world's own); site `valley` `on: "valley-site"`; sun from the star; link deleted |
-| `compose-moonbase-sector07` | `sol` + `sector` (gui) anchored `sol:sector07-site`; `camera.from: [sol, sector]`, `carry: false` | site `sector` `on: "sector07-site"`; controllers `space` and `walk` |
+| `compose-planetfall` | `sol` (origin, sky) + `valley` anchored `sol:valley-pad`; link `valley.light` | no `sol` site (space is the world's own); site `valley` `on: "valley-pad"`; sun from the star; link deleted |
+| `compose-moonbase-sector07` | `sol` + `sector` (gui) anchored `sol:sector07-pad`; `camera.from: [sol, sector]`, `carry: false` | site `sector` `on: "sector07-pad"`; controllers `space` and `walk` |
 | `compose-grand-tour` | `sky` + `river` + `valley` + `bunker`; `fly` camera; `river.rain` | four sites; `fly`; link kept |
-| `compose-every-kit` | all six, everything anchored on `sol:plains-site`; `camera.from: [sol, sector]`; `river.rain` | sites `sky` (on `plains-site`, −1300 m), `river`, `valley`, `bunker`, `sector`; space as the world's own; controllers `space` / `walk`; link kept |
+| `compose-every-kit` | all six, everything anchored on `sol:plains-pad`; `camera.from: [sol, sector]`; `river.rain` | sites `sky` (on `plains-pad`, −1300 m), `river`, `valley`, `bunker`, `sector`; space as the world's own; controllers `space` / `walk`; link kept |
 
 `scenarios/gui/*.json` (handheld pages) and `scenarios/plans/*` are unchanged; page entries that name a world id keep
 working because site ids are the old world ids. `scenarios/sounds/*` entries addressed as `<world>.<event>` go through
@@ -603,8 +603,8 @@ phases can run in parallel from Phase 1 on: its Phase 0 shares Phase 1's two Com
 6. **Names.** Keep the `compose-*` ids and the "Compositions" group in `scenarios/index.json` (URLs and `localStorage`
    remember the ids), or rename the group (for example "Tours") so the word "composition" leaves the UI too?
 7. **`site` as the name** of the new engine type. `place` is taken by the geo kit and `area` by the interior kit.
-   `site` is also what `plains-site` / `valley-site` props are called today; is that clash wanted (a site that rides on a
-   `*-site` prop) or should the props be renamed?
+   **Answered (2026-10-22): `site` stays; the props a site rides on are renamed `*-site` → `*-pad`** (`plains-pad`,
+   `valley-pad`, `sector07-pad`; done in Phase 4).
 8. **Higher limits.** Request `maxSampledTexturesPerShaderStage` above 16 when the adapter offers it, or keep 16 as the
    design limit everywhere (proposed: keep 16, as the sdf plan does)?
 9. **Phase 8.** In this plan, or a separate one once Phase 7 is in?

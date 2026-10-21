@@ -1230,39 +1230,39 @@
      "key": "8",
      "name": "Over the plains",
      "at": {
-      "parent": "plains-site",
+      "parent": "plains-pad",
       "offset": [
        1500,
        2900,
        14000
       ]
      },
-     "look": "plains-site"
+     "look": "plains-pad"
     },
     {
      "key": "9",
      "name": "Riverlands",
      "at": {
-      "parent": "plains-site",
+      "parent": "plains-pad",
       "offset": [
        5200,
        520,
        7000
       ]
      },
-     "look": "plains-site"
+     "look": "plains-pad"
     },
     {
      "name": "High over the plains",
      "at": {
-      "parent": "plains-site",
+      "parent": "plains-pad",
       "offset": [
        -8000,
        14000,
        30000
       ]
      },
-     "look": "plains-site"
+     "look": "plains-pad"
     }
    ],
    "entities": [
@@ -1784,7 +1784,7 @@
     },
     {
      "type": "prop",
-     "id": "plains-site",
+     "id": "plains-pad",
      "label": "High Plains",
      "model": "marker",
      "surface": {
@@ -16761,7 +16761,7 @@
    "media"
   ],
   "native": {
-   "name": "Every kit",
+   "name": "Sector 07",
    "views": [
     {
      "name": "Start",

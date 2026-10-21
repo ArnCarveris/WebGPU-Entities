@@ -2,7 +2,6 @@
     "name": "Riverlands",
     "group": "Entity Water",
     "entities": [
-        {"type":"water","name":"Riverlands"},
         {"type":"terrain","size":2048,"resolution":512,"base":80,"snowLine":250},
         {
             "type": "sim", "stepsPerFrame": 1, "stepTime": 0.12, "gravity": 9.81, "acceleration": 0.4, "diffusion": 0.06, "linDamping": 0.99, "sqrDamping": 0.05,

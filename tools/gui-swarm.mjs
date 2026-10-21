@@ -9,7 +9,7 @@ import { fileURLToPath } from 'url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const base = JSON.parse(readFileSync(join(root, 'scenarios/gui-stress.json'), 'utf8'));
-const keep = new Set(['gui', 'waves', 'material', 'model', 'sound.bed', 'sound.cue', 'cctv', 'media', 'iptv', 'handheld', 'phone', 'radar']);
+const keep = new Set(['waves', 'material', 'model', 'sound.bed', 'sound.cue', 'cctv', 'media', 'iptv', 'handheld', 'phone', 'radar']);
 const out = [];
 for (const e of base.entities) {
     if (!e.type && e.$comment) { out.push(e); continue; }

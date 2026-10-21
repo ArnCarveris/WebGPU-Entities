@@ -6,7 +6,7 @@
     "entities": [
         {"$comment":"the sky: High Plains, as the composition's atmosphere (the other worlds go into its scene before its volumetrics)"},
         {"type":"include","scenario":"cloud-high-plains","as":"sky","skip":["view"],
-            "root":{"label":"Cloud · High Plains","layer":{"role":"atmosphere"}}},
+            "site":{"label":"Cloud · High Plains","layer":{"role":"atmosphere"}}},
         {"type":"render","radar":false},
         {"$comment":"the plains make room under the river map by themselves (its footprint); its sea goes on south of it"},
         {"type":"lake","of":"sky","label":"","pos":[5300,7900],"radius":1300,"level":1397},
@@ -14,7 +14,7 @@
 
         {"$comment":"the river: Riverlands, 1395 m up on the plains; it drives the camera and has the keys first"},
         {"type":"include","scenario":"water-riverlands","as":"river",
-            "root":{"label":"Water · Riverlands","layer":{"transform":{"offset":[6000,1395,6000]},"focus":true}}},
+            "site":{"label":"Water · Riverlands","at":{"pos":[6000,1395,6000]},"layer":{"focus":true}}},
         {"type":"light","of":"river","id":"plains day","sun":{"color":[1,0.84,0.66],"intensity":3.0},
             "sky":{"top":[0.3,0.45,0.72],"horizon":[0.72,0.74,0.78]},"ground":[0.24,0.22,0.18],"ambient":0.55,"fog":0.000004,"exposure":0.62},
         {"type":"light","of":"river","id":"plains golden","sun":{"color":[1,0.6,0.32],"intensity":3.0},

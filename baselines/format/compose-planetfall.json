@@ -1230,27 +1230,27 @@
      "key": "8",
      "name": "Imposter Valley, Earth",
      "at": {
-      "parent": "valley-site",
+      "parent": "valley-pad",
       "offset": [
        -60,
        46,
        280
       ]
      },
-     "look": "valley-site"
+     "look": "valley-pad"
     },
     {
      "key": "9",
      "name": "Above the valley",
      "at": {
-      "parent": "valley-site",
+      "parent": "valley-pad",
       "offset": [
        0,
        4000,
        9000
       ]
      },
-     "look": "valley-site"
+     "look": "valley-pad"
     }
    ],
    "entities": [
@@ -1772,7 +1772,7 @@
     },
     {
      "type": "prop",
-     "id": "valley-site",
+     "id": "valley-pad",
      "label": "Imposter Valley",
      "model": "marker",
      "surface": {

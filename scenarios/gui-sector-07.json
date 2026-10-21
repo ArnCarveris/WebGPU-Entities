@@ -2,7 +2,6 @@
     "name": "Sector 07",
     "group": "Entity GUI",
     "entities": [
-        {"type":"gui"},
         {"type":"view","of":"gui","name":"Start","pos":[-0.75,1.6,-1.35],"look":[-0.71,1.54,-3.3]},
         {"type":"view","of":"gui","name":"Ops terminal","pos":[-0.9,1.6,-0.9],"look":[-1.2,1.2,-3.39]},
         {"type":"view","of":"gui","name":"Hatch B","pos":[1.8,1.6,-1.9],"look":[1.8,1.35,-4]},

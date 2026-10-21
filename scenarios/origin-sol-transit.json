@@ -2,7 +2,6 @@
     "name": "Sol Transit",
     "group": "Entity Origin",
     "entities": [
-        {"type":"origin","name":"Sol Transit"},
         {"type":"start","value":"1"},
         {"type":"camera","of":"origin","fov":60,"minAltitude":1.7},
         {"type":"floatingOrigin","distance":512,"angle":0.25,"scaleBase":64,"frameRange":3,"maxScaleExp":44},

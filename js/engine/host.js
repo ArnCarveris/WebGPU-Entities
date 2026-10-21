@@ -114,7 +114,7 @@ class Host {
     async dropFile(file) {
         try {
             let data = JSON.parse(await file.text());
-            if (!ScenarioFormat.roots(data).length) data = Host.importNative(data, file.name);
+            if (!Array.isArray(data.entities)) data = Host.importNative(data, file.name);
             sessionStorage.setItem('entities.dropped', JSON.stringify(data));
             this.pickScenario(Host.DROPPED);
         } catch (err) {
@@ -182,7 +182,9 @@ class Host {
 
     async createWorlds(scenario) {
         const roots = ScenarioFormat.roots(scenario);
-        if (!roots.length) throw new Error(`Scenario "${scenario.name}" has no world (an entity of type ${Object.keys(ScenarioFormat.SCHEMAS).join(' / ')}, or one a world takes)`);
+        if (!roots.length) throw new Error(`Scenario "${scenario.name}" has nothing in it (no site, and no entity any kit takes)`);
+        // (a root entity of a world type: read as a site of its kit; tools/migrate-single-world.mjs rewrites them)
+        for (const r of roots) if (!r.site) console.info(`${scenario.name}: the root entity { type: "${r.type}" } is read as a site of the ${r.kit} kit`);
         const engine = this.engine;
         this.composed = roots.length > 1;
         for (const root of roots) {
@@ -236,7 +238,8 @@ class Host {
             label: def.label || def.name || root.id,
             def, layer,
             role: layer.role || 'scene',
-            frameDef: layer.transform || {},
+            // (a site's at: { pos, yaw, on }, on: the entity of another world it rides on; a root's layer.transform)
+            frameDef: def.at ? { offset: def.at.pos, yaw: def.at.yaw, on: def.at.on } : layer.transform || {},
             // (region(): what of the screen its in-world labels may show, fx.outdoors; veil(): how much the other worlds
             // hide of a point on it, veilOf)
             ui: { root: ui, $: name => ui.querySelector(`[data-hud="${name}"]`), region: () => inst.ctx.outdoors,
@@ -527,9 +530,18 @@ class Host {
         for (const i of this.instances) i.ui.root.classList.toggle('unfocused', this.composed && this.router.focus !== i.id);
     }
 
-    // the frame of a world in composition space (anchors resolved against the world they ride on)
+    // the frame of a world in composition space (anchors resolved against the world they ride on: a site's `on`, the
+    // entity of whichever other world answers anchor() for it; a root's layer.transform.anchor "<world>:<entity>")
     frameOf(inst) {
         const t = inst.frameDef, local = LayerFrame.fromDef(t);
+        if (t.on) {
+            const owner = inst.anchorOwner ? [inst.anchorOwner] : this.instances.filter(i => i !== inst);
+            for (const i of owner) {
+                const f = i.world.anchor?.(t.on);
+                if (f) { inst.anchorOwner = i; return local.within(new LayerFrame(f.pos, f.q)); }
+            }
+            return local;
+        }
         if (!t.anchor) return local;
         const [wid, eid] = String(t.anchor).split(':');
         const base = this.instances.find(i => i.id === wid);

@@ -33,6 +33,8 @@
 const Kits = (() => {
     const ENGINE = {
         include: 'splices another scenario\'s entities in its place',
+        site: 'a named place in the world (id, label, kit, at: { pos, yaw, on }): the entities `of` it stand there',
+        features: 'turns features on or off for the whole world: { <name>: true | false }',
         camera: 'which world drives the camera, or the engine\'s free camera; with `of`: that world\'s camera settings',
         view: 'a viewpoint in composition space; with `of`: one of that world\'s views (`each` + `follow` per member)',
         link: 'sets a world parameter from an expression',

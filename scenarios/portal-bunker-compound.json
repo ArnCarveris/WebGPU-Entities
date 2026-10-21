@@ -2,7 +2,6 @@
     "name": "Bunker compound",
     "group": "Entity Portal",
     "entities": [
-        {"type":"portal","name":"Bunker compound"},
         {"type":"camera","of":"portal","pos":[0,1.7,-16],"yaw":180,"pitch":-2,"fov":70},
         {"type":"view","of":"portal","name":"Outside the bunker","pos":[0,1.7,-16],"look":[0,1.2,0]},
         {"type":"view","of":"portal","name":"Compound overview","pos":[-30,26,-38],"look":[0,0,10]},

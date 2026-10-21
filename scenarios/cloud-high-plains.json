@@ -2,7 +2,6 @@
     "name": "High Plains",
     "group": "Entity Cloud",
     "entities": [
-        {"type":"cloud","name":"High Plains"},
         {"type":"terrain","size":64000,"resolution":512,"base":1500,"fieldSize":805,"pivots":0.22},
         {"type":"curvature","radius":6371000,"$comment":"the outdoors drawn on a round planet, O(1) per point; optional: without it the plains are flat (the handheld's GPU menu turns it on or off)"},
         {

@@ -4,9 +4,6 @@
     "description": "EntityGUI screens at 2 m to 512 m, one per view: how deep a world-space GUI can be before it breaks.",
     "entities": [
         {
-            "type": "gui"
-        },
-        {
             "type": "facility",
             "log": [
                 "DEPTH STRESS RANGE ONLINE",
