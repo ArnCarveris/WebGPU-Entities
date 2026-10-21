@@ -38,7 +38,7 @@ class FrameWriter {
     // the camera as it renders this frame (the projection write() puts in the globals): { viewProj, height (px) }
     view() {
         const a = this.app, r = a.renderer, cam = a.camera, { fwd, right, up } = cam.basis();
-        const proj = m4.reversedInfinite(cam.fov, r.width / r.height, a.walker.active ? 0.05 : NEAR);
+        const proj = m4.reversedInfinite(cam.fov, r.width / r.height, a.walker.active ? 0.05 : r.frameSpec?.near ?? NEAR);
         return { viewProj: m4.mul(proj, m4.view(cam.pos, right, up, fwd)), height: r.height };
     }
 
@@ -48,7 +48,7 @@ class FrameWriter {
         const aspect = r.width / r.height, tanY = Math.tan(cam.fov / 2), tanX = tanY * aspect;
         const { fwd, right, up } = cam.basis();
         // on foot the near plane comes in to 5 cm (seat backs and bus walls are within a metre); reversed-Z keeps the far depth precise
-        const near = a.walker.active ? 0.05 : NEAR, proj = m4.reversedInfinite(cam.fov, aspect, near);
+        const near = a.walker.active ? 0.05 : r.frameSpec?.near ?? NEAR, proj = m4.reversedInfinite(cam.fov, aspect, near);
         this.viewProj = m4.mul(proj, m4.view(cam.pos, right, up, fwd));
         // what the features draw this frame (their AppExtension.draws: the buses near, the rooms the portal traversal reaches
         // and their lifts, the world-space GUIs); one that sees the outdoors from inside sets this.outdoors ({ seen, rect });

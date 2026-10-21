@@ -380,27 +380,51 @@ class PointerInput {
 //
 // A member no extension exposes reads undefined; while the host's own extension still has it without saying so, it is
 // answered from there with a console error naming it (an exposes list to complete), so nothing breaks on the way.
+//
+// Several kits on one host: scope(host, key) is the host as one of them sees it (a site of the scenario and its kit).
+// Through its scope a kit has an own extension of its own (scope.extend), composes its own (scope.compose), and its
+// hook lists, its ext and the members its extensions expose are its own: two kits may each expose a camera, a world or
+// a frame without a clash, each reading its own. Everything else is the host's: its fields and methods (called on the
+// scope), and the members only one kit exposes. The host itself answers a name one kit exposes; one that several kits
+// expose reads undefined on it (with an error, once). Its hook lists hold every kit's composed extensions, and a
+// scope's ext sees the host's (an extension shared between kits is made once). A field a kit sets that nobody exposes
+// stays its own, and so do the World's entities (SCOPED).
 const ROLE = { World: 'world', App: 'app', Renderer: 'renderer' };
-const STATE = new WeakMap();        // host -> { owner: Map(name -> extension), bound: Map(name -> { fn, x, call }), own, told }
-const TARGET = new WeakMap();       // a host's Proxy -> the host
+const SCOPED = { World: { entities: () => [], byId: () => new Map() }, Renderer: { frameSpec: () => null }, App: {} };
+const STATE = new WeakMap();        // host -> { owner: Map(name -> extension), bound: Map(name -> { fn, x, call }), own, told, ambiguous: Map(name -> Set), scopes, proxy }
+const TARGET = new WeakMap();       // a host's Proxy (or one of its scopes) -> the host
+const SCOPE = new WeakMap();        // a scope -> its state { key, target, host (the host's Proxy), owner, bound, own, told, fields (ext, extensions, SCOPED), local }
 // the extension answering name k for host t: who exposes it, else (with an error, once) its own extension if it has it
 function owner(t, k) {
     const S = STATE.get(t), x = S.owner.get(k), e = S.own;
+    if (!x && S.ambiguous.has(k)) {
+        if (!S.told.has(k)) { S.told.add(k); console.error(`${t.constructor.name}.${k}: exposed by several kits (${[...S.ambiguous.get(k)].map(x => x.constructor.key).join(', ')}); read it through one's scope`); }
+        return undefined;
+    }
     if (x || typeof k !== 'string' || !e || !(k in e)) return x;
     if (!S.told.has(k)) { S.told.add(k); console.error(`${t.constructor.name}.${k}: answered by ${e.constructor.name} (${e.constructor.key}), which does not expose it`); }
     return e;
+}
+// ... for a scope: its own extensions'
+function scopeOwner(sc, k) {
+    const x = sc.owner.get(k), e = sc.own;
+    if (x || !e || !(k in e)) return x;
+    if (!sc.told.has(k)) { sc.told.add(k); console.error(`${sc.target.constructor.name}.${k} (${sc.key}): answered by ${e.constructor.name} (${e.constructor.key}), which does not expose it`); }
+    return e;
+}
+// member k of extension x, a method bound to it (kept: the same function each time)
+function member(bound, x, k) {
+    const v = x[k];
+    if (typeof v !== 'function') return v;
+    let m = bound.get(k);
+    if (!m || m.fn !== v || m.x !== x) bound.set(k, m = { fn: v, x, call: v.bind(x) });
+    return m.call;
 }
 const FORWARD = {
     get(t, k, r) {
         if (k in t) return Reflect.get(t, k, r);
         const x = owner(t, k);
-        if (!x) return undefined;
-        const v = x[k];
-        if (typeof v !== 'function') return v;
-        const bound = STATE.get(t).bound;
-        let m = bound.get(k);
-        if (!m || m.fn !== v || m.x !== x) bound.set(k, m = { fn: v, x, call: v.bind(x) });
-        return m.call;
+        return x ? member(STATE.get(t).bound, x, k) : undefined;
     },
     set(t, k, v, r) {
         if (k in t) return Reflect.set(t, k, v, r);
@@ -411,26 +435,82 @@ const FORWARD = {
     },
     has(t, k) { return k in t || !!owner(t, k); },
 };
+const hasOwn = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+const SCOPE_FORWARD = {
+    get(sc, k) {
+        if (hasOwn(sc.fields, k)) return sc.fields[k];
+        if (typeof k !== 'string' || k in sc.target) return Reflect.get(sc.target, k, sc.proxy);
+        const x = scopeOwner(sc, k);
+        if (x) return member(sc.bound, x, k);
+        return hasOwn(sc.local, k) ? sc.local[k] : sc.host[k];
+    },
+    set(sc, k, v) {
+        if (hasOwn(sc.fields, k)) sc.fields[k] = v;
+        else if (typeof k !== 'string' || k in sc.target) return Reflect.set(sc.target, k, v, sc.target);
+        else {
+            const x = scopeOwner(sc, k);
+            if (x) x[k] = v;
+            else sc.local[k] = v;
+        }
+        return true;
+    },
+    has(sc, k) { return hasOwn(sc.fields, k) || k in sc.target || !!scopeOwner(sc, k) || hasOwn(sc.local, k) || k in sc.host; },
+};
 const Composite = {
     of(host) {
         host.ext = {};
         host.extensions = [];
-        STATE.set(host, { owner: new Map(), bound: new Map(), own: null, told: new Set() });
         const p = new Proxy(host, FORWARD);
+        STATE.set(host, { owner: new Map(), bound: new Map(), own: null, told: new Set(), ambiguous: new Map(), scopes: new Map(), proxy: p });
         TARGET.set(p, host);
         return p;
     },
-    // the host's own extension (its constructor's: new World(E, ...args))
+    // the host as kit `key` sees it (made on first use; see above)
+    scope(host, key) {
+        const t = Composite.target(host), S = STATE.get(t), have = S.scopes.get(key);
+        if (have) return have.proxy;
+        const fields = { ext: Object.create(t.ext), extensions: [] };
+        for (const [k, make] of Object.entries(SCOPED[t.constructor.name] || {})) fields[k] = make();
+        const sc = { key, target: t, host: S.proxy, owner: new Map(), bound: new Map(), own: null, told: new Set(), fields, local: {} };
+        const p = sc.proxy = new Proxy(sc, SCOPE_FORWARD);
+        SCOPE.set(p, sc);
+        TARGET.set(p, t);
+        S.scopes.set(key, sc);
+        return p;
+    },
+    // whether host is one of a host's scopes
+    isScope(host) { return SCOPE.has(host); },
+    // where host's extensions are kept: a scope's state, else the host's
+    stateOf(host) { return SCOPE.get(host) || STATE.get(Composite.target(host)); },
+    // the host's own extension (its constructor's: new World(E, ...args)), or a scope's
     own(host, E, ...args) {
-        const S = STATE.get(Composite.target(host));
-        if (S.own) throw new Error(`${Composite.target(host).constructor.name}: already has its own extension (${S.own.constructor.name}); reset() it first`);
+        const S = Composite.stateOf(host);
+        if (S.own) throw new Error(`${Composite.target(host).constructor.name}${S.key ? ` (${S.key})` : ''}: already has its own extension (${S.own.constructor.name}); reset() it first`);
         const x = Composite.make(host, E, args);
         S.own = x;
         return x;
     },
     reset(host) {
-        const t = Composite.target(host), S = STATE.get(t);
-        S.owner.clear(); S.bound.clear(); S.told.clear();
+        const t = Composite.target(host), S = STATE.get(t), sc = SCOPE.get(host);
+        if (sc) {
+            // its extensions off the host too
+            const gone = new Set([sc.own, ...sc.fields.extensions].filter(Boolean));
+            t.extensions.splice(0, t.extensions.length, ...t.extensions.filter(x => !gone.has(x)));
+            for (const [k, x] of Object.entries(t.ext)) if (gone.has(x)) delete t.ext[k];
+            for (const [k, x] of [...S.owner]) if (gone.has(x)) S.owner.delete(k);
+            for (const [k, set] of [...S.ambiguous]) {
+                for (const x of gone) set.delete(x);
+                if (set.size > 1) continue;
+                S.ambiguous.delete(k);
+                if (set.size) S.owner.set(k, [...set][0]);
+            }
+            sc.owner.clear(); sc.bound.clear(); sc.told.clear();
+            sc.own = null;
+            sc.fields.extensions.length = 0;
+            for (const k of Object.keys(sc.fields.ext)) delete sc.fields.ext[k];
+            return;
+        }
+        S.owner.clear(); S.bound.clear(); S.told.clear(); S.ambiguous.clear();
         S.own = null;
         for (const k of Object.keys(t.ext)) delete t.ext[k];
         t.extensions.length = 0;
@@ -440,11 +520,12 @@ const Composite = {
         return host.ext[key] = new E(host, ...args);
     },
     compose(host, list, ...args) {
-        const out = [];
+        const out = [], sc = SCOPE.get(host);
         for (const E of list.flat()) {
             if (E.key && E.key in host.ext) continue;
             const x = Composite.make(host, E, args);
             host.extensions.push(x);
+            if (sc) sc.target.extensions.push(x);
             out.push(x);
         }
         return out;
@@ -471,18 +552,29 @@ const Composite = {
         }
     },
     adopt(host, E, x) {
-        const t = Composite.target(host), S = STATE.get(t);
-        if (E.key) host.ext[E.key] = x;
+        const t = Composite.target(host), sc = SCOPE.get(host), S = sc || STATE.get(t);
+        if (E.key) {
+            host.ext[E.key] = x;
+            if (sc && !(E.key in t.ext)) t.ext[E.key] = x;
+        }
         for (const k of E.exposes || []) {
             const was = S.owner.get(k);
             if (was && was !== x) throw new Error(`${t.constructor.name}.${k}: exposed by both ${was.constructor.name} (${was.constructor.key}) and ${E.name} (${E.key})`);
             S.owner.set(k, x);
+            if (sc) Composite.expose(STATE.get(t), k, x);
         }
     },
-    // the host behind its Proxy (`this` in its methods is the Proxy)
+    // a scope's extension x exposing k: the host answers it while no other kit's does
+    expose(S, k, x) {
+        const amb = S.ambiguous.get(k), was = S.owner.get(k);
+        if (amb) amb.add(x);
+        else if (was && was !== x) { S.owner.delete(k); S.ambiguous.set(k, new Set([was, x])); }
+        else S.owner.set(k, x);
+    },
+    // the host behind its Proxy (`this` in its methods is the Proxy, or a scope)
     target(host) { return TARGET.get(host) || host; },
-    // the host's own extension
-    ownOf(host) { return STATE.get(Composite.target(host))?.own; },
+    // the host's own extension (a scope's own)
+    ownOf(host) { return Composite.stateOf(host)?.own; },
     each(host, name, ...args) { for (const x of host.extensions) x[name]?.(...args); },
     first(host, name, ...args) {
         for (const x of host.extensions) { const v = x[name]?.(...args); if (v) return v; }

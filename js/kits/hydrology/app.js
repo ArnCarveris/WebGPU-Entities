@@ -79,6 +79,15 @@ class AppExtension {
         };
     }
 
+    // In a world lit by another site's sky (world.sunlight: its sun, the frame's one), its light: its own preset's, the sun
+    // where that one is (toward it, in this site's frame), and its radiance scaled into the frame's (toScene: its exposure
+    // over the sky's, F.extra.y); else null
+    sunlit() {
+        const s = this.world.sunlight, site = this.fx.site;
+        if (!s || !site) return null;
+        return { ...this.light, dir: site.frame().localDir(s.dir), scale: this.light.exposure / Math.max(s.exposure, 1e-4) };
+    }
+
     jump(v) {
         this.camera.pos = [...v.pos];
         if (v.look) this.camera.lookAt(v.look);
@@ -125,13 +134,13 @@ class AppExtension {
     }
 
     writeFrame(hit) {
-        const r = this.renderer, F = r.frameData, cam = this.camera, f = this.world.field, L = this.light, wt = this.water;
-        const aspect = r.width / r.height, tanY = Math.tan(cam.fov / 2), tanX = tanY * aspect;
+        const r = this.renderer, F = r.frameData, cam = this.camera, f = this.world.field, L = this.sunlit() || this.light, wt = this.water;
+        const aspect = r.width / r.height, tanY = Math.tan(cam.fov / 2), tanX = tanY * aspect, near = r.frameSpec?.near ?? NEAR;
         const { fwd, right, up } = cam.basis();
-        this.viewProj = m4.mul(m4.reversedInfinite(cam.fov, aspect, NEAR), m4.view(cam.pos, right, up, fwd));
+        this.viewProj = m4.mul(m4.reversedInfinite(cam.fov, aspect, near), m4.view(cam.pos, right, up, fwd));
         F.set(this.viewProj, 0);
         F.set([...cam.pos, this.time % 3600], 16);
-        F.set([...fwd, NEAR], 20);
+        F.set([...fwd, near], 20);
         F.set([...v3.mul(right, tanX), 0], 24);
         F.set([...v3.mul(up, tanY), 0], 28);
         F.set([...L.dir, L.intensity], 32);
@@ -150,7 +159,7 @@ class AppExtension {
             F.set([cur[0], cur[1], l.size, l.lerpK ?? 1], 76 + i * 4);
             F.set([old[0], old[1], l.newest, 0], 92 + i * 4);
         });
-        F.set([wt.flowScale, 0, 0, 0], 108);
+        F.set([wt.flowScale, L.scale ?? 1, 0, 0], 108);
     }
 
     // update: input, camera, tools, world, sim; render: the frame. The host runs both, or (in a composition) the

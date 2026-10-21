@@ -13,6 +13,8 @@ const { NEAR, QUALITY, AppExtension, phonePages } = kit;
 const atmosphereWorld = type => ({
     hud: HUD.labels + HUD.toast,
     app: (app, fx) => app.extend(AppExtension, fx, type),
+    // with other sites, it makes room in its terrain for their ground (fx.footprints): it is built after them
+    makesRoom: true,
 
     // reversed-Z, infinite far plane, metres (the near plane comes in to 5 cm on foot)
     depth() {
@@ -74,6 +76,15 @@ const atmosphereWorld = type => ({
 
     // its planned buildings' portal visibility (the building kit's RoomVis): floor map, traversal, frames on the handheld
     get inspector() { return this.app?.frameWriter?.roomVis?.inspector || null; },
+
+    // its sun (or moon by night), what lights the other sites (the host's world.sunlight): { dir (toward it, the same
+    // everywhere), color (its radiance), zenith, horizon, ambient (its sky's), exposure }, in its own radiance
+    sunlight() {
+        const a = this.app, s = a?.sun, w = a?.world;
+        if (!s || !w) return null;
+        const sky = kits.weather.Sky.compute(s.azimuth, s.elevation, s.intensity, w.weather.cur, s.moon);
+        return { dir: sky.dir, color: sky.sun, zenith: sky.zenith, horizon: sky.horizon, ambient: sky.ambient, exposure: s.exposure };
+    },
 
     // toward its sun (or moon by night), the same everywhere: what lights the worlds under it in a composition
     sunDir() {

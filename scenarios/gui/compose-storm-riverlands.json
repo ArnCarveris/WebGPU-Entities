@@ -24,7 +24,7 @@
                         {"type":"label","title":"Volume","expr":"{river.volume|num: m³}"},
                         {"type":"label","title":"Fastest flow","expr":"{river.maxSpeed|1} m/s"}
                     ],
-                    "footer": "` cycles the keys: the sky takes 1-9 weather, T lighting, K lightning."
+                    "footer": "The sky's weather, light and lightning are on its own pages."
                 }
             ]
         }

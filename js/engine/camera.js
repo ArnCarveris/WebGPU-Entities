@@ -63,12 +63,13 @@ class LayerFrame {
     }
 }
 
-// the engine's own camera (camera { controller: "fly" }): a FirstPersonView (kits.view, an engine kit) driven by
-// PointerInput, flying or walking on floor(x, y, z) (composition space: every world's ground, Host.floorAt)
+// the engine's own camera (camera { controller: "fly" }, or a scenario of several sites): a FirstPersonView (kits.view, an
+// engine kit) driven by PointerInput, flying (at least `clearance` m over the ground; Alt slows it) or walking on
+// floor(x, y, z) (every site's ground, Host.floorAt)
 class FlyCamera {
     constructor(def, io, floor) {
         this.eye = new Features.kits.view.FirstPersonView({ pos: def.pos || [0, 100, 0], fov: (def.fov || 60) * Math.PI / 180,
-            speed: def.speed || 60, wheel: { step: 1.2, min: 1, max: 20000 } });
+            speed: def.speed || 60, wheel: { step: 1.2, min: 1, max: 20000 }, clearance: def.clearance || 0, slow: { keys: ['AltLeft'], factor: 0.2 } });
         this.input = new Common.PointerInput(io);
         this.floor = floor;
         if (def.look) this.eye.lookAt(def.look);

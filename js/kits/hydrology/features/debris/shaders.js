@@ -112,7 +112,7 @@ struct DOut { @builtin(position) pos: vec4f, @location(0) world: vec3f, @locatio
 @fragment fn fsDebris(in: DOut) -> @location(0) vec4f {
     let n = normalize(in.n);
     let c = in.col * (F.sunColor.rgb * F.sunDir.w * max(dot(n, F.sunDir.xyz), 0.0) + ambient(n));
-    return vec4f(tonemap(applyFog(c, in.world)), 1.0);
+    return vec4f(display(applyFog(c, in.world)), 1.0);
 }
 `;
 

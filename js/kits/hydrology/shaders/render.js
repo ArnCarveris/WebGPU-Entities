@@ -178,7 +178,7 @@ struct TOut { @builtin(position) pos: vec4f, @location(0) world: vec3f, @locatio
         col = vec3f(dot(alb, vec3f(0.3, 0.55, 0.15))) * (ndl * sh * 0.7 + 0.3) * 1.2;
     }
     col = mix(col, vec3f(1.0, 0.8, 0.3) * 2.0, cursorRing(p.xz));
-    return vec4f(applyFog(col, p), 1.0);
+    return vec4f(toScene(applyFog(col, p)), 1.0);
 }
 `;
 
@@ -263,8 +263,8 @@ fn surfOr(p: vec2i, fallback: f32) -> f32 {
     ruv = clamp(ruv, vec2f(0.0), vec2f(0.999));
     var sceneZ = near / max(textureLoad(sceneDepth, vec2i(ruv * F.screen.xy), 0), 1e-7);
     if (sceneZ < fragZ) { ruv = suv; sceneZ = sceneZ0; }
-    let refr = textureSampleLevel(sceneTex, linSamp, ruv, 0.0).rgb;
-    let raw = textureSampleLevel(sceneTex, linSamp, suv, 0.0).rgb;
+    let refr = fromScene(textureSampleLevel(sceneTex, linSamp, ruv, 0.0).rgb);
+    let raw = fromScene(textureSampleLevel(sceneTex, linSamp, suv, 0.0).rgb);
     let rayLen = max(sceneZ - fragZ, 0.0) * dist / fragZ;
     let T = exp(-F.absorb.rgb * rayLen);
 
@@ -293,8 +293,23 @@ fn surfOr(p: vec2i, fallback: f32) -> f32 {
     if (mode == 4) { col = vec3f(0.5 + wv.x * 3.0, 0.5 + wv.x * 3.0, 0.6) * (0.5 + 0.5 * n.y) + vec3f(wv.w * 0.5, 0.0, 0.0); }
     col = mix(col, vec3f(1.0, 0.8, 0.3) * 2.0, cursorRing(p.xz));
     if (mode > 0) { return vec4f(pow(clamp(col, vec3f(0.0), vec3f(1.0)), vec3f(1.0 / 2.2)), 1.0); }
-    return vec4f(tonemap(col), 1.0);
+    return vec4f(display(col), 1.0);
 }
+`;
+
+// Its radiance and the scene's: alone the same, and the surface pass writes the display (display: its tonemap, over its
+// composite). In a frame it shares with a kit whose post maps radiance to the display (Renderer.share), that kit's
+// scene is in that kit's radiance: its own times F.extra.y (its exposure over that kit's: what it shows as it would
+// alone) going in (toScene), and the surface pass writes that radiance into the scene (display)
+const DISPLAY = /* wgsl */`
+fn toScene(c: vec3f) -> vec3f { return c; }
+fn fromScene(c: vec3f) -> vec3f { return c; }
+fn display(c: vec3f) -> vec3f { return tonemap(c); }
+`;
+const RADIANCE = /* wgsl */`
+fn toScene(c: vec3f) -> vec3f { return c * F.extra.y; }
+fn fromScene(c: vec3f) -> vec3f { return c / F.extra.y; }
+fn display(c: vec3f) -> vec3f { return toScene(c); }
 `;
 
 // No surface waves (the waves feature's WGSL_WAVE_SAMPLE in its place): a calm surface
@@ -302,13 +317,15 @@ const NO_WAVES = /* wgsl */`
 fn waves(xz: vec2f) -> vec4f { return vec4f(0.0); }
 `;
 
-// the core's library (a new one per renderer: the features on in its world change it)
-function waterWgsl() {
+// the core's library (a new one per renderer: the features on in its world change it); radiance: its surface pass
+// writes radiance (a shared frame's), not the display
+function waterWgsl(radiance = false) {
     const { WgslLibrary } = kits.gpu, L = new WgslLibrary();
     L.define('COMMON', WGSL_COMMON);
-    L.define('SCENE', WGSL_SCENE);
+    L.define('SCENE', WGSL_SCENE, { needs: ['DISPLAY'] });
     L.define('WAVES', NO_WAVES);
-    L.define('SURFACE', WGSL_SURFACE, { needs: ['WAVES'] });
+    L.define('DISPLAY', radiance ? RADIANCE : DISPLAY);
+    L.define('SURFACE', WGSL_SURFACE, { needs: ['WAVES', 'DISPLAY'] });
     return L;
 }
 

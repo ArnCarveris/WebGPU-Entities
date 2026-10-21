@@ -61,7 +61,7 @@ class GpuFrame {
 const FRAME_DEFAULTS = { display: 'display', depth: 'reversed', depthFormat: 'depth32float', samples: 1, near: 0.1 };
 function frameSpec(E, fx) {
     const own = E.frame || {}, spec = { ...FRAME_DEFAULTS, ...own };
-    delete spec.depths; delete spec.formats; delete spec.sampleCounts;
+    delete spec.depths; delete spec.formats; delete spec.sampleCounts; delete spec.single; delete spec.ranks;
     spec.native = spec.depth;
     const page = {};
     try { for (const [k, v] of new URLSearchParams(location.search)) if (k.startsWith('render.')) page[k.slice(7)] = v; } catch { /* no page */ }
@@ -90,15 +90,40 @@ class Renderer {
         this.frameSpec = null;
         this.stencils = {};
         this.lineLayerOf = null;
+        this.shared = null;             // a frame several kits draw in: its conventions (share), else null
+        this.pending = [];              // ... the kits' frames still to encode after their compute (encode, encodeFrame)
         if (E) renderer.extend(E, ...args);
         return renderer;
     }
 
     extend(E, ...args) {
         this.gpuFrame ??= args[0]?.frame || null;
-        this.frameSpec = frameSpec(E, args[0]);
+        const own = frameSpec(E, args[0]);
+        this.frameSpec = this.shared ? { ...this.shared, native: own.native } : own;
         Composite.own(this, E, ...args);
         return this;
+    }
+
+    // A frame several kits draw in, each through its scope (Common.Composite.scope; kits: [{ key, E (its own
+    // RendererExtension), fx }]): its conventions (docs/single-world-plan.md §2.3), what every kit's frameSpec is from
+    // then on: radiance when any kit draws radiance; reversed depth; a stencil when any kit wants one and the device has
+    // it; one sample with a kit whose volumetrics read single-sample depth (frame.single: the atmosphere's march), else the
+    // most any asks for; the nearest near plane. And who draws what only one may (frame.ranks, the highest): `sky`, the
+    // frame's one sky (the atmosphere's over space's over a kit's own); `post`, the kit whose scene targets the others draw
+    // into and whose post and final passes map them to the canvas
+    share(device, kits) {
+        const specs = kits.map(k => ({ ...k, s: frameSpec(k.E, k.fx) }));
+        const rank = (E, r) => E.frame?.ranks?.[r] ?? 0;
+        const best = r => specs.reduce((b, k) => (rank(k.E, r) > (b ? rank(b.E, r) : 0) ? k : b), null)?.key ?? null;
+        const stencil = specs.some(k => /stencil/.test(k.s.depthFormat)) && device.features.has('depth32float-stencil8');
+        return this.shared = {
+            display: specs.some(k => k.s.display === 'radiance') ? 'radiance' : 'display',
+            depth: 'reversed', native: 'reversed', depthClear: 0,
+            depthFormat: stencil ? 'depth32float-stencil8' : 'depth32float',
+            samples: specs.some(k => k.E.frame?.single) ? 1 : Math.max(...specs.map(k => k.s.samples)),
+            near: Math.min(...specs.map(k => k.s.near)),
+            shared: true, sky: best('sky'), post: best('post'),
+        };
     }
 
     // one beside it (Common.Composite): the handheld's GUI renderer, drawing in its own conventions (frameSpecOf)
@@ -137,14 +162,24 @@ class Renderer {
     most(name, ...args) { return Composite.most(this, name, ...args); }
     all(name, ...args) { return Composite.all(this, name, ...args); }
 
+    // a shared frame's scene targets, the `post` kit's (its targets(): { color, colorView, depth, depthView (the
+    // attachment), depthSample (its depth aspect), stencil (whether it has one), width, height })
+    sceneTargets() { return this.shared && this.ext[this.shared.post]?.targets?.(); }
+
     // the frame's command encoder, and what runs once the frame is submitted
     frameEncoder() { return (this.gpuFrame ??= new GpuFrame(this.device)).enc; }
     afterSubmit(fn) { (this.gpuFrame ??= new GpuFrame(this.device)).after.push(fn); }
     get frameId() { return this.gpuFrame?.id ?? 0; }
 
     // the frame's stages, its own extension's (see above; or x's, one attached), into the frame encoder
+    // In a shared frame (share) a kit's frame encodes its compute at once and the rest with every other kit's (encodeFrame)
     encode(f = {}, x = Composite.ownOf(this)) {
         f.enc ??= this.frameEncoder();
+        if (this.shared && Composite.isScope(this) && x === Composite.ownOf(this)) {
+            x.compute?.(f);
+            this.pending.push({ x, f });
+            return f;
+        }
         for (const s of Renderer.STAGES) {
             if (s !== 'scene') { x[s]?.(f); continue; }
             const pass = x.scene?.(f);
@@ -155,6 +190,33 @@ class Renderer {
             f.pass = null;
         }
         return f;
+    }
+
+    // A shared frame's stages after compute: each stage kit by kit (the `post` kit first), one scene pass, the `post`
+    // kit's (its targets: every kit draws into them), in which only the `sky` kit draws a sky. Before a kit draws in the
+    // scene pass after another one, its bind(f) puts its bind groups back
+    encodeFrame() {
+        const list = this.pending, spec = this.shared, key = p => p.x.constructor.key;
+        this.pending = [];
+        if (!list.length) return;
+        list.sort((a, b) => (key(b) === spec.post) - (key(a) === spec.post));
+        for (const s of Renderer.STAGES) {
+            if (s === 'compute') continue;
+            if (s !== 'scene') { for (const p of list) p.x[s]?.(p.f); continue; }
+            const pass = list[0].x.scene?.(list[0].f);
+            if (!pass) continue;
+            let last = list[0];
+            for (const p of list) p.f.pass = pass;
+            for (const t of Renderer.SCENE) {
+                for (const p of list) {
+                    if (!p.x[t] || (t === 'sky' && key(p) !== spec.sky)) continue;
+                    if (p !== last) { p.x.bind?.(p.f); last = p; }
+                    p.x[t](p.f);
+                }
+            }
+            pass.end();
+            for (const p of list) p.f.pass = null;
+        }
     }
 }
 

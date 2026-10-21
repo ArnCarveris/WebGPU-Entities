@@ -55,12 +55,13 @@ const Outdoors = {
 // in-world labels on a 2D canvas over the world: begin() sizes and clears it, place() projects a point, mark() draws one.
 // What of the outdoors they may show: their world's own `region` and the composition's (outer(): fx.outdoors); how much
 // the composition's other worlds hide a point beyond them (veil(x, y, W, H, d): fx.ui.veil, an atmosphere's daytime sky
-// what is in space)
+// what is in space). frame(): the frame's number, when the canvas is shared by every kit's labels (cleared once a frame)
 class LabelLayer {
-    constructor(canvas, outer = null, veil = null) {
+    constructor(canvas, outer = null, veil = null, frame = null) {
         this.canvas = canvas;
         this.outer = outer;
         this.veil = veil;
+        this.frame = frame;
         this.g = canvas.getContext('2d');
         this.W = this.H = 0;
         this.dpr = 1;
@@ -70,7 +71,9 @@ class LabelLayer {
         const c = this.canvas, dpr = this.dpr = Math.min(window.devicePixelRatio || 1, 2);
         const W = this.W = Math.floor(c.clientWidth * dpr), H = this.H = Math.floor(c.clientHeight * dpr);
         if (c.width !== W || c.height !== H) { c.width = W; c.height = H; }
-        this.g.clearRect(0, 0, W, H);
+        const f = this.frame?.();
+        if (f === undefined || c.cleared !== f) this.g.clearRect(0, 0, W, H);
+        c.cleared = f;
         return this.g;
     }
 
@@ -114,7 +117,7 @@ class WorldHud {
     constructor(ui, { labels = false, every = 150, toastMs = 2200 } = {}) {
         this.lines = [];
         this.toaster = new Toast(ui.$('toast'));
-        this.labels = labels ? new LabelLayer(ui.$('labels'), ui.region, ui.veil) : null;
+        this.labels = labels ? new LabelLayer(ui.$('labels'), ui.region, ui.veil, ui.frame) : null;
         this.showLabels = true;
         this.every = every;
         this.toastMs = toastMs;

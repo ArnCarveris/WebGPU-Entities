@@ -37,8 +37,10 @@ const { TerrainLod, TERRAIN_MAX_NODES, terrainPatchIndices } = kits.terrain;
 class RendererExtension {
     static key = 'atmosphere';
     // what it draws with alone (Renderer.frameSpec): radiance (its final pass maps it), reversed depth, no MSAA (the march
-    // reads single-sample depth); depth32float-stencil8 where the device has it
-    static frame = { display: 'radiance', depth: 'reversed', depthFormat: 'depth32float-stencil8', samples: 1, near: kit.NEAR };
+    // reads single-sample depth: a frame it shares is single-sample too, single); depth32float-stencil8 where the device
+    // has it. In a frame it shares (Renderer.share) its sky is the frame's, and its targets the scene every kit draws in
+    static frame = { display: 'radiance', depth: 'reversed', depthFormat: 'depth32float-stencil8', samples: 1, near: kit.NEAR,
+        single: true, ranks: { sky: 3, post: 2 } };
     // what it answers on the Renderer (Common.Composite)
     static exposes = ['air', 'bloom', 'bloomViews', 'boltBuf', 'busData', 'busGroup', 'busLayout', 'cellBuf',
         'cellData', 'clampSamp', 'cloudPass', 'createPipelines', 'depth', 'depthFormat', 'depthSampleView', 'depthView',
@@ -220,6 +222,15 @@ class RendererExtension {
         return L.draws;
     }
 
+    // its scene targets, every kit's in a frame it shares (Renderer.sceneTargets)
+    targets() {
+        return { color: this.hdr, colorView: this.hdrView, depth: this.depth, depthView: this.depthView, depthSample: this.depthSampleView,
+            stencil: this.stencilBits > 0, width: this.width, height: this.height };
+    }
+
+    // its world group back on the scene pass after another kit drew in it (a shared frame: Renderer.encodeFrame)
+    bind(f) { f.pass.setBindGroup(0, this.worldGroup); }
+
     // a depth-stencil attachment's stencil ops (none on a depth-only target)
     stencilOps(load) { return this.stencilBits ? { stencilLoadOp: load, stencilStoreOp: 'store', stencilClearValue: 0 } : {}; }
 
@@ -232,7 +243,7 @@ class RendererExtension {
         const U = GPUTextureUsage;
         this.hdr?.destroy();
         this.depth?.destroy();
-        this.hdr = this.device.createTexture({ size: [w, h], format: 'rgba16float', usage: U.RENDER_ATTACHMENT | U.TEXTURE_BINDING });
+        this.hdr = this.device.createTexture({ size: [w, h], format: 'rgba16float', usage: U.RENDER_ATTACHMENT | U.TEXTURE_BINDING | U.COPY_SRC });
         this.depth = this.device.createTexture({ size: [w, h], format: this.depthFormat, usage: U.RENDER_ATTACHMENT | U.TEXTURE_BINDING });
         this.hdrView = this.hdr.createView();
         this.depthView = this.depth.createView();                                     // (the attachment)

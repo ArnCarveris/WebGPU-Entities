@@ -4,30 +4,26 @@
     "order": 1,
     "description": "Entity Water's river simulation set into Entity Cloud's High Plains: the clouds, rain shafts, haze and lightning are drawn over the river world, and rain falling where the camera is turns on the river's rain.",
     "entities": [
-        {"$comment":"the sky: High Plains, as the composition's atmosphere (the other worlds go into its scene before its volumetrics)"},
+        {"$comment":"the sky: High Plains; its sky and sun are the world's (the river is drawn into its scene, under its clouds, rain, haze and lightning)"},
         {"type":"include","scenario":"cloud-high-plains","as":"sky","skip":["view"],
-            "site":{"label":"Cloud · High Plains","layer":{"role":"atmosphere"}}},
+            "site":{"label":"Cloud · High Plains"}},
         {"type":"render","radar":false},
         {"$comment":"the plains make room under the river map by themselves (its footprint); its sea goes on south of it"},
         {"type":"lake","of":"sky","label":"","pos":[5300,7900],"radius":1300,"level":1397},
         {"type":"lake","of":"sky","label":"","pos":[6700,7900],"radius":1300,"level":1397},
 
-        {"$comment":"the river: Riverlands, 1395 m up on the plains; it drives the camera and has the keys first"},
+        {"$comment":"the river: Riverlands, 1395 m up on the plains, lit by the sky's sun; the camera starts at its first view"},
         {"type":"include","scenario":"water-riverlands","as":"river",
-            "site":{"label":"Water · Riverlands","at":{"pos":[6000,1395,6000]},"layer":{"focus":true}}},
-        {"type":"light","of":"river","id":"plains day","sun":{"color":[1,0.84,0.66],"intensity":3.0},
+            "site":{"label":"Water · Riverlands","at":{"pos":[6000,1395,6000]}}},
+        {"$comment":"its light under the plains' sky (the sun is the sky's: its direction, whatever this says)"},
+        {"type":"light","of":"river","id":"plains","sun":{"color":[1,0.84,0.66],"intensity":3.0},
             "sky":{"top":[0.3,0.45,0.72],"horizon":[0.72,0.74,0.78]},"ground":[0.24,0.22,0.18],"ambient":0.55,"fog":0.000004,"exposure":0.62},
-        {"type":"light","of":"river","id":"plains golden","sun":{"color":[1,0.6,0.32],"intensity":3.0},
-            "sky":{"top":[0.18,0.26,0.5],"horizon":[0.9,0.6,0.42]},"ground":[0.22,0.16,0.12],"ambient":0.45,"fog":0.000005,"exposure":0.7},
-        {"type":"light","of":"river","id":"plains night","sun":{"color":[0.6,0.7,1.0],"intensity":0.35},
-            "sky":{"top":[0.02,0.03,0.06],"horizon":[0.05,0.06,0.09]},"ground":[0.05,0.05,0.05],"ambient":0.25,"fog":0.000005,"exposure":1.2},
-        {"type":"lighting","of":"river","start":"plains day"},
+        {"type":"lighting","of":"river","start":"plains"},
 
-        {"type":"camera","from":"river"},
+        {"type":"camera","start":"river","speed":80,"clearance":2},
 
-        {"$comment":"what joins them"},
+        {"$comment":"what joins them: rain where the camera is turns on the river's rain"},
         {"type":"link","to":"river.rain","value":"sky.rain > 0.05"},
-        {"type":"link","to":"river.light","value":"sky.light == 'golden' || sky.light == 'storm dusk' ? 'plains golden' : contains(sky.light, 'moon') || sky.light == 'crescent' ? 'plains night' : 'plains day'"},
         {"$comment":"the handheld's pages: scenarios/gui/compose-storm-riverlands.json","type":"include","scenario":"gui/compose-storm-riverlands"}
     ]
 }

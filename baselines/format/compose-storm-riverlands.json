@@ -3823,7 +3823,7 @@
     "flowScale": 3
    },
    "lighting": {
-    "start": "plains day",
+    "start": "plains",
     "day": {
      "sun": {
       "azimuth": 150,
@@ -3920,7 +3920,7 @@
      "fog": 0.00045,
      "exposure": 0.75
     },
-    "plains day": {
+    "plains": {
      "sun": {
       "color": [
        1,
@@ -3949,66 +3949,6 @@
      "ambient": 0.55,
      "fog": 0.000004,
      "exposure": 0.62
-    },
-    "plains golden": {
-     "sun": {
-      "color": [
-       1,
-       0.6,
-       0.32
-      ],
-      "intensity": 3
-     },
-     "sky": {
-      "top": [
-       0.18,
-       0.26,
-       0.5
-      ],
-      "horizon": [
-       0.9,
-       0.6,
-       0.42
-      ]
-     },
-     "ground": [
-      0.22,
-      0.16,
-      0.12
-     ],
-     "ambient": 0.45,
-     "fog": 0.000005,
-     "exposure": 0.7
-    },
-    "plains night": {
-     "sun": {
-      "color": [
-       0.6,
-       0.7,
-       1
-      ],
-      "intensity": 0.35
-     },
-     "sky": {
-      "top": [
-       0.02,
-       0.03,
-       0.06
-      ],
-      "horizon": [
-       0.05,
-       0.06,
-       0.09
-      ]
-     },
-     "ground": [
-      0.05,
-      0.05,
-      0.05
-     ],
-     "ambient": 0.25,
-     "fog": 0.000005,
-     "exposure": 1.2
     }
    },
    "tools": [

@@ -12,8 +12,10 @@ const { FRAME_FLOATS, waterWgsl, TU, BU, makeTex } = kit;
 // surface, layoutA, layoutB, pipe }), surface(pass) (its draws in the surface pass, after the water)
 class RendererExtension {
     static key = 'water';
-    // what it draws with alone (Renderer.frameSpec): radiance (its surface pass maps it), reversed depth, no MSAA
-    static frame = { display: 'radiance', depth: 'reversed', depthFormat: 'depth32float', samples: 1, near: kit.NEAR };
+    // what it draws with alone (Renderer.frameSpec): radiance (its surface pass maps it), reversed depth, no MSAA. In a frame
+    // it shares (frameSpec.shared) with a kit whose post maps the frame, it draws its terrain into that kit's scene (with
+    // the frame's sky, not its own), its surface over it in radiance (refracting a copy of it), then its surface's depth
+    static frame = { display: 'radiance', depth: 'reversed', depthFormat: 'depth32float', samples: 1, near: kit.NEAR, ranks: { sky: 1 } };
     // what it answers on the Renderer (Common.Composite)
     static exposes = ['createPipelines', 'debrisCount', 'depth', 'depthCView', 'depthView', 'device', 'format',
         'frameData', 'fx', 'height', 'init', 'modules', 'render', 'resize', 'sampler', 'setSim', 'width'];
@@ -26,7 +28,9 @@ class RendererExtension {
 
     async init() {
         this.device = this.fx.device;
-        this.format = this.fx.format;
+        this.shared = !!this.renderer.frameSpec?.shared;
+        this.format = this.shared ? 'rgba16float' : this.fx.format;
+        this.depthFormat = this.shared ? this.renderer.frameSpec.depthFormat : 'depth32float';
         this.frameData = new Float32Array(FRAME_FLOATS);
         this.frameBuf = makeBuffer(this.device, FRAME_FLOATS * 4, BU().UNIFORM | BU().COPY_DST);
         this.createPipelines();
@@ -41,7 +45,7 @@ class RendererExtension {
         const U = TU();
         this.dummyArray = makeTex(d, 1, 1, 'rgba16float', U.TEXTURE_BINDING, 2).createView({ dimension: '2d-array' });
         // its shaders: the core's chunks, the features' over them
-        this.wgsl = waterWgsl();
+        this.wgsl = waterWgsl(this.shared);
         this.modules = { scene: ['COMMON', 'SCENE'], surface: ['COMMON', 'SURFACE'] };
         this.renderer.each('wgsl', this.wgsl, this.modules);
         const scene = d.createShaderModule({ label: 'scene', code: this.wgsl.code(...this.modules.scene) });
@@ -53,18 +57,19 @@ class RendererExtension {
             vertex: { module, entryPoint: vs },
             fragment: { module, entryPoint: fs, targets: [{ format }] },
             primitive: { topology: 'triangle-list', cullMode: extra.cull || 'none' },
-            depthStencil: { format: 'depth32float', depthWriteEnabled: depth.write, depthCompare: depth.compare },
+            depthStencil: { format: this.depthFormat, depthWriteEnabled: depth.write, depthCompare: depth.compare },
         });
         this.pSky = pipe(layoutA, scene, 'vsSky', 'fsSky', 'rgba16float', { write: false, compare: 'always' });
         this.pTerrain = pipe(layoutA, scene, 'vsTerrain', 'fsTerrain', 'rgba16float', { write: true, compare: 'greater' });
         this.pComposite = pipe(layoutB, surface, 'vsComposite', 'fsComposite', this.format, { write: false, compare: 'always' });
         this.pWater = pipe(layoutB, surface, 'vsWater', 'fsWater', this.format, { write: false, compare: 'greater' });
-        // a composition's depth: the terrain's plus the water surface (dry cells sink under the terrain in vsWater)
+        // a composition's depth: the terrain's plus the water surface (dry cells sink under the terrain in vsWater); a
+        // shared frame's with its world group only (the depth it writes is the one the surface pass samples)
         this.pWaterDepth = d.createRenderPipeline({
-            label: 'water depth', layout: layoutB,
+            label: 'water depth', layout: this.shared ? layoutA : layoutB,
             vertex: { module: surface, entryPoint: 'vsWater' },
             primitive: { topology: 'triangle-list', cullMode: 'none' },
-            depthStencil: { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'greater' },
+            depthStencil: { format: this.depthFormat, depthWriteEnabled: true, depthCompare: 'greater' },
         });
         // (its storage buffers' stand-ins: no debris)
         this.noParticles = makeBuffer(d, 64, BU().STORAGE);
@@ -88,6 +93,7 @@ class RendererExtension {
     }
 
     resize() {
+        if (this.shared) return this.resizeShared();
         const [w, h] = this.fx.size();
         if (w === this.width && h === this.height) return;
         this.width = w;
@@ -104,6 +110,24 @@ class RendererExtension {
         this.depthView = this.depth.createView();
         this.screenGroup = bindGroup(this.device, this.screenLayout, [this.hdrView, this.depthView], 'screen');
     }
+
+    // in a shared frame: a copy of the scene to refract, and the scene's depth to sample (its screen group)
+    resizeShared() {
+        const T = this.renderer.sceneTargets();
+        if (!T || (T.width === this.width && T.height === this.height && T.depthSample === this.screenDepth)) return;
+        if (T.width !== this.width || T.height !== this.height) {
+            this.width = T.width;
+            this.height = T.height;
+            this.sceneCopy?.destroy();
+            this.sceneCopy = makeTex(this.device, T.width, T.height, 'rgba16float', TU().TEXTURE_BINDING | TU().COPY_DST);
+            this.sceneCopyView = this.sceneCopy.createView();
+        }
+        this.screenDepth = T.depthSample;
+        this.screenGroup = bindGroup(this.device, this.screenLayout, [this.sceneCopyView, T.depthSample], 'screen');
+    }
+
+    // its world group back on the scene pass after another kit drew in it (a shared frame: Renderer.encodeFrame)
+    bind(f) { f.pass.setBindGroup(0, this.worldGroup); }
 
     // one frame (Renderer.encode: its stages, into the frame encoder): f { sim: this frame's simulation step { steps, dt,
     // eye, flowScale, time } or null (paused), uniforms() (its frame uniform's data, once the simulation has run) }
@@ -145,6 +169,7 @@ class RendererExtension {
 
     // the surface pass: the scene composited, the water over it, the features' (debris); in a composition its depth too
     translucent(f) {
+        if (this.shared) return this.translucentShared(f);
         const enc = f.enc;
         const b = enc.beginRenderPass({
             label: 'surface',
@@ -171,6 +196,33 @@ class RendererExtension {
             c.drawIndexed(this.waterCount);
             c.end();
         }
+    }
+
+    // ... in a shared frame: the water (and the features') over the scene in radiance, refracting a copy of it; then the
+    // surface into the scene's depth, for what comes after (the volumetrics)
+    translucentShared(f) {
+        const enc = f.enc, T = this.renderer.sceneTargets();
+        this.resizeShared();
+        enc.copyTextureToTexture({ texture: T.color }, { texture: this.sceneCopy }, [T.width, T.height]);
+        const b = enc.beginRenderPass({
+            label: 'surface',
+            colorAttachments: [{ view: T.colorView, loadOp: 'load', storeOp: 'store' }],
+            depthStencilAttachment: { view: T.depthView, depthReadOnly: true, ...(T.stencil ? { stencilReadOnly: true } : {}) },
+        });
+        b.setBindGroup(0, this.worldGroup);
+        b.setBindGroup(1, this.screenGroup);
+        b.setPipeline(this.pWater);
+        b.setIndexBuffer(this.waterIndex, 'uint32');
+        b.drawIndexed(this.waterCount);
+        this.renderer.each('surface', b);
+        b.end();
+        const c = enc.beginRenderPass({ label: 'water depth', colorAttachments: [],
+            depthStencilAttachment: { view: T.depthView, depthLoadOp: 'load', depthStoreOp: 'store', ...(T.stencil ? { stencilLoadOp: 'load', stencilStoreOp: 'store' } : {}) } });
+        c.setBindGroup(0, this.worldGroup);
+        c.setPipeline(this.pWaterDepth);
+        c.setIndexBuffer(this.waterIndex, 'uint32');
+        c.drawIndexed(this.waterCount);
+        c.end();
     }
 }
 
