@@ -17,6 +17,8 @@ const {
 // the cull, before the main one), gpuTimes(t, ms) (its share of the timestamp readout)
 class RendererExtension {
     static key = 'imposter';
+    // what it draws with alone (Renderer.frameSpec): display values, reversed depth with an infinite far plane, MSAA
+    static frame = { display: 'display', depth: 'reversed', depthFormat: DEPTH_FORMAT, samples: MSAA, near: 0.1 };
     // what it answers on the Renderer (Common.Composite)
     static exposes = ['cascadePlanes', 'clampSampler', 'depthView', 'device', 'drawLists', 'format', 'fx', 'globalBG',
         'gpuTimes', 'height', 'impPipe', 'init', 'makeGlobalBG', 'matBgl', 'meshPipe', 'patternTexture', 'render',

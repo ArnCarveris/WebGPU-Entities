@@ -26,7 +26,8 @@ const portalWorld = {
     // classic 0..1 depth, near 0.05, far 400; 4x MSAA depth-stencil (the depth aspect)
     depth() {
         const r = this.app.renderer;
-        return r.depthSample && { view: r.depthSample, kind: 'standard', near: 0.05, far: 400, samples: 4 };
+        const s = r.frameSpec;
+        return r.depthSample && { view: r.depthSample, kind: s.depth, near: s.near, far: 400, samples: s.samples };
     },
 
     get view() {

@@ -36,6 +36,9 @@ const { TerrainLod, TERRAIN_MAX_NODES, terrainPatchIndices } = kits.terrain;
 //   final(pass)              its draws in the final pass, after the composite and the precipitation
 class RendererExtension {
     static key = 'atmosphere';
+    // what it draws with alone (Renderer.frameSpec): radiance (its final pass maps it), reversed depth, no MSAA (the march
+    // reads single-sample depth); depth32float-stencil8 where the device has it
+    static frame = { display: 'radiance', depth: 'reversed', depthFormat: 'depth32float-stencil8', samples: 1, near: kit.NEAR };
     // what it answers on the Renderer (Common.Composite)
     static exposes = ['air', 'bloom', 'bloomViews', 'boltBuf', 'busData', 'busGroup', 'busLayout', 'cellBuf',
         'cellData', 'clampSamp', 'cloudPass', 'createPipelines', 'depth', 'depthFormat', 'depthSampleView', 'depthView',
@@ -118,7 +121,7 @@ class RendererExtension {
         this.pPrecip = pipe(layoutB, final, 'vsPrecip', 'fsPrecip', this.format, { write: false, compare: 'greater' }, blendAlpha);
         this.pBolt = pipe(layoutB, final, 'vsBolt', 'fsBolt', this.format, { write: false, compare: 'greater' }, blendAdd);
         // the sector and portal frames (the interior kit's VisInspector lines, about the eye), over the finished frame
-        this.lineLayer = new kits.gpu.LineLayer(d, { format: this.format, depth: { format: this.depthFormat, compare: 'greater' } });
+        this.lineLayer = this.renderer.debugLines({ format: this.format, depth: { format: this.depthFormat, compare: 'greater' } });
         // bloom (WGSL_BLOOM): fullscreen passes into the levels of this.bloom, no depth
         this.bloomLayout = bindLayout(d, GPUShaderStage.FRAGMENT, ['tex', 'tex']);
         const bloom = d.createShaderModule({ label: 'bloom', code: shaderSource(this.renderer, this.worldSet, this.wgsl.code('BLOOM')) });

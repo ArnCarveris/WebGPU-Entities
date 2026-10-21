@@ -12,6 +12,8 @@ const { FRAME_FLOATS, waterWgsl, TU, BU, makeTex } = kit;
 // surface, layoutA, layoutB, pipe }), surface(pass) (its draws in the surface pass, after the water)
 class RendererExtension {
     static key = 'water';
+    // what it draws with alone (Renderer.frameSpec): radiance (its surface pass maps it), reversed depth, no MSAA
+    static frame = { display: 'radiance', depth: 'reversed', depthFormat: 'depth32float', samples: 1, near: kit.NEAR };
     // what it answers on the Renderer (Common.Composite)
     static exposes = ['createPipelines', 'debrisCount', 'depth', 'depthCView', 'depthView', 'device', 'format',
         'frameData', 'fx', 'height', 'init', 'modules', 'render', 'resize', 'sampler', 'setSim', 'width'];

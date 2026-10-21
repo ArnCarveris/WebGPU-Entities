@@ -6,6 +6,8 @@ const { MAX_BODIES, ORIGIN_BYTES, BODY_FLOATS, FRAME_FLOATS, VERTEX_FLOATS, SAMP
 
 class RendererExtension {
     static key = 'origin';
+    // what it draws with alone (Renderer.frameSpec): display values, reversed depth (its own scale), MSAA
+    static frame = { display: 'display', depth: 'reversed', depthFormat: 'depth32float', samples: SAMPLES, near: kit.NEAR };
     // what it answers on the Renderer (Common.Composite)
     static exposes = ['bodyData', 'depth', 'depthView', 'device', 'draws', 'format', 'frameData', 'fx', 'height',
         'init', 'layout', 'render', 'resize', 'setWorld', 'width', 'writeOrigin'];

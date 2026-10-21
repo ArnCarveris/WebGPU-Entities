@@ -3,7 +3,7 @@
 
 Features.kit('gui', (engine, kit) => {
 const { MeshBuilder, GuiSurface, GuiMode, M4, guiWgsl } = kit;
-const { StencilLayout, buildPipelines } = engine.kits.gpu;
+const { buildPipelines } = engine.kits.gpu;
 
 // WebGPU renderer: device, pipelines, instance data, GUI materials and views (view targets: views.js).
 
@@ -56,6 +56,9 @@ async function checkShaderModule(module) {
 
 class RendererExtension {
     static key = 'gui';
+    // what it draws with alone (Renderer.frameSpec): display values, standard depth, no MSAA; it can draw in reversed depth
+    static frame = { display: 'display', depth: 'standard', depthFormat: DEPTH_FORMAT, samples: 1, near: 0.02,
+        depths: ['standard', 'reversed'], formats: { standard: DEPTH_FORMAT, reversed: 'depth32float-stencil8' } };
     // what it answers on the Renderer (Common.Composite)
     static exposes = ['allocInstances', 'aspect', 'beginFrame', 'beginScenePass', 'bindGui', 'createBuffer',
         'createMesh', 'createPipelines', 'createView', 'depthSample', 'depthView', 'device', 'encoder', 'endFrame',
@@ -74,7 +77,7 @@ class RendererExtension {
         this.mirror = null;             // another renderer (the handheld's) that gets this one's GUI materials too
         // the depth-stencil target's bits, by name (js/kits/gpu/stencil.js): the stencil mode's GUI surfaces reserve theirs
         // with reserveSurfaces() before createPipelines()
-        this.stencil = new StencilLayout();
+        this.stencil = renderer.stencilLayout();
         this.surfaceSlot = null;
         this.surfaces = 0;
         this.targets = null;            // GuiTargets (the target mode): GUIs drawn into textures for their surfaces
@@ -101,10 +104,11 @@ class RendererExtension {
         this.height = h;
         for (const t of [this.depthTexture, this.phoneDepth]) t?.destroy();
         const U = GPUTextureUsage;
-        this.depthTexture = this.device.createTexture({ size: [w, h], format: DEPTH_FORMAT, usage: U.RENDER_ATTACHMENT | U.TEXTURE_BINDING });
+        const f = this.renderer.sceneDepthFormat();
+        this.depthTexture = this.device.createTexture({ size: [w, h], format: f, usage: U.RENDER_ATTACHMENT | U.TEXTURE_BINDING });
         this.depthView = this.depthTexture.createView();
         this.depthSample = this.depthTexture.createView({ aspect: 'depth-only' });
-        this.phoneDepth = this.device.createTexture({ size: [w, h], format: DEPTH_FORMAT, usage: U.RENDER_ATTACHMENT });
+        this.phoneDepth = this.device.createTexture({ size: [w, h], format: f, usage: U.RENDER_ATTACHMENT });
         this.phoneDepthView = this.phoneDepth.createView();
     }
 
@@ -198,7 +202,8 @@ class RendererExtension {
             '2d-array': device.createBindGroupLayout({ entries: layoutEntries('2d-array') })
         };
         const ctx = this.pipelineContext = {
-            device, format: this.format, depthFormat: DEPTH_FORMAT, samples: 1, stencil: this.stencil.resolve(),
+            device, format: this.format, depthFormat: this.renderer.sceneDepthFormat(), samples: this.renderer.frameSpec.samples,
+            stencil: this.stencil.resolve(), depth: this.renderer.frameSpec.depth,
             modules: { scene: module },
             layouts: {
                 '2d': device.createPipelineLayout({ bindGroupLayouts: [this.groupLayouts['2d']] }),
@@ -342,7 +347,7 @@ class RendererExtension {
     depthAttachment(view) {
         return {
             view,
-            depthClearValue: 1.0, depthLoadOp: 'clear', depthStoreOp: 'store',
+            depthClearValue: this.renderer.frameSpec.depthClear, depthLoadOp: 'clear', depthStoreOp: 'store',
             stencilClearValue: 0, stencilLoadOp: 'clear', stencilStoreOp: 'store'
         };
     }

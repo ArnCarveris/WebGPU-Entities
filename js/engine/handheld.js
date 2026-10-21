@@ -455,7 +455,7 @@ class Handheld {
         const L = this.cfg.lighting, lights = [...(lit?.lights || L.lights)];
         while (lights.length < 6) lights.push([0, 0, 0, 0, 0, 0, 0, 0]);
         const frame = { time: t, lightsOn: true, alarmPulse: lit?.alarmPulse || 0, lights, fog: 0, ambient: lit ? lit.ambient : L.ambient };
-        this.view.update(M4.perspective(this.fovy, r.aspect, 0.02, 100), [0, 0, 0], frame);
+        this.view.update(r.frameDepth(M4.perspective(this.fovy, r.aspect, r.frameSpec.near, 100)), [0, 0, 0], frame);
         r.setInstance(this.instance, this.pose);
         g.writeInstances(r);
         // (over the finished frame: its scene pass loads the canvas)

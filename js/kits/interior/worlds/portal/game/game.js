@@ -187,7 +187,7 @@ class AppExtension {
         R.resize(W, H);
 
         const { fwd, up } = player.basis(), eye = player.cam.pos;
-        const proj = m4.perspective(player.cam.fov, W / H, 0.05, 400);
+        const proj = m4.perspective(player.cam.fov, W / H, R.frameSpec.near, 400);
         const viewProj = m4.mul(proj, m4.lookAt(eye, v3.add(eye, fwd), up));
 
         const t0 = performance.now();
@@ -210,7 +210,7 @@ class AppExtension {
         this.app.each('frame', now, { eye, fwd, viewProj, height: H });
 
         const lines = I.lines();
-        R.render({ globals: this.globals(viewProj, eye, t, W, H, mode === 'stencil'), areas: w.lightingTable(t, eye), draws: fr.draws, cmds: fr.cmds, polys: fr.polys, stencil: mode === 'stencil', lines: lines.data, lineDepthCount: lines.depthCount });
+        R.render({ globals: this.globals(R.frameDepth(viewProj), eye, t, W, H, mode === 'stencil'), areas: w.lightingTable(t, eye), draws: fr.draws, cmds: fr.cmds, polys: fr.polys, stencil: mode === 'stencil', lines: lines.data, lineDepthCount: lines.depthCount });
 
         this.hud.tick(now, vis);
     }
@@ -226,7 +226,7 @@ class AppExtension {
         const fr = this.viewBuilder.build(vis, mode, W, H);
         this.app.each('view', this.viewBuilder.stamp, this.frameNow);
         this.renderer.render({
-            globals: this.globals(viewProj, s.eye, t, W, H, mode === 'stencil'), areas: w.lightingTable(t, s.eye), draws: fr.draws, cmds: fr.cmds,
+            globals: this.globals(this.renderer.frameDepth(viewProj), s.eye, t, W, H, mode === 'stencil'), areas: w.lightingTable(t, s.eye), draws: fr.draws, cmds: fr.cmds,
             polys: fr.polys, stencil: mode === 'stencil', lines: NO_LINES, lineDepthCount: 0,
         }, target);
     }

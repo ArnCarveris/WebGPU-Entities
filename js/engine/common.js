@@ -108,6 +108,12 @@ const m4 = {
         const f = 1 / Math.tan(fovy / 2);
         return new Float64Array([f / aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, 0, -1, 0, 0, near, 0]);
     },
+    // a projection's depth turned round: 1 at its near plane, 0 at its far one (z' = w - z), keeping the type of m
+    reverseDepth(m) {
+        const o = m.slice();
+        for (let c = 0; c < 4; c++) o[c * 4 + 2] = m[c * 4 + 3] - m[c * 4 + 2];
+        return o;
+    },
     // depth 0 at the near plane, 1 at the far one
     perspective(fovy, aspect, near, far) {
         const f = 1 / Math.tan(fovy / 2), nf = 1 / (near - far);

@@ -6,7 +6,7 @@ const {
     AREA_FLOATS, MAX_DRAWS, DRAW_STRIDE, MAX_FOG_PORTALS, DRAW_FLOATS, MAX_LINE_VERTS, MAX_POLY_VERTS, POLY_FLOATS,
     DEPTH_FORMAT, STENCIL, portalWgsl, PORTAL_MODULES,
 } = kit;
-const { StencilLayout, buildPipelines, RenderExtensions } = engine.kits.gpu;
+const { buildPipelines, RenderExtensions } = engine.kits.gpu;
 
 // The renderer: pipelines for the scene, sky, stencil marks, water, glass / fog veils and debug lines, and one render pass
 // that executes a command list built by FrameBuilder, into the canvas or a view target (render(f, target), with its
@@ -34,6 +34,9 @@ const { StencilLayout, buildPipelines, RenderExtensions } = engine.kits.gpu;
 
 class RendererExtension {
     static key = 'interior';
+    // what it draws with alone (Renderer.frameSpec): display values, standard depth, 4x MSAA; it can draw in reversed depth
+    static frame = { display: 'display', depth: 'standard', depthFormat: DEPTH_FORMAT, samples: 4, near: 0.05,
+        depths: ['standard', 'reversed'], formats: { standard: DEPTH_FORMAT, reversed: 'depth32float-stencil8' } };
     // what it answers on the Renderer (Common.Composite)
     static exposes = ['H', 'W', 'bgl0', 'bgl1', 'depth', 'depthSample', 'device', 'format', 'fx', 'info', 'init',
         'onError', 'overlays', 'pipes', 'regions', 'render', 'resize', 'stencil', 'upload'];
@@ -42,7 +45,7 @@ class RendererExtension {
         this.renderer = renderer;
         this.fx = fx;
         this.onError = (msg) => console.error(msg);
-        this.stencil = new StencilLayout();
+        this.stencil = renderer.stencilLayout();
         for (const [name, spec] of Object.entries(STENCIL)) this.stencil.reserve(name, spec);
         this.regions = this.stencil.slot('portal.regions');
         this.targets = new Map();       // view target -> its MSAA colour and depth
@@ -71,6 +74,7 @@ class RendererExtension {
     async init() {
         const device = this.device = this.fx.device;
         this.format = this.fx.format;
+        this.depthFormat = this.renderer.sceneDepthFormat();
 
         const U = GPUBufferUsage;
         this.globalBuf = device.createBuffer({ size: 224, usage: U.UNIFORM | U.COPY_DST });
@@ -90,13 +94,16 @@ class RendererExtension {
         ] });
         this.drawBG = device.createBindGroup({ layout: this.bgl1, entries: [{ binding: 0, resource: { buffer: this.drawBuf, size: DRAW_FLOATS * 4 } }] });
 
-        // its shaders: the core's chunks, the extensions' over them, each module the chunks it names
+        // its shaders: the core's chunks, the extensions' over them, each module the chunks it names; the far depth the
+        // frame's
         this.wgsl = portalWgsl();
+        if (this.renderer.frameSpec.depth === 'reversed') this.wgsl.replace('DEPTH', 'const FAR_Z: f32 = 0.0;');
         const modules = Object.fromEntries(Object.entries(PORTAL_MODULES).map(([k, v]) => [k, [...v]]));
         this.renderer.each('wgsl', this.wgsl, modules);
         const mod = names => device.createShaderModule({ code: this.wgsl.code(...names) });
         const ctx = {
-            device, format: this.format, depthFormat: DEPTH_FORMAT, samples: 4, stencil: this.stencil,
+            device, format: this.format, depthFormat: this.depthFormat, samples: this.renderer.frameSpec.samples, stencil: this.stencil,
+            depth: this.renderer.frameSpec.depth,
             modules: Object.fromEntries(Object.entries(modules).map(([k, names]) => [k, mod(names)])),
             layouts: {
                 world: device.createPipelineLayout({ bindGroupLayouts: [this.bgl0, this.bgl1] }),
@@ -166,9 +173,10 @@ class RendererExtension {
         if (this.W === W && this.H === H) return;
         this.W = W; this.H = H;
         this.msaa?.destroy(); this.depth?.destroy();
-        this.msaa = this.device.createTexture({ size: [W, H], sampleCount: 4, format: this.format, usage: GPUTextureUsage.RENDER_ATTACHMENT });
+        const n = this.renderer.frameSpec.samples;
+        this.msaa = this.device.createTexture({ size: [W, H], sampleCount: n, format: this.format, usage: GPUTextureUsage.RENDER_ATTACHMENT });
         // sampled too: a composition reads its depth (js/engine/compositor.js)
-        this.depth = this.device.createTexture({ size: [W, H], sampleCount: 4, format: DEPTH_FORMAT, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
+        this.depth = this.device.createTexture({ size: [W, H], sampleCount: n, format: this.depthFormat, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
         this.depthSample = this.depth.createView({ aspect: 'depth-only' });
     }
 
@@ -176,10 +184,10 @@ class RendererExtension {
     attachments(target) {
         let a = this.targets.get(target);
         if (!a) {
-            const size = [target.width, target.height], U = GPUTextureUsage;
+            const size = [target.width, target.height], U = GPUTextureUsage, n = this.renderer.frameSpec.samples;
             a = {
-                msaa: this.device.createTexture({ size, sampleCount: 4, format: this.format, usage: U.RENDER_ATTACHMENT }).createView(),
-                depth: this.device.createTexture({ size, sampleCount: 4, format: DEPTH_FORMAT, usage: U.RENDER_ATTACHMENT }).createView(),
+                msaa: this.device.createTexture({ size, sampleCount: n, format: this.format, usage: U.RENDER_ATTACHMENT }).createView(),
+                depth: this.device.createTexture({ size, sampleCount: n, format: this.depthFormat, usage: U.RENDER_ATTACHMENT }).createView(),
             };
             this.targets.set(target, a);
         }
@@ -274,7 +282,7 @@ class RendererExtension {
         const pass = f.enc.beginRenderPass({
             colorAttachments: [{ view: into.msaa, resolveTarget: into.resolve,
                 clearValue: { r: 0.004, g: 0.005, b: 0.007, a: 1 }, loadOp: 'clear', storeOp: 'discard' }],
-            depthStencilAttachment: { view: into.depth, depthClearValue: 1, depthLoadOp: 'clear', depthStoreOp: 'store',
+            depthStencilAttachment: { view: into.depth, depthClearValue: this.renderer.frameSpec.depthClear, depthLoadOp: 'clear', depthStoreOp: 'store',
                 stencilClearValue: 0, stencilLoadOp: 'clear', stencilStoreOp: 'discard' },
         });
         f.scissor = r => {

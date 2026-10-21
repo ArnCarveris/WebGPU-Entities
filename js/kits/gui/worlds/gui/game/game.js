@@ -146,12 +146,12 @@ class AppExtension {
         const r = this.renderer;
         let v = this.views.get(target);
         if (!v) {
-            const depth = r.device.createTexture({ size: [target.width, target.height], format: DEPTH_FORMAT, usage: GPUTextureUsage.RENDER_ATTACHMENT });
+            const depth = r.device.createTexture({ size: [target.width, target.height], format: r.sceneDepthFormat(), usage: GPUTextureUsage.RENDER_ATTACHMENT });
             v = { depthView: depth.createView(), view: r.createView() };
             if (target.material) v.view.exclude.add(target.material);     // can't sample the texture it renders into
             this.views.set(target, v);
         }
-        v.view.update(M4.viewProjection(s.eye, s.dir, s.up, s.fovY, target.aspect, s.near, s.far), s.eye, this.frameState);
+        v.view.update(r.frameDepth(M4.viewProjection(s.eye, s.dir, s.up, s.fovY, target.aspect, s.near, s.far)), s.eye, this.frameState);
         r.updateGuiTargets(enc, this.world.guis);
         const pass = r.beginScenePass(target.colorView, v.depthView, v.view);
         this.world.render(pass, { showAvatar: s.showAvatar, skip: s.skip });
@@ -192,7 +192,7 @@ class AppExtension {
         // Views and render targets for this frame
         const frame = this.frameState = world.frameState(t);
         const view = player.viewMatrix();
-        this.mainView.update(M4.multiply(M4.perspective(player.fovy, r.aspect, 0.02, this.far), view), player.eye, frame);
+        this.mainView.update(r.frameDepth(M4.multiply(M4.perspective(player.fovy, r.aspect, r.frameSpec.near, this.far), view)), player.eye, frame);
         this.app.each('prepare');
 
         world.writeInstances(r);

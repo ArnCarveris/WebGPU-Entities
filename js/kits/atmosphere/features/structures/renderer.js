@@ -7,7 +7,6 @@ Features.feature('atmosphere/structures', (engine, kit) => {
 const { Common, kits } = engine;
 const { makeBuffer, frustumPlanes, GroundFrame } = Common;
 const { GuiAtlas, DeviceContext, WorldGuiPass } = kits.gui;
-const { StencilLayout } = kits.gpu;
 const { FAR_FLOATS, MAX_FAR_DYN, FAR_LAMP_H, FAR_LAMP_REACH, MAX_POLES, BUS_UNIFORM } = kit;
 const { STRUCT_FLOATS, BUILDING_FLOATS, STRUCT_COLORS, Structures, MAX_BLOCKERS, BLOCK_GRID, MAX_DRIPS } = kits.settlement;
 const { TiledMesh } = kits.mesh;
@@ -118,7 +117,7 @@ class StructuresRenderer {
         const r = this.r, key = JSON.stringify(cfg);
         if (this.guiKey === key) return;
         this.guiKey = key;
-        this.stencil = new StencilLayout(Math.min(r.stencilBits, cfg.stencil ?? r.stencilBits));
+        this.stencil = r.stencilLayout(`scene ${key}`, Math.min(r.stencilBits, cfg.stencil ?? r.stencilBits));
         this.gui = new WorldGuiPass(r.device, { color: 'rgba16float', depth: { format: r.depthFormat, compare: 'greater' }, stencil: this.stencil,
             mode: cfg.mode ?? 'auto', max: cfg.max ?? MAX_PANELS, rtMax: cfg.rtMax ?? 512, ...(cfg.glass ? { glass: cfg.glass } : {}) });
         this.gui.reserve();

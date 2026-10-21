@@ -198,12 +198,12 @@ struct SOut { @builtin(position) pos: vec4f, @location(0) ndc: vec2f };
 @vertex fn vs(@builtin(vertex_index) i: u32) -> SOut {
     var o: SOut;
     let p = vec2f(f32((i << 1u) & 2u), f32(i & 2u)) * 2.0 - 1.0;
-    o.pos = vec4f(p, 1.0, 1.0);
+    o.pos = vec4f(p, FAR_Z, 1.0);
     o.ndc = p;
     return o;
 }
 @fragment fn fs(i: SOut) -> @location(0) vec4f {
-    let h = G.invViewProj * vec4f(i.ndc, 1.0, 1.0);
+    let h = G.invViewProj * vec4f(i.ndc, FAR_Z, 1.0);
     return vec4f(tonemap(skyColor(normalize(h.xyz / h.w - G.eye.xyz))), 1.0);
 }
 `;
@@ -298,7 +298,9 @@ function portalWgsl() {
     L.define('DRAW', WGSL_DRAW, { needs: ['COMMON'] });
     L.define('THROUGH', NO_THROUGH, { needs: ['COMMON'] });
     L.define('WORLD', WGSL_WORLD, { needs: ['COMMON', 'DRAW', 'THROUGH'] });
-    L.define('SKY', WGSL_SKY, { needs: ['COMMON'] });
+    // the far plane's depth: standard (1), or the reversed variant's (0: the renderer replaces it)
+    L.define('DEPTH', 'const FAR_Z: f32 = 1.0;');
+    L.define('SKY', WGSL_SKY, { needs: ['COMMON', 'DEPTH'] });
     L.define('POLY', WGSL_POLY, { needs: ['COMMON'] });
     L.define('LINES', WGSL_LINES, { needs: ['COMMON'] });
     return L;

@@ -218,7 +218,11 @@ only list of kits, entity types, data types and worlds, and everything else is l
   is one command encoder and one submit (the gpu kit's `GpuFrame`, `renderer.frameEncoder()`, readbacks in
   `renderer.afterSubmit(fn)`), drawn in the Renderer's stages: `compute`, `views`, the scene pass (`background`,
   `sky`, `outdoor`, `indoor`, `late`), `translucent`, `volumetric`, `post`, `final`, `overlay` (`renderer.encode(f)`,
-  js/kits/gpu/renderer.js).
+  js/kits/gpu/renderer.js), in the frame's conventions (`renderer.frameSpec`: display or radiance, reversed or
+  standard depth, its format, samples, near; each RendererExtension's `static frame` says what it draws with alone,
+  the data's `render` block and the page's `?render.<key>=` override it where the extension can: the portal and gui
+  renderers draw in reversed depth with `?render.depth=reversed`), with one StencilLayout per depth target
+  (`renderer.stencilLayout()`) and one LineLayer (`renderer.debugLines()`).
 - **A feature** is what a world is made of beyond its core, built only when the world's data asks for it (`when`: an
   entity of a type, an entity whose implementation needs something, a data path, through a list in any of its items
   (`entities.screen`), another feature; `requires`), its

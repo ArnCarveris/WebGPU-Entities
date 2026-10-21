@@ -20,7 +20,8 @@
 // --port N (Brave's debugging port, 9371), --keep (leave Brave open), --only
 // start (the start view only), --query k=v (added to the page URL, repeatable), --brave path, --trace (also writes
 // <work>/trace/<scenario>.json: what each host answers through its base extension, see TRACE), --bindings (check: the
-// binding budget of every pipeline layout, failing over WebGPU's default limits; <work>/bindings/<scenario>.json).
+// binding budget of every pipeline layout, failing over WebGPU's default limits; <work>/bindings/<scenario>.json),
+// --report (check: pixel differences are reported, not failures: a variant forced with --query, render.depth=reversed)
 //
 // Determinism (the page never sees real time): a fake clock (performance.now, Date.now) that moves 1/60 s per stepped
 // frame, a seeded Math.random, requestAnimationFrame stubbed and its callbacks called by the harness (entities.frame(t)),
@@ -43,7 +44,7 @@ const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
 const mode = ['record', 'check', 'smoke', 'perf'].includes(argv[0]) ? argv.shift() : 'check';
 const opt = { frames: 40, viewFrames: 20, runs: mode === 'record' ? 2 : 1, port: 9371, out: 'baselines', baseline: 'baselines',
-    work: path.join(os.tmpdir(), 'webgpu-entities-harness'), keep: false, trace: false, bindings: false, live: false, rev: null, revs: 'HEAD~1,HEAD', rounds: 2, servePort: 9381, only: null, query: [],
+    work: path.join(os.tmpdir(), 'webgpu-entities-harness'), keep: false, trace: false, bindings: false, report: false, live: false, rev: null, revs: 'HEAD~1,HEAD', rounds: 2, servePort: 9381, only: null, query: [],
     brave: process.env.BRAVE || 'C:/Program Files/BraveSoftware/Brave-Browser/Application/brave.exe' };
 const ids = [];
 for (let i = 0; i < argv.length; i++) {
@@ -68,6 +69,11 @@ const PRELUDE = `(() => {
     GPUQueue.prototype.submit = function (...a) { H.submits++; return submit.apply(this, a); };
     GPUQueue.prototype.writeBuffer = function (...a) { H.writes++; return write.apply(this, a); };
   }
+  // no input but the harness's own (smoke: window.__input): the test window is on the user's screen, and a mouse passing
+  // over it would move the water's tool ring or light a GUI button
+  for (const t of ['pointermove', 'pointerdown', 'pointerup', 'pointerover', 'pointerout', 'pointerenter', 'pointerleave', 'mousemove', 'mousedown',
+    'mouseup', 'mouseover', 'mouseout', 'click', 'dblclick', 'contextmenu', 'wheel', 'keydown', 'keyup', 'touchstart', 'touchmove', 'touchend'])
+    window.addEventListener(t, e => { if (!window.__input) e.stopImmediatePropagation(); }, { capture: true });
   window.__raf = [];
   window.requestAnimationFrame = cb => { window.__raf.push(cb); return window.__raf.length; };
   window.cancelAnimationFrame = () => {};
@@ -173,13 +179,14 @@ const LIMITS = { sampled: 16, samplers: 16, storage: 8, uniform: 12, storageText
 
 // perf: GPU time per pass, whatever the renderer: every render and compute pass gets timestamps in a query set of the
 // harness's (over the pass's own: a renderer's profiler then reads nothing), resolved by a command buffer added to each
-// submit and read back; __harness.gpu: per stepped frame { ms (the passes' sum), passes: { label: ms } }
+// submit and read back; __harness.gpu: per stepped frame { ms (the passes' sum: passes overlapping in one command buffer
+// count twice), span (first pass begin to last pass end: the frame's GPU time), passes: { label: ms } }
 const PERF = `(() => {
   const H = window.__harness, MAX = 1024;
   let dev = null, qs = null, res = null, used = 0, labels = [], frame = null;
   const free = [];
   H.gpu = [];
-  H.gpuFrame = () => { frame = { ms: 0, passes: {}, pending: 0 }; H.gpu.push(frame); };
+  H.gpuFrame = () => { frame = { ms: 0, passes: {}, pending: 0, t0: null, t1: null }; H.gpu.push(frame); };
   const ad = GPUAdapter.prototype.requestDevice;
   GPUAdapter.prototype.requestDevice = async function (d) {
     const device = await ad.call(this, d);
@@ -217,7 +224,10 @@ const PERF = `(() => {
         if (!f || !(ms >= 0 && ms < 1000)) continue;
         f.ms += ms;
         f.passes[names[i]] = (f.passes[names[i]] || 0) + ms;
+        if (f.t0 === null || t[i * 2] < f.t0) f.t0 = t[i * 2];
+        if (f.t1 === null || t[i * 2 + 1] > f.t1) f.t1 = t[i * 2 + 1];
       }
+      if (f && f.t0 !== null) f.span = Number(f.t1 - f.t0) / 1e6;
       buf.unmap();
       free.push(buf);
       if (f) f.pending--;
@@ -275,7 +285,9 @@ async function brave() {
         '--disable-features=CalculateNativeWinOcclusion', '--window-size=1040,760',
         // Canvas 2D on the CPU: GPU-rasterised canvases (the imposter world's procedural textures) differ a little from
         // one browser session to the next
-        '--disable-accelerated-2d-canvas', 'about:blank'], { stdio: 'ignore', detached: false });
+        '--disable-accelerated-2d-canvas',
+        // (perf: GPU timestamps unquantised)
+        ...(mode === 'perf' ? ['--enable-webgpu-developer-features'] : []), 'about:blank'], { stdio: 'ignore', detached: false });
     for (let k = 0; k < 60 && !(v = await version()); k++) await sleep(500);
     if (!v) throw new Error(`Brave did not answer on ${CDP}`);
     return { v, proc };
@@ -424,10 +436,10 @@ async function perf(base, sid) {
         const from = await s.evaluate('__harness.gpu.length');
         await s.evaluate(`__step(${opt.viewFrames})`);
         for (let k = 0; k < 40 && await s.evaluate(`__harness.gpu.slice(${from}).some(f => f.pending)`); k++) await sleep(50);
-        const frames = await s.evaluate(`__harness.gpu.slice(${from})`);
+        const frames = await s.evaluate(`__harness.gpu.slice(${from}).map(f => ({ ms: f.ms, span: f.span || 0, passes: f.passes }))`);
         const med = xs => { const a = [...xs].sort((p, q) => p - q); return a.length ? a[a.length >> 1] : 0; };
         const labels = [...new Set(frames.flatMap(f => Object.keys(f.passes)))];
-        return { sid, median: med(frames.map(f => f.ms)), passes: Object.fromEntries(labels.map(l => [l, med(frames.map(f => f.passes[l] || 0))])), errors: s.errors() };
+        return { sid, median: med(frames.map(f => f.span)), sum: med(frames.map(f => f.ms)), passes: Object.fromEntries(labels.map(l => [l, med(frames.map(f => f.passes[l] || 0))])), errors: s.errors() };
     } finally { await s.close(); }
 }
 
@@ -446,6 +458,7 @@ async function smoke(base, sid) {
         }
         if (state !== 'ready') return { sid, failed: state || 'timed out', errors: s.errors() };
         await settle(s);
+        await s.evaluate('window.__input = true');
         await s.send('Page.bringToFront');
         await s.evaluate(`__step(10)`);
         // where the camera is: the engine's (entities.camera after Phase 5), else the camera world's in composition space
@@ -516,8 +529,8 @@ try {
                 runs[b.rev].push(r);
             }
             const best = rs => rs.length ? Math.min(...rs.map(r => r.median)) : NaN;
-            out[sid] = Object.fromEntries(revs.map(r => [r, { ms: runs[r].map(x => +x.median.toFixed(3)), passes: runs[r][0]?.passes }]));
-            console.log(`${sid}: ${revs.map(r => `${r} ${runs[r].map(x => x.median.toFixed(2)).join(' / ')} ms`).join('   ')}   (best ${revs.map(r => best(runs[r]).toFixed(2)).join(' vs ')})`);
+            out[sid] = Object.fromEntries(revs.map(r => [r, { span: runs[r].map(x => +x.median.toFixed(3)), sum: runs[r].map(x => +x.sum.toFixed(3)), passes: runs[r][0]?.passes }]));
+            console.log(`${sid}: GPU span ${revs.map(r => `${r} ${runs[r].map(x => x.median.toFixed(2)).join(' / ')}`).join('   ')} ms (best ${revs.map(r => best(runs[r]).toFixed(2)).join(' vs ')}); passes' sum ${revs.map(r => runs[r].map(x => x.sum.toFixed(2)).join(' / ')).join(' vs ')}`);
         }
         fs.writeFileSync(path.join(opt.work, 'perf-report.json'), JSON.stringify(out, null, 1));
         for (const b of bases) b.srv.close();
@@ -583,7 +596,9 @@ try {
                 if (!d.n) continue;
                 if (d.heat) { fs.mkdirSync(path.join(ddir, sid), { recursive: true }); fs.writeFileSync(path.join(ddir, sid, bv.file), d.heat); }
                 const msg = `${bv.file} differs ${(100 * d.frac).toFixed(4)}% max ${d.max} mean ${d.mean.toFixed(2)} box ${d.box}`;
-                if (d.frac > allow || d.max > allowMax) { lines.push(msg); fail(`${sid}: ${msg}`); } else lines.push(msg + ' (noise)');
+                if (d.frac <= allow && d.max <= allowMax) lines.push(msg + ' (noise)');
+                else if (opt.report) lines.push(msg + ' (reported)');
+                else { lines.push(msg); fail(`${sid}: ${msg}`); }
             }
             for (const cv of r.views.filter(x => !B.views.some(b => b.key === x.key))) lines.push(`new view ${cv.key}`);
             const kitsSame = JSON.stringify(r.kits) === JSON.stringify(B.kits);

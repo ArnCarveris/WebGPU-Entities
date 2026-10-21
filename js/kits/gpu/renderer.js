@@ -22,7 +22,7 @@
 // call: a ring of slots), and a readback maps after the submit (afterSubmit).
 
 Features.kit('gpu', (engine, kit) => {
-const { Composite } = engine.Common;
+const { Common } = engine, { Composite } = Common;
 
 // one frame's GPU work, the host's: { device, encoder (made on first use), after: callbacks once it is submitted, id }
 class GpuFrame {
@@ -47,6 +47,36 @@ class GpuFrame {
     }
 }
 
+// The conventions a frame is drawn in (docs/single-world-plan.md §2.3), as the Renderer's frameSpec:
+//   display      'display': the scene colour is the canvas format and the shaders write display values into it;
+//                'radiance': an rgba16float scene of radiance, mapped to the display by its post / final pass
+//   depth        'reversed' (clear 0, compare greater, depth near / view distance) | 'standard' (clear 1, less)
+//   depthFormat  the depth-stencil format, depthClear its clear value
+//   samples      MSAA samples of the scene pass (every pipeline drawing into it is built for them)
+//   near         the near plane, metres
+// What its own extension draws with alone is its static frame ({ ...those, depths: the depth conventions it can draw
+// in, formats: { <depth>: its depth format in that one }, sampleCounts }); over it the data's render block
+// (fx.native.render: samples, depth, near) and the page's ?render.<key>= (the harness forces a variant with it), each
+// only where the extension can draw that way.
+const FRAME_DEFAULTS = { display: 'display', depth: 'reversed', depthFormat: 'depth32float', samples: 1, near: 0.1 };
+function frameSpec(E, fx) {
+    const own = E.frame || {}, spec = { ...FRAME_DEFAULTS, ...own };
+    delete spec.depths; delete spec.formats; delete spec.sampleCounts;
+    spec.native = spec.depth;
+    const page = {};
+    try { for (const [k, v] of new URLSearchParams(location.search)) if (k.startsWith('render.')) page[k.slice(7)] = v; } catch { /* no page */ }
+    for (const o of [fx?.native?.render || {}, page]) {
+        if (o.depth && (own.depths || [spec.depth]).includes(o.depth)) {
+            spec.depth = o.depth;
+            spec.depthFormat = own.formats?.[o.depth] || spec.depthFormat;
+        }
+        if (o.samples && (own.sampleCounts || [spec.samples]).includes(+o.samples)) spec.samples = +o.samples;
+        if (+o.near > 0) spec.near = +o.near;
+    }
+    spec.depthClear = spec.depth === 'reversed' ? 0 : 1;
+    return spec;
+}
+
 class Renderer {
     static STAGES = ['compute', 'views', 'scene', 'translucent', 'volumetric', 'post', 'final', 'overlay'];
     static SCENE = ['background', 'sky', 'outdoor', 'indoor', 'late'];
@@ -57,9 +87,30 @@ class Renderer {
     constructor(E, ...args) {
         const renderer = Composite.of(this);
         this.gpuFrame = args[0]?.frame || null;
+        this.frameSpec = frameSpec(E, args[0]);
+        this.stencils = {};
+        this.lineLayerOf = null;
         Composite.own(renderer, E, ...args);
         return renderer;
     }
+
+    // one StencilLayout per depth-stencil target (name; bits: what its format has, on first use), every extension
+    // reserving its slots in it
+    stencilLayout(name = 'scene', bits = 8) { return this.stencils[name] ??= new kit.StencilLayout(bits); }
+
+    // the one LineLayer (debug frames, the vis inspector), for the pass it draws into (o: LineLayer's)
+    debugLines(o) { return this.lineLayerOf ??= new kit.LineLayer(this.device, o); }
+
+    // the scene's depth-stencil format: the frame's (depth32float-stencil8 only where the device has it, else
+    // depth24plus-stencil8)
+    sceneDepthFormat() {
+        const f = this.frameSpec.depthFormat;
+        return f === 'depth32float-stencil8' && !this.device.features.has(f) ? 'depth24plus-stencil8' : f;
+    }
+
+    // a view-projection made for standard depth, in the frame's convention: turned round (common.js m4.reverseDepth) when
+    // the frame is reversed and its own extension draws in standard depth alone
+    frameDepth(m) { return this.frameSpec.depth === 'reversed' && this.frameSpec.native === 'standard' ? Common.m4.reverseDepth(m) : m; }
 
     compose(list, ...args) { return Composite.compose(this, list, ...args); }
 
