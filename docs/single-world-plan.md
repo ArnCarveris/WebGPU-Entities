@@ -1,7 +1,10 @@
 # One World, one Renderer, one App: every scenario on a single instance (plan)
 
-Status: plan only, nothing built. Written 2026-10-21 against `main` at 756d5ee (soft shadows), with
-`docs/sdf-kit-plan.md` uncommitted beside it.
+Status: Phases 0-5 done on branch `claude/single-world-177086` (2026-10-22): the harness and baselines, Composite with
+many extensions, one encoder and submit, frame conventions, the scenario format with sites, and the single-site
+scenarios on one World, Renderer and App (the compositions on js/engine/legacy-host.js). Next: Phase 6, which needs Q1
+(MSAA), Q2 (sky ranking), Q3 (links) and Q4 (origin scale) answered. Written 2026-10-21 against `main` at 756d5ee (soft
+shadows), with `docs/sdf-kit-plan.md` uncommitted beside it.
 
 The goal, in the user's words: the worlds (cloud, portal, water, gui, origin, imposter) "are from separate
 repos/projects, I trying to merge into one engine, but turn exclusive those project features into own kits that can be

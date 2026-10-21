@@ -66,10 +66,14 @@ class RendererExtension {
         'registerMaterial', 'reserveSurfaces', 'resize', 'sampler', 'setInstance', 'setMaterialTexture',
         'setWorldMaterials', 'shadings', 'stencil', 'surfaces', 'swapView', 'targets', 'updateGuiTargets', 'width',
         'worldMaterials', 'writeGui'];
-    // fx: the feature context (the host's device, canvas size and target; see js/engine/host.js)
+    // fx: the feature context (the host's device, canvas size and target; see js/engine/host.js; stencilTarget: the
+    // depth-stencil target it draws into, 'scene' by default). It may be the renderer's own extension (the gui world's)
+    // or one attached beside another kit's (the handheld's): it draws in its own conventions (frameSpec) and its own
+    // depth target, and what it makes (views, passes) talks to it, not to the renderer
     constructor(renderer, fx) {
         this.renderer = renderer;
         this.fx = fx;
+        this.frameSpec = renderer.frameSpecOf(RendererExtension, fx);
         this.pipelines = {};
         this.materials = new Map();     // name -> { shading, view, version }
         this.instanceCount = 0;
@@ -77,7 +81,7 @@ class RendererExtension {
         this.mirror = null;             // another renderer (the handheld's) that gets this one's GUI materials too
         // the depth-stencil target's bits, by name (js/kits/gpu/stencil.js): the stencil mode's GUI surfaces reserve theirs
         // with reserveSurfaces() before createPipelines()
-        this.stencil = renderer.stencilLayout();
+        this.stencil = renderer.stencilLayout(fx.stencilTarget || 'scene');
         this.surfaceSlot = null;
         this.surfaces = 0;
         this.targets = null;            // GuiTargets (the target mode): GUIs drawn into textures for their surfaces
@@ -104,7 +108,7 @@ class RendererExtension {
         this.height = h;
         for (const t of [this.depthTexture, this.phoneDepth]) t?.destroy();
         const U = GPUTextureUsage;
-        const f = this.renderer.sceneDepthFormat();
+        const f = this.renderer.sceneDepthFormat(this.frameSpec, this.device);
         this.depthTexture = this.device.createTexture({ size: [w, h], format: f, usage: U.RENDER_ATTACHMENT | U.TEXTURE_BINDING });
         this.depthView = this.depthTexture.createView();
         this.depthSample = this.depthTexture.createView({ aspect: 'depth-only' });
@@ -202,8 +206,8 @@ class RendererExtension {
             '2d-array': device.createBindGroupLayout({ entries: layoutEntries('2d-array') })
         };
         const ctx = this.pipelineContext = {
-            device, format: this.format, depthFormat: this.renderer.sceneDepthFormat(), samples: this.renderer.frameSpec.samples,
-            stencil: this.stencil.resolve(), depth: this.renderer.frameSpec.depth,
+            device, format: this.format, depthFormat: this.renderer.sceneDepthFormat(this.frameSpec, this.device), samples: this.frameSpec.samples,
+            stencil: this.stencil.resolve(), depth: this.frameSpec.depth,
             modules: { scene: module },
             layouts: {
                 '2d': device.createPipelineLayout({ bindGroupLayouts: [this.groupLayouts['2d']] }),
@@ -290,7 +294,7 @@ class RendererExtension {
     }
 
     createView() {
-        return new RenderView(this.renderer);
+        return new RenderView(this);
     }
 
     // Bind group for (view, material), cached per view until the material's texture changes
@@ -321,9 +325,12 @@ class RendererExtension {
     // color, depth } (the scene pass: by default into the canvas and its depth; load keeps what is there), draw(pass) }
     frame(f) {
         this.beginFrame();
-        this.renderer.encode(f);
+        this.renderer.encode(f, this);
         this.endFrame();
     }
+
+    // a view-projection made for standard depth, in its conventions (Renderer.frameDepth)
+    frameDepth(m) { return this.renderer.frameDepth(m, this.frameSpec); }
 
     compute(f) { f.compute?.(f.enc); }
 
@@ -347,7 +354,7 @@ class RendererExtension {
     depthAttachment(view) {
         return {
             view,
-            depthClearValue: this.renderer.frameSpec.depthClear, depthLoadOp: 'clear', depthStoreOp: 'store',
+            depthClearValue: this.frameSpec.depthClear, depthLoadOp: 'clear', depthStoreOp: 'store',
             stencilClearValue: 0, stencilLoadOp: 'clear', stencilStoreOp: 'store'
         };
     }
@@ -358,7 +365,7 @@ class RendererExtension {
             colorAttachments: [{ view: colorView, clearValue: CLEAR_COLOR, loadOp: load ? 'load' : 'clear', storeOp: 'store' }],
             depthStencilAttachment: this.depthAttachment(depthView)
         });
-        return new ScenePass(this.renderer, pass, view);
+        return new ScenePass(this, pass, view);
     }
 }
 

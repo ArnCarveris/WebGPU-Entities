@@ -21,7 +21,7 @@ const { DEG, clamp, v3, m4 } = Common;
 //                   `speed` m/s (`run` with the boost keys, times slow.factor with the slow keys); a floor up to `step`
 //                   m higher is stepped onto at once (the eye eases up after it), a lower one is fallen to
 // The floor is a function floor(x, y, z): the height of the highest thing to stand on at or below y there (-Infinity:
-// nothing), e.g. a world's ground or the engine's over every world (FeatureWorld.ground, Host.floorFor).
+// nothing), e.g. a world's ground or the engine's over every world (Site.ground, Host.floorFor).
 class FirstPersonView {
     constructor(o = {}) {
         this.pos = [...(o.pos || [0, 0, 0])];
@@ -65,7 +65,7 @@ class FirstPersonView {
     }
     lookAt(target) { this.lookAlong(v3.norm(v3.sub(target, this.pos))); }
 
-    // { pos, fwd, up, fov } (FeatureWorld.view)
+    // { pos, fwd, up, fov } (Site.view)
     get view() {
         const { fwd, up } = this.basis();
         return { pos: [...this.pos], fwd, up, fov: this.fov };

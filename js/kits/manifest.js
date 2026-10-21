@@ -1,6 +1,6 @@
 'use strict';
 // Kits: the one description of every kit, read by the loader (Features), the scenario format (ScenarioFormat) and the
-// worlds (their entity classes). Nothing else lists kits, types or worlds.
+// sites (their entity classes). Nothing else lists kits, types or sites.
 //
 //   <kit>: {
 //     about, uses (the kits it builds on), parts (js/kits/<kit>/<part>.js, in load order),
@@ -10,21 +10,24 @@
 //             A factory that returns one class (not a set of them) names none ([null, about]). A type's `uses`: kits it
 //             needs beyond its kit's (an easel's paint), loaded only with an entity of it.
 //     data:   data types it reads (config blocks, presets, plans): { <type>: about }; a world with one of them loads it
-//     worlds: the world types it offers: <type>: { title, about, uses, parts, bases, provides, schema, implicit }
-//             parts: js/kits/<kit>/worlds/<type>/<part>.js (Features.world); bases: the entity bases it has (names);
-//             provides: what else its entity types may need of it (structures, weather, water...); schema: how its
-//             data types map onto its native layout (ScenarioFormat); implicit: how it joins a scenario that has none of
-//             it but entities only it takes (an entity of any kit works in any scenario): { root (fields of its root when
-//             it joins other worlds: a sky's layer role), entities (what it has unless the scenario says: a ground) }.
-//             A world may have features of its own (features, as a kit's below: parts under its folder's features/<name>/,
-//             registered as Features.feature('<kit>/<world>/<name>', fn), over the world's exports).
-//     features: what its worlds are made of beyond their core, each built only when a world's data asks for it:
+//     site:   what a site of this kit is (a scenario's sites: ScenarioFormat; each one world for now): { type (the
+//             world type its sites are, the id of a site its entities imply), sites ('one' | 'many': how many a
+//             scenario may have), extends: { world, renderer, app } (the exports of its parts it extends the one World,
+//             Renderer and App with), title, about, uses, parts (js/kits/<kit>/<part>.js, registered with
+//             Features.world(type, fn), loaded only with a site of it, after the kit), bases (the entity bases it has),
+//             provides (what else its entity types may need of it: structures, weather, water...), schema (how its
+//             data types map onto a site's native layout: ScenarioFormat), defaults (entities it has unless the
+//             scenario gives some of that type: a sky's ground), join (fields of its site when its entities bring it
+//             into a scenario of other sites: a sky's layer role), features (its own, as a kit's below: parts under
+//             js/kits/<kit>/features/<name>/, registered as Features.feature('<kit>/<type>/<name>', fn), over its
+//             parts' exports) }. An entity of any kit works in any scenario: its kit's site comes with it.
+//     features: what its sites are made of beyond their core, each built only when a site's data asks for it:
 //             <name>: { about, uses, parts, when, requires }. parts: js/kits/<kit>/features/<name>/<part>.js
 //             (Features.feature('<kit>/<name>', fn)), loaded with the kits it uses. when: { types (any of these entity
 //             types), needs (an entity whose implementation needs one of these), data (any of these paths of the
 //             world's native data is set; through a list, in any of its items: entities.screen), features (any of these
 //             features is on) }; requires: features it builds on
-//             (on with it). A root entity's `features: { <name>: true | false }` turns one on or off whatever its data.
+//             (on with it). A `features` entity (or a site's `features`) { <name>: true | false } turns one on or off.
 //   }
 //
 // ENGINE: the engine's own entity types (js/engine). Plain script, not a kit part: the scenario format reads it before
@@ -57,8 +60,8 @@ const Kits = (() => {
             data: { player: 'the player (FirstPersonView: start, speeds, walk)' },
         },
         world: {
-            about: 'entity bases, the one World and App every world type extends, HUD layers, pages and the FeatureWorld adapter every world is',
-            parts: ['entity', 'world', 'app', 'hud', 'pages', 'feature-world'],
+            about: 'entity bases, the one World and App every world type extends, HUD layers, pages and the Site adapter (what the host asks of a site)',
+            parts: ['entity', 'world', 'app', 'hud', 'pages', 'site'],
             data: { lighting: 'which lighting preset starts, and lighting settings', light: 'a lighting preset (sun, sky, fog...)' },
         },
         entities: {
@@ -99,24 +102,25 @@ const Kits = (() => {
                     },
                 },
             },
-            worlds: {
-                origin: {
-                    title: 'Entity Origin',
-                    about: 'a real-scale solar system under a floating origin',
-                    parts: [
-                        'core/config', 'core/math', 'core/world-pos', 'core/origin', 'render/mesh', 'render/materials',
-                        'render/instances', 'render/shaders', 'render/renderer', 'world/entities', 'world/world', 'game/floating',
-                        'game/camera', 'game/hud', 'game/app', 'phone-pages', 'feature',
-                    ],
-                    bases: ['space'],
-                    schema: {
-                        config: ['start', 'camera', 'origin', 'lighting'],
-                        rename: { origin: 'floatingOrigin' },
-                        maps: { materials: { type: 'material' }, models: { type: 'model', value: 'parts' } },
-                        lists: { bookmarks: 'bookmark' },
-                    },
-                    data: { bookmark: 'a bookmarked place', start: 'the starting bookmark', floatingOrigin: 'floating origin settings (distance, angle, scale)' },
+            site: {
+                type: 'origin',
+                sites: 'one',
+                extends: { world: 'WorldExtension', renderer: 'RendererExtension', app: 'AppExtension' },
+                title: 'Entity Origin',
+                about: 'a real-scale solar system under a floating origin',
+                parts: [
+                    'core/config', 'core/math', 'core/world-pos', 'core/origin', 'render/mesh', 'render/materials',
+                    'render/instances', 'render/shaders', 'render/renderer', 'world/entities', 'world/world', 'game/floating',
+                    'game/camera', 'game/hud', 'game/app', 'phone-pages', 'feature',
+                ],
+                bases: ['space'],
+                schema: {
+                    config: ['start', 'camera', 'origin', 'lighting'],
+                    rename: { origin: 'floatingOrigin' },
+                    maps: { materials: { type: 'material' }, models: { type: 'model', value: 'parts' } },
+                    lists: { bookmarks: 'bookmark' },
                 },
+                data: { bookmark: 'a bookmarked place', start: 'the starting bookmark', floatingOrigin: 'floating origin settings (distance, angle, scale)' },
             },
         },
         terrain: {
@@ -152,35 +156,36 @@ const Kits = (() => {
                     },
                 },
             },
-            worlds: {
-                water: {
-                    title: 'Entity Water',
-                    about: 'a GPU shallow-water river simulation with surface-wave cascades and debris',
-                    uses: ['noise', 'view', 'world', 'terrain'],
-                    parts: [
-                        'config', 'terrain/heightfield', 'shaders/flow', 'shaders/render', 'gpu/helpers', 'entities/types', 'world',
-                        'sim/flow', 'renderer', 'tools', 'hud', 'app', 'phone-pages', 'feature',
-                    ],
-                    bases: ['terrain'],
-                    provides: ['water'],
-                    // (its own, over its parts' exports: js/kits/hydrology/worlds/water/features/)
-                    features: {
-                        waves: {
-                            about: 'surface waves: wave maps in cascades that follow the camera, carried by the flow, with foam',
-                            parts: ['shaders', 'cascade', 'waves'], when: { data: ['waves'] },
-                        },
-                        debris: { about: 'floating debris: logs on the GPU, carried by the flow', parts: ['shaders', 'system', 'debris'], when: { types: ['debris'] } },
+            site: {
+                type: 'water',
+                sites: 'many',
+                extends: { world: 'WorldExtension', renderer: 'RendererExtension', app: 'AppExtension' },
+                title: 'Entity Water',
+                about: 'a GPU shallow-water river simulation with surface-wave cascades and debris',
+                uses: ['noise', 'view', 'world', 'terrain'],
+                parts: [
+                    'config', 'terrain/heightfield', 'shaders/flow', 'shaders/render', 'gpu/helpers', 'entities/types', 'world',
+                    'sim/flow', 'renderer', 'tools', 'hud', 'app', 'phone-pages', 'feature',
+                ],
+                bases: ['terrain'],
+                provides: ['water'],
+                // (its own, over its parts' exports: js/kits/hydrology/features/)
+                features: {
+                    waves: {
+                        about: 'surface waves: wave maps in cascades that follow the camera, carried by the flow, with foam',
+                        parts: ['shaders', 'cascade', 'waves'], when: { data: ['waves'] },
                     },
-                    schema: {
-                        config: ['terrain', 'sim', 'waves', 'water', 'lighting'],
-                        rename: { water: 'waterShading' },
-                        maps: { lighting: { type: 'light', except: ['start'] } },
-                        lists: { tools: 'tool', views: 'view' },
-                    },
-                    data: {
-                        sim: 'water simulation settings', waves: 'surface waves', tool: 'a tool on a key',
-                        waterShading: 'water shading (colour, absorption, refraction, foam)',
-                    },
+                    debris: { about: 'floating debris: logs on the GPU, carried by the flow', parts: ['shaders', 'system', 'debris'], when: { types: ['debris'] } },
+                },
+                schema: {
+                    config: ['terrain', 'sim', 'waves', 'water', 'lighting'],
+                    rename: { water: 'waterShading' },
+                    maps: { lighting: { type: 'light', except: ['start'] } },
+                    lists: { tools: 'tool', views: 'view' },
+                },
+                data: {
+                    sim: 'water simulation settings', waves: 'surface waves', tool: 'a tool on a key',
+                    waterShading: 'water shading (colour, absorption, refraction, foam)',
                 },
             },
         },
@@ -210,43 +215,44 @@ const Kits = (() => {
                 building: 'a building archetype (storeys, windows, doors, furniture)', area: 'a vis area (room) with its lights',
                 visPortal: 'a vis portal (door, window, hatch) between areas', occluder: 'an occluder box',
             },
-            worlds: {
-                portal: {
-                    title: 'Entity Portal',
-                    about: 'a bunker compound of areas and portals, stencil-masked traversal, a freighter, drones',
-                    uses: ['noise', 'view', 'world', 'entities', 'transit', 'building', 'gpu', 'gui'],
-                    parts: [
-                        'core/config', 'core/math', 'core/geometry2d', 'core/frustum', 'render/mesh', 'render/materials',
-                        'render/shaders', 'render/renderer', 'render/frame-builder', 'vis/object-trees',
-                        'vis/portal-vis', 'world/collision', 'world/area', 'world/portal', 'world/architecture', 'world/outdoors',
-                        'world/power', 'world/entities', 'world/world', 'game/player', 'game/input',
-                        'game/hud', 'game/game', 'phone-pages', 'feature',
-                    ],
-                    bases: ['sector'],
-                    // (its own, over its parts' exports: js/kits/interior/worlds/portal/features/)
-                    features: {
-                        screens: {
-                            about: 'world-space GUI screens on the props (consoles, generators, the bridge): their GUIs, drawn in the portal pass, the cursor on them',
-                            parts: ['screens', 'gui-pass', 'feature'], when: { data: ['entities.screen'] },
-                        },
-                        media: {
-                            about: 'CCTV over the security cameras, the phone camera and IPTV, on the screens and the handheld',
-                            uses: ['media'], requires: ['screens'], parts: ['media'], when: { types: ['securityCamera'], data: ['cctv', 'media', 'iptv'] },
-                        },
-                        vehicles: { about: 'vehicles on routes (the freighter): sailed, boarded and steered, their routes on the map', parts: ['vehicles'], when: { data: ['vehicles'] } },
-                        lightTransport: {
-                            about: "light through portals: the neighbouring areas' lamps and the sun shining in through doors, windows and hatches",
-                            parts: ['shaders', 'light-transport'], when: { data: ['portals'] },
-                        },
-                        drones: { about: 'drones flying the areas: their navigation graph over areas and portals, on the map', parts: ['nav-graph', 'drones'], when: { types: ['drone'] } },
+            site: {
+                type: 'portal',
+                sites: 'many',
+                extends: { world: 'WorldExtension', renderer: 'RendererExtension', app: 'AppExtension' },
+                title: 'Entity Portal',
+                about: 'a bunker compound of areas and portals, stencil-masked traversal, a freighter, drones',
+                uses: ['noise', 'view', 'world', 'entities', 'transit', 'building', 'gpu', 'gui'],
+                parts: [
+                    'core/config', 'core/math', 'core/geometry2d', 'core/frustum', 'render/mesh', 'render/materials',
+                    'render/shaders', 'render/renderer', 'render/frame-builder', 'vis/object-trees',
+                    'vis/portal-vis', 'world/collision', 'world/area', 'world/portal', 'world/architecture', 'world/outdoors',
+                    'world/power', 'world/entities', 'world/world', 'game/player', 'game/input',
+                    'game/hud', 'game/game', 'phone-pages', 'feature',
+                ],
+                bases: ['sector'],
+                // (its own, over its parts' exports: js/kits/interior/features/)
+                features: {
+                    screens: {
+                        about: 'world-space GUI screens on the props (consoles, generators, the bridge): their GUIs, drawn in the portal pass, the cursor on them',
+                        parts: ['screens', 'gui-pass', 'feature'], when: { data: ['entities.screen'] },
                     },
-                    schema: {
-                        config: ['camera', 'player', 'minimap', 'outdoor', 'cctv', 'media', 'iptv'],
-                        maps: { materials: { type: 'material' }, models: { type: 'model' }, buildings: { type: 'building' }, ...plans() },
-                        lists: { areas: 'area', portals: 'visPortal', occluders: 'occluder', vehicles: 'vehicle', views: 'view', structures: 'structure' },
+                    media: {
+                        about: 'CCTV over the security cameras, the phone camera and IPTV, on the screens and the handheld',
+                        uses: ['media'], requires: ['screens'], parts: ['media'], when: { types: ['securityCamera'], data: ['cctv', 'media', 'iptv'] },
                     },
-                    data: { minimap: 'the minimap', outdoor: 'the outdoors (fog, sun)' },
+                    vehicles: { about: 'vehicles on routes (the freighter): sailed, boarded and steered, their routes on the map', parts: ['vehicles'], when: { data: ['vehicles'] } },
+                    lightTransport: {
+                        about: "light through portals: the neighbouring areas' lamps and the sun shining in through doors, windows and hatches",
+                        parts: ['shaders', 'light-transport'], when: { data: ['portals'] },
+                    },
+                    drones: { about: 'drones flying the areas: their navigation graph over areas and portals, on the map', parts: ['nav-graph', 'drones'], when: { types: ['drone'] } },
                 },
+                schema: {
+                    config: ['camera', 'player', 'minimap', 'outdoor', 'cctv', 'media', 'iptv'],
+                    maps: { materials: { type: 'material' }, models: { type: 'model' }, buildings: { type: 'building' }, ...plans() },
+                    lists: { areas: 'area', portals: 'visPortal', occluders: 'occluder', vehicles: 'vehicle', views: 'view', structures: 'structure' },
+                },
+                data: { minimap: 'the minimap', outdoor: 'the outdoors (fog, sun)' },
             },
         },
         transit: {
@@ -316,35 +322,36 @@ const Kits = (() => {
         imposter: {
             about: 'octahedral imposters for any renderer: bake a mesh into a light-agnostic G-buffer atlas, draw instances as imposters from it, cull them into LOD lists (docs/imposter.md)',
             parts: ['octahedral', 'atlas', 'shaders', 'gpu', 'baker', 'lists'],
-            worlds: {
-                imposter: {
-                    title: 'Entity Imposter',
-                    about: 'a valley of meshes and their octahedral imposters, LOD-culled on the GPU',
-                    uses: ['noise', 'view', 'world', 'terrain', 'entities'],
-                    parts: [
-                        'core/config', 'core/util', 'core/math', 'assets/textures',
-                        'assets/materials', 'assets/geometry', 'gpu/mesh', 'assets/models', 'assets/loaders', 'shaders/common',
-                        'shaders/mesh', 'shaders/cull', 'shaders/imposter', 'shaders/overlay', 'shaders/library', 'gpu/renderer', 'world/lighting', 'world/archetype',
-                        'world/entities', 'world/world', 'game/camera', 'game/hud', 'game/game', 'phone-pages', 'feature',
-                    ],
-                    bases: ['ground'],
-                    // (its own: js/kits/imposter/worlds/imposter/features/)
-                    features: {
-                        shadows: {
-                            about: 'cascaded sun shadows: caster lists per cascade, meshes and imposters drawn into a depth array, sampled with PCF',
-                            parts: ['shaders', 'shadows'], when: { data: ['shadows'] },
-                        },
+            site: {
+                type: 'imposter',
+                sites: 'many',
+                extends: { world: 'WorldExtension', renderer: 'RendererExtension', app: 'AppExtension' },
+                title: 'Entity Imposter',
+                about: 'a valley of meshes and their octahedral imposters, LOD-culled on the GPU',
+                uses: ['noise', 'view', 'world', 'terrain', 'entities'],
+                parts: [
+                    'core/config', 'core/util', 'core/math', 'assets/textures',
+                    'assets/materials', 'assets/geometry', 'gpu/mesh', 'assets/models', 'assets/loaders', 'shaders/common',
+                    'shaders/mesh', 'shaders/cull', 'shaders/imposter', 'shaders/overlay', 'shaders/library', 'gpu/renderer', 'world/lighting', 'world/archetype',
+                    'world/entities', 'world/world', 'game/camera', 'game/hud', 'game/game', 'phone-pages', 'feature',
+                ],
+                bases: ['ground'],
+                // (its own: js/kits/imposter/features/)
+                features: {
+                    shadows: {
+                        about: 'cascaded sun shadows: caster lists per cascade, meshes and imposters drawn into a depth array, sampled with PCF',
+                        parts: ['shaders', 'shadows'], when: { data: ['shadows'] },
                     },
-                    schema: {
-                        config: ['camera', 'environment', 'lod', 'shadows', 'imposter', 'drop'],
-                        rename: { imposter: 'imposterAtlas' },
-                        maps: { lighting: { type: 'light' }, materials: { type: 'material' }, models: { type: 'model' } },
-                        lists: { views: 'view' },
-                    },
-                    data: {
-                        environment: 'the starting environment preset', lod: 'LOD settings', shadows: 'shadow settings',
-                        imposterAtlas: 'imposter atlas settings (grid, resolution, mode)', drop: 'dropping a model file into the scene',
-                    },
+                },
+                schema: {
+                    config: ['camera', 'environment', 'lod', 'shadows', 'imposter', 'drop'],
+                    rename: { imposter: 'imposterAtlas' },
+                    maps: { lighting: { type: 'light' }, materials: { type: 'material' }, models: { type: 'model' } },
+                    lists: { views: 'view' },
+                },
+                data: {
+                    environment: 'the starting environment preset', lod: 'LOD settings', shadows: 'shadow settings',
+                    imposterAtlas: 'imposter atlas settings (grid, resolution, mode)', drop: 'dropping a model file into the scene',
                 },
             },
         },
@@ -360,32 +367,33 @@ const Kits = (() => {
                 'phone-gui', 'phone-apps',
             ],
             data: { phone: "the phone's apps and pages", radar: 'the radar app' },
-            worlds: {
-                gui: {
-                    title: 'Entity GUI',
-                    about: 'a facility of world-space GUIs (terminals, CCTV, easels) walked by a player',
-                    uses: ['view', 'world', 'entities', 'interior'],
-                    parts: [
-                        'core/audio', 'gui/terminal-gui', 'world/entities', 'world/world', 'game/player',
-                        'game/input', 'game/bindings', 'game/game', 'feature',
-                    ],
-                    bases: ['fixture'],
-                    // (its own: js/kits/gui/worlds/gui/features/)
-                    features: {
-                        paint: { about: "easels: their paint canvases, stamped on the GPU before the frame's passes", uses: ['paint'], parts: ['paint'], when: { types: ['easel'] } },
-                        radar: { about: 'the phone radar: the waves of footsteps, doors, drones and the alarm, and its app', parts: ['radar-app', 'radar'], when: { data: ['waves', 'radar'] } },
-                        media: {
-                            about: 'CCTV over the security cameras, the phone camera and its gallery, IPTV: their views and phone apps',
-                            uses: ['media'], parts: ['media'], when: { types: ['securityCamera'], data: ['cctv', 'media', 'iptv'] },
-                        },
+            site: {
+                type: 'gui',
+                sites: 'many',
+                extends: { world: 'WorldExtension', renderer: 'RendererExtension', app: 'AppExtension' },
+                title: 'Entity GUI',
+                about: 'a facility of world-space GUIs (terminals, CCTV, easels) walked by a player',
+                uses: ['view', 'world', 'entities', 'interior'],
+                parts: [
+                    'core/audio', 'gui/terminal-gui', 'world/entities', 'world/world', 'game/player',
+                    'game/input', 'game/bindings', 'game/game', 'feature',
+                ],
+                bases: ['fixture'],
+                // (its own: js/kits/gui/features/)
+                features: {
+                    paint: { about: "easels: their paint canvases, stamped on the GPU before the frame's passes", uses: ['paint'], parts: ['paint'], when: { types: ['easel'] } },
+                    radar: { about: 'the phone radar: the waves of footsteps, doors, drones and the alarm, and its app', parts: ['radar-app', 'radar'], when: { data: ['waves', 'radar'] } },
+                    media: {
+                        about: 'CCTV over the security cameras, the phone camera and its gallery, IPTV: their views and phone apps',
+                        uses: ['media'], parts: ['media'], when: { types: ['securityCamera'], data: ['cctv', 'media', 'iptv'] },
                     },
-                    schema: {
-                        config: ['player', 'facility', 'cctv', 'media', 'iptv', 'waves', 'radar', 'places', 'phone'],
-                        maps: { materials: { type: 'material' }, models: { type: 'model', value: 'parts' } },
-                        lists: { views: 'view' },
-                    },
-                    data: { facility: 'facility state (log)', places: 'named zones', waves: 'radar pings' },
                 },
+                schema: {
+                    config: ['player', 'facility', 'cctv', 'media', 'iptv', 'waves', 'radar', 'places', 'phone'],
+                    maps: { materials: { type: 'material' }, models: { type: 'model', value: 'parts' } },
+                    lists: { views: 'view' },
+                },
+                data: { facility: 'facility state (log)', places: 'named zones', waves: 'radar pings' },
             },
         },
         // the media of a world of EntityGUIs: views into it (ViewTarget), CCTV over its security cameras, the phone's camera and
@@ -423,27 +431,26 @@ const Kits = (() => {
                     uses: ['transit'], requires: ['structures'], parts: ['shaders', 'renderer', 'buses'], when: { types: ['bus'] },
                 },
             },
-            worlds: {
-                // its entity types, its World extension (Storms: cells, hurricane, tornado) and App extension (Clouds: the
-                // cloud picker, storm keys, menus, readout), composed onto this kit's World, App and adapter
-                cloud: {
-                    title: 'Entity Cloud',
-                    about: 'volumetric clouds and weather over a terrain with its towns, buildings and buses',
-                    parts: ['entities', 'storms', 'clouds', 'world-type'],
-                    bases: ['terrain'],
-                    provides: ['structures', 'weather'],
-                    schema: {
-                        config: ['terrain', 'render', 'weather', 'lighting', 'hurricane', 'streetLights', 'curvature'],
-                        maps: { 'weather.states': { type: 'weatherState' }, 'lighting.presets': { type: 'light' }, buildings: { type: 'building' }, ...plans() },
-                        lists: { clouds: 'cloudLayer', views: 'view' },
-                    },
-                    // what any scenario gets with a weather entity and no sky: this world over the others, on a calm plain at
-                    // sea level (the worlds it joins stand on their own ground)
-                    implicit: {
-                        root: { layer: { role: 'atmosphere' } },
-                        entities: [{ type: 'terrain', base: -2, size: 64000, resolution: 256, style: 'natural', outside: 'sea' }],
-                    },
+            // its entity types, its World extension (Storms: cells, hurricane, tornado) and App extension (Clouds: the
+            // cloud picker, storm keys, menus, readout), composed onto this kit's World, App and adapter
+            site: {
+                type: 'cloud',
+                sites: 'one',
+                extends: { world: 'WorldExtension', renderer: 'RendererExtension', app: 'AppExtension' },
+                title: 'Entity Cloud',
+                about: 'volumetric clouds and weather over a terrain with its towns, buildings and buses',
+                parts: ['entities', 'storms', 'clouds', 'world-type'],
+                bases: ['terrain'],
+                provides: ['structures', 'weather'],
+                schema: {
+                    config: ['terrain', 'render', 'weather', 'lighting', 'hurricane', 'streetLights', 'curvature'],
+                    maps: { 'weather.states': { type: 'weatherState' }, 'lighting.presets': { type: 'light' }, buildings: { type: 'building' }, ...plans() },
+                    lists: { clouds: 'cloudLayer', views: 'view' },
                 },
+                // what any scenario gets with a weather entity and no sky: this world over the others, on a calm plain at
+                // sea level (the worlds it joins stand on their own ground)
+                join: { layer: { role: 'atmosphere' } },
+                defaults: [{ type: 'terrain', base: -2, size: 64000, resolution: 256, style: 'natural', outside: 'sea' }],
             },
         },
     };
@@ -457,11 +464,13 @@ const Kits = (() => {
     }
 
     // ------------------------------------------------------------------------------------------- derived
-    // worlds by type: { kit, ...spec }
+    // the kits' sites by world type: { kit, ...site }
     const WORLDS = {};
-    for (const [kit, k] of Object.entries(KITS)) for (const [type, w] of Object.entries(k.worlds || {})) {
-        if (WORLDS[type]) throw new Error(`world "${type}" offered by kits ${WORLDS[type].kit} and ${kit}`);
-        WORLDS[type] = { kit, type, uses: [], bases: [], provides: [], data: {}, ...w };
+    for (const [kit, k] of Object.entries(KITS)) {
+        const w = k.site;
+        if (!w) continue;
+        if (WORLDS[w.type]) throw new Error(`site type "${w.type}" offered by kits ${WORLDS[w.type].kit} and ${kit}`);
+        WORLDS[w.type] = { kit, uses: [], bases: [], provides: [], data: {}, ...w };
     }
 
     // entity implementations by type: [{ kit, factory, base, needs, cls, about }]
@@ -473,7 +482,7 @@ const Kits = (() => {
     const DATA = {};
     for (const [kit, k] of Object.entries(KITS)) {
         for (const [type, about] of Object.entries(k.data || {})) (DATA[type] ??= []).push({ kit, about });
-        for (const [w, spec] of Object.entries(k.worlds || {})) for (const [type, about] of Object.entries(spec.data || {})) (DATA[type] ??= []).push({ kit, world: w, about });
+        for (const [w, spec] of k.site ? [[k.site.type, k.site]] : []) for (const [type, about] of Object.entries(spec.data || {})) (DATA[type] ??= []).push({ kit, world: w, about });
     }
 
     // the implementations of `type` a world of type `world` takes: its base, and every need provided

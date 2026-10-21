@@ -8,17 +8,23 @@ const { Composite } = engine.Common;
 const { addEntity } = kit;
 
 class World {
-    // E: its own WorldExtension, new E(world, ...args): it keeps the world (this.world = world), builds it and composes
-    // in its features' (world.compose(list): new F(world), world.ext[F.key])
+    // E: its own WorldExtension, new E(world, ...args) (or later: world.extend(E, ...args)): it keeps the world
+    // (this.world = world), builds it and composes in its features' (world.compose(list): new F(world), world.ext[F.key])
     constructor(E, ...args) {
         const world = Composite.of(this);
         this.entities = [];
         this.byId = new Map();
-        Composite.own(world, E, ...args);
+        if (E) Composite.own(world, E, ...args);
         return world;
     }
 
     compose(list, ...args) { return Composite.compose(this, list, ...args); }
+
+    // its own extension, on a world made empty (new World()); everything off it, its entities too (a site rebuilt in
+    // place); one kept beside it (Common.Composite)
+    extend(E, ...args) { Composite.own(this, E, ...args); return this; }
+    reset() { Composite.reset(this); this.entities = []; this.byId = new Map(); return this; }
+    attach(key, E, ...args) { return Composite.attach(this, key, E, ...args); }
 
     // its extensions' hooks, in compose order (Common.Composite): every one's, the first truthy result, the largest
     // number, every result

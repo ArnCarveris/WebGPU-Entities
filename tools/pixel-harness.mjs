@@ -9,6 +9,8 @@
 //                                                  constructions and queue.submit calls per frame; exit 1 on a failure
 //   node tools/pixel-harness.mjs smoke [ids...]    the key smoke run: WASD, E, F, Tab, the Walk switch, click, Esc; no
 //                                                  errors, and the view moves
+//   node tools/pixel-harness.mjs eval --expr 'js' [ids...]   after opt.frames: the expression's value (awaited), then
+//                                                  opt.view-frames more frames; the counters before and after, errors
 //   node tools/pixel-harness.mjs perf [ids...]     GPU time per frame and per pass (timestamps on every pass), A/B
 //                                                  between two revisions (--revs a,b, HEAD~1,HEAD), alternated
 //                                                  scenario by scenario, --rounds times; <work>/perf-report.json
@@ -42,9 +44,9 @@ import * as PNG from './png.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const argv = process.argv.slice(2);
-const mode = ['record', 'check', 'smoke', 'perf'].includes(argv[0]) ? argv.shift() : 'check';
+const mode = ['record', 'check', 'smoke', 'perf', 'eval'].includes(argv[0]) ? argv.shift() : 'check';
 const opt = { frames: 40, viewFrames: 20, runs: mode === 'record' ? 2 : 1, port: 9371, out: 'baselines', baseline: 'baselines',
-    work: path.join(os.tmpdir(), 'webgpu-entities-harness'), keep: false, trace: false, bindings: false, report: false, live: false, rev: null, revs: 'HEAD~1,HEAD', rounds: 2, servePort: 9381, only: null, query: [],
+    work: path.join(os.tmpdir(), 'webgpu-entities-harness'), keep: false, trace: false, bindings: false, report: false, expr: '', live: false, rev: null, revs: 'HEAD~1,HEAD', rounds: 2, servePort: 9381, only: null, query: [],
     brave: process.env.BRAVE || 'C:/Program Files/BraveSoftware/Brave-Browser/Application/brave.exe' };
 const ids = [];
 for (let i = 0; i < argv.length; i++) {
@@ -443,6 +445,38 @@ async function perf(base, sid) {
     } finally { await s.close(); }
 }
 
+// one scenario, an expression run in it after opt.frames (eval mode): { sid, before, value, after, frames, errors }
+async function evalIn(base, sid) {
+    const s = await tab();
+    try {
+        await s.send('Runtime.enable'); await s.send('Network.enable'); await s.send('Network.setCacheDisabled', { cacheDisabled: true }); await s.send('Page.enable');
+        await s.send('Emulation.setDeviceMetricsOverride', { width: W, height: H, deviceScaleFactor: 1, mobile: false });
+        await s.send('Page.addScriptToEvaluateOnNewDocument', { source: PRELUDE });
+        await s.send('Page.navigate', { url: `${base}/index.html?scenario=${encodeURIComponent(sid)}` });
+        let state = null;
+        for (let k = 0; k < 240 && !state; k++) {
+            await sleep(500);
+            state = await s.evaluate(`document.getElementById('fallback')?.classList.contains('show') ? 'failed' : window.entities && entities.last !== undefined ? 'ready' : null`).catch(() => null);
+        }
+        if (state !== 'ready') return { sid, failed: state || 'timed out', errors: s.errors() };
+        await settle(s);
+        await s.evaluate(`__step(${opt.frames})`);
+        const counts = () => s.evaluate('JSON.stringify(__harness.counts)');
+        const before = await counts();
+        // (the expression may wait for frames: they step meanwhile)
+        let done = false, value;
+        const run = s.evaluate(`(async () => JSON.stringify(await (${opt.expr})))()`).then(v => { value = v; done = true; }, e => { value = 'threw ' + e.message; done = true; });
+        for (let k = 0; k < 600 && !done; k++) await s.evaluate('__step(1)');
+        await run;
+        await settle(s);
+        const f0 = await s.evaluate('entities.frameNo');
+        await s.evaluate(`__step(${opt.viewFrames})`);
+        const f1 = await s.evaluate('entities.frameNo');
+        const failed = await s.evaluate(`document.getElementById('fallback')?.classList.contains('show')`);
+        return { sid, before, value, after: await counts(), frames: [f0, f1], failed, errors: s.errors() };
+    } finally { await s.close(); }
+}
+
 // the key smoke run (§6.2 G6) on one scenario
 async function smoke(base, sid) {
     const s = await tab();
@@ -512,7 +546,14 @@ let failures = 0;
 const fail = msg => { failures++; console.log('  FAIL ' + msg); };
 
 try {
-    if (mode === 'perf') {
+    if (mode === 'eval') {
+        for (const sid of list) {
+            const r = await evalIn(base, sid);
+            console.log(`${sid}: ${r.failed ? 'FAILED ' + r.failed : `${r.value} · counts ${r.before} -> ${r.after} · frames ${r.frames.join(' -> ')}`}`);
+            if (r.failed) fail(String(r.failed));
+            for (const e of [...new Set(r.errors)].slice(0, 6)) fail(e);
+        }
+    } else if (mode === 'perf') {
         // A/B: each revision (--revs a,b) served from its own snapshot and port, alternated scenario by scenario, rounds
         // times (the laptop GPU's clocks drift between runs: compare neighbours, not runs)
         const revs = opt.revs.split(','), bases = [];

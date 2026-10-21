@@ -10,21 +10,21 @@
 // types (Host.createWorlds: ScenarioFormat.kitsOf). The engine's own scripts use ENGINE_KITS, which the host loads at
 // boot, through Features.kits. Smaller shared helpers (math, GPU, text) are js/engine/common.js's.
 //
-// A world is what a scenario root entity of its type makes ({ type: "water" }): a kit offers it (the manifest's
-// worlds), parts under js/kits/<kit>/worlds/<type>/ registered with Features.world(type, fn). They load only when a
-// scenario has that world, after their kit and the kits the world uses; `kit` in them is the world's own exports over
-// its kit's (a world part reads its kit's exports as kit.X too, and shadows none of them). The last part returns
-// { create(ctx) }: one world of that type (a FeatureWorld, see Host.createInstance).
+// A site of a kit is, for now, one world of the kit's site type (the manifest's `site`: { type: "water", parts }): its
+// parts, js/kits/<kit>/<part>.js registered with Features.world(type, fn), load only when a scenario has a site of that
+// kit, after the kit and the kits the site uses; `kit` in them is the site parts' own exports over the kit's (a site
+// part reads its kit's exports as kit.X too, and shadows none of them). The last part returns { spec }: what a site of
+// that type is to the host (the hooks of its Site, js/kits/world/site.js).
 //
-// A feature is what a kit's worlds are made of beyond their core, built only when a world's data asks for it (the
+// A feature is what a kit's sites are made of beyond their core, built only when a site's data asks for it (the
 // manifest's features: when / requires, Kits.featuresOf): parts under js/kits/<kit>/features/<name>/ registered with
 // Features.feature('<kit>/<name>', fn), loaded with the kits it uses before the world is built; `kit` in them is the
 // feature's exports over its kit's and its required features'. The world gets the features on as fx.features.
 
 const Features = {
-    // the kits as the manifest has them: { uses, parts, types, data, worlds }
+    // the kits as the manifest has them: { uses, parts, types, data, site, features }
     get KITS() { return Kits.KITS; },
-    ENGINE_KITS: ['noise', 'view', 'gpu', 'gui'],
+    ENGINE_KITS: ['noise', 'view', 'gpu', 'gui', 'world'],
     worldParts: {},
     featureParts: {},
     featureModules: {},
@@ -52,25 +52,25 @@ const Features = {
     // the kit offering world type `type`, or null
     kitOf(type) { return Kits.WORLDS[type]?.kit || null; },
 
-    // a world type's module ({ create(ctx) }, over its kit's exports), once per page
+    // a world type's module ({ spec }, over its kit's exports), once per page
     load(type, engine) {
         return (this.modules[type] ??= (async () => {
             const kit = this.kitOf(type);
             if (!kit) throw new Error(`unknown world type "${type}": no kit offers it`);
-            const spec = this.KITS[kit].worlds[type];
+            const spec = this.KITS[kit].site;
             const base = await this.loadKit(kit, engine);
             for (const k of spec.uses ?? []) await this.loadKit(k, engine);
-            const srcs = spec.parts.map(p => `js/kits/${kit}/worlds/${type}/${p}.js`);
+            const srcs = spec.parts.map(p => `js/kits/${kit}/${p}.js`);
             const world = await this.assemble(`world "${type}"`, srcs, () => this.worldParts[type], engine, Object.create(base));
-            if (typeof world.create !== 'function') throw new Error(`world "${type}" has no create()`);
+            if (!world.spec) throw new Error(`world "${type}" has no spec`);
             return world;
         })());
     },
 
-    // A feature of world type `type` (its kit's, KITS[kit].features[name], or the world's own, its features[name]), once
+    // A feature of site type `type` (its kit's, KITS[kit].features[name], or its site's own, site.features[name]), once
     // per page: the kits it uses, the features it requires, then its parts (js/kits/<kit>/features/<name>/, registered
-    // with Features.feature('<kit>/<name>', fn); a world's own under js/kits/<kit>/worlds/<type>/features/<name>/, as
-    // '<kit>/<type>/<name>'), over its kit's exports (a world's own: the world's) and the required features'
+    // with Features.feature('<kit>/<name>', fn); a site's own as '<kit>/<type>/<name>'), over its kit's exports (a
+    // site's own: its site parts') and the required features'
     loadFeature(type, name, engine) {
         const { spec, kit, world } = Kits.featureOf(type, name);
         const key = world ? `${kit}/${world}/${name}` : `${kit}/${name}`;
@@ -79,7 +79,7 @@ const Features = {
             for (const k of spec.uses ?? []) await this.loadKit(k, engine);
             const under = Object.create(base);
             for (const r of spec.requires ?? []) Object.assign(under, await this.loadFeature(type, r, engine));
-            const dir = world ? `js/kits/${kit}/worlds/${world}/features/${name}` : `js/kits/${kit}/features/${name}`;
+            const dir = `js/kits/${kit}/features/${name}`;
             return this.assemble(`feature "${key}"`, spec.parts.map(p => `${dir}/${p}.js`), () => this.featureParts[key], engine, Object.create(under));
         })());
     },

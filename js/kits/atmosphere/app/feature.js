@@ -1,19 +1,18 @@
 'use strict';
-// atmosphereWorld(type): a world under this kit's sky as one world of the engine, the hooks of its FeatureWorld
+// atmosphereWorld(type): a world under this kit's sky as one world of the engine, the hooks of its Site
 // (js/engine/host.js calls these; view / setView: its camera's). A world type is a spec, not a subclass: { world(scenario,
 // features): the one World with its WorldExtensions, extensions: its AppExtensions, title } (the cloud world's `cloud`). As the "atmosphere" of a
 // composition it takes the other worlds into its scene before its volumetrics (its RendererExtension's encodeInject).
 
 Features.kit('atmosphere', (engine, kit) => {
 const { kits } = engine;
-const { FeatureWorld } = kits.world, { HUD } = FeatureWorld;
+const { Site } = kits.world, { HUD } = Site;
 const { NEAR, QUALITY, AppExtension, phonePages } = kit;
-const { App } = engine.kits.world;
 
-// the world of a world type (type: its spec) as the engine runs it (a FeatureWorld's hooks)
+// the world of a world type (type: its spec) as the engine runs it (a Site's hooks)
 const atmosphereWorld = type => ({
     hud: HUD.labels + HUD.toast,
-    app: fx => new App(AppExtension, fx, type),
+    app: (app, fx) => app.extend(AppExtension, fx, type),
 
     // reversed-Z, infinite far plane, metres (the near plane comes in to 5 cm on foot)
     depth() {
@@ -26,10 +25,10 @@ const atmosphereWorld = type => ({
     get move() { return this.app.walker.active ? 'walk' : 'fly'; },
     setMove(mode) { this.app.controls.setWalk(mode === 'walk'); },
 
-    // the keys there are (FeatureWorld.keys): moving, on foot or flying; E at a door, lift or seat, F at a bus's wheel
+    // the keys there are (Site.keys): moving, on foot or flying; E at a door, lift or seat, F at a bus's wheel
     get keys() {
-        const a = this.app, keys = a.walker.active ? [...FeatureWorld.WALK_KEYS, ['Alt', 'slow']]
-            : [...FeatureWorld.FLY_KEYS, ['Alt', 'slow']];
+        const a = this.app, keys = a.walker.active ? [...Site.WALK_KEYS, ['Alt', 'slow']]
+            : [...Site.FLY_KEYS, ['Alt', 'slow']];
         if (a.doors || a.liftControl) keys.push(['E', 'use']);
         if (a.drive) keys.push(['F', 'drive a bus']);
         return keys;
@@ -85,7 +84,7 @@ const atmosphereWorld = type => ({
     // how much its air hides a point beyond it (AppExtension.airHides): its daytime sky what is in space
     veil(p, dir, d) { return this.app?.airHides(p, dir, d) ?? 0; },
 
-    // the ground it covers (FeatureWorld.footprint): its terrain's map, with its colour from afar (groundAlbedo): a planet
+    // the ground it covers (Site.footprint): its terrain's map, with its colour from afar (groundAlbedo): a planet
     // it stands on in a composition shows it there
     footprint() {
         const w = this.app?.world, f = w?.field;

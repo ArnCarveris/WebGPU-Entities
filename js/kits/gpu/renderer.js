@@ -81,18 +81,34 @@ class Renderer {
     static STAGES = ['compute', 'views', 'scene', 'translucent', 'volumetric', 'post', 'final', 'overlay'];
     static SCENE = ['background', 'sky', 'outdoor', 'indoor', 'late'];
 
-    // E: its own RendererExtension, new E(renderer, fx, ...): it keeps the renderer (this.renderer = renderer) and
-    // composes in its features' (renderer.compose(list): new F(renderer), renderer.ext[F.key]); fx.frame: the host's
-    // frame (GpuFrame), else one of its own
+    // E: its own RendererExtension, new E(renderer, fx, ...) (or later: renderer.extend(E, fx, ...)): it keeps the
+    // renderer (this.renderer = renderer) and composes in its features' (renderer.compose(list): new F(renderer),
+    // renderer.ext[F.key]); fx.frame: the host's frame (GpuFrame), else one of its own; its frameSpec is E's
     constructor(E, ...args) {
         const renderer = Composite.of(this);
-        this.gpuFrame = args[0]?.frame || null;
-        this.frameSpec = frameSpec(E, args[0]);
+        this.gpuFrame = null;
+        this.frameSpec = null;
         this.stencils = {};
         this.lineLayerOf = null;
-        Composite.own(renderer, E, ...args);
+        if (E) renderer.extend(E, ...args);
         return renderer;
     }
+
+    extend(E, ...args) {
+        this.gpuFrame ??= args[0]?.frame || null;
+        this.frameSpec = frameSpec(E, args[0]);
+        Composite.own(this, E, ...args);
+        return this;
+    }
+
+    // one beside it (Common.Composite): the handheld's GUI renderer, drawing in its own conventions (frameSpecOf)
+    attach(key, E, ...args) {
+        this.gpuFrame ??= args[0]?.frame || null;
+        return Composite.attach(this, key, E, ...args);
+    }
+
+    // the conventions extension class E draws with, given its fx (see frameSpec)
+    frameSpecOf(E, fx) { return frameSpec(E, fx); }
 
     // one StencilLayout per depth-stencil target (name; bits: what its format has, on first use), every extension
     // reserving its slots in it
@@ -103,14 +119,14 @@ class Renderer {
 
     // the scene's depth-stencil format: the frame's (depth32float-stencil8 only where the device has it, else
     // depth24plus-stencil8)
-    sceneDepthFormat() {
-        const f = this.frameSpec.depthFormat;
-        return f === 'depth32float-stencil8' && !this.device.features.has(f) ? 'depth24plus-stencil8' : f;
+    sceneDepthFormat(spec = this.frameSpec, device = this.device) {
+        const f = spec.depthFormat;
+        return f === 'depth32float-stencil8' && !device.features.has(f) ? 'depth24plus-stencil8' : f;
     }
 
     // a view-projection made for standard depth, in the frame's convention: turned round (common.js m4.reverseDepth) when
     // the frame is reversed and its own extension draws in standard depth alone
-    frameDepth(m) { return this.frameSpec.depth === 'reversed' && this.frameSpec.native === 'standard' ? Common.m4.reverseDepth(m) : m; }
+    frameDepth(m, spec = this.frameSpec) { return spec.depth === 'reversed' && spec.native === 'standard' ? Common.m4.reverseDepth(m) : m; }
 
     compose(list, ...args) { return Composite.compose(this, list, ...args); }
 
@@ -126,9 +142,8 @@ class Renderer {
     afterSubmit(fn) { (this.gpuFrame ??= new GpuFrame(this.device)).after.push(fn); }
     get frameId() { return this.gpuFrame?.id ?? 0; }
 
-    // the frame's stages, its own extension's (see above), into the frame encoder
-    encode(f = {}) {
-        const x = Composite.ownOf(this);
+    // the frame's stages, its own extension's (see above; or x's, one attached), into the frame encoder
+    encode(f = {}, x = Composite.ownOf(this)) {
         f.enc ??= this.frameEncoder();
         for (const s of Renderer.STAGES) {
             if (s !== 'scene') { x[s]?.(f); continue; }

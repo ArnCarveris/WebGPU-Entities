@@ -20,7 +20,7 @@ const { FirstPersonView } = kits.view;
 const SLOW_ALT = { keys: ['AltLeft'], factor: 0.2 };       // Alt held: a fifth of the speed
 const { Hud, AppMenus, Controls, KeyCommands, SPLASH_PARTICLES, RENDER_DEFAULTS, QUALITY, FRAME_BUDGET, RendererExtension, Surroundings, LightWriter, FrameWriter,
     Walker, Footsteps } = kit;
-const { DynamicScale, Renderer } = kits.gpu;
+const { DynamicScale } = kits.gpu;
 
 class AppExtension {
     static key = 'atmosphere';
@@ -41,7 +41,7 @@ class AppExtension {
         this.createWorld = world;
         this.title = title;
         this.canvas = fx.canvas;
-        this.renderer = new Renderer(RendererExtension, fx);
+        this.renderer = fx.renderer.extend(RendererExtension, fx);
         this.input = new PointerInput(fx.io);
         this.hud = new Hud(fx.ui);
         this.camera = new FirstPersonView({ pos: [0, 3000, 0], speed: 400, wheel: { step: 1.25, min: 5, max: 20000 }, clearance: 1.5, ceiling: 25000, slow: SLOW_ALT });
@@ -138,7 +138,7 @@ class AppExtension {
             blend: fp.ground ? clamp(0.12 * Math.min(...fp.size), 100, 300) : 150,
         }));
         if (room.length) scenario = { ...scenario, entities: [...(scenario.entities || []), ...room] };
-        const world = this.createWorld(scenario, this.worldExtensions);
+        const world = this.createWorld(this.fx.world.reset(), scenario, this.worldExtensions);
         this.world = world;
         // thunder from each flash, timed by its distance from the camera then
         world.lightning.onStrike = f => { const [lo, hi] = world.lightning.reach(f, this.camera.pos); this.fx.emit('thunder', { near: lo, far: hi, bolt: !!f.bolt }); };

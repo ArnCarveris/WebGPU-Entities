@@ -372,9 +372,11 @@ class PointerInput {
 // An extension gets the host as its constructor's first argument and keeps it (this.world = world, this.app = app,
 // this.renderer = renderer): from that line on the host answers its exposed names, so its constructor may already use
 // them through the host. It passes the host, not itself, to what it makes. compose(host, list, ...args): new E(host,
-// ...args) for each, in order (host.extensions). The host's own constructor composes its own extension (own: new
-// World(E, ...args)), which runs its hooks from its own code: host.extensions and the hook lists hold the others, the
-// ones it composes in turn (its features').
+// ...args) for each, in order (host.extensions). A host has one own extension (own: new World(E, ...args), or later,
+// host.extend(E, ...args) on a host made empty), which runs its hooks from its own code: host.extensions and the hook
+// lists hold the others, the ones it composes in turn (its features'). reset(host) takes every extension off it (a site
+// rebuilt in place); attach(host, key, E, ...args) keeps one beside it, host.ext[key] only: in no hook list, exposing
+// nothing (the engine's adapters: the site's hooks, the handheld's GUI renderer).
 //
 // A member no extension exposes reads undefined; while the host's own extension still has it without saying so, it is
 // answered from there with a console error naming it (an exposes list to complete), so nothing breaks on the way.
@@ -420,9 +422,22 @@ const Composite = {
     },
     // the host's own extension (its constructor's: new World(E, ...args))
     own(host, E, ...args) {
+        const S = STATE.get(Composite.target(host));
+        if (S.own) throw new Error(`${Composite.target(host).constructor.name}: already has its own extension (${S.own.constructor.name}); reset() it first`);
         const x = Composite.make(host, E, args);
-        STATE.get(Composite.target(host)).own = x;
+        S.own = x;
         return x;
+    },
+    reset(host) {
+        const t = Composite.target(host), S = STATE.get(t);
+        S.owner.clear(); S.bound.clear(); S.told.clear();
+        S.own = null;
+        for (const k of Object.keys(t.ext)) delete t.ext[k];
+        t.extensions.length = 0;
+    },
+    attach(host, key, E, ...args) {
+        if (key in host.ext) throw new Error(`${Composite.target(host).constructor.name}.ext.${key}: already there`);
+        return host.ext[key] = new E(host, ...args);
     },
     compose(host, list, ...args) {
         const out = [];

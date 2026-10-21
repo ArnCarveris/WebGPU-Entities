@@ -231,10 +231,10 @@ const ScenarioFormat = (() => {
 
     // Implicit sites: the entities that no site of the scenario takes (and name none with `of`) bring in sites of kits
     // that take them: first of the world type that takes the most of them (on a tie one that says how it joins a
-    // scenario, its `implicit`, then the manifest's order), then for what is left, and so on. Each new site goes first, id
+    // scenario, its `join` / `defaults`, then the manifest's order), then for what is left, and so on. Each new site goes first, id
     // = its world type (as the root entity it replaces had), and the entities it was brought in for name it (`of`), as do
-    // its implicit entities (its defaults: a sky's ground) of a type the scenario gives it none of. With other sites a new
-    // one joins them as its `implicit.root` says (fields merged into it: a sky's layer role); alone it is the scenario's
+    // its `defaults` (a sky's ground) of a type the scenario gives it none of. With other sites a new
+    // one joins them as its `join` says (fields merged into it: a sky's layer role); alone it is the scenario's
     // as it is. A scenario of plain entities (no site) gets its one site so.
     function complete(scenario) {
         const ents = scenario.entities || [], have = roots(scenario);
@@ -244,7 +244,7 @@ const ScenarioFormat = (() => {
         const add = [], via = new Map();
         while (left.length) {
             const score = w => left.filter(e => takes(w, e.type)).length;
-            const best = Object.keys(SCHEMAS).map((w, k) => ({ w, k, n: score(w), imp: !!Types.WORLDS[w].implicit }))
+            const best = Object.keys(SCHEMAS).map((w, k) => ({ w, k, n: score(w), imp: !!(Types.WORLDS[w].join || Types.WORLDS[w].defaults) }))
                 .filter(c => c.n).sort((a, b) => b.n - a.n || b.imp - a.imp || a.k - b.k)[0];
             if (!best) break;           // taken by no world at all: worldOf says so
             const id = have.some(r => r.id === best.w) || add.some(r => r.id === best.w) ? `${best.w}${add.length + 1}` : best.w;
@@ -255,11 +255,11 @@ const ScenarioFormat = (() => {
         if (!add.length) return scenario;
         const many = have.length + add.length > 1, out = [];
         for (const r of add) {
-            const imp = Types.WORLDS[r.type].implicit || {}, kit = kitOfWorld(r.type);
+            const W = Types.WORLDS[r.type], kit = kitOfWorld(r.type);
             const site = { type: 'site', id: r.id, kit, ...(KIT_WORLD[kit] !== r.type ? { world: r.type } : {}) };
-            out.push(many ? { ...site, ...(imp.root || {}) } : site);
+            out.push(many ? { ...site, ...(W.join || {}) } : site);
             const given = new Set(ents.filter(e => via.get(e) === r.id).map(e => e.type));
-            for (const e of imp.entities || []) if (!given.has(e.type)) out.push({ ...e, of: r.id });
+            for (const e of W.defaults || []) if (!given.has(e.type)) out.push({ ...e, of: r.id });
         }
         return { ...scenario, entities: [...out, ...ents.map(e => (via.has(e) ? { ...e, of: via.get(e) } : e))] };
     }

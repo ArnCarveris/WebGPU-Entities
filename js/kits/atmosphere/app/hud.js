@@ -12,7 +12,7 @@ const rainName = (rate, drops) => drops < 0.2 && rate < 0.3 ? 'drizzle' : rate <
     : rate <= 1 ? 'heavy rain' : drops > 0.9 ? 'downpour' : 'torrential rain';
 
 // The screen keeps the in-world labels, the walker's dot and toasts; the readout (lines) and every option (the menus)
-// are on the engine's handheld (FeatureWorld.handheld)
+// are on the engine's handheld (Site.handheld)
 class Hud extends kits.world.WorldHud {
     constructor(ui) { super(ui, { labels: true }); }
 

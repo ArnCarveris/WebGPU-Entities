@@ -63,6 +63,15 @@ const HANDHELD_DEFAULTS = {
     ],
 };
 
+// the handheld beside the App (app.attach('handheld', HandheldApp, handheld): app.ext.handheld), what the kits reach it
+// by (its pages, its GUI renderer, shown or not); its own GUI renderer is beside the Renderer (renderer.ext.handheld)
+class HandheldApp {
+    constructor(app, handheld) {
+        this.app = app;
+        this.handheld = handheld;
+    }
+}
+
 class Handheld {
     // A world's readout panel (lines of text with a little markup, as the demos printed them) as handheld sections:
     // a <span class="t">TITLE</span> line starts a section, every other line is a "title   value" row (split at its
@@ -151,8 +160,11 @@ class Handheld {
         const { RendererExtension, MaterialTable, MeshBuilder, GuiAtlas, DeviceContext, PhoneGUI } = Features.kits.gui;
         const { Renderer } = Features.kits.gpu;
         const host = this.host;
-        const r = this.renderer = new Renderer(RendererExtension, {
-            device: host.device, format: host.format, frame: host.gpuFrame,
+        // its GUI renderer: the gui kit's, beside the one Renderer's own extension (renderer.ext.handheld), drawing over the
+        // finished frame into a depth-stencil target of its own (a host of worlds: a Renderer of its own)
+        const R = host.renderer || new Renderer();
+        const r = this.renderer = R.attach('handheld', RendererExtension, {
+            device: host.device, format: host.format, frame: host.gpuFrame, stencilTarget: 'handheld',
             size: () => [host.width, host.height],
             target: () => host.swapView(),
         });
@@ -208,10 +220,10 @@ class Handheld {
         // a world's section: its name in a composition, its scenario's name alone ("Water · Riverlands" -> RIVERLANDS)
         const worldSection = inst => {
             const [kind, name] = inst.label.split(' · ');
-            return section((host.instances.length > 1 || !name ? kind : name).toUpperCase());
+            return section((host.sites.length > 1 || !name ? kind : name).toUpperCase());
         };
         // what each world offers (once it has started)
-        for (const inst of host.instances.filter(i => i.ready)) {
+        for (const inst of host.sites.filter(i => i.ready)) {
             let offered = [];
             try { offered = inst.world.handheld?.() || []; } catch (err) { console.warn(`${inst.id}: handheld()`, err); }
             // a world built of areas and portals: its visibility (the interior kit's VisInspector), the same pages in every
@@ -229,7 +241,7 @@ class Handheld {
             const { type, $comment, nav, of, ...page } = e;
             pages[id] = page;
             if (!nav) continue;
-            const inst = of && host.instances.find(i => i.id === of);
+            const inst = of && host.sites.find(i => i.id === of);
             const { section: header, ...cell } = nav;
             (header ? section(header) : inst ? worldSection(inst) : section('SCENARIO')).cells.push({ type: 'nav', page: id, title: page.title, ...cell });
         }
@@ -242,7 +254,7 @@ class Handheld {
 
     // the engine's own options, as offered cells
     engineOptions() {
-        const host = this.host, cat = host.catalog || [], inst = host.instances;
+        const host = this.host, cat = host.catalog || [], inst = host.sites;
         const cells = [{ choice: 'Scenario', options: cat.map(s => ({ label: s.name, sub: s.group })), index: cat.findIndex(s => s.id === host.currentId),
             value: host.scenario?.name, pick: i => host.pickScenario(cat[i].id) }];
         const views = inst.length ? host.viewList : [];
