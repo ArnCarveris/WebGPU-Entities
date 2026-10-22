@@ -17,8 +17,10 @@ const {
 // the cull, before the main one), gpuTimes(t, ms) (its share of the timestamp readout)
 class RendererExtension {
     static key = 'imposter';
-    // what it draws with alone (Renderer.frameSpec): display values, reversed depth with an infinite far plane, MSAA
-    static frame = { display: 'display', depth: 'reversed', depthFormat: DEPTH_FORMAT, samples: MSAA, near: 0.1 };
+    // what it draws with alone (Renderer.frameSpec): display values, reversed depth with an infinite far plane, MSAA. In a
+    // frame it shares (frameSpec.shared) with a kit whose post maps the frame, it draws its lists into that kit's scene
+    // (with the frame's sky, not its own), in that kit's radiance (output), at the frame's samples (cutout at one)
+    static frame = { display: 'display', depth: 'reversed', depthFormat: DEPTH_FORMAT, samples: MSAA, near: 0.1, ranks: { sky: 1 } };
     // what it answers on the Renderer (Common.Composite)
     static exposes = ['cascadePlanes', 'clampSampler', 'depthView', 'device', 'drawLists', 'format', 'fx', 'globalBG',
         'gpuTimes', 'height', 'impPipe', 'init', 'makeGlobalBG', 'matBgl', 'meshPipe', 'patternTexture', 'render',
@@ -49,7 +51,11 @@ class RendererExtension {
             this.queryRead = device.createBuffer({ size: 96, usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST });
             this.gpuTimes = null;               // { cull, main, and the extensions' (shadow: [4]) } in ms
         }
-        this.format = this.fx.format;
+        const spec = this.renderer.frameSpec;
+        this.shared = !!spec?.shared;
+        this.format = this.shared ? 'rgba16float' : this.fx.format;
+        this.samples = this.shared ? spec.samples : MSAA;
+        this.depthFormat = this.shared ? spec.depthFormat : DEPTH_FORMAT;
         this.width = this.height = 0;
 
         const U = GPUBufferUsage, S = GPUShaderStage;
@@ -80,13 +86,14 @@ class RendererExtension {
 
         const layout = (...bgls) => device.createPipelineLayout({ bindGroupLayouts: bgls });
         // its shaders: the core's chunks, the extensions' over them, each module the chunks it names
-        this.wgsl = imposterWgsl();
+        this.wgsl = imposterWgsl(this.shared);
         const modules = Object.fromEntries(Object.entries(IMPOSTER_MODULES).map(([k, v]) => [k, [...v]]));
         this.renderer.each('wgsl', this.wgsl, modules);
         const M = Object.fromEntries(Object.entries(modules).map(([k, names]) => [k, device.createShaderModule({ code: this.wgsl.code(...names) })]));
         const vertexLayout = MESH_BUFFERS;          // the imposter kit's standard mesh: + per-vertex AO
-        const mainDepth = (write, compare) => ({ format: DEPTH_FORMAT, depthWriteEnabled: write, depthCompare: compare });
-        const target = [{ format: this.format }], ms = { count: MSAA }, a2c = { count: MSAA, alphaToCoverageEnabled: true };
+        const mainDepth = (write, compare) => ({ format: this.depthFormat, depthWriteEnabled: write, depthCompare: compare });
+        const target = [{ format: this.format }], ms = { count: this.samples };
+        const a2c = this.samples > 1 ? { count: this.samples, alphaToCoverageEnabled: true } : ms;
 
         const meshMod = M.mesh, meshLayout = layout(this.bgl0, this.matBgl, imp.instanceLayout, this.viewBgl);
         const mesh = cullMode => device.createRenderPipeline({
@@ -147,6 +154,7 @@ class RendererExtension {
 
     resize() {
         const [w, h] = this.fx.size();
+        if (this.shared) { this.width = w; this.height = h; return; }
         if (this.msaaTex && this.width === w && this.height === h) return;
         this.width = w; this.height = h;
         this.msaaTex?.destroy(); this.depthTex?.destroy();
@@ -158,9 +166,10 @@ class RendererExtension {
         this.depthView = this.depthTex.createView();
     }
 
-    writeGlobals(cam, env, st, time) {
+    // scale: its radiance into the frame's (a shared frame: the reciprocal of its post kit's exposure, G.light.y)
+    writeGlobals(cam, env, st, time, scale = 1) {
         const g = this.globals, W = this.width, H = this.height;
-        const vp = m4.mul(m4.reversedInfinite(cam.fov, W / H, 0.1), cam.viewMatrix());
+        const vp = m4.mul(m4.reversedInfinite(cam.fov, W / H, this.renderer.frameSpec?.near ?? 0.1), cam.viewMatrix());
         g.set(vp, 0);
         g.set([...cam.pos, time], 16);
         g.set([...env.sunDir, env.exposure], 20);
@@ -176,7 +185,7 @@ class RendererExtension {
         g.set([st.blend ? 1 : 0, st.parallax ? 1 : 0, st.depthOffset ? 1 : 0, st.tint ? 1 : 0], 76);
         g.set(m4.invert(vp), 80);
         g.set([W, H, 1 / W, 1 / H], 96);
-        g.set([env.emission, 0, 0, 0], 100);
+        g.set([env.emission, scale, 0, 0], 100);
         g.set([...cam.basis().fwd, 0], 104);
         this.device.queue.writeBuffer(this.globalBuf, 0, g);
         this.viewData.set(vp, 0);
@@ -237,10 +246,10 @@ class RendererExtension {
     // sky, meshes, imposters, atlas overlay. Its stages (Renderer.encode, into the frame encoder): compute (the cull,
     // the counts' readback copy, the extensions' passes), the scene pass: sky, outdoor (the lists), late (the atlas
     // overlay); final (its timestamps; it has no final pass of its own); the readbacks map once the frame is submitted
-    render(world, cam, st, time, overlay, env) {
+    render(world, cam, st, time, overlay, env, scale) {
         this.resize();
         const d = this.device, archs = world ? world.list : [];
-        this.writeGlobals(cam, env, st, time);
+        this.writeGlobals(cam, env, st, time, scale);
         this.renderer.each('frame', cam, env, st, this.width / this.height, world?.casterTop ?? 0);
         for (let k = 0; k < LISTS; k++) d.queue.writeBuffer(this.viewBuf, k * 256, this.viewData, k * 64, 24);
         this.renderer.encode({ archs, cam, st, time, overlay });
@@ -279,6 +288,9 @@ class RendererExtension {
             depthStencilAttachment: { view: this.depthView, depthClearValue: 0, depthLoadOp: 'clear', depthStoreOp: 'store' },
         });
     }
+
+    // its globals back on the scene pass after another kit drew in it (a shared frame: Renderer.encodeFrame)
+    bind(f) { f.pass.setBindGroup(0, this.globalBG); }
 
     sky(f) {
         f.pass.setPipeline(this.skyPipe);

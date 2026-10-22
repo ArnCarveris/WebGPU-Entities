@@ -32,7 +32,10 @@ class Host {
     static DROPPED = 'dropped';
     // the kits whose sites share the one World, Renderer and App with other kits' sites (docs/single-world-plan.md Phase 6:
     // one kit more each step)
-    static SHARED = ['atmosphere', 'hydrology'];
+    static SHARED = ['atmosphere', 'hydrology', 'imposter'];
+
+    // two views { pos, fwd } the same, but for rounding (a site's camera holds the one it is given in its own terms)
+    static sameView(a, b) { return Host.same(a.pos, b.pos) && Host.same(a.fwd, b.fwd); }
 
     // link values: numbers and vectors change when they move by more than a hair
     static same(a, b) {
@@ -329,6 +332,8 @@ class Host {
             for (const s of this.sites) s.ctx.cameraLocked = true;
             const start = this.sites.find(s => s.id === (cam.start ?? [].concat(cam.from ?? [])[0]));
             if (this.shared && start?.world.view) this.fly.view = this.frameOf(start).toWorld(start.world.view);
+            // (what each site's camera holds now: one it moves before the first frame, a world loading on, is followed)
+            if (this.shared) for (const s of this.sites) s.sent = s.world.view;
         }
         if (cam.mode) this.setMove(cam.mode, false);
         this.router.setFocus('app');
@@ -537,13 +542,19 @@ class Host {
         }
     }
 
-    // several sites: the camera moves, each site's camera follows it in its frame, each site updates and renders (the
-    // sky's first: its sun, world.sunlight, lights the others), then the one frame is encoded (Renderer.encodeFrame)
+    // several sites: the camera moves (to where a site moved its own camera since the last frame: a reset once its world
+    // is loaded, a view of its own), each site's camera follows it in its frame, each site updates and renders (the sky's
+    // first: its sun, world.sunlight, lights the others), then the one frame is encoded (Renderer.encodeFrame)
     frameSites(now, dt) {
+        for (const site of this.order) {
+            const v = site.sent && site.world.view;
+            if (v && !Host.sameView(v, site.sent)) this.fly.view = this.frameOf(site).toWorld(v);
+        }
         this.fly.update(dt);
         const view = this.eye = this.fly.view;
         for (const site of this.order) {
             site.world.setView?.(this.frameOf(site).toLocal(view));
+            site.sent = site.world.view;
             site.world.frame(now, dt);
             if (site === this.skySite) {
                 const s = site.world.sunlight();

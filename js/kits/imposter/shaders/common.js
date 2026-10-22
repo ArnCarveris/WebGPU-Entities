@@ -66,7 +66,7 @@ fn shade(s: Surface, wp: vec3f) -> vec3f {
     return c;
 }
 fn aces(x: vec3f) -> vec3f { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), vec3f(0.0), vec3f(1.0)); }
-fn present(c: vec3f) -> vec3f { return pow(aces(c * G.sunDir.w), vec3f(1.0 / 2.2)); }
+fn present(c: vec3f) -> vec3f { return output(c); }
 fn finish(c: vec3f, wp: vec3f) -> vec3f {
     let v = wp - G.camPos.xyz;
     let d = max(length(v), 1e-4);

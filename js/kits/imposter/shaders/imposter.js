@@ -79,7 +79,7 @@ struct FOut { @location(0) color: vec4f, @builtin(frag_depth) depth: f32 };
     let wp = v.center + qrot(v.rot, S.hit * v.cellsB.w);
     var c = shade(Surface(S.albedo, qrot(v.rot, S.n), S.surface.x, S.surface.y, S.surface.z, S.surface.w, S.emissive), wp);
     if (G.flags.w > 0.5) { c = mix(c, vec3f(0.25, 0.45, 1.0) * (0.3 + dot(c, vec3f(0.5))), 0.55); }
-    out.color = vec4f(finish(c, wp), clamp(cover, 0.0, 1.0));
+    out.color = vec4f(finish(c, wp), cutout(clamp(cover, 0.0, 1.0)));
     if (G.flags.z > 0.5) {
         let cp = V.viewProj * vec4f(wp, 1.0);
         out.depth = clamp(cp.z / cp.w, 0.0, 1.0);

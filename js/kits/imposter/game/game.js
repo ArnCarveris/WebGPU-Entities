@@ -235,12 +235,24 @@ class AppExtension {
         };
     }
 
+    // In a world lit by another site's sky (world.sunlight: the frame's one sun), its lighting keeps its preset with that
+    // sun where it is (toward it, in this site's frame), and its radiance goes into the frame's scaled by that sky's
+    // exposure (sunScale); else its own
+    followSun() {
+        const s = this.fx.site && this.fx.world.sunlight;
+        if (!s) return 1;
+        const d = this.fx.site.frame().localDir(s.dir), was = this.sunAlong;
+        if (!was || Math.hypot(d[0] - was[0], d[1] - was[1], d[2] - was[2]) > 1e-5) { this.sunAlong = d; this.lighting.follow(d); }
+        return 1 / Math.max(s.exposure, 1e-4);
+    }
+
     // update: input, lighting, world; render: the frame. The host runs both, or (in a composition) the camera's world
     // updates before the others render
     frame(now, dt, { update = true, render = true } = {}) {
         const t0 = performance.now(), w = this.world, cam = this.camera;
         if (update) {
             this.time += dt;
+            this.sunScale = this.followSun();
             this.input.update(dt);
             this.lighting.update(dt);
             if (w) {
@@ -251,7 +263,7 @@ class AppExtension {
         if (!render) return;
         this.updateFocus();
         const f = this.focusInfo;
-        this.renderer.render(w, cam, this.settings, this.time, f && this.settings.atlasView !== 'off' ? f : null, this.lighting.env);
+        this.renderer.render(w, cam, this.settings, this.time, f && this.settings.atlasView !== 'off' ? f : null, this.lighting.env, this.sunScale);
         this.cpuMs = lerp(this.cpuMs, performance.now() - t0, 0.1);
         this.hud.update(now);
         if (now - (this.lastSync || 0) > 500) { this.lastSync = now; if (!this.baking) this.panel.sync(); }

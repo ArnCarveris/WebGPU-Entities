@@ -11,7 +11,7 @@
                     "header": "WEATHER",
                     "cells": [
                         {"type":"label","title":"Weather","expr":"{sky.weather}"},
-                        {"type":"label","title":"Light","expr":"{sky.light} → {valley.light}"},
+                        {"type":"label","title":"Light","expr":"{sky.light}"},
                         {"type":"label","title":"Rain here","expr":"{sky.rain|pct}"},
                         {"type":"label","title":"Storm cells","expr":"{sky.cells}"},
                         {"type":"label","title":"Flashes","expr":"{sky.flashes}"}
@@ -24,7 +24,7 @@
                         {"type":"label","title":"Meshes","expr":"{valley.meshes}"},
                         {"type":"label","title":"Imposters","expr":"{valley.imposters}"}
                     ],
-                    "footer": "` cycles the keys: the sky takes 1-9 weather, T lighting."
+                    "footer": "The sky's weather and light are on its own pages."
                 }
             ]
         }

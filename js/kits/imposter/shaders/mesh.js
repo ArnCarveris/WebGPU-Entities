@@ -45,7 +45,7 @@ struct VOut {
     if (!ff && M.params.w > 0.5) { n = -n; }
     var c = shade(Surface(t.rgb * v.col * M.color.rgb, n, v.ao, M.surf.x, M.surf.y, M.params.y, M.emissive.rgb), v.wp);
     if (G.flags.w > 0.5) { c = mix(c, vec3f(0.15, 0.9, 0.25) * (0.3 + dot(c, vec3f(0.5))), 0.55); }
-    return vec4f(finish(c, v.wp), clamp(cover, 0.0, 1.0));
+    return vec4f(finish(c, v.wp), cutout(clamp(cover, 0.0, 1.0)));
 }
 `;
 
