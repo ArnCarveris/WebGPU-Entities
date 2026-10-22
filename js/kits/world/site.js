@@ -4,12 +4,12 @@
 Features.kit('world', (engine, kit) => {
 const { v3 } = engine.Common;
 const { Outdoors } = kit;
-// The hooks the host asks of a site, kept beside the one App (app.attach('site', Site, fx, spec): app.ext.site; a host
-// of worlds: one per world, each on an App of its own), composed, not derived. Its kit's world type gives it a spec ({
-// spec } of its world parts): { hud (the HUD elements it asks for: Site.HUD), app(app, fx) (extends the App with its
-// AppExtension: start(), frame(now, dt, opts), and load(native) when it takes its scenario after starting) } and
-// whichever hooks the host asks of it it has: depth(), stats(), handheld(), set(key, v), anchor(id), drop(files),
-// ground(p), sheltered(p), outdoors(p), sunDir(p), veil(p, dir, d), footprint(), views(), inspector; view / setView,
+// The hooks the host asks of a site, kept beside the one App (a scenario of one site: app.attach('site', Site, fx, spec),
+// app.ext.site; of several: one per site, each on its kit's scope of the App), composed, not derived. Its kit gives it a
+// spec ({ spec } of its site parts): { hud (the HUD elements it asks for: Site.HUD), app(app, fx) (extends the App with
+// its AppExtension: start(), frame(now, dt, opts), and load(native) when it takes its scenario after starting) } and
+// whichever hooks the host asks of it it has: stats(), handheld(), set(key, v), anchor(id), drop(files), ground(p),
+// sheltered(p), outdoors(p), sunlight(), veil(p, dir, d), footprint(), makesRoom, views(), inspector; view / setView,
 // moves / move / setMove. Its hooks (methods and getters, `this` the site: this.app, this.fx) go over the defaults
 // here, which read and move the camera through the app's (a FirstPersonView: kits.view).
 class Site {
@@ -64,9 +64,9 @@ class Site {
     // traversal, culling and freeze, the sector and portal frames), whose pages the engine's handheld shows; null: none
     get inspector() { return null; }
 
-    // the interior (kits.interior) that shelters p (this world's frame) from the weather, or null. While one holds the
-    // camera, the camera is inside for every world of a composition (Host.inside): an atmosphere world keeps its rain and
-    // snow off it, and the others see the outdoors only as this world does (outdoors(p))
+    // the interior (kits.interior) that shelters p (this site's frame) from the weather, or null. While one holds the
+    // camera, the camera is inside for the whole world (Host.shelter: world.shelter): an atmosphere keeps its rain and
+    // snow off it, and the other sites see the outdoors only as this one does (outdoors(p))
     sheltered(p) { return null; }
 
     // what of the outdoors the camera at p (this world's frame, inside one of its interiors) sees from there (Outdoors:
@@ -76,18 +76,13 @@ class Site {
 
     // the ground it covers, its own frame: { lo: [x, z], hi: [x, z], floor (its lowest ground's height), ground (true: its
     // own ground reaches its edges, a terrain; false: it stands on a floor, a building), albedo ([r, g, b], optional: its
-    // ground's colour from afar) }, or null (none). A composition's atmosphere makes room under it in its own terrain
+    // ground's colour from afar) }, or null (none). An atmosphere's site makes room under it in its own terrain
     // (Host.footprintsIn, fx.footprints); a planet it stands on takes its albedo there (the origin's bodies: covers)
     footprint() { return null; }
 
-    // the direction (unit, this world's frame) to the sun that lights it, as seen from p (this world's frame), or null
-    // (none of its own). The worlds of a composition that take their sun from this one (layer.sun, Host.lights) get it
-    // as set('sunDir', d) in their own frames, and keep it whatever light they pick
-    sunDir(p) { return null; }
-
-    // how much of a point d m from p along dir (unit; p and dir in this world's frame) this world hides from an eye at p,
-    // seen through it from another world: 0 .. 1 (an atmosphere's air: its daytime sky hides what is in space). The
-    // other worlds' in-world labels fade by it (Host.veilOf, their fx.ui.veil)
+    // how much of a point d m from p along dir (unit; p and dir in this site's frame) this site hides from an eye at p:
+    // 0 .. 1 (an atmosphere's air: its daytime sky hides what is in space). The in-world labels fade by it (Host.veilOf,
+    // fx.ui.veil)
     veil(p, dir, d) { return 0; }
 }
 

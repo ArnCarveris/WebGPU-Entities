@@ -37,12 +37,6 @@ const imposterWorld = {
     // dropped models (the engine keeps scenario .json drops)
     drop(files) { this.app.loadFiles(files); },
 
-    // reversed-Z, infinite far plane, 4x MSAA, metres
-    depth() {
-        const r = this.app.renderer;
-        return r.depthView && { view: r.depthView, kind: 'reversed', near: 0.1, samples: MSAA };
-    },
-
     // the terrain, within its square
     ground(p) {
         const t = this.app.world?.terrain;
@@ -71,9 +65,6 @@ const imposterWorld = {
         for (const h of t.heights) if (h < floor) floor = h;
         return { lo: [-t.size / 2, -t.size / 2], hi: [t.size / 2, t.size / 2], floor, ground: true };
     },
-
-    // toward its sun (its lighting's), the same everywhere
-    sunDir() { return this.app?.lighting ? [...this.app.lighting.env.sunDir] : null; },
 
     // the keys there are (Site.keys; every option is on the handheld)
     get keys() {

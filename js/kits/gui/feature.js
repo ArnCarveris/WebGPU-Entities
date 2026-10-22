@@ -22,12 +22,6 @@ const guiWorld = {
 
     app: (app, fx) => app.extend(AppExtension, fx),
 
-    // classic 0..1 depth, near 0.02, far 100 or the scenario's player.far (depth-stencil, the depth aspect)
-    depth() {
-        const r = this.app.renderer;
-        return r.depthSample && { view: r.depthSample, kind: r.frameSpec.depth, near: r.frameSpec.near, far: this.app.far };
-    },
-
     // the player's view
     get view() { return this.app.player.view; },
     setView(v) { this.app.player.setView(v); },

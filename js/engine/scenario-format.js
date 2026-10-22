@@ -16,8 +16,8 @@
 // A root entity of a world type ({ type: "water", id: "river" }), what scenarios had before sites, is read as a site of
 // its kit; tools/migrate-single-world.mjs rewrites them.
 //
-// Any kit's entity works in any scenario: an entity no world of the scenario takes brings in a world that does (its
-// implicit root: complete()), composed with the others; a scenario of plain entities needs no root at all.
+// Any kit's entity works in any scenario: an entity no site of the scenario takes brings in a site of a kit that does (an
+// implicit site: complete()), beside the others; a scenario of plain entities needs no site at all.
 //
 // Each world still reads its own native layout (materials as a map, views as a list, ...). Its schema (the manifest's
 // worlds.<type>.schema, SCHEMAS here) says how its entities map onto it, so toNative / fromNative convert both ways
@@ -230,12 +230,10 @@ const ScenarioFormat = (() => {
     }
 
     // Implicit sites: the entities that no site of the scenario takes (and name none with `of`) bring in sites of kits
-    // that take them: first of the world type that takes the most of them (on a tie one that says how it joins a
-    // scenario, its `join` / `defaults`, then the manifest's order), then for what is left, and so on. Each new site goes first, id
-    // = its world type (as the root entity it replaces had), and the entities it was brought in for name it (`of`), as do
-    // its `defaults` (a sky's ground) of a type the scenario gives it none of. With other sites a new
-    // one joins them as its `join` says (fields merged into it: a sky's layer role); alone it is the scenario's
-    // as it is. A scenario of plain entities (no site) gets its one site so.
+    // that take them: first of the world type that takes the most of them (on a tie one with `defaults`, then the
+    // manifest's order), then for what is left, and so on. Each new site goes first, id = its world type (as the root
+    // entity it replaces had), and the entities it was brought in for name it (`of`), as do its `defaults` (a sky's
+    // ground) of a type the scenario gives it none of. A scenario of plain entities (no site) gets its one site so.
     function complete(scenario) {
         const ents = scenario.entities || [], have = roots(scenario);
         // a data type of no world here goes to the only world, which reads what it wants of it (worldOf), as before
@@ -244,7 +242,7 @@ const ScenarioFormat = (() => {
         const add = [], via = new Map();
         while (left.length) {
             const score = w => left.filter(e => takes(w, e.type)).length;
-            const best = Object.keys(SCHEMAS).map((w, k) => ({ w, k, n: score(w), imp: !!(Types.WORLDS[w].join || Types.WORLDS[w].defaults) }))
+            const best = Object.keys(SCHEMAS).map((w, k) => ({ w, k, n: score(w), imp: !!Types.WORLDS[w].defaults }))
                 .filter(c => c.n).sort((a, b) => b.n - a.n || b.imp - a.imp || a.k - b.k)[0];
             if (!best) break;           // taken by no world at all: worldOf says so
             const id = have.some(r => r.id === best.w) || add.some(r => r.id === best.w) ? `${best.w}${add.length + 1}` : best.w;
@@ -253,11 +251,11 @@ const ScenarioFormat = (() => {
             left = left.filter(e => !via.has(e));
         }
         if (!add.length) return scenario;
-        const many = have.length + add.length > 1, out = [];
+        const out = [];
         for (const r of add) {
             const W = Types.WORLDS[r.type], kit = kitOfWorld(r.type);
             const site = { type: 'site', id: r.id, kit, ...(KIT_WORLD[kit] !== r.type ? { world: r.type } : {}) };
-            out.push(many ? { ...site, ...(W.join || {}) } : site);
+            out.push(site);
             const given = new Set(ents.filter(e => via.get(e) === r.id).map(e => e.type));
             for (const e of W.defaults || []) if (!given.has(e.type)) out.push({ ...e, of: r.id });
         }

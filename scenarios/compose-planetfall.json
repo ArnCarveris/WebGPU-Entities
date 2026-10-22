@@ -1,6 +1,6 @@
 {
     "name": "Planetfall",
-    "group": "Compositions",
+    "group": "Tours",
     "order": 4,
     "description": "Entity Imposter's valley set on Entity Origin's real-scale Earth: one floating-origin camera flies from the valley floor up to Gateway Station in orbit and on to Neptune, the valley staying exact under it. The valley's sun is the solar system's.",
     "entities": [

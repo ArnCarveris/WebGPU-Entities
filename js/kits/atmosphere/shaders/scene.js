@@ -494,16 +494,6 @@ fn groundGrain(xz: vec2f, px: f32, rough: f32) -> vec3f {
 // y and z (features of some 75 and 37 m) move where the colour maps are read, w (some 19 m) the shoreline
 fn groundNoise(xz: vec2f) -> vec4f { return textureSampleLevel(shapeTex, repSamp, vec3f(xz / 300.0, 0.31), 0.0) - 0.5; }
 
-// what lies behind the scene at pixel q (behindTex: the other worlds of a composition, in display colour) as this
-// scene's radiance: back through the inverse of its display transform (gamma, ACES, exposure), as the inject pass
-// brings them in (Renderer.encodeInject)
-fn behindAt(q: vec2f) -> vec3f {
-    let y = clamp(pow(textureLoad(behindTex, min(vec2i(q), vec2i(textureDimensions(behindTex)) - 1), 0).rgb, vec3f(2.2)), vec3f(0.0), vec3f(0.985));
-    let a = 2.51 - 2.43 * y;
-    let b = 0.03 - 0.59 * y;
-    let c = -0.14 * y;
-    return (-b + sqrt(b * b - 4.0 * a * c)) / (2.0 * a) / max(F.sunCol.w, 1e-4);
-}
 
 @fragment fn fsTerrain(i: TerrOut) -> @location(0) vec4f {
     let p = i.world;
@@ -511,17 +501,15 @@ fn behindAt(q: vec2f) -> vec3f {
     let uv = (p.xz - F.tdomain.xy) / F.tdomain.z;
     let inside = all(uv > vec2f(0.0)) && all(uv < vec2f(1.0));
     // (beyond the map: the plain, the sea round a real island (F.geo.y 1), or no ground at all (-1): what lies behind
-    // it shows, in a composition the planet it stands on)
+    // it shows: the planet it stands on, drawn before it in a frame it shares)
     if (!inside && F.geo.y < 0.0) { discard; }
-    // ... and over the map's last F.outside.w m (terrain.edge) the map fades into it: toward the edge its colour gives
-    // way to that of what lies behind it (behindAt), at the edge all of it. Where the fade starts wanders by a third of
-    // its width
+    // ... and over the map's last F.outside.w m (terrain.edge) the map is dithered into it: toward the edge a growing
+    // share of its pixels left out, at the edge all of them. Where the fade starts wanders by a third of its width
     var fade = 0.0;
     if (F.outside.w > 0.0) {
         let e = min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y)) * F.tdomain.z;
         fade = 1.0 - smoothstep(0.0, F.outside.w, e + F.outside.w * (0.67 * vnoise2(p.xz / 5300.0) + 0.33 * vnoise2(p.xz / 1700.0) - 0.5) * 0.66);
-        // (nothing known of what lies behind: a dither, a growing share of its pixels left out)
-        if (F.outside.x < 0.5 && ign(i.pos.xy) < smoothstep(0.35, 1.0, fade)) { discard; }
+        if (ign(i.pos.xy) < smoothstep(0.35, 1.0, fade)) { discard; }
     }
     let n = normalize(vec3f(-i.grad.x, 1.0, -i.grad.y));
     let land4 = select(vec4f(0.0, 0.0, max(F.geo.y, 0.0), 0.0), textureSampleLevel(landTex, clampSamp, uv, 0.0), inside);
@@ -634,7 +622,6 @@ fn behindAt(q: vec2f) -> vec3f {
     }
     col += spec * fres * wet * 0.35 * (1.0 - pool);
     col += skyColor(r) * sh.y * length(rg) * 1.5;                         // the rings catch the sky at any angle
-    if (fade > 0.0 && F.outside.x > 0.5) { col = mix(col, behindAt(i.pos.xy), smoothstep(0.0, 1.0, fade)); }
     let kind = select(select(select(1.0, 2.0, rock * wild > 0.5), 3.0, paved > 0.5), 4.0, water > 0.5);
     return vec4f(col, select(0.0, kind + 0.45 * puddle, rainNow > 0.0 && n.y > 0.7));
 }

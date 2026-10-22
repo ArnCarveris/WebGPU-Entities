@@ -52,7 +52,7 @@ class FrameWriter {
         this.viewProj = m4.mul(proj, m4.view(cam.pos, right, up, fwd));
         // what the features draw this frame (their AppExtension.draws: the buses near, the rooms the portal traversal reaches
         // and their lifts, the world-space GUIs); one that sees the outdoors from inside sets this.outdoors ({ seen, rect });
-        // the camera inside another world of a composition sees it only as that world does (fx.outdoors)
+        // the camera inside another site's interior sees it only as that site does (fx.outdoors: world.shelter)
         this.outdoors = null;
         const view = { proj, near, basis: { fwd, right, up }, aspect, planes: frustumPlanes(this.viewProj, { reversed: true }) };
         a.each('draws', this, view);
@@ -97,9 +97,9 @@ class FrameWriter {
         // (beyond the map, terrain.outside: the plain at its base (0), the sea (1), or none (-1): what lies behind it shows)
         F.set('geo', [w.terrain.style === 'natural' ? 1 : 0, { sea: 1, none: -1 }[w.terrain.outside] ?? 0, r.terrainLod.range0, w.terrain.moisture ?? 0.5]);
         F.set('tdetail', [f.rough, f.coastBand, r.terrainLod.step, r.vegetation ? (f.canopy ? 2 : 1) : 0]);
-        // (beyond a map with no ground of its own, in a composition: the ground of the world it stands on, in the other
-        // worlds' merged picture (fx.inject), its last terrain.edge m fading into it: fsTerrain)
-        F.set('outside', [a.fx.inject ? 1 : 0, 0, 0, w.terrain.outside === 'none' ? w.terrain.edge || 0 : 0]);
+        // (beyond a map with no ground of its own: whatever is drawn before it (the planet it stands on), its last
+        // terrain.edge m dithered into it: fsTerrain)
+        F.set('outside', [0, 0, 0, w.terrain.outside === 'none' ? w.terrain.edge || 0 : 0]);
         F.set('ground', [w.terrain.fieldSize, w.terrain.pivots, GROUND_RES, this.outdoors?.seen === false ? 1 : a.mode]);     // (mode 1: the scene alone, no volumetrics: also indoors with the outdoors out of sight)
         F.set('cirrus', [cfg.maxTop + 800, c.cirrus, 9000, c.drizzle]);
         F.set('march', [q.steps, q.light, cfg.maxDistance, a.radar ? 1 : 0]);

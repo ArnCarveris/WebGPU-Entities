@@ -1,6 +1,6 @@
 {
     "name": "Storm over Riverlands",
-    "group": "Compositions",
+    "group": "Tours",
     "order": 1,
     "description": "Entity Water's river simulation set into Entity Cloud's High Plains: the clouds, rain shafts, haze and lightning are drawn over the river world, and rain falling where the camera is turns on the river's rain.",
     "entities": [

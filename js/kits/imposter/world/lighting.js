@@ -44,7 +44,7 @@ class Lighting {
         this.from = null;
         this.t = 1;
         this.changes = 0;               // relights since start (switches + sun / emission tweaks)
-        this.sunAlong = null;           // the sun followed (another world's in a composition: follow), whatever preset
+        this.sunAlong = null;           // the sun followed (the world's: follow), whatever preset
     }
 
     get names() { return Object.keys(this.presets); }

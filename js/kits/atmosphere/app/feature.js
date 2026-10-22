@@ -1,8 +1,8 @@
 'use strict';
 // atmosphereWorld(type): a world under this kit's sky as one world of the engine, the hooks of its Site
 // (js/engine/host.js calls these; view / setView: its camera's). A world type is a spec, not a subclass: { world(scenario,
-// features): the one World with its WorldExtensions, extensions: its AppExtensions, title } (the cloud world's `cloud`). As the "atmosphere" of a
-// composition it takes the other worlds into its scene before its volumetrics (its RendererExtension's encodeInject).
+// features): the one World with its WorldExtensions, extensions: its AppExtensions, title } (the cloud world's `cloud`). In a
+// frame it shares, its scene is every site's (Renderer.share): its clouds, rain, haze and post cover them all.
 
 Features.kit('atmosphere', (engine, kit) => {
 const { kits } = engine;
@@ -15,12 +15,6 @@ const atmosphereWorld = type => ({
     app: (app, fx) => app.extend(AppExtension, fx, type),
     // with other sites, it makes room in its terrain for their ground (fx.footprints): it is built after them
     makesRoom: true,
-
-    // reversed-Z, infinite far plane, metres (the near plane comes in to 5 cm on foot)
-    depth() {
-        const r = this.app.renderer;
-        return r.depthSampleView && { view: r.depthSampleView, kind: 'reversed', near: this.app.walker.active ? 0.05 : NEAR };
-    },
 
     // walking is its Walker's (on the terrain as drawn, structures, into the buses); the engine switches it
     get moves() { return ['fly', 'walk']; },
@@ -85,12 +79,6 @@ const atmosphereWorld = type => ({
         if (!s || !w) return null;
         const sky = kits.weather.Sky.compute(s.azimuth, s.elevation, s.intensity, w.weather.cur, s.moon);
         return { toward: () => sky.dir, color: sky.sun, zenith: sky.zenith, horizon: sky.horizon, ambient: sky.ambient, exposure: s.exposure };
-    },
-
-    // toward its sun (or moon by night), the same everywhere: what lights the worlds under it in a composition
-    sunDir() {
-        const s = this.app?.sun;
-        return s ? [Math.cos(s.elevation) * Math.sin(s.azimuth), Math.sin(s.elevation), -Math.cos(s.elevation) * Math.cos(s.azimuth)] : null;
     },
 
     // how much its air hides a point beyond it (AppExtension.airHides): its daytime sky what is in space

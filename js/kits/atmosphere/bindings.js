@@ -34,7 +34,7 @@ const FRAME_LAYOUT = [
     ['ground', 'vec4f'],    // field size, pivot chance, ground state resolution, render mode
     ['geo', 'vec4f'],       // the terrain's look: 1 natural ground (a real place's: no farm sections, no street grid), beyond the map 1 sea, the finest terrain lod's range (m: TerrainLod.range0), its moisture (0..1: how green)
     ['tdetail', 'vec4f'],   // the terrain's procedural detail: roughness (m; 0 none), the coast field's band (m; 0 no coastline), the finest lod's vertex spacing (m), 1 with vegetation (and its canopy carpet), 2 with a canopy map as well (canopyTex)
-    ['outside', 'vec4f'],   // beyond the map with no ground of its own (terrain.outside "none"): 1 with what lies behind it (behindTex: the other worlds of a composition), -, -, how far in from the map's edge the map fades into it (m: terrain.edge; 0 none)
+    ['outside', 'vec4f'],   // beyond the map with no ground of its own (terrain.outside "none"): -, -, -, how far in from the map's edge the map is dithered into what lies behind it (m: terrain.edge; 0 none)
     ['cirrus', 'vec4f'],    // altitude, coverage, scale, drizzle
     ['flash', `array<vec4f, ${MAX_FLASHES}>`], // xyz, intensity
     ['march', 'vec4f'],     // steps, light steps, max distance, radar on
@@ -114,7 +114,6 @@ const WORLD_BINDINGS = [
     ['styleTex', 'tex', 'var styleTex: texture_2d<f32>'],     // laminar plates, green tint, wall cloud lowering (m), -
     ['occ', 'read', 'var<storage, read> occ: array<u32>'],     // per column, bit k: height cell k may hold noise cloud
     ['buildings', 'read', 'var<storage, read> buildings: array<vec4f>'],   // every building's frame, storeys and windows (WGSL_BUILDING)
-    ['behindTex', 'tex', 'var behindTex: texture_2d<f32>'],   // what lies behind it: the other worlds of a composition, merged (fx.inject: display colour; 1 x 1 without)
 ];
 
 class BindingSet {

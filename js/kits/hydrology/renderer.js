@@ -17,7 +17,7 @@ class RendererExtension {
     // the frame's sky, not its own), its surface over it in radiance (refracting a copy of it), then its surface's depth
     static frame = { display: 'radiance', depth: 'reversed', depthFormat: 'depth32float', samples: 1, near: kit.NEAR, ranks: { sky: 1 } };
     // what it answers on the Renderer (Common.Composite)
-    static exposes = ['createPipelines', 'debrisCount', 'depth', 'depthCView', 'depthView', 'device', 'format',
+    static exposes = ['createPipelines', 'debrisCount', 'depth', 'depthView', 'device', 'format',
         'frameData', 'fx', 'height', 'init', 'modules', 'render', 'resize', 'sampler', 'setSim', 'width'];
     // the host's device and canvas (fx: the world context, see js/engine/host.js; fx.features: the features on in its world)
     constructor(renderer, fx) {
@@ -63,10 +63,10 @@ class RendererExtension {
         this.pTerrain = pipe(layoutA, scene, 'vsTerrain', 'fsTerrain', 'rgba16float', { write: true, compare: 'greater' });
         this.pComposite = pipe(layoutB, surface, 'vsComposite', 'fsComposite', this.format, { write: false, compare: 'always' });
         this.pWater = pipe(layoutB, surface, 'vsWater', 'fsWater', this.format, { write: false, compare: 'greater' });
-        // a composition's depth: the terrain's plus the water surface (dry cells sink under the terrain in vsWater); a
-        // shared frame's with its world group only (the depth it writes is the one the surface pass samples)
-        this.pWaterDepth = d.createRenderPipeline({
-            label: 'water depth', layout: this.shared ? layoutA : layoutB,
+        // a shared frame's depth: the water surface over the terrain's (dry cells sink under the terrain in vsWater), with
+        // its world group only (the depth it writes is the one the surface pass samples)
+        if (this.shared) this.pWaterDepth = d.createRenderPipeline({
+            label: 'water depth', layout: layoutA,
             vertex: { module: surface, entryPoint: 'vsWater' },
             primitive: { topology: 'triangle-list', cullMode: 'none' },
             depthStencil: { format: this.depthFormat, depthWriteEnabled: true, depthCompare: 'greater' },
@@ -103,9 +103,6 @@ class RendererExtension {
         this.depth?.destroy();
         this.hdr = makeTex(this.device, w, h, 'rgba16float', U.RENDER_ATTACHMENT | U.TEXTURE_BINDING);
         this.depth = makeTex(this.device, w, h, 'depth32float', U.RENDER_ATTACHMENT | U.TEXTURE_BINDING | U.COPY_SRC);
-        this.depthC?.destroy();
-        this.depthC = this.fx.composed ? makeTex(this.device, w, h, 'depth32float', U.RENDER_ATTACHMENT | U.TEXTURE_BINDING | U.COPY_DST) : null;
-        this.depthCView = this.depthC?.createView();
         this.hdrView = this.hdr.createView();
         this.depthView = this.depth.createView();
         this.screenGroup = bindGroup(this.device, this.screenLayout, [this.hdrView, this.depthView], 'screen');
@@ -167,7 +164,7 @@ class RendererExtension {
         a.drawIndexed(this.terrainCount);
     }
 
-    // the surface pass: the scene composited, the water over it, the features' (debris); in a composition its depth too
+    // the surface pass: the scene composited, the water over it, the features' (debris)
     translucent(f) {
         if (this.shared) return this.translucentShared(f);
         const enc = f.enc;
@@ -185,17 +182,6 @@ class RendererExtension {
         b.drawIndexed(this.waterCount);
         this.renderer.each('surface', b);
         b.end();
-        if (this.depthC) {
-            enc.copyTextureToTexture({ texture: this.depth }, { texture: this.depthC }, [this.width, this.height]);
-            const c = enc.beginRenderPass({ label: 'water depth', colorAttachments: [],
-                depthStencilAttachment: { view: this.depthCView, depthLoadOp: 'load', depthStoreOp: 'store' } });
-            c.setBindGroup(0, this.worldGroup);
-            c.setBindGroup(1, this.screenGroup);
-            c.setPipeline(this.pWaterDepth);
-            c.setIndexBuffer(this.waterIndex, 'uint32');
-            c.drawIndexed(this.waterCount);
-            c.end();
-        }
     }
 
     // ... in a shared frame: the water (and the features') over the scene in radiance, refracting a copy of it; then the

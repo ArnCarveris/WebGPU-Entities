@@ -1,8 +1,9 @@
 'use strict';
-// InputRouter: every world listens through its own scope (io.listen(target, type, fn, opts), target the
-// canvas, window or document) instead of addEventListener, so several worlds can share one page. Input events go to
-// the focused world (plus "always" owners such as the engine's fly camera); state events (blur, resize, key releases,
-// pointer lock) go to everyone. Events aimed at the engine's own UI (the scenario and GPU pickers...) reach no world.
+// InputRouter: the App's input scope ('app': every site's kit listens through it) and the engine camera's ('engine', an
+// "always" owner while it drives the camera) listen through io.listen(target, type, fn, opts) (target the canvas, window
+// or document) instead of addEventListener. Input events go to the focused scope and the "always" ones; state events
+// (blur, resize, key releases, pointer lock) go to everyone. Events aimed at the engine's own UI (the scenario and GPU
+// pickers...) reach no scope.
 
 class InputRouter {
     static BROADCAST = new Set(['blur', 'focus', 'resize', 'keyup', 'pointerlockchange', 'pointerlockerror', 'visibilitychange', 'pointerup', 'pointercancel', 'mouseup']);

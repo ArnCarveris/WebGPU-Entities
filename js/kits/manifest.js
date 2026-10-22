@@ -17,8 +17,7 @@
 //             Features.world(type, fn), loaded only with a site of it, after the kit), bases (the entity bases it has),
 //             provides (what else its entity types may need of it: structures, weather, water...), schema (how its
 //             data types map onto a site's native layout: ScenarioFormat), defaults (entities it has unless the
-//             scenario gives some of that type: a sky's ground), join (fields of its site when its entities bring it
-//             into a scenario of other sites: a sky's layer role), features (its own, as a kit's below: parts under
+//             scenario gives some of that type: a sky's ground), features (its own, as a kit's below: parts under
 //             js/kits/<kit>/features/<name>/, registered as Features.feature('<kit>/<type>/<name>', fn), over its
 //             parts' exports) }. An entity of any kit works in any scenario: its kit's site comes with it.
 //     features: what its sites are made of beyond their core, each built only when a site's data asks for it:
@@ -447,9 +446,7 @@ const Kits = (() => {
                     maps: { 'weather.states': { type: 'weatherState' }, 'lighting.presets': { type: 'light' }, buildings: { type: 'building' }, ...plans() },
                     lists: { clouds: 'cloudLayer', views: 'view' },
                 },
-                // what any scenario gets with a weather entity and no sky: this world over the others, on a calm plain at
-                // sea level (the worlds it joins stand on their own ground)
-                join: { layer: { role: 'atmosphere' } },
+                // what any scenario gets with a weather entity and no sky: a calm plain at sea level
                 defaults: [{ type: 'terrain', base: -2, size: 64000, resolution: 256, style: 'natural', outside: 'sea' }],
             },
         },

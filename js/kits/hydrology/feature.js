@@ -32,12 +32,6 @@ const waterWorld = {
 
     app: (app, fx) => app.extend(AppExtension, fx),
 
-    // reversed-Z, infinite far plane, metres
-    depth() {
-        const r = this.app.renderer;
-        return r.depthView && { view: r.depthCView || r.depthView, kind: 'reversed', near: NEAR };
-    },
-
     // its scenario's views (water.view)
     views() {
         const a = this.app;
@@ -74,9 +68,6 @@ const waterWorld = {
         for (const h of f.h) if (h < floor) floor = h;
         return { lo: [-f.size / 2, -f.size / 2], hi: [f.size / 2, f.size / 2], floor, ground: true };
     },
-
-    // toward its sun (its light's), the same everywhere
-    sunDir() { return this.app?.light ? [...this.app.light.dir] : null; },
 
     // the keys there are (Site.keys; every option is on the handheld)
     get keys() {

@@ -161,7 +161,6 @@ class RendererExtension {
         this.msaaTex?.destroy(); this.depthTex?.destroy();
         const U = GPUTextureUsage.RENDER_ATTACHMENT;
         this.msaaTex = this.device.createTexture({ size: [w, h], format: this.format, sampleCount: MSAA, usage: U });
-        // sampled too: a composition reads it (js/engine/compositor.js)
         this.depthTex = this.device.createTexture({ size: [w, h], format: DEPTH_FORMAT, sampleCount: MSAA, usage: U | GPUTextureUsage.TEXTURE_BINDING });
         this.msaaView = this.msaaTex.createView();
         this.depthView = this.depthTex.createView();

@@ -35,8 +35,8 @@ class Controls {
         if (d) { a.sun.azimuth = Math.atan2(d[0], -d[2]); a.sun.elevation = Math.asin(clamp(d[1], -1, 1)); }
     }
 
-    // the sun of another world (a composition's, Host.lights): its direction d (this world's frame, toward it), kept
-    // whatever light is picked
+    // a sun it follows (a star's site's, Host.lightFrom: set('sunDir')): its direction d (this site's frame, toward it),
+    // kept whatever light is picked
     follow(d) {
         const a = this.app;
         a.sunAlong = v3.norm(d);

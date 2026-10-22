@@ -1,6 +1,6 @@
 {
     "name": "Bunker on the Reservoir",
-    "group": "Compositions",
+    "group": "Tours",
     "order": 3,
     "description": "Entity Portal's bunker compound (portal-room visibility, stencil-masked traversal, a freighter, drones) as an island in Entity Cloud's Reservoir: walk out of the bunker into the plains' weather. Indoors (a portal area that isn't the outdoors) the rain stays outside.",
     "entities": [

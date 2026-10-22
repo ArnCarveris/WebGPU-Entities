@@ -1,6 +1,6 @@
 {
     "name": "Every kit",
-    "group": "Compositions",
+    "group": "Tours",
     "order": 7,
     "description": "All six worlds and all twenty kits at once, on Entity Origin's real-scale Earth: Entity Cloud's High Plains (structures, buses, vegetation, a named place) with Entity Water's Riverlands, Entity Imposter's valley, Entity Portal's bunker island and Entity GUI's Sector 07 (its easel, radar and CCTV) standing on the plains. One floating-origin camera flies from the river up through the clouds to orbit and the planets; the handheld hands the camera to the facility's player.",
     "entities": [

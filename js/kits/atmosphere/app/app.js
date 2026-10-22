@@ -113,7 +113,7 @@ class AppExtension {
     // how much its sky hides what lies beyond it: all by day, none by night or under the moon
     daySky() { const s = this.sun; return s.moon > 0 ? 0 : smoothstep(-0.1, 0.05, Math.sin(s.elevation)); }
 
-    // airHides for the GPU (Renderer.encodeInject: the other worlds beyond its air drop out where its sky hides them):
+    // airHides for the GPU (its sky over what lies beyond its air, fsSkyOver, where its daytime sky hides it):
     // [on (round), K (R + the eye's height), C ((R + top)² - K², exactly), top - height (flat)] and how much it hides
     // there (null: nothing, no airTop)
     airShell(p) {
@@ -187,17 +187,9 @@ class AppExtension {
             this.footsteps.update();
         }
         if (!render) return;
-        // above its air (airAt), nothing of it: only what lies behind it (Renderer.encodeSpace)
+        // how much of its air there is about the eye (airAt): above it none of its scene, only its post over what lies
+        // behind it (space, drawn under its sky in a frame it shares)
         const air = this.airHere = this.airAt(this.camera.pos);
-        // (in a frame it shares, space is drawn under its sky, which hides none of it there: it draws on)
-        if (air <= 0 && !r.frameSpec?.shared) {
-            r.encodeSpace(r.frameEncoder(), 1, true);
-            this.lastCam = [...this.camera.pos];
-            this.frameNo++;
-            this.hud.drawLabels(this.app);
-            this.hud.update(this.app, now);
-            return;
-        }
         // the volumetric resolution: the preset's, or lower while the GPU time is over budget (a resize keeps the history)
         const q = QUALITY[this.quality];
         r.resize(q.dynamic && r.profiler.enabled ? this.dynamicScale.update(q, r.profiler.total, this.time) : q.scale);
@@ -206,12 +198,11 @@ class AppExtension {
         const total = this.near.rain + this.near.snow;
         const particles = total > 0.001 ?fw.splashStart + (this.near.rain > 0.02 ? SPLASH_PARTICLES : 0) : 0;
         // (from inside, with the outdoors out of sight through the portals: no volumetrics, no rain; FrameWriter.outdoors)
-        // (above its air in a frame it shares: none of its own scene, only its post over what lies behind it, space)
         const out = fw.outdoors?.seen !== false && air > 0;
         r.air = this.airShell(this.camera.pos);
         r.render({ probeTexel: fw.probeTexel, particles: out ? particles : 0, bolts: out ? w.lightning.count : 0, interleave: QUALITY[this.quality].interleave,
             shadowSlices: fw.shadowSlices, froxels: this.froxels && out, volumetrics: this.mode !== 1 && out, tiles: this.tiles,
-            bloom: this.bloom && this.cfg.bloom > 0 && air > 0, space: air < 1 ? 1 - air : 0, air });
+            bloom: this.bloom && this.cfg.bloom > 0 && air > 0, air });
         r.afterSubmit(() => { r.weatherPass.afterSubmit(); r.profiler.afterSubmit(); });
         fw.advance();
         this.lastCam = [...this.camera.pos];

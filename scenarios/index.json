@@ -2,7 +2,7 @@
   {
     "id": "compose-storm-riverlands",
     "name": "Storm over Riverlands",
-    "group": "Compositions",
+    "group": "Tours",
     "description": "Entity Water's river simulation set into Entity Cloud's High Plains: the clouds, rain shafts, haze and lightning are drawn over the river world, and rain falling where the camera is turns on the river's rain.",
     "worlds": [
       "cloud",
@@ -12,7 +12,7 @@
   {
     "id": "compose-valley-weather",
     "name": "Imposter Valley weather",
-    "group": "Compositions",
+    "group": "Tours",
     "description": "Entity Imposter's valley (15k trees, rocks and homesteads as octahedral imposters) out on Entity Cloud's High Plains: its forests under volumetric clouds, storm shafts and lightning, lit by the plains' sun.",
     "worlds": [
       "cloud",
@@ -22,7 +22,7 @@
   {
     "id": "compose-bunker-reservoir",
     "name": "Bunker on the Reservoir",
-    "group": "Compositions",
+    "group": "Tours",
     "description": "Entity Portal's bunker compound (portal-room visibility, stencil-masked traversal, a freighter, drones) as an island in Entity Cloud's Reservoir: walk out of the bunker into the plains' weather. Indoors (a portal area that isn't the outdoors) the rain stays outside.",
     "worlds": [
       "cloud",
@@ -32,7 +32,7 @@
   {
     "id": "compose-planetfall",
     "name": "Planetfall",
-    "group": "Compositions",
+    "group": "Tours",
     "description": "Entity Imposter's valley set on Entity Origin's real-scale Earth: one floating-origin camera flies from the valley floor up to Gateway Station in orbit and on to Neptune, the valley staying exact under it. The valley's sun is the solar system's.",
     "worlds": [
       "origin",
@@ -42,7 +42,7 @@
   {
     "id": "compose-moonbase-sector07",
     "name": "Sector 07 on the Moon",
-    "group": "Compositions",
+    "group": "Tours",
     "description": "Entity GUI's facility (airlock terminal, CCTV, easel, handheld) stands at Entity Origin's Shackleton Base on the Moon. Fly around it with the floating-origin camera; the handheld's Walk hands the camera to the facility's player inside, with its world-space GUIs.",
     "worlds": [
       "origin",
@@ -52,7 +52,7 @@
   {
     "id": "compose-grand-tour",
     "name": "Grand tour of the plains",
-    "group": "Compositions",
+    "group": "Tours",
     "description": "Four engines in one world: Entity Cloud's High Plains as the sky over Entity Water's Riverlands, Entity Imposter's valley and Entity Portal's bunker island, flown with the engine's free camera.",
     "worlds": [
       "cloud",
@@ -64,7 +64,7 @@
   {
     "id": "compose-every-kit",
     "name": "Every kit",
-    "group": "Compositions",
+    "group": "Tours",
     "description": "All six worlds and all twenty kits at once, on Entity Origin's real-scale Earth: Entity Cloud's High Plains (structures, buses, vegetation, a named place) with Entity Water's Riverlands, Entity Imposter's valley, Entity Portal's bunker island and Entity GUI's Sector 07 (its easel, radar and CCTV) standing on the plains. One floating-origin camera flies from the river up through the clouds to orbit and the planets; the handheld hands the camera to the facility's player.",
     "worlds": [
       "origin",

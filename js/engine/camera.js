@@ -1,16 +1,17 @@
 'use strict';
-// One camera for every world of a composition.
+// The one camera, and where a site is in the world.
 //
-//   camera { controller: "fly", pos, look, fov, speed }    the engine flies it (WASD, drag, wheel, Space / C)
-//   camera { ..., mode: "walk" }                           ... walking (the handheld switches): on the ground of every world
-//   camera { from: "<world id>" }                         that world's own camera (walk, fly, ride...) drives it
-//   camera { from: ["a", "b"], carry }                    ... several: walking or flying (the handheld's Walk) gives the camera to one that can,
-//                                                         from where the camera is (carry, default) or where it was
+//   camera { controller: "fly", pos, look, fov, speed, clearance }   the engine flies it (WASD, drag, wheel, Space / C)
+//   camera { ..., mode: "walk" }                                     ... walking (the handheld switches): on every site's ground
+//   camera { start: "<site>" }                                       (several sites) the engine's camera starts at that site's start view
+//   camera { controller: "<site>" | ["<site>", ...], carry }         that site's own camera (its flight, its player) drives it;
+//                                                                    the handheld's Walk picks the first that walks or flies (else
+//                                                                    the engine's), from where the camera is (carry false: from
+//                                                                    where that one was)
 //
-// Each world sits in the composition through its root entity's `layer.transform`: { offset: [x, y, z], yaw: deg } or
-// { anchor: "<world id>:<entity id>", offset, yaw }, an entity of another world it rides on (a moon base, a ship...),
-// resolved every frame. The camera is passed around as a view { pos, fwd, up, fov } (metres, doubles), converted
-// between composition space and each world's own space with that transform.
+// Each site stands in the world by its `at`: { pos: [x, y, z], yaw: deg, on: "<entity>" } (on: an entity another site
+// answers anchor() for, a pad on a planet, resolved every frame). The camera is a view { pos, fwd, up, fov } (metres,
+// doubles), taken into each site's own frame with its SiteFrame.
 
 const CamMath = {
     ...Common.v3,
@@ -31,12 +32,12 @@ const CamMath = {
     },
 };
 
-// a rigid frame { pos, q }: local -> composition space
-class LayerFrame {
+// a rigid frame { pos, q }: a site's frame in the world, local -> world
+class SiteFrame {
     constructor(pos = [0, 0, 0], q = [0, 0, 0, 1]) { this.pos = pos; this.q = q; }
 
     static fromDef(t = {}) {
-        return new LayerFrame([...(t.offset || [0, 0, 0])], CamMath.qAxis([0, 1, 0], (t.yaw || 0) * Math.PI / 180));
+        return new SiteFrame([...(t.offset || [0, 0, 0])], CamMath.qAxis([0, 1, 0], (t.yaw || 0) * Math.PI / 180));
     }
 
     toWorld(view) {
@@ -49,17 +50,17 @@ class LayerFrame {
         return { pos: M.qRotate(iq, M.sub(view.pos, this.pos)), fwd: M.qRotate(iq, view.fwd), up: M.qRotate(iq, view.up), fov: view.fov };
     }
 
-    // a point of this frame in composition space, and back
+    // a point of this frame in the world, and back
     point(p) { return CamMath.add(this.pos, CamMath.qRotate(this.q, p)); }
     local(p) { return CamMath.qRotate(CamMath.qConj(this.q), CamMath.sub(p, this.pos)); }
 
-    // a direction of this frame in composition space, and back
+    // a direction of this frame in the world, and back
     dir(d) { return CamMath.qRotate(this.q, d); }
     localDir(d) { return CamMath.qRotate(CamMath.qConj(this.q), d); }
 
     // this frame placed in a parent frame
     within(parent) {
-        return new LayerFrame(CamMath.add(parent.pos, CamMath.qRotate(parent.q, this.pos)), CamMath.qMul(parent.q, this.q));
+        return new SiteFrame(CamMath.add(parent.pos, CamMath.qRotate(parent.q, this.pos)), CamMath.qMul(parent.q, this.q));
     }
 }
 

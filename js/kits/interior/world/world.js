@@ -94,8 +94,7 @@ class WorldExtension extends AreaSet {
 
     mat(name) { return this.materials.index(name); }
 
-    // toward the sun (not normalized): the one followed (sunAlong: another world's in a composition, Site.sunDir),
-    // or its outdoors'
+    // toward the sun (not normalized): the one followed (sunAlong: the world's, world.sunlight), or its outdoors'
     get sunDir() { return this.sunAlong || this.scn.outdoor?.sunDir || [0.4, 0.8, 0.3]; }
 
     // ---- areas (FarCry VisArea / SECTR Sector) ----

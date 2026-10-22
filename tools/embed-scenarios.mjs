@@ -20,7 +20,7 @@ const dir = join(root, 'scenarios');
 const ScenarioFormat = createRequire(import.meta.url)(join(root, 'js/engine/scenario-format.js'));
 
 // groups in this order, then any other; within a group by `order`, then name
-const GROUPS = ['Compositions', 'Entity Cloud', 'Entity Water', 'Entity Origin', 'Entity Imposter', 'Entity Portal', 'Entity GUI'];
+const GROUPS = ['Tours', 'Entity Cloud', 'Entity Water', 'Entity Origin', 'Entity Imposter', 'Entity Portal', 'Entity GUI'];
 
 const embedded = {}, index = [];
 const files = readdirSync(dir).filter(f => f.endsWith('.json') && f !== 'index.json');

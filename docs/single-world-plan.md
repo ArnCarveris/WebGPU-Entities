@@ -1,10 +1,10 @@
 # One World, one Renderer, one App: every scenario on a single instance (plan)
 
-Status: Phases 0-5 done on branch `claude/single-world-177086` (2026-10-22): the harness and baselines, Composite with
-many extensions, one encoder and submit, frame conventions, the scenario format with sites, and the single-site
-scenarios on one World, Renderer and App (the compositions on js/engine/legacy-host.js). Phase 6 (Q1-Q4 answered: 1x
-MSAA under the atmosphere, sky rank atmosphere > space > own, `river.rain` kept as a site link, origin scale into the
-model matrices) moves the compositions one at a time: 6a (storm-riverlands) 6b (valley-weather) 6c (bunker-reservoir) 6d (planetfall) 6e (moonbase-sector07) 6f (grand-tour) and 6g (every-kit) done (Q5: dither); the deletions next and Q6 still open. Written 2026-10-21 against `main` at 756d5ee (soft
+Status: Phases 0-6 done. Phases 0-5 on branch `claude/single-world-177086` (2026-10-22): the harness and baselines,
+Composite with many extensions, one encoder and submit, frame conventions, the scenario format with sites, the single-site
+scenarios on one World, Renderer and App. Phase 6 on `claude/single-world-phase6-2b119d` (2026-10-23): every composition
+on one World, Renderer and App (6a-6g; Q1-Q6 answered, §8), the legacy host, compositor, inject / behindTex, layer roles
+and joins, the old sun and camera hand-over deleted. Next: Phase 7. Written 2026-10-21 against `main` at 756d5ee (soft
 shadows), with `docs/sdf-kit-plan.md` uncommitted beside it.
 
 The goal, in the user's words: the worlds (cloud, portal, water, gui, origin, imposter) "are from separate
@@ -590,22 +590,24 @@ phases can run in parallel from Phase 1 on: its Phase 0 shares Phase 1's two Com
 
 ## 8. Open questions
 
-1. **MSAA in mixed frames.** With the atmosphere loaded, the frame is single-sample (its march reads single-sample
+1. **MSAA in mixed frames.** **Answered (2026-10-22): 1x under the atmosphere** (no FXAA / TAA yet). With the atmosphere loaded, the frame is single-sample (its march reads single-sample
    depth), so imposter, portal and origin content under the clouds loses its 4× MSAA. Accept that? Add FXAA / TAA in
    `post`? Or run the scene pass at 4× and resolve depth (nearest) for the volumetrics, which builds every atmosphere
    pipeline at 4× and changes the cloud scenarios' pixels?
-2. **Which sky wins** when several kits offer one and the data says nothing: the manifest ranking proposed in §1.7
+2. **Which sky wins** (**answered 2026-10-22: the manifest ranking**, frame.ranks.sky) when several kits offer one and the data says nothing: the manifest ranking proposed in §1.7
    (atmosphere > space > a kit's own), or must a mixed scenario always say `render.sky`?
-3. **Kit-wide parameters vs site parameters in links.** `river.rain` addresses a site. Should `rain` be a property of
+3. **Kit-wide parameters vs site parameters in links.** (**answered 2026-10-22: `river.rain` stays a site link**) `river.rain` addresses a site. Should `rain` be a property of
    the world's one weather instead (water reads the atmosphere's rain where its site is) and the link be deleted too?
    This is like the light links, which §1.7 already deletes.
-4. **Origin `scale`.** Fold it into the model matrices, or drop it, given reversed-Z f32 depth and camera-relative
+4. **Origin `scale`.** (**answered 2026-10-22: folded in, never reaching the depth**: in a shared frame the origin's near plane in its units is the frame's over its scale, so its depth is metres) Fold it into the model matrices, or drop it, given reversed-Z f32 depth and camera-relative
    rendering? This needs a precision check at Sol's distances.
 5. **Terrain edge over Earth** (`compose-every-kit`, `outside: "none"`, `edge: 8000`): blend the edge band (the terrain
    pipeline gets a blend state; space and bodies draw first) or dither / alpha-to-coverage? Blending is closest to
    today's `behindTex` look but conflicts with depth writes in the band.
+   **Answered (2026-10-23): dither** (the terrain shader's own dither over what is drawn before it; done in 6g).
 6. **Names.** Keep the `compose-*` ids and the "Compositions" group in `scenarios/index.json` (URLs and `localStorage`
    remember the ids), or rename the group (for example "Tours") so the word "composition" leaves the UI too?
+   **Answered (2026-10-23): ids kept, the group renamed "Tours".**
 7. **`site` as the name** of the new engine type. `place` is taken by the geo kit and `area` by the interior kit.
    **Answered (2026-10-22): `site` stays; the props a site rides on are renamed `*-site` → `*-pad`** (`plains-pad`,
    `valley-pad`, `sector07-pad`; done in Phase 4).

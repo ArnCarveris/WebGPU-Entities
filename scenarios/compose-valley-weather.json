@@ -1,6 +1,6 @@
 {
     "name": "Imposter Valley weather",
-    "group": "Compositions",
+    "group": "Tours",
     "order": 2,
     "description": "Entity Imposter's valley (15k trees, rocks and homesteads as octahedral imposters) out on Entity Cloud's High Plains: its forests under volumetric clouds, storm shafts and lightning, lit by the plains' sun.",
     "entities": [

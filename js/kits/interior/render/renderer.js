@@ -199,7 +199,6 @@ class RendererExtension {
         this.msaa?.destroy(); this.depth?.destroy();
         const n = this.renderer.frameSpec.samples;
         this.msaa = this.device.createTexture({ size: [W, H], sampleCount: n, format: this.format, usage: GPUTextureUsage.RENDER_ATTACHMENT });
-        // sampled too: a composition reads its depth (js/engine/compositor.js)
         this.depth = this.device.createTexture({ size: [W, H], sampleCount: n, format: this.depthFormat, usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
         this.depthSample = this.depth.createView({ aspect: 'depth-only' });
     }

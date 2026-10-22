@@ -336,7 +336,7 @@ async function tab() {
 
 // before the first stepped frame: no request in flight, and no app still loading or baking what it loads after the host
 // is ready (the imposter world bakes its atlases then: on whichever frame they land, the pictures would differ)
-const BUSY = `[...(window.entities?.instances || []).map(i => i.world?.app), window.entities?.app].some(a => a && (a.loading || a.baking))`;
+const BUSY = `[...(window.entities?.sites || []).map(s => s.ctx?.app), window.entities?.app].some(a => a && (a.loading || a.baking))`;
 async function settle(s) {
     for (let k = 0; k < 240; k++) {
         if (!s.inflight.size && !(await s.evaluate(BUSY).catch(() => false))) return;
@@ -495,7 +495,7 @@ async function smoke(base, sid) {
         await s.evaluate('window.__input = true');
         await s.send('Page.bringToFront');
         await s.evaluate(`__step(10)`);
-        // where the camera is: the engine's (entities.camera after Phase 5), else the camera world's in composition space
+        // where the camera is: the engine's, in the world (entities.worldView)
         const eye = `JSON.stringify((() => { const v = entities.camera?.view || (entities.worldView ? entities.worldView() : null); return v ? v.pos.map(x => +(+x).toFixed(3)) : null; })())`;
         const key = async (code, key, frames = 1, hold = 0) => {
             const vk = { KeyW: 87, KeyA: 65, KeyS: 83, KeyD: 68, KeyE: 69, KeyF: 70, Tab: 9, Escape: 27 }[code];

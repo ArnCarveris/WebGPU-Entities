@@ -31,12 +31,6 @@ const originWorld = {
 
     app: (app, fx) => app.extend(AppExtension, fx),
 
-    // reversed-Z, infinite far plane, 4x MSAA; depth is in origin units: s metres each
-    depth() {
-        const r = this.app.renderer;
-        return r.depthView && { view: r.depthView, kind: 'reversed', near: NEAR, samples: SAMPLES, scale: this.app.floating.origin.scale };
-    },
-
     // where an entity is (other worlds can ride on it: layer.transform.anchor)
     anchor(id) {
         const e = this.app.world?.byId.get(id);
@@ -63,12 +57,6 @@ const originWorld = {
         if (!w?.sun) return null;
         const at = w.sunPos.metres();
         return { toward: p => v3.norm(v3.sub(at, p)), exposure: this.app.lighting?.exposure ?? 1, star: true };
-    },
-
-    // toward the Sun from p (metres, this world's frame): what lights the worlds riding on it in a composition (Host.lights)
-    sunDir(p) {
-        const w = this.app?.world;
-        return w?.sun ? v3.norm(v3.sub(w.sunPos.metres(), p)) : null;
     },
 
     // the direction to the sun in the frame of every entity marked `sunProbe` (for expressions: a link can light a world

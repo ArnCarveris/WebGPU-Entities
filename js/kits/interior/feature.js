@@ -22,13 +22,6 @@ const portalWorld = {
         return app;
     },
 
-    // classic 0..1 depth, near 0.05, far 400; 4x MSAA depth-stencil (the depth aspect)
-    depth() {
-        const r = this.app.renderer;
-        const s = r.frameSpec;
-        return r.depthSample && { view: r.depthSample, kind: s.depth, near: s.near, far: 400, samples: s.samples };
-    },
-
     get view() {
         const P = this.app.player, { fwd, up } = P.basis();
         return { pos: [...P.cam.pos], fwd, up, fov: P.cam.fov };
@@ -96,9 +89,6 @@ const portalWorld = {
         for (let z = z0; z <= z1; z += 4) for (let x = x0; x <= x1; x += 4) floor = Math.min(floor, o.height(x, z));
         return { lo: [x0, z0], hi: [x1, z1], floor, ground: true };
     },
-
-    // toward the sun of its outdoors, the same everywhere
-    sunDir() { const w = this.app?.world; return w ? engine.Common.v3.norm(w.sunDir) : null; },
 
     set(key, v) {
         const o = this.app.opts;

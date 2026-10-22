@@ -18,9 +18,9 @@
 // its own (Common.Composite.scope: its own extensions and the names they expose, everything else shared), its site placed
 // in the world by its `at` (a position and a yaw, on an entity another site answers anchor() for: frameOf), and they draw
 // one frame (Renderer.share: one scene, one depth, one sky, the post of the kit that maps radiance to the canvas). There is
-// one camera, the engine's: it flies or walks over every site's ground (floorAt), and each site's own camera follows it in
-// the site's frame. The sky's site lights the others (world.sunlight). A scenario with a site of a kit that cannot share
-// a frame yet (Host.SHARED) still runs one world per site: js/engine/legacy-host.js (LegacyHost), until Phase 6 is done.
+// one camera: the engine's flies or walks over every site's ground (floorAt), or a site's own drives it (its controller),
+// and each site's own camera follows it in the site's frame. The sky's site lights the others (world.sunlight), its sun
+// where a star's site has its star; the site whose interior holds the camera shelters the rest (world.shelter).
 //
 // Engine entities: camera, view, link, site, features, hud.toast, handheld, handheld.page, sound.* (see camera.js,
 // audio.js, hud.js, handheld.js). A link sets a parameter of a site from an expression every frame: { type: "link",
@@ -30,9 +30,6 @@
 
 class Host {
     static DROPPED = 'dropped';
-    // the kits whose sites share the one World, Renderer and App with other kits' sites (docs/single-world-plan.md Phase 6:
-    // one kit more each step)
-    static SHARED = ['atmosphere', 'hydrology', 'imposter', 'interior', 'entities', 'gui'];
 
     // two views { pos, fwd } the same, but for rounding (a site's camera holds the one it is given in its own terms)
     static sameView(a, b) { return Host.same(a.pos, b.pos) && Host.same(a.fwd, b.fwd); }
@@ -155,12 +152,6 @@ class Host {
         await this.loadCatalog();
         const id = this.currentId = this.scenarioId;
         const scenario = await this.loadScenario(id);
-        // several sites, a kit among them that cannot share a frame yet: one world each, for now
-        const roots = ScenarioFormat.roots(scenario);
-        if (roots.length > 1 && !roots.every(r => Host.SHARED.includes(r.kit))) {
-            const legacy = window.entities = new LegacyHost();
-            return legacy.boot(this.catalog, scenario);
-        }
         this.setup();
         this.scenario = scenario;
         this.hud.buildBar();
@@ -177,7 +168,7 @@ class Host {
         document.title = `${scenario.name} · WebGPU Entities`;
         await ScenarioData.load(scenario);         // the data its entities name (a real place's heights, roads, buildings)
         await this.initGpu();
-        this.engine = { Expr, GpuChoice, Common, CamMath, LayerFrame, host: this, kits: Features.kits };
+        this.engine = { Expr, GpuChoice, Common, CamMath, SiteFrame, host: this, kits: Features.kits };
         for (const k of Features.ENGINE_KITS) await Features.loadKit(k, this.engine);
         const { World, App } = Features.kits.world, { Renderer, GpuFrame } = Features.kits.gpu;
         this.gpuFrame = new GpuFrame(this.device);
@@ -267,16 +258,16 @@ class Host {
     }
 
     createSite(root, module, features, native, ui) {
-        const def = root.def, layer = def.layer || {}, shared = this.shared;
+        const def = root.def, shared = this.shared;
         const site = {
-            id: root.id, type: root.type, kit: root.kit, label: def.label || def.name || root.id, def, layer, spec: module.spec || {},
-            // (a site's at: { pos, yaw, on }, on: an entity of another site it rides on; a root's layer.transform)
-            frameDef: def.at ? { offset: def.at.pos, yaw: def.at.yaw, on: def.at.on } : layer.transform || {},
+            id: root.id, type: root.type, kit: root.kit, label: def.label || def.name || root.id, def, spec: module.spec || {},
+            // (its at: { pos, yaw, on }, on: an entity of another site it rides on)
+            frameDef: { offset: def.at?.pos, yaw: def.at?.yaw, on: def.at?.on },
             ui: shared ? ui : { ...ui, veil: () => 0, frame: undefined },
         };
         const { Composite } = Common;
         const ctx = site.ctx = {
-            id: root.id, type: root.type, def, native, layer,
+            id: root.id, type: root.type, def, native,
             features,                      // its kit's features its data asks for: { <name>: their exports }
             host: this,
             device: this.device, format: this.format, adapter: this.adapter,
@@ -288,11 +279,9 @@ class Host {
             app: shared ? Composite.scope(this.app, root.id) : this.app,
             ui: site.ui,
             io: this.router.scope('app'),
-            composed: false,
             cameraLocked: shared,          // set while the engine drives the camera (several sites, camera.controller: fly)
-            inject: null,
             outdoors: null,
-            // where it is in the world (several sites): { id, frame (its LayerFrame this frame) }
+            // where it is in the world (several sites): { id, frame (its SiteFrame this frame) }
             site: shared ? { id: root.id, frame: () => this.frameOf(site) } : null,
             size: () => [this.width, this.height],
             target: () => this.swapView(),
@@ -343,7 +332,7 @@ class Host {
             for (const s of this.controllerSites.slice(1)) s.left = s.world.view;
             if (!this.controller) this.router.always.add('engine');
             for (const s of this.sites) s.ctx.cameraLocked = s !== this.controller;
-            const start = this.controller || this.sites.find(s => s.id === (cam.start ?? [].concat(cam.from ?? [])[0]));
+            const start = this.controller || this.sites.find(s => s.id === cam.start);
             if (this.shared && start?.world.view) this.fly.view = this.frameOf(start).toWorld(start.world.view);
             this.startSite = this.shared && !this.controller ? start || null : null;
             // (what each site's camera holds now: one it moves before the first frame, a world loading on, is followed)
@@ -376,12 +365,12 @@ class Host {
     // ------------------------------------------------------------------------------------------- sites
     // where a site is in the world: its frame (a site's `at`, riding on the entity another site answers anchor() for)
     frameOf(site) {
-        const t = site.frameDef, local = LayerFrame.fromDef(t);
+        const t = site.frameDef, local = SiteFrame.fromDef(t);
         if (t.on) {
             const owner = site.anchorOwner ? [site.anchorOwner] : this.sites.filter(s => s !== site);
             for (const s of owner) {
                 const f = s.world.anchor?.(t.on);
-                if (f) { site.anchorOwner = s; return local.within(new LayerFrame(f.pos, f.q)); }
+                if (f) { site.anchorOwner = s; return local.within(new SiteFrame(f.pos, f.q)); }
             }
         }
         return local;

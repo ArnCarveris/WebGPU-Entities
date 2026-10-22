@@ -1,4 +1,4 @@
-/* WebGPU Entities: the shell, the engine's HUD, and each world's HUD (scoped by .fhud[data-world]) */
+/* WebGPU Entities: the shell, the engine's HUD, and the sites' HUD (one .fhud root; data-world: a single site's kit type) */
 :root {
     --bg: #030507;
     --panel: rgba(6, 12, 16, 0.8);
@@ -71,7 +71,6 @@ canvas#view.drag { cursor: grabbing; }
 
 /* ------------------------------------------------------------------------------------------- feature HUDs */
 /* what a world still puts on the screen: in-world labels, toasts, a crosshair (its options and readouts are on the handheld) */
-.fhud.unfocused .panel { display: none !important; }
 .fhud .panel:empty { display: none !important; }
 .fhud canvas.labels { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; }
 .fhud [data-hud=toast] { top: 50%; left: 50%; transform: translate(-50%, -50%); color: var(--warn); font-size: 16px; display: none; text-align: center; z-index: 20; white-space: pre-wrap; max-width: 80vw; }
@@ -80,7 +79,6 @@ canvas#view.drag { cursor: grabbing; }
 body.handheld-up #world-huds canvas.labels { opacity: 0.35; }
 /* portal: crosshair */
 .fhud[data-world=portal] [data-hud=crosshair], .fhud[data-world=""] [data-hud=crosshair] { position: fixed; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border: 1px solid rgba(255,255,255,0.6); border-radius: 50%; pointer-events: none; }
-.fhud[data-world=portal].unfocused [data-hud=crosshair] { display: none !important; }
 
 @media (max-width: 700px) {
     #engine-bar { top: auto; bottom: 12px; }

@@ -102,8 +102,7 @@ class RendererExtension {
         return this.width / this.height;
     }
 
-    // the world's depth (sampled by a composition, js/engine/compositor.js) and the phone's own, so the view model
-    // never clips into a wall nor clears the world's depth
+    // the world's depth and the phone's own, so the view model never clips into a wall nor clears the world's depth
     resize() {
         const [w, h] = this.fx.size();
         if (!this.device || (w === this.width && h === this.height)) return;
