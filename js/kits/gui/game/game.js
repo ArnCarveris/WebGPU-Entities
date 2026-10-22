@@ -192,6 +192,8 @@ class AppExtension {
         r.resize();
         // Views and render targets for this frame
         const frame = this.frameState = world.frameState(t);
+        // (a frame another kit maps from radiance: its display values into that kit's, the sky's exposure's reciprocal)
+        if (r.frameSpec.shared && r.frameSpec.display === 'radiance') frame.sceneScale = 1 / Math.max(this.fx.world.sunlight?.exposure ?? 1, 1e-4);
         const view = player.viewMatrix();
         // (a shared frame's depth: every kit's the same, reversed with an infinite far plane)
         const shared = r.frameSpec.shared && engine.Common.m4.reversedInfinite(player.fovy, r.aspect, r.frameSpec.near);

@@ -218,13 +218,41 @@ struct SkyOut { @builtin(position) pos: vec4f, @location(0) ndc: vec2f };
     return o;
 }
 
-@fragment fn fsSky(i: SkyOut) -> @location(0) vec4f {
-    let d = rayDir(i.ndc);
+fn skyAt(ndc: vec2f) -> vec4f {
+    let d = rayDir(ndc);
     var c = skyColor(d);
     let mu = dot(d, F.sunDir.xyz);
     if (F.sunDir.w > 0.0) { c += moonDisc(d, mu) + stars(d); }
     else { c += F.sunCol.rgb * 30.0 * smoothstep(0.99990, 0.99996, mu); }
     return vec4f(c, 0.0);
+}
+
+@fragment fn fsSky(i: SkyOut) -> @location(0) vec4f { return skyAt(i.ndc); }
+
+// how far along dir the view ray leaves its air (F.shell; stably: no difference of two planet-sized numbers)
+fn airOut(dir: vec3f) -> f32 {
+    if (F.shell.x > 0.5) {
+        let b = F.shell.y * dir.y;
+        let s = sqrt(max(b * b + F.shell.z, 0.0));
+        return select(-b + s, F.shell.z / (b + s), b > 0.0);
+    }
+    return select(3.0e38, F.shell.w / dir.y, dir.y > 0.0);
+}
+
+// The sky in a frame it shares with space (drawn first: stars, bodies, the planet it stands on): where its daytime sky
+// hides what lies beyond its air (F.shellInfo.x), at the depth where the air ends, so what is nearer (the planet's
+// ground round its map) stays and what is beyond goes; else only where nothing is drawn (depth 0: the stars it has
+// itself)
+struct SkyOver { @location(0) c: vec4f, @builtin(frag_depth) d: f32 }
+@fragment fn fsSkyOver(i: SkyOut) -> SkyOver {
+    var o: SkyOver;
+    o.c = skyAt(i.ndc);
+    o.d = 0.0;
+    if (F.shellInfo.x > 0.5) {
+        let d = rayDir(i.ndc);
+        o.d = clamp(F.fwd.w / max(airOut(d) * dot(d, normalize(F.fwd.xyz)), F.fwd.w), 0.0, 1.0);
+    }
+    return o;
 }
 
 // the moon by night (at F.sunDir): a disc lit from one side by its phase (F.sunDir.w its lit fraction), with darker

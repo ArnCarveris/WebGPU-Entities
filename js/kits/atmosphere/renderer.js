@@ -116,6 +116,10 @@ class RendererExtension {
             depthStencil: { format: this.depthFormat, depthWriteEnabled: depth.write, depthCompare: depth.compare },
         });
         this.pSky = pipe(layoutA, scene, 'vsSky', 'fsSky', 'rgba16float', { write: false, compare: 'always' });
+        // (a frame it shares: over what is drawn before it, space, by depth (fsSkyOver), and only as much as there is air
+        // about the eye: the blend constant, AppExtension.airAt)
+        const blendAir = { color: { srcFactor: 'constant', dstFactor: 'one-minus-constant' }, alpha: { srcFactor: 'one', dstFactor: 'zero' } };
+        if (this.renderer.frameSpec?.shared) this.pSkyOver = pipe(layoutA, scene, 'vsSky', 'fsSkyOver', 'rgba16float', { write: false, compare: 'greater-equal' }, blendAir);
         // the terrain patch: vertex index -> patch corner; a node (x0, z0, size, lod) per instance
         this.pTerrain = pipe(layoutA, scene, 'vsTerrain', 'fsTerrain', 'rgba16float', { write: true, compare: 'greater' }, undefined, [{
             arrayStride: 16, stepMode: 'instance', attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x4' }] }]);
@@ -430,6 +434,9 @@ class RendererExtension {
     compute(f) {
         const q = this.device.queue, prof = this.profiler, enc = f.enc;
         this.bindBehind();
+        const air = this.air;
+        this.frame.set('shell', air ? air.shell : [0, 0, 0, 0]);
+        this.frame.set('shellInfo', [air ? air.hides : 0, f.air <= 0 ? 1 : 0, 0, 0]);
         q.writeBuffer(this.frameBuf, 0, this.frame.data);
         q.writeBuffer(this.cellBuf, 0, this.cellData);
         if (this.framesUsed) q.writeBuffer(this.busUBuf, 0, this.busData, 0, this.framesUsed * BUS_UNIFORM / 4);
@@ -457,15 +464,16 @@ class RendererExtension {
     }
 
     sky(f) {
-        if (!f.od.seen) return;
+        if (!f.od.seen || f.air <= 0) return;
         f.outdoor(true);
-        f.pass.setPipeline(this.pSky);
+        if (this.pSkyOver) f.pass.setBlendConstant([f.air ?? 1, f.air ?? 1, f.air ?? 1, 1]);
+        f.pass.setPipeline(this.pSkyOver || this.pSky);
         f.pass.draw(3);
     }
 
     // the terrain, then the features' outdoors (still within the outdoors' rectangle)
     outdoor(f) {
-        if (!f.od.seen) return;
+        if (!f.od.seen || f.air <= 0) return;
         const a = f.pass;
         a.setPipeline(this.pTerrain);
         a.setIndexBuffer(this.terrainIndex, 'uint32');
@@ -485,7 +493,7 @@ class RendererExtension {
     indoor(f) { this.renderer.each('indoor', f.pass); }
 
     late(f) {
-        if (!f.od.seen) return;
+        if (!f.od.seen || f.air <= 0) return;
         f.outdoor(true);
         this.renderer.each('late', f.pass);
         f.outdoor(false);
@@ -520,7 +528,7 @@ class RendererExtension {
     }
 
     // above its air: what lies behind it, over the finished frame by f.space
-    overlay(f) { if (f.space > 0) this.encodeSpace(f.enc, f.space); }
+    overlay(f) { if (f.space > 0 && !this.renderer.frameSpec?.shared) this.encodeSpace(f.enc, f.space); }
 }
 
 return { RendererExtension };

@@ -189,7 +189,8 @@ class AppExtension {
         if (!render) return;
         // above its air (airAt), nothing of it: only what lies behind it (Renderer.encodeSpace)
         const air = this.airHere = this.airAt(this.camera.pos);
-        if (air <= 0) {
+        // (in a frame it shares, space is drawn under its sky, which hides none of it there: it draws on)
+        if (air <= 0 && !r.frameSpec?.shared) {
             r.encodeSpace(r.frameEncoder(), 1, true);
             this.lastCam = [...this.camera.pos];
             this.frameNo++;
@@ -205,11 +206,12 @@ class AppExtension {
         const total = this.near.rain + this.near.snow;
         const particles = total > 0.001 ?fw.splashStart + (this.near.rain > 0.02 ? SPLASH_PARTICLES : 0) : 0;
         // (from inside, with the outdoors out of sight through the portals: no volumetrics, no rain; FrameWriter.outdoors)
-        const out = fw.outdoors?.seen !== false;
+        // (above its air in a frame it shares: none of its own scene, only its post over what lies behind it, space)
+        const out = fw.outdoors?.seen !== false && air > 0;
         r.air = this.airShell(this.camera.pos);
-        r.render({ probeTexel: fw.probeTexel, particles: out ? particles : 0, bolts: w.lightning.count, interleave: QUALITY[this.quality].interleave,
+        r.render({ probeTexel: fw.probeTexel, particles: out ? particles : 0, bolts: out ? w.lightning.count : 0, interleave: QUALITY[this.quality].interleave,
             shadowSlices: fw.shadowSlices, froxels: this.froxels && out, volumetrics: this.mode !== 1 && out, tiles: this.tiles,
-            bloom: this.bloom && this.cfg.bloom > 0, space: air < 1 ? 1 - air : 0 });
+            bloom: this.bloom && this.cfg.bloom > 0 && air > 0, space: air < 1 ? 1 - air : 0, air });
         r.afterSubmit(() => { r.weatherPass.afterSubmit(); r.profiler.afterSubmit(); });
         fw.advance();
         this.lastCam = [...this.camera.pos];

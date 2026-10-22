@@ -16,7 +16,7 @@ const sceneShader = () => /* wgsl */`
         camPos   : vec4f,
         params   : vec4f,                           // x time, y lightsOn, z alarm pulse
         lights   : array<Light, 6>,
-        env      : vec4f,                           // x fog density (1/m), y ambient
+        env      : vec4f,                           // x fog density (1/m), y ambient, z (a frame in radiance) the reciprocal of its exposure
     };
     struct Instance { model : mat4x4f, tint : vec4f }; // tint.x: tally LED on (world) / CRT amount (GUI)
 
@@ -161,7 +161,7 @@ const sceneShader = () => /* wgsl */`
     @fragment
     fn fs_surface(i : VSOut) -> @location(0) vec4f {
         let t = textureSample(guiTex, guiSampler, i.uv);
-        return vec4f(t.rgb + vec3f(0.004, 0.005, 0.006) * (1.0 - t.a), 1.0);
+        return vec4f(toScene(t.rgb + vec3f(0.004, 0.005, 0.006) * (1.0 - t.a)), 1.0);
     }
 
     @fragment
@@ -189,7 +189,7 @@ const sceneShader = () => /* wgsl */`
         col = col / (1.0 + col);
         col = pow(col, vec3f(1.0 / 2.2));
         col += (hash(i.pos.xy + fract(U.params.x) * 91.0) - 0.5) * 0.025;
-        return vec4f(col, 1.0);
+        return vec4f(toScene(col), 1.0);
     }
 
     // ---------------- GUI models ----------------
@@ -247,7 +247,7 @@ const sceneShader = () => /* wgsl */`
     fn fs_gui(i : GuiOut) -> @location(0) vec4f {
         if (clipped(i)) { discard; }
         let c = textureSample(guiTex, guiSampler, i.uv) * i.color;
-        return vec4f(mix(c.rgb, crt(c.rgb, i.gpos, c.a), i.fx), c.a);
+        return vec4f(toScene(mix(c.rgb, crt(c.rgb, i.gpos, c.a), i.fx)), c.a);
     }
 `;
 
@@ -272,10 +272,27 @@ const BLIT_SHADER = /* wgsl */`
     }
 `;
 
-// a renderer's library (a new one per renderer: the shadings it builds add theirs): SCENE, the world and GUI models
-function guiWgsl() {
+// What its passes write: display values; in a frame another kit maps from radiance (Renderer.share), that kit's radiance
+// showing as them (taken back through its ACES and exposure: U.env.z)
+const DISPLAY = /* wgsl */`
+    fn toScene(c : vec3f) -> vec3f { return c; }
+`;
+const RADIANCE = /* wgsl */`
+    fn toScene(c : vec3f) -> vec3f {
+        let y = clamp(pow(max(c, vec3f(0.0)), vec3f(2.2)), vec3f(0.0), vec3f(0.985));
+        let a = 2.51 - 2.43 * y;
+        let b = 0.03 - 0.59 * y;
+        let k = -0.14 * y;
+        return (-b + sqrt(b * b - 4.0 * a * k)) / (2.0 * a) * U.env.z;
+    }
+`;
+
+// a renderer's library (a new one per renderer: the shadings it builds add theirs): SCENE, the world and GUI models;
+// radiance: its passes write a shared frame's radiance
+function guiWgsl(radiance = false) {
     const L = new engine.kits.gpu.WgslLibrary();
-    L.define('SCENE', () => sceneShader());
+    L.define('OUTPUT', radiance ? RADIANCE : DISPLAY);
+    L.define('SCENE', () => sceneShader(), { needs: ['OUTPUT'] });
     return L;
 }
 

@@ -57,12 +57,12 @@ const originWorld = {
     },
 
     // the Sun, what lights the other sites (the host's world.sunlight): { toward(p) (the direction to it from p, metres in
-    // this site's frame), exposure }
+    // this site's frame), exposure, star (a sky lighting the world follows it) }
     sunlight() {
         const w = this.app?.world;
         if (!w?.sun) return null;
         const at = w.sunPos.metres();
-        return { toward: p => v3.norm(v3.sub(at, p)), exposure: this.app.lighting?.exposure ?? 1 };
+        return { toward: p => v3.norm(v3.sub(at, p)), exposure: this.app.lighting?.exposure ?? 1, star: true };
     },
 
     // toward the Sun from p (metres, this world's frame): what lights the worlds riding on it in a composition (Host.lights)

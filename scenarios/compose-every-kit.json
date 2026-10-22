@@ -5,17 +5,17 @@
     "description": "All six worlds and all twenty kits at once, on Entity Origin's real-scale Earth: Entity Cloud's High Plains (structures, buses, vegetation, a named place) with Entity Water's Riverlands, Entity Imposter's valley, Entity Portal's bunker island and Entity GUI's Sector 07 (its easel, radar and CCTV) standing on the plains. One floating-origin camera flies from the river up through the clouds to orbit and the planets; the handheld hands the camera to the facility's player.",
     "entities": [
         {"$comment":"the root: the solar system (entities kit), its Earth carrying a site the plains stand on"},
-        {"type":"include","scenario":"origin-sol-transit","as":"sol","site":{"label":"Origin · Sol Transit","layer":{"sky":true}}},
+        {"type":"include","scenario":"origin-sol-transit","as":"sol","site":{"label":"Origin · Sol Transit"}},
         {"type":"prop","of":"sol","id":"plains-pad","label":"High Plains","model":"marker","surface":{"parent":"earth","lat":40,"lon":-104},"sunProbe":true},
         {"type":"bookmark","key":"8","name":"Over the plains","at":{"parent":"plains-pad","offset":[1500,2900,14000]},"look":"plains-pad"},
         {"type":"bookmark","key":"9","name":"Riverlands","at":{"parent":"plains-pad","offset":[5200,520,7000]},"look":"plains-pad"},
         {"type":"bookmark","name":"High over the plains","at":{"parent":"plains-pad","offset":[-8000,14000,30000]},"look":"plains-pad"},
         {"type":"start","value":"8"},
 
-        {"$comment":"the sky: the atmosphere over everything below it (atmosphere, terrain, weather, curvature, settlement, building, transit, geo, imposter for its plants); its ground 1300 m lower so it lies on the Earth's surface, its curvature the Earth's"},
+        {"$comment":"the sky: the atmosphere's sky, weather and sun are the world's (its sun where the Sun is); the atmosphere over everything below it (atmosphere, terrain, weather, curvature, settlement, building, transit, geo, imposter for its plants); its ground 1300 m lower so it lies on the Earth's surface, its curvature the Earth's"},
         {"type":"include","scenario":"cloud-high-plains","as":"sky","skip":["view"],
-            "site":{"label":"Cloud · High Plains","at":{"pos":[0,-1300,0],"on":"plains-pad"},"layer":{"role":"atmosphere"}}},
-        {"$comment":"beyond its 64 km map no ground of its own: the Earth it stands on goes on there, the map's last 8 km fading into it; sol's Earth takes the plains' colour round them (their footprint)"},
+            "site":{"label":"Cloud · High Plains","at":{"pos":[0,-1300,0],"on":"plains-pad"}}},
+        {"$comment":"beyond its 64 km map no ground of its own: the Earth it stands on goes on there, the map's last 8 km dithered into it; sol's Earth takes the plains' colour round them (their footprint)"},
         {"type":"terrain","of":"sky","vegetation":true,"outside":"none","edge":8000},
         {"$comment":"its air ends 40 km up (thinning out from 20 km): above it, and near the other bodies, the solar system shows bare"},
         {"type":"render","radar":false,"airTop":40000,"airFade":20000},
@@ -54,7 +54,7 @@
         {"type":"facility","fog":0.0005,"ambient":0.12},
 
         {"$comment":"the camera: sol's floating-origin flight, or (walking: the handheld's Walk) the facility's player"},
-        {"type":"camera","from":["sol","sector"],"carry":false},
+        {"type":"camera","controller":["sol","sector"],"carry":false},
         {"$comment":"the handheld's pages: scenarios/gui/compose-every-kit.json","type":"include","scenario":"gui/compose-every-kit"}
     ]
 }

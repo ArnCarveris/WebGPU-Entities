@@ -90,7 +90,8 @@ fn cloudAt(uv: vec2f) -> vec4f {
     let hdr = textureLoad(hdrTex, vec2i(i.pos.xy), 0).rgb;
     let c = cloudAt(i.uv);
     var col = hdr * c.a + c.rgb;
-    if (i32(F.ground.w) == 1) { col = hdr; }
+    // (render mode 1: no volumetrics; above its air in a frame it shares: none of it, the scene as it is)
+    if (i32(F.ground.w) == 1 || F.shellInfo.y > 0.5) { col = hdr; }
     if (F.bloom.x > 0.0) { col += textureSampleLevel(bloomTex, clampSamp, i.uv, 0.0).rgb * F.bloom.x / F.bloom.w; }
     // a flash close by lights everything up and floods the eye: the dark storm scene goes near white for an instant
     let fv = F.ambient.w;

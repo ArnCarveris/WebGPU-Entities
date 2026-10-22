@@ -76,7 +76,7 @@ class RendererExtension {
         this.fx = fx;
         const shared = renderer.frameSpec?.shared && engine.Common.Composite.isScope(renderer);
         this.frameSpec = shared ? renderer.frameSpec : renderer.frameSpecOf(RendererExtension, fx);
-        if (shared && this.frameSpec.display === 'radiance') throw new Error('gui: a frame in radiance (under an atmosphere) is not drawn yet');
+        this.radiance = !!shared && this.frameSpec.display === 'radiance';
         this.pipelines = {};
         this.materials = new Map();     // name -> { shading, view, version }
         this.instanceCount = 0;
@@ -92,7 +92,7 @@ class RendererExtension {
 
     async init() {
         this.device = this.fx.device;
-        this.format = this.fx.format;
+        this.format = this.radiance ? 'rgba16float' : this.fx.format;
         this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear', mipmapFilter: 'linear' });
         this.targets = new kit.GuiTargets(this.device, 'rgba8unorm', { max: GUI_TARGET_MAX });
         this.resize();
@@ -193,7 +193,7 @@ class RendererExtension {
     // ---- pipelines: a table (js/kits/gpu/pipelines.js) over the resolved stencil layout ----
     async createPipelines() {
         const device = this.device;
-        this.wgsl = guiWgsl();
+        this.wgsl = guiWgsl(this.radiance);
         const module = device.createShaderModule({ code: this.wgsl.code('SCENE') });
         await checkShaderModule(module);
 
@@ -392,7 +392,7 @@ class RenderView {
         u.set([eye[0], eye[1], eye[2], 1], 16);
         u.set([frame.time, frame.lightsOn ? 1 : 0, frame.alarmPulse, 0], 20);
         frame.lights.slice(0, MAX_LIGHTS).forEach((l, i) => u.set(l, 24 + i * 8));
-        u.set([frame.fog ?? 0.05, frame.ambient ?? 0, 0, 0], 72);
+        u.set([frame.fog ?? 0.05, frame.ambient ?? 0, frame.sceneScale ?? 1, 0], 72);
         this.renderer.device.queue.writeBuffer(this.buffer, 0, u);
     }
 

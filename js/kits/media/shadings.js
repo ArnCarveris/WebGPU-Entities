@@ -22,7 +22,7 @@ const WGSL_CCTV = /* wgsl */`
         v = v * (1.0 - dot(d, d) * 1.3);
         let feed = vec3f(v * 0.72, v, v * 0.8);
         let rgb = mix(vec3f(noise * 0.75), feed, clamp(i.color.r, 0.0, 1.0));
-        return vec4f(crt(rgb, i.gpos, 1.0), 1.0);
+        return vec4f(toScene(crt(rgb, i.gpos, 1.0)), 1.0);
     }
 `;
 

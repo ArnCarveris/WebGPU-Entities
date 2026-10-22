@@ -3,6 +3,15 @@
 
 Features.world('origin', (engine, kit) => {
 const { MAX_BODIES, ORIGIN_BYTES, BODY_FLOATS, FRAME_FLOATS, VERTEX_FLOATS, SAMPLES, WGSL } = kit;
+const TONE = 'fn tone(c: vec3f) -> vec3f { return pow(vec3f(1.0) - exp(-c * frame.misc.x), vec3f(1.0 / 2.2)); }';
+const TONE_RADIANCE = `fn tone(c: vec3f) -> vec3f {
+    let y = clamp(vec3f(1.0) - exp(-c * frame.misc.x), vec3f(0.0), vec3f(0.985));
+    let a = 2.51 - 2.43 * y;
+    let b = 0.03 - 0.59 * y;
+    let k = -0.14 * y;
+    return (-b + sqrt(b * b - 4.0 * a * k)) / (2.0 * a) * frame.misc.w;
+}`;
+if (!WGSL.includes(TONE)) throw new Error('origin: its tone curve is not where the radiance variant expects it');
 
 class RendererExtension {
     static key = 'origin';
@@ -23,11 +32,13 @@ class RendererExtension {
     async init() {
         const device = this.device = this.fx.device, spec = this.renderer.frameSpec;
         this.shared = !!spec?.shared;
-        if (this.shared && spec.display === 'radiance') throw new Error('origin: a frame in radiance (under an atmosphere) is not drawn yet');
-        this.format = this.fx.format;
+        this.radiance = this.shared && spec.display === 'radiance';
+        this.format = this.radiance ? 'rgba16float' : this.fx.format;
         const samples = this.shared ? spec.samples : SAMPLES, depthFormat = this.shared ? spec.depthFormat : 'depth32float';
 
-        const module = device.createShaderModule({ code: WGSL });
+        // (radiance: its tone curve's display value taken back through that kit's ACES and exposure, frame.misc.w the
+        // reciprocal of that exposure)
+        const module = device.createShaderModule({ code: this.radiance ? WGSL.replace(TONE, TONE_RADIANCE) : WGSL });
         const info = await module.getCompilationInfo();
         const errors = info.messages.filter(m => m.type === 'error');
         if (errors.length) throw new Error(errors.map(m => `WGSL ${m.lineNum}:${m.linePos} ${m.message}`).join('\n'));
@@ -146,7 +157,17 @@ class RendererExtension {
         f.pass.draw(3);
     }
 
-    outdoor(f) {
+    // under another kit's sky (a frame it shares: the atmosphere's), space is the background it is drawn over: the stars,
+    // the bodies, the instanced meshes
+    background(f) {
+        if (!this.shared || this.renderer.frameSpec.sky === RendererExtension.key) return;
+        this.sky(f);
+        this.draw(f);
+    }
+
+    outdoor(f) { if (!this.shared || this.renderer.frameSpec.sky === RendererExtension.key) this.draw(f); }
+
+    draw(f) {
         const { pass, world, bodyCount } = f;
         if (bodyCount) { pass.setPipeline(this.bodyPipe); pass.draw(36, bodyCount); }
         pass.setPipeline(this.meshPipe);

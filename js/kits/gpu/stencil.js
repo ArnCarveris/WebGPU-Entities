@@ -46,9 +46,15 @@ class StencilLayout {
         this.resolved = false;
     }
 
+    // (a slot reserved again by name is the same slot: kits drawing into one target share it, the first reservation's
+    // size; a flag and a value slot of one name don't mix)
     reserve(name, spec) {
+        const have = this.slots.get(name);
+        if (have) {
+            if (have.flag !== !!spec.flag) throw new Error(`stencil slot "${name}": reserved as a flag and as values`);
+            return have;
+        }
         if (this.resolved) throw new Error(`stencil slot "${name}": reserved after the layout was resolved (${this})`);
-        if (this.slots.has(name)) throw new Error(`stencil slot "${name}": reserved twice`);
         const s = new StencilSlot(name, spec);
         this.slots.set(name, s);
         return s;

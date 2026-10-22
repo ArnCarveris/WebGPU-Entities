@@ -113,7 +113,8 @@ class AppExtension {
             starVis = 1 - clamp(k * day * 3, 0, 1);
         }
         F.set([sky[0], sky[1], sky[2], starVis], 36);
-        F.set([this.lighting.exposure, this.lighting.sun, this.writeCovers(F, 44), 0], 40);
+        // (w: in a frame another kit maps from radiance, the reciprocal of that kit's exposure: its sky's, world.sunlight)
+        F.set([this.lighting.exposure, this.lighting.sun, this.writeCovers(F, 44), 1 / Math.max(this.fx.world.sunlight?.exposure ?? 1, 1e-4)], 40);
     }
 
     // The ground of the worlds standing on its bodies in a composition (their Site.footprint with an albedo: an

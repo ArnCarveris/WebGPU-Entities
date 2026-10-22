@@ -33,9 +33,6 @@ class Host {
     // the kits whose sites share the one World, Renderer and App with other kits' sites (docs/single-world-plan.md Phase 6:
     // one kit more each step)
     static SHARED = ['atmosphere', 'hydrology', 'imposter', 'interior', 'entities', 'gui'];
-    // ... and those that cannot draw under a kit that maps radiance (the atmosphere) yet: such a scenario stays on
-    // LegacyHost (Phase 6g)
-    static DISPLAY_ONLY = ['entities', 'gui'];
 
     // two views { pos, fwd } the same, but for rounding (a site's camera holds the one it is given in its own terms)
     static sameView(a, b) { return Host.same(a.pos, b.pos) && Host.same(a.fwd, b.fwd); }
@@ -160,8 +157,7 @@ class Host {
         const scenario = await this.loadScenario(id);
         // several sites, a kit among them that cannot share a frame yet: one world each, for now
         const roots = ScenarioFormat.roots(scenario);
-        const kits = roots.map(r => r.kit);
-        if (roots.length > 1 && (!kits.every(k => Host.SHARED.includes(k)) || (kits.includes('atmosphere') && kits.some(k => Host.DISPLAY_ONLY.includes(k))))) {
+        if (roots.length > 1 && !roots.every(r => Host.SHARED.includes(r.kit))) {
             const legacy = window.entities = new LegacyHost();
             return legacy.boot(this.catalog, scenario);
         }
@@ -252,6 +248,8 @@ class Host {
         const sky = this.renderer.shared?.sky;
         this.order = shared ? [...this.sites].sort((a, b) => !!a.spec.makesRoom - !!b.spec.makesRoom) : this.sites;
         this.skySite = shared ? this.order.find(s => s.renderKey === sky && s.world.sunlight) || null : null;
+        // (a site whose sun is a star in space, when another's sky lights the world: that sky follows it)
+        this.starSite = shared ? this.order.find(s => s !== this.skySite && s.world.sunlight?.()?.star) || null : null;
     }
 
     // the HUD root: the elements the sites ask for (their specs' hud: Site.HUD), once each
@@ -621,8 +619,14 @@ class Host {
         this.renderer.encodeFrame();
     }
 
-    // the sky's site, once it has framed: its sun is the world's (world.sunlight, in world space)
+    // the sky's site, once it has framed: its sun is the world's (world.sunlight, in world space). A star's site (the Sun
+    // of a solar system), once it has framed: the sky's sun stands where it does, seen from the sky's site
     lightFrom(site) {
+        if (site === this.starSite) {
+            const s = site.world.sunlight(), Fs = this.frameOf(site), F = this.frameOf(this.skySite);
+            const d = s && F.localDir(Fs.dir(s.toward(Fs.local(F.pos))));
+            if (d && !Host.same(d, this.starDir)) { this.starDir = d; this.skySite.world.set?.('sunDir', d); }
+        }
         if (site !== this.skySite) return;
         const s = site.world.sunlight(), F = this.frameOf(site);
         this.world.sunlight = s && { ...s, toward: p => F.dir(s.toward(F.local(p))) };

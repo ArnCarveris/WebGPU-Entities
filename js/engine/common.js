@@ -522,7 +522,8 @@ const Composite = {
     compose(host, list, ...args) {
         const out = [], sc = SCOPE.get(host);
         for (const E of list.flat()) {
-            if (E.key && E.key in host.ext) continue;
+            // (a key already there: the same extension, made once; in a scope another kit's of that key is not)
+            if (E.key && E.key in host.ext && (!sc || hasOwn(sc.fields.ext, E.key) || host.ext[E.key].constructor === E)) continue;
             const x = Composite.make(host, E, args);
             host.extensions.push(x);
             if (sc) sc.target.extensions.push(x);
