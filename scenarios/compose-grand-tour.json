@@ -4,8 +4,9 @@
     "order": 6,
     "description": "Four engines in one world: Entity Cloud's High Plains as the sky over Entity Water's Riverlands, Entity Imposter's valley and Entity Portal's bunker island, flown with the engine's free camera.",
     "entities": [
+        {"$comment":"the sky: High Plains; its sky, sun and weather are the world's"},
         {"type":"include","scenario":"cloud-high-plains","as":"sky","skip":["view"],
-            "site":{"label":"Cloud · High Plains","layer":{"role":"atmosphere"}}},
+            "site":{"label":"Cloud · High Plains"}},
         {"type":"render","radar":false},
         {"type":"weather","start":"fair cumulus"},
 
@@ -28,7 +29,7 @@
             "site":{"label":"Portal · Bunker","at":{"pos":[-11000,1521.2,15000]}}},
         {"type":"outdoor","fog":[0.62,0.66,0.72,0.0012],"sunColor":[1.1,0.95,0.8]},
 
-        {"$comment":"the engine's free camera: WASD, drag, wheel for speed, Space / C up and down, Shift ×5; the keys go to the sky first"},
+        {"$comment":"the engine's free camera: WASD, drag, wheel for speed, Space / C up and down, Shift ×5"},
         {"type":"camera","controller":"fly","pos":[1500,4200,14000],"look":[9000,1800,3000],"speed":300},
         {"type":"view","name":"Over the plains","pos":[1500,4200,14000],"look":[9000,1800,3000]},
         {"type":"view","name":"Riverlands","pos":[5200,1820,7000],"look":[6060,1435,5940]},
