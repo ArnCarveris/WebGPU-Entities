@@ -6,8 +6,11 @@ const { MAX_BODIES, ORIGIN_BYTES, BODY_FLOATS, FRAME_FLOATS, VERTEX_FLOATS, SAMP
 
 class RendererExtension {
     static key = 'origin';
-    // what it draws with alone (Renderer.frameSpec): display values, reversed depth (its own scale), MSAA
-    static frame = { display: 'display', depth: 'reversed', depthFormat: 'depth32float', samples: SAMPLES, near: kit.NEAR };
+    // what it draws with alone (Renderer.frameSpec): display values, reversed depth (its own scale), MSAA. In a frame it
+    // shares (frameSpec.shared) its sky is the frame's over a kit's own (space), its bodies and meshes go into the
+    // frame's scene at its samples and depth format, and its depth is in metres (the origin's scale folded into its
+    // projection: AppExtension.writeFrame)
+    static frame = { display: 'display', depth: 'reversed', depthFormat: 'depth32float', samples: SAMPLES, near: kit.NEAR, ranks: { sky: 2 } };
     // what it answers on the Renderer (Common.Composite)
     static exposes = ['bodyData', 'depth', 'depthView', 'device', 'draws', 'format', 'frameData', 'fx', 'height',
         'init', 'layout', 'render', 'resize', 'setWorld', 'width', 'writeOrigin'];
@@ -18,8 +21,11 @@ class RendererExtension {
     }
 
     async init() {
-        const device = this.device = this.fx.device;
+        const device = this.device = this.fx.device, spec = this.renderer.frameSpec;
+        this.shared = !!spec?.shared;
+        if (this.shared && spec.display === 'radiance') throw new Error('origin: a frame in radiance (under an atmosphere) is not drawn yet');
         this.format = this.fx.format;
+        const samples = this.shared ? spec.samples : SAMPLES, depthFormat = this.shared ? spec.depthFormat : 'depth32float';
 
         const module = device.createShaderModule({ code: WGSL });
         const info = await module.getCompilationInfo();
@@ -42,17 +48,17 @@ class RendererExtension {
             { binding: 4, visibility: vf, buffer: { type: 'read-only-storage' } },
         ] });
         const layout = device.createPipelineLayout({ bindGroupLayouts: [this.layout] });
-        const multisample = { count: SAMPLES };
+        const multisample = { count: samples };
         const targets = [{ format: this.format }];
         // stars' glow (fsBody) is alpha-blended over the sky; opaque bodies write alpha 1
         const glow = [{ format: this.format, blend: { color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha', operation: 'add' }, alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha', operation: 'add' } } }];
-        const depth = { format: 'depth32float', depthWriteEnabled: true, depthCompare: 'greater' };
+        const depth = { format: depthFormat, depthWriteEnabled: true, depthCompare: 'greater' };
         const [sky, body, mesh] = await Promise.all([
             device.createRenderPipelineAsync({
                 layout, multisample,
                 vertex: { module, entryPoint: 'vsSky' },
                 fragment: { module, entryPoint: 'fsSky', targets },
-                depthStencil: { format: 'depth32float', depthWriteEnabled: false, depthCompare: 'always' },
+                depthStencil: { format: depthFormat, depthWriteEnabled: false, depthCompare: 'always' },
             }),
             device.createRenderPipelineAsync({
                 layout, multisample,
@@ -107,6 +113,7 @@ class RendererExtension {
         if (w === this.width && h === this.height) return;
         this.width = w;
         this.height = h;
+        if (this.shared) return;
         for (const t of [this.msaa, this.depth]) t && t.destroy();
         this.msaa = this.device.createTexture({ size: [w, h], sampleCount: SAMPLES, format: this.format, usage: GPUTextureUsage.RENDER_ATTACHMENT });
         this.depth = this.device.createTexture({ size: [w, h], sampleCount: SAMPLES, format: 'depth32float', usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING });
@@ -130,6 +137,9 @@ class RendererExtension {
         pass.setBindGroup(0, this.bindGroup);
         return pass;
     }
+
+    // its bind group back on the scene pass after another kit drew in it (a shared frame: Renderer.encodeFrame)
+    bind(f) { f.pass.setBindGroup(0, this.bindGroup); }
 
     sky(f) {
         f.pass.setPipeline(this.skyPipe);

@@ -32,7 +32,7 @@ class Host {
     static DROPPED = 'dropped';
     // the kits whose sites share the one World, Renderer and App with other kits' sites (docs/single-world-plan.md Phase 6:
     // one kit more each step)
-    static SHARED = ['atmosphere', 'hydrology', 'imposter', 'interior'];
+    static SHARED = ['atmosphere', 'hydrology', 'imposter', 'interior', 'entities'];
 
     // two views { pos, fwd } the same, but for rounding (a site's camera holds the one it is given in its own terms)
     static sameView(a, b) { return Host.same(a.pos, b.pos) && Host.same(a.fwd, b.fwd); }
@@ -589,6 +589,7 @@ class Host {
         if (ctrl) {
             // (a controller site moves the camera itself, first)
             ctrl.world.frame(now, dt);
+            this.lightFrom(ctrl);
             this.fly.view = this.frameOf(ctrl).toWorld(ctrl.world.view);
         } else {
             const site = this.startSite, v = site?.sent && site.world.view;
@@ -603,13 +604,17 @@ class Host {
             site.world.setView?.(this.frameOf(site).toLocal(view));
             site.sent = site.world.view;
             site.world.frame(now, dt);
-            if (site === this.skySite) {
-                const s = site.world.sunlight(), F = this.frameOf(site);
-                this.world.sunlight = s && { ...s, toward: p => F.dir(s.toward(F.local(p))) };
-            }
+            this.lightFrom(site);
         }
         if (!sheltered) this.shelter(view);
         this.renderer.encodeFrame();
+    }
+
+    // the sky's site, once it has framed: its sun is the world's (world.sunlight, in world space)
+    lightFrom(site) {
+        if (site !== this.skySite) return;
+        const s = site.world.sunlight(), F = this.frameOf(site);
+        this.world.sunlight = s && { ...s, toward: p => F.dir(s.toward(F.local(p))) };
     }
 
     // The camera inside an interior of a site (Site.sheltered: a building, a vehicle's cabin, a portal area) is inside for

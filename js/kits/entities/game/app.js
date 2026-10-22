@@ -91,10 +91,13 @@ class AppExtension {
         const r = this.renderer, o = this.floating.origin, cam = this.camera, F = r.frameData;
         const camO = o.toLocal(cam.pos), qO = quat.mul(quat.conj(o.q), cam.q), [X, Y, Z] = quat.axes(qO);
         const aspect = r.width / r.height, tanH = Math.tan(cam.fov / 2);
-        this.viewProj = m4.mul(m4.reversedInfinite(cam.fov, aspect, NEAR), m4.view(qO, camO));
+        // (in a shared frame its depth is in metres, every kit's: the near plane in origin units is the frame's over the
+        // origin's scale, so the scale never reaches the depth)
+        const near = r.frameSpec?.shared ? r.frameSpec.near / o.scale : NEAR;
+        this.viewProj = m4.mul(m4.reversedInfinite(cam.fov, aspect, near), m4.view(qO, camO));
         F.set(this.viewProj, 0);
         F.set([camO[0], camO[1], camO[2], this.time % 3600], 16);
-        F.set([-Z[0], -Z[1], -Z[2], NEAR], 20);
+        F.set([-Z[0], -Z[1], -Z[2], near], 20);
         F.set([X[0], X[1], X[2], tanH * aspect], 24);
         F.set([Y[0], Y[1], Y[2], tanH], 28);
         const sun = o.toLocal(this.world.sunPos);
