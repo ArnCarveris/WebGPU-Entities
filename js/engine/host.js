@@ -32,7 +32,10 @@ class Host {
     static DROPPED = 'dropped';
     // the kits whose sites share the one World, Renderer and App with other kits' sites (docs/single-world-plan.md Phase 6:
     // one kit more each step)
-    static SHARED = ['atmosphere', 'hydrology', 'imposter', 'interior', 'entities'];
+    static SHARED = ['atmosphere', 'hydrology', 'imposter', 'interior', 'entities', 'gui'];
+    // ... and those that cannot draw under a kit that maps radiance (the atmosphere) yet: such a scenario stays on
+    // LegacyHost (Phase 6g)
+    static DISPLAY_ONLY = ['entities', 'gui'];
 
     // two views { pos, fwd } the same, but for rounding (a site's camera holds the one it is given in its own terms)
     static sameView(a, b) { return Host.same(a.pos, b.pos) && Host.same(a.fwd, b.fwd); }
@@ -157,7 +160,8 @@ class Host {
         const scenario = await this.loadScenario(id);
         // several sites, a kit among them that cannot share a frame yet: one world each, for now
         const roots = ScenarioFormat.roots(scenario);
-        if (roots.length > 1 && !roots.every(r => Host.SHARED.includes(r.kit))) {
+        const kits = roots.map(r => r.kit);
+        if (roots.length > 1 && (!kits.every(k => Host.SHARED.includes(k)) || (kits.includes('atmosphere') && kits.some(k => Host.DISPLAY_ONLY.includes(k))))) {
             const legacy = window.entities = new LegacyHost();
             return legacy.boot(this.catalog, scenario);
         }
@@ -329,12 +333,16 @@ class Host {
         const ents = scenario.entities || [];
         // The camera: a site's (one site), or the engine's (camera.controller: fly). With several sites there is one camera,
         // driven by the engine (starting at camera.start: that site's start view) or by a site's own (camera.controller:
-        // its id; its player walking and colliding the site's way) that the engine's follows; every other site's camera
-        // follows it in its frame
+        // its id, or several: the first drives, the Walk switch picks the first that walks or flies; its player walking and
+        // colliding the site's way) that the engine's follows; every other site's camera follows it in its frame.
+        // camera.carry false: a controller taking over goes on from where it was, not from where the camera is
         const cam = this.cameraDef = ents.find(e => e.type === 'camera' && ScenarioFormat.isEngine(e)) || {};
         if (cam.controller === 'fly' || this.shared) {
             this.fly = new FlyCamera(cam, this.router.scope('engine'), (x, y, z) => this.floorAt(x, y, z));
-            this.controller = this.controllerSite = this.shared && this.sites.find(s => s.id === cam.controller) || null;
+            this.controllerSites = this.shared ? [].concat(cam.controller ?? []).map(id => this.sites.find(s => s.id === id)).filter(Boolean) : [];
+            this.controller = this.controllerSites[0] || null;
+            // (where each other controller's camera is: with carry false it goes on from there when it takes over)
+            for (const s of this.controllerSites.slice(1)) s.left = s.world.view;
             if (!this.controller) this.router.always.add('engine');
             for (const s of this.sites) s.ctx.cameraLocked = s !== this.controller;
             const start = this.controller || this.sites.find(s => s.id === (cam.start ?? [].concat(cam.from ?? [])[0]));
@@ -424,13 +432,16 @@ class Host {
     // (camera.controller: its own walking or flight), else the engine's, walking on every site's ground: each takes over
     // from where the camera is
     shareMove(mode) {
-        const site = this.controllerSite, view = this.fly.view;
-        const to = site && (site.world.moves || ['fly']).includes(mode) ? site : null;
+        const view = this.fly.view, to = this.controllerSites.find(s => (s.world.moves || ['fly']).includes(mode)) || null;
         if (to !== this.controller) {
+            const was = this.controller;
+            if (was) was.left = was.world.view;
             this.controller = to;
             for (const s of this.sites) s.ctx.cameraLocked = s !== to;
-            if (to) { this.router.always.delete('engine'); to.world.setView?.(this.frameOf(to).toLocal(view)); }
-            else { this.router.always.add('engine'); this.fly.view = view; }
+            if (to) {
+                this.router.always.delete('engine');
+                to.world.setView?.(this.cameraDef.carry === false && to.left ? to.left : this.frameOf(to).toLocal(view));
+            } else { this.router.always.add('engine'); this.fly.view = view; }
         }
         if (to) { if (to.world.move !== mode) to.world.setMove(mode); }
         else this.fly.eye.setMode(mode);

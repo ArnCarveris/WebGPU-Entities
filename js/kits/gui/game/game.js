@@ -144,14 +144,17 @@ class AppExtension {
         const r = this.renderer;
         let v = this.views.get(target);
         if (!v) {
-            const depth = r.device.createTexture({ size: [target.width, target.height], format: r.sceneDepthFormat(), usage: GPUTextureUsage.RENDER_ATTACHMENT });
-            v = { depthView: depth.createView(), view: r.createView() };
+            // (at the frame's samples, resolved into the target: a shared frame's may be more than one)
+            const size = [target.width, target.height], n = r.frameSpec.samples, U = GPUTextureUsage;
+            const depth = r.device.createTexture({ size, format: r.sceneDepthFormat(), sampleCount: n, usage: U.RENDER_ATTACHMENT });
+            const msaa = n > 1 ? r.device.createTexture({ size, format: r.format, sampleCount: n, usage: U.RENDER_ATTACHMENT }).createView() : null;
+            v = { depthView: depth.createView(), view: r.createView(), msaa };
             if (target.material) v.view.exclude.add(target.material);     // can't sample the texture it renders into
             this.views.set(target, v);
         }
         v.view.update(r.frameDepth(M4.viewProjection(s.eye, s.dir, s.up, s.fovY, target.aspect, s.near, s.far)), s.eye, this.frameState);
         r.updateGuiTargets(enc, this.world.guis);
-        const pass = r.beginScenePass(target.colorView, v.depthView, v.view);
+        const pass = v.msaa ? r.beginScenePass(v.msaa, v.depthView, v.view, { resolve: target.colorView }) : r.beginScenePass(target.colorView, v.depthView, v.view);
         this.world.render(pass, { showAvatar: s.showAvatar, skip: s.skip });
         pass.end();
     }
@@ -190,7 +193,9 @@ class AppExtension {
         // Views and render targets for this frame
         const frame = this.frameState = world.frameState(t);
         const view = player.viewMatrix();
-        this.mainView.update(r.frameDepth(M4.multiply(M4.perspective(player.fovy, r.aspect, r.frameSpec.near, this.far), view)), player.eye, frame);
+        // (a shared frame's depth: every kit's the same, reversed with an infinite far plane)
+        const shared = r.frameSpec.shared && engine.Common.m4.reversedInfinite(player.fovy, r.aspect, r.frameSpec.near);
+        this.mainView.update(shared ? M4.multiply(shared, view) : r.frameDepth(M4.multiply(M4.perspective(player.fovy, r.aspect, r.frameSpec.near, this.far), view)), player.eye, frame);
         this.app.each('prepare');
 
         world.writeInstances(r);

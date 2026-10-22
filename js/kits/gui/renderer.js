@@ -69,11 +69,14 @@ class RendererExtension {
     // fx: the feature context (the host's device, canvas size and target; see js/engine/host.js; stencilTarget: the
     // depth-stencil target it draws into, 'scene' by default). It may be the renderer's own extension (the gui world's)
     // or one attached beside another kit's (the handheld's): it draws in its own conventions (frameSpec) and its own
-    // depth target, and what it makes (views, passes) talks to it, not to the renderer
+    // depth target, and what it makes (views, passes) talks to it, not to the renderer. As a kit's own extension in a
+    // frame it shares (frameSpec.shared), it draws in that frame's conventions: its facility into the frame's scene pass
     constructor(renderer, fx) {
         this.renderer = renderer;
         this.fx = fx;
-        this.frameSpec = renderer.frameSpecOf(RendererExtension, fx);
+        const shared = renderer.frameSpec?.shared && engine.Common.Composite.isScope(renderer);
+        this.frameSpec = shared ? renderer.frameSpec : renderer.frameSpecOf(RendererExtension, fx);
+        if (shared && this.frameSpec.display === 'radiance') throw new Error('gui: a frame in radiance (under an atmosphere) is not drawn yet');
         this.pipelines = {};
         this.materials = new Map();     // name -> { shading, view, version }
         this.instanceCount = 0;
@@ -339,7 +342,8 @@ class RendererExtension {
         return s ? this.beginScenePass(s.color || this.swapView, s.depth || this.depthView, s.view, s) : null;
     }
 
-    indoor(f) { f.draw?.(f.pass); }
+    // (in a shared frame the pass is the frame's: wrapped here, the facility drawing as in its own)
+    indoor(f) { f.draw?.(f.pass instanceof ScenePass ? f.pass : new ScenePass(this, f.pass, f.scene.view)); }
 
     // (this.encoder: the frame encoder while a frame is encoded)
     beginFrame() {
@@ -359,10 +363,11 @@ class RendererExtension {
         };
     }
 
-    // A scene pass into `colorView`. `load` keeps what's already there (the phone draws over the world).
-    beginScenePass(colorView, depthView, view, { load = false } = {}) {
+    // A scene pass into `colorView`. `load` keeps what's already there (the phone draws over the world); resolve: the
+    // view colorView (multisampled: a shared frame's samples) resolves into
+    beginScenePass(colorView, depthView, view, { load = false, resolve = null } = {}) {
         const pass = this.encoder.beginRenderPass({
-            colorAttachments: [{ view: colorView, clearValue: CLEAR_COLOR, loadOp: load ? 'load' : 'clear', storeOp: 'store' }],
+            colorAttachments: [{ view: colorView, resolveTarget: resolve || undefined, clearValue: CLEAR_COLOR, loadOp: load ? 'load' : 'clear', storeOp: resolve ? 'discard' : 'store' }],
             depthStencilAttachment: this.depthAttachment(depthView)
         });
         return new ScenePass(this, pass, view);

@@ -4,7 +4,8 @@
     "order": 5,
     "description": "Entity GUI's facility (airlock terminal, CCTV, easel, handheld) stands at Entity Origin's Shackleton Base on the Moon. Fly around it with the floating-origin camera; the handheld's Walk hands the camera to the facility's player inside, with its world-space GUIs.",
     "entities": [
-        {"type":"include","scenario":"origin-sol-transit","as":"sol","site":{"label":"Origin · Sol Transit","layer":{"sky":true,"focus":true}}},
+        {"$comment":"the solar system: its sky (space) and its Sun are the world's"},
+        {"type":"include","scenario":"origin-sol-transit","as":"sol","site":{"label":"Origin · Sol Transit"}},
         {"type":"prop","id":"sector07-pad","label":"Sector 07","model":"marker","parent":"moonbase","offset":[-58,0,8],"rot":[90,0,0]},
         {"type":"bookmark","key":"8","name":"Sector 07, Shackleton Base","at":{"parent":"sector07-pad","offset":[14,6,18]},"look":"sector07-pad"},
         {"type":"start","value":"8"},
@@ -18,7 +19,7 @@
         {"type":"facility","fog":0.0005,"ambient":0.12},
 
         {"$comment":"the camera: sol's flight, or (walking: the handheld's Walk) the facility's player, each going on from where it was"},
-        {"type":"camera","from":["sol","sector"],"carry":false},
+        {"type":"camera","controller":["sol","sector"],"carry":false},
 
         {"type":"hud.toast","text":"The handheld's Walk takes you into the facility","ms":5000},
         {"$comment":"the handheld's pages: scenarios/gui/compose-moonbase-sector07.json","type":"include","scenario":"gui/compose-moonbase-sector07"}
