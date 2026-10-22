@@ -34,17 +34,17 @@
     }
    ],
    "counts": {
-    "Renderer": 3,
-    "App": 2,
-    "World": 2
+    "World": 1,
+    "Renderer": 1,
+    "App": 1
    },
    "submitsPerFrame": [
-    3,
-    3
+    1,
+    1
    ],
    "writesPerFrame": [
-    11,
-    13
+    8,
+    10
    ],
    "kits": [
     "atmosphere",
@@ -108,17 +108,17 @@
     }
    ],
    "counts": {
-    "Renderer": 3,
-    "App": 2,
-    "World": 2
+    "World": 1,
+    "Renderer": 1,
+    "App": 1
    },
    "submitsPerFrame": [
-    3,
-    3
+    1,
+    1
    ],
    "writesPerFrame": [
-    86,
-    86
+    83,
+    83
    ],
    "kits": [
     "atmosphere",
@@ -138,36 +138,36 @@
     "weather",
     "world"
    ],
-   "noise": 0.029505208333333335,
-   "noiseMax": 4,
+   "noise": 0.0283125,
+   "noiseMax": 8,
    "noiseByView": {
     "start.png": {
-     "frac": 0.025694444444444443,
-     "max": 4
+     "frac": 0.02739236111111111,
+     "max": 6
     },
     "view-valley-0.png": {
-     "frac": 0.021918402777777776,
-     "max": 4
+     "frac": 0.021432291666666665,
+     "max": 8
     },
     "view-valley-1.png": {
-     "frac": 0.029505208333333335,
-     "max": 4
+     "frac": 0.0283125,
+     "max": 5
     },
     "view-valley-2.png": {
-     "frac": 0.01642708333333333,
-     "max": 4
+     "frac": 0.01735590277777778,
+     "max": 6
     },
     "view-valley-3.png": {
-     "frac": 0.01984722222222222,
+     "frac": 0.020701388888888887,
      "max": 2
     },
     "view-valley-4.png": {
-     "frac": 0.013114583333333334,
+     "frac": 0.012868055555555556,
      "max": 2
     },
     "view-valley-5.png": {
-     "frac": 0.003390625,
-     "max": 1
+     "frac": 0.003265625,
+     "max": 2
     }
    },
    "errors": [],
@@ -247,17 +247,17 @@
     }
    ],
    "counts": {
-    "Renderer": 3,
-    "App": 2,
-    "World": 2
+    "World": 1,
+    "Renderer": 1,
+    "App": 1
    },
    "submitsPerFrame": [
-    3,
-    3
+    1,
+    1
    ],
    "writesPerFrame": [
-    12,
-    12
+    9,
+    9
    ],
    "kits": [
     "atmosphere",
@@ -277,18 +277,9 @@
     "weather",
     "world"
    ],
-   "noise": 0.00011111111111111112,
-   "noiseMax": 2,
-   "noiseByView": {
-    "view-bunker-3.png": {
-     "frac": 0.00009201388888888889,
-     "max": 1
-    },
-    "view-bunker-8.png": {
-     "frac": 0.00011111111111111112,
-     "max": 2
-    }
-   },
+   "noise": 0,
+   "noiseMax": 0,
+   "noiseByView": {},
    "errors": [],
    "warnings": []
   },
@@ -376,17 +367,17 @@
     }
    ],
    "counts": {
-    "Renderer": 3,
-    "App": 2,
-    "World": 2
+    "World": 1,
+    "Renderer": 1,
+    "App": 1
    },
    "submitsPerFrame": [
-    3,
-    3
+    1,
+    1
    ],
    "writesPerFrame": [
-    89,
-    99
+    86,
+    105
    ],
    "kits": [
     "entities",
@@ -399,39 +390,39 @@
     "view",
     "world"
    ],
-   "noise": 0.043067708333333336,
-   "noiseMax": 8,
+   "noise": 0.04563715277777778,
+   "noiseMax": 31,
    "noiseByView": {
     "start.png": {
-     "frac": 0.036229166666666666,
-     "max": 5
+     "frac": 0.03902083333333333,
+     "max": 31
     },
     "view-sol-7.png": {
-     "frac": 0.036229166666666666,
-     "max": 5
+     "frac": 0.03901909722222222,
+     "max": 31
     },
     "view-valley-0.png": {
-     "frac": 0.02961284722222222,
-     "max": 8
+     "frac": 0.032921875,
+     "max": 16
     },
     "view-valley-1.png": {
-     "frac": 0.043067708333333336,
-     "max": 6
+     "frac": 0.04563715277777778,
+     "max": 12
     },
     "view-valley-2.png": {
-     "frac": 0.021237847222222224,
+     "frac": 0.02442361111111111,
      "max": 8
     },
     "view-valley-3.png": {
-     "frac": 0.01675347222222222,
+     "frac": 0.021211805555555557,
      "max": 2
     },
     "view-valley-4.png": {
-     "frac": 0.016182291666666668,
+     "frac": 0.019651041666666667,
      "max": 2
     },
     "view-valley-5.png": {
-     "frac": 0.001963541666666667,
+     "frac": 0.002762152777777778,
      "max": 1
     }
    },
@@ -517,17 +508,17 @@
     }
    ],
    "counts": {
-    "Renderer": 3,
-    "App": 2,
-    "World": 2
+    "World": 1,
+    "Renderer": 1,
+    "App": 1
    },
    "submitsPerFrame": [
-    3,
-    3
+    1,
+    1
    ],
    "writesPerFrame": [
-    12,
-    13
+    10,
+    10
    ],
    "kits": [
     "entities",
@@ -541,9 +532,18 @@
     "view",
     "world"
    ],
-   "noise": 0,
-   "noiseMax": 0,
-   "noiseByView": {},
+   "noise": 0.00003125,
+   "noiseMax": 1,
+   "noiseByView": {
+    "view-sector-1.png": {
+     "frac": 0.00003125,
+     "max": 1
+    },
+    "view-sector-5.png": {
+     "frac": 0.000010416666666666666,
+     "max": 1
+    }
+   },
    "errors": [],
    "warnings": []
   },
@@ -701,17 +701,17 @@
     }
    ],
    "counts": {
-    "Renderer": 5,
-    "App": 4,
-    "World": 4
+    "World": 1,
+    "Renderer": 1,
+    "App": 1
    },
    "submitsPerFrame": [
-    5,
-    5
+    1,
+    1
    ],
    "writesPerFrame": [
-    97,
-    99
+    92,
+    94
    ],
    "kits": [
     "atmosphere",
@@ -733,43 +733,35 @@
     "weather",
     "world"
    ],
-   "noise": 0.03273784722222222,
-   "noiseMax": 16,
+   "noise": 0.033463541666666666,
+   "noiseMax": 7,
    "noiseByView": {
     "view-engine-2.png": {
-     "frac": 0.03273784722222222,
-     "max": 8
+     "frac": 0.033463541666666666,
+     "max": 7
     },
     "view-valley-0.png": {
-     "frac": 0.022053819444444445,
-     "max": 7
+     "frac": 0.022387152777777777,
+     "max": 6
     },
     "view-valley-1.png": {
-     "frac": 0.02943576388888889,
-     "max": 7
+     "frac": 0.02974826388888889,
+     "max": 6
     },
     "view-valley-2.png": {
-     "frac": 0.019041666666666665,
-     "max": 16
+     "frac": 0.01874652777777778,
+     "max": 6
     },
     "view-valley-3.png": {
-     "frac": 0.020921875,
+     "frac": 0.021135416666666667,
      "max": 2
     },
     "view-valley-4.png": {
-     "frac": 0.013354166666666667,
+     "frac": 0.013815972222222223,
      "max": 2
     },
     "view-valley-5.png": {
-     "frac": 0.0035277777777777777,
-     "max": 1
-    },
-    "view-bunker-3.png": {
-     "frac": 0.00019270833333333333,
-     "max": 1
-    },
-    "view-bunker-8.png": {
-     "frac": 0.00010590277777777777,
+     "frac": 0.003685763888888889,
      "max": 2
     }
    },
