@@ -110,8 +110,10 @@ class Renderer {
     // it; one sample with a kit whose volumetrics read single-sample depth (frame.single: the atmosphere's march), else the
     // most any asks for; the nearest near plane. And who draws what only one may (frame.ranks, the highest): `sky`, the
     // frame's one sky (the atmosphere's over space's over a kit's own); `post`, the kit whose scene targets the others draw
-    // into and whose post and final passes map them to the canvas
-    share(device, kits) {
+    // into and whose post and final passes map them to the canvas. With no such kit (display values only) the scene
+    // targets are the core's (sceneTargets): output { format, size(), target() } (the canvas)
+    share(device, kits, output) {
+        this.output = { ...output, device };
         const specs = kits.map(k => ({ ...k, s: frameSpec(k.E, k.fx) }));
         const rank = (E, r) => E.frame?.ranks?.[r] ?? 0;
         const best = r => specs.reduce((b, k) => (rank(k.E, r) > (b ? rank(b.E, r) : 0) ? k : b), null)?.key ?? null;
@@ -164,7 +166,37 @@ class Renderer {
 
     // a shared frame's scene targets, the `post` kit's (its targets(): { color, colorView, depth, depthView (the
     // attachment), depthSample (its depth aspect), stencil (whether it has one), width, height })
-    sceneTargets() { return this.shared && this.ext[this.shared.post]?.targets?.(); }
+    sceneTargets() {
+        if (!this.shared) return null;
+        return this.shared.post ? this.ext[this.shared.post]?.targets?.() : this.coreTargets();
+    }
+
+    // the core's scene targets (a shared frame of display values): the canvas, through an MSAA colour at the frame's
+    // samples, and the frame's depth(-stencil)
+    coreTargets() {
+        const spec = this.shared, o = this.output, [w, h] = o.size(), U = GPUTextureUsage, d = o.device;
+        let T = this.core;
+        if (!T || T.width !== w || T.height !== h) {
+            T?.colorTex?.destroy();
+            T?.depth.destroy();
+            const n = spec.samples;
+            const colorTex = n > 1 ? d.createTexture({ size: [w, h], format: o.format, sampleCount: n, usage: U.RENDER_ATTACHMENT }) : null;
+            const depth = d.createTexture({ size: [w, h], format: spec.depthFormat, sampleCount: n, usage: U.RENDER_ATTACHMENT | U.TEXTURE_BINDING });
+            T = this.core = { width: w, height: h, colorTex, msaaView: colorTex?.createView(), depth, depthView: depth.createView(),
+                depthSample: depth.createView({ aspect: 'depth-only' }), stencil: /stencil/.test(spec.depthFormat) };
+        }
+        return { ...T, color: null, colorView: T.msaaView || o.target(), resolve: T.msaaView ? o.target() : null };
+    }
+
+    // the scene pass on the core's targets, cleared
+    coreScene(enc) {
+        const T = this.coreTargets(), ds = T.stencil ? { stencilClearValue: 0, stencilLoadOp: 'clear', stencilStoreOp: 'discard' } : {};
+        return enc.beginRenderPass({
+            label: 'scene',
+            colorAttachments: [{ view: T.colorView, resolveTarget: T.resolve || undefined, clearValue: [0, 0, 0, 1], loadOp: 'clear', storeOp: T.resolve ? 'discard' : 'store' }],
+            depthStencilAttachment: { view: T.depthView, depthClearValue: 0, depthLoadOp: 'clear', depthStoreOp: 'store', ...ds },
+        });
+    }
 
     // the frame's command encoder, and what runs once the frame is submitted
     frameEncoder() { return (this.gpuFrame ??= new GpuFrame(this.device)).enc; }
@@ -172,10 +204,11 @@ class Renderer {
     get frameId() { return this.gpuFrame?.id ?? 0; }
 
     // the frame's stages, its own extension's (see above; or x's, one attached), into the frame encoder
-    // In a shared frame (share) a kit's frame encodes its compute at once and the rest with every other kit's (encodeFrame)
+    // In a shared frame (share) a kit's frame encodes its compute at once and the rest with every other kit's (encodeFrame);
+    // one into a view target of its own (f.target: CCTV, the phone camera) all at once
     encode(f = {}, x = Composite.ownOf(this)) {
         f.enc ??= this.frameEncoder();
-        if (this.shared && Composite.isScope(this) && x === Composite.ownOf(this)) {
+        if (this.shared && !f.target && Composite.isScope(this) && x === Composite.ownOf(this)) {
             x.compute?.(f);
             this.pending.push({ x, f });
             return f;
@@ -203,9 +236,10 @@ class Renderer {
         for (const s of Renderer.STAGES) {
             if (s === 'compute') continue;
             if (s !== 'scene') { for (const p of list) p.x[s]?.(p.f); continue; }
-            const pass = list[0].x.scene?.(list[0].f);
+            const own = spec.post && key(list[0]) === spec.post;
+            const pass = own ? list[0].x.scene?.(list[0].f) : this.coreScene(list[0].f.enc);
             if (!pass) continue;
-            let last = list[0];
+            let last = own ? list[0] : null;
             for (const p of list) p.f.pass = pass;
             for (const t of Renderer.SCENE) {
                 for (const p of list) {

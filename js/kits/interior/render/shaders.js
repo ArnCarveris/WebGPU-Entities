@@ -14,6 +14,7 @@ const WGSL_COMMON = /* wgsl */`
 struct Globals {
     viewProj: mat4x4f, invViewProj: mat4x4f, eye: vec4f, sunDir: vec4f, sunColor: vec4f,
     skyTop: vec4f, skyHorizon: vec4f, params: vec4f,
+    scene: vec4f,       // x: in a shared frame, the reciprocal of the exposure of the kit that maps it (TONEMAP)
 };
 struct Light { posRad: vec4f, color: vec4f };
 // a light shining in through portals (features/lightTransport/light-transport.js): posRad.w = 0 is the sun; ap = up to two apertures
@@ -29,7 +30,6 @@ struct Material { albedo: vec4f, params: vec4f, emissive: vec4f };
 ${NoiseWGSL.hashSin2('hash2')}
 ${NoiseWGSL.value2('vnoise', 'hash2')}
 ${NoiseWGSL.fbm('fbm', 'vnoise', { octaves: 4, shift: [1.7, 9.2] })}
-fn tonemap(c: vec3f) -> vec3f { return pow(vec3f(1.0) - exp(-c * 1.15), vec3f(1.0 / 2.2)); }
 fn skyColor(dir: vec3f) -> vec3f {
     let t = dir.y;
     var col = mix(G.skyHorizon.rgb, G.skyTop.rgb, pow(max(t, 0.0), 0.6));
@@ -292,9 +292,11 @@ fn throughLight(col: vec3f, ai: u32, wpos: vec3f, N: vec3f, V: vec3f, albedo: ve
 `;
 
 // the core's library (a new one per renderer: the features on in its world change it) and its modules' chunks
-function portalWgsl() {
+// radiance: its passes write a shared frame's radiance (TO_RADIANCE), not display values
+function portalWgsl(radiance = false) {
     const L = new kits.gpu.WgslLibrary();
-    L.define('COMMON', WGSL_COMMON);
+    L.define('TONEMAP', radiance ? TO_RADIANCE : TONEMAP);
+    L.define('COMMON', WGSL_COMMON, { needs: ['TONEMAP'] });
     L.define('DRAW', WGSL_DRAW, { needs: ['COMMON'] });
     L.define('THROUGH', NO_THROUGH, { needs: ['COMMON'] });
     L.define('WORLD', WGSL_WORLD, { needs: ['COMMON', 'DRAW', 'THROUGH'] });
@@ -305,6 +307,23 @@ function portalWgsl() {
     L.define('LINES', WGSL_LINES, { needs: ['COMMON'] });
     return L;
 }
+// Its tone curve (what its passes write: display values), or, drawing into a frame another kit maps to the display
+// (Renderer.share: radiance), the radiance that kit shows as this curve would: its display value taken back through that
+// kit's ACES and exposure (G.scene.x, its reciprocal)
+const TONEMAP = /* wgsl */`
+fn tonemap(c: vec3f) -> vec3f { return pow(vec3f(1.0) - exp(-c * 1.15), vec3f(1.0 / 2.2)); }
+`;
+const TO_RADIANCE = /* wgsl */`
+fn tonemap(c: vec3f) -> vec3f {
+    // y = aces(x): a x^2 + b x + c = 0
+    let y = clamp(vec3f(1.0) - exp(-c * 1.15), vec3f(0.0), vec3f(0.985));
+    let a = 2.51 - 2.43 * y;
+    let b = 0.03 - 0.59 * y;
+    let k = -0.14 * y;
+    return (-b + sqrt(b * b - 4.0 * a * k)) / (2.0 * a) * G.scene.x;
+}
+`;
+
 const PORTAL_MODULES = { world: ['WORLD'], sky: ['SKY'], poly: ['POLY'], lines: ['LINES'] };
 
 return { portalWgsl, PORTAL_MODULES };

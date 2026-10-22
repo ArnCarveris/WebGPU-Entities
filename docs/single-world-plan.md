@@ -4,7 +4,7 @@ Status: Phases 0-5 done on branch `claude/single-world-177086` (2026-10-22): the
 many extensions, one encoder and submit, frame conventions, the scenario format with sites, and the single-site
 scenarios on one World, Renderer and App (the compositions on js/engine/legacy-host.js). Phase 6 (Q1-Q4 answered: 1x
 MSAA under the atmosphere, sky rank atmosphere > space > own, `river.rain` kept as a site link, origin scale into the
-model matrices) moves the compositions one at a time: 6a (storm-riverlands) and 6b (valley-weather) done; Q5 and Q6 still open. Written 2026-10-21 against `main` at 756d5ee (soft
+model matrices) moves the compositions one at a time: 6a (storm-riverlands) 6b (valley-weather) and 6c (bunker-reservoir) done; Q5 and Q6 still open. Written 2026-10-21 against `main` at 756d5ee (soft
 shadows), with `docs/sdf-kit-plan.md` uncommitted beside it.
 
 The goal, in the user's words: the worlds (cloud, portal, water, gui, origin, imposter) "are from separate

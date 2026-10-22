@@ -241,7 +241,7 @@ class AppExtension {
     followSun() {
         const s = this.fx.site && this.fx.world.sunlight;
         if (!s) return 1;
-        const d = this.fx.site.frame().localDir(s.dir), was = this.sunAlong;
+        const F = this.fx.site.frame(), d = F.localDir(s.toward(F.pos)), was = this.sunAlong;
         if (!was || Math.hypot(d[0] - was[0], d[1] - was[1], d[2] - was[2]) > 1e-5) { this.sunAlong = d; this.lighting.follow(d); }
         return 1 / Math.max(s.exposure, 1e-4);
     }

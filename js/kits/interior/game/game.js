@@ -150,11 +150,23 @@ class AppExtension {
 
     // update: world (vehicles first, so riding players use this frame's pose), player; render: visibility, the
     // frame. The host runs both, or (in a composition) the camera's world updates before the others render
+    // In a world lit by another site's sky (world.sunlight: the frame's one sun): its outdoors' sun where that one is
+    // (toward it, in this site's frame), and its display values taken into the frame's radiance by that sky's exposure
+    // (sceneScale, G.scene.x)
+    followSun() {
+        const s = this.fx.site && this.fx.world.sunlight;
+        if (!s) return;
+        const F = this.fx.site.frame();
+        this.world.sunAlong = v3.norm(F.localDir(s.toward(F.pos)));
+        this.sceneScale = 1 / Math.max(s.exposure, 1e-4);
+    }
+
     frame(now, dt, { update = true, render = true } = {}) {
         dt = Math.min(0.05, dt);
         const t = now / 1000;
         const { world: w, player, stats } = this;
         if (update) {
+            this.followSun();
             stats.fps = stats.fps * 0.93 + (1 / Math.max(dt, 1e-4)) * 0.07;
             w.update(dt, t, [player.cam.pos]);
             if (!this.fx.cameraLocked) player.update(dt, this.input.keys);
@@ -186,7 +198,9 @@ class AppExtension {
 
         const { fwd, up } = player.basis(), eye = player.cam.pos;
         const proj = m4.perspective(player.cam.fov, W / H, R.frameSpec.near, 400);
-        const viewProj = m4.mul(proj, m4.lookAt(eye, v3.add(eye, fwd), up));
+        const view = m4.lookAt(eye, v3.add(eye, fwd), up), viewProj = m4.mul(proj, view);
+        // (a shared frame's depth: every kit's the same, reversed with an infinite far plane; the traversal culls at 400 m)
+        const drawProj = R.frameSpec.shared ? m4.mul(m4.reversedInfinite(player.cam.fov, W / H, R.frameSpec.near), view) : R.frameDepth(viewProj);
 
         const t0 = performance.now();
         const I = this.inspector;
@@ -208,7 +222,7 @@ class AppExtension {
         this.app.each('frame', now, { eye, fwd, viewProj, height: H });
 
         const lines = I.lines();
-        R.render({ globals: this.globals(R.frameDepth(viewProj), eye, t, W, H, mode === 'stencil'), areas: w.lightingTable(t, eye), draws: fr.draws, cmds: fr.cmds, polys: fr.polys, stencil: mode === 'stencil', lines: lines.data, lineDepthCount: lines.depthCount });
+        R.render({ globals: this.globals(drawProj, eye, t, W, H, mode === 'stencil'), areas: w.lightingTable(t, eye), draws: fr.draws, cmds: fr.cmds, polys: fr.polys, stencil: mode === 'stencil', lines: lines.data, lineDepthCount: lines.depthCount });
 
         this.hud.tick(now, vis);
     }
@@ -232,7 +246,7 @@ class AppExtension {
     // Globals uniform: view-projection (+ inverse), eye, sun, sky colours, time, viewport and whether the
     // scene shader fogs through portals (stencil mode)
     globals(viewProj, eye, t, W, H, portalFog) {
-        const w = this.world, sc = w.scn.outdoor || {}, g = new Float32Array(56);
+        const w = this.world, sc = w.scn.outdoor || {}, g = new Float32Array(60);
         g.set(viewProj, 0);
         g.set(m4.invert(viewProj), 16);
         g.set([eye[0], eye[1], eye[2], 1], 32);
@@ -241,6 +255,7 @@ class AppExtension {
         g.set([...(sc.skyTop || [0.3, 0.55, 1.3]), 1], 44);
         g.set([...(sc.skyHorizon || [1.0, 1.15, 1.35]), 1], 48);
         g.set([t, W, H, portalFog ? 1 : 0], 52);
+        g.set([this.sceneScale ?? 1, 0, 0, 0], 56);
         return g;
     }
 }

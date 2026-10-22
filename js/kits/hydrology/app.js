@@ -85,7 +85,8 @@ class AppExtension {
     sunlit() {
         const s = this.world.sunlight, site = this.fx.site;
         if (!s || !site) return null;
-        return { ...this.light, dir: site.frame().localDir(s.dir), scale: this.light.exposure / Math.max(s.exposure, 1e-4) };
+        const F = site.frame();
+        return { ...this.light, dir: F.localDir(s.toward(F.pos)), scale: this.light.exposure / Math.max(s.exposure, 1e-4) };
     }
 
     jump(v) {

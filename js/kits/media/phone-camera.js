@@ -36,14 +36,14 @@ class PhoneCamera {
         const device = renderer.device;
         this.library.init(renderer);
         const [w, h] = this.cfg.photo.size;
-        this.target = new ViewTarget(device, renderer.format, w, h, { material: 'viewfinder', copySrc: true });
+        this.target = new ViewTarget(device, renderer.viewFormat ?? renderer.format, w, h, { material: 'viewfinder', copySrc: true });
         renderer.registerMaterial('viewfinder', 'gui', this.target.colorView);
 
         const module = device.createShaderModule({ code: BLIT_SHADER });
         this.blitPipeline = device.createRenderPipeline({
             layout: 'auto',
             vertex: { module, entryPoint: 'vs' },
-            fragment: { module, entryPoint: 'fs', targets: [{ format: renderer.format }] },
+            fragment: { module, entryPoint: 'fs', targets: [{ format: renderer.viewFormat ?? renderer.format }] },
             primitive: { topology: 'triangle-list' }
         });
         this.blitGroup = device.createBindGroup({

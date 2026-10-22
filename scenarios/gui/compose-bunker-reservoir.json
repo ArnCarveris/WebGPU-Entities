@@ -22,7 +22,7 @@
                         {"type":"label","title":"Storm cells","expr":"{sky.cells}"},
                         {"type":"label","title":"Flashes","expr":"{sky.flashes}"}
                     ],
-                    "footer": "` cycles the keys: the sky takes 1-9 weather."
+                    "footer": "The sky's weather is on its own pages."
                 }
             ]
         }

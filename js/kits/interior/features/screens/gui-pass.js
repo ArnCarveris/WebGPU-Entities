@@ -103,6 +103,8 @@ class GuiPass {
         modules.screen = ['WORLD', 'SCREEN'];
     }
     get format() { return this.renderer.format; }
+    // the view targets' (CCTV, the viewfinder: display values, whatever the frame's scene is)
+    get viewFormat() { return this.renderer.viewFormat; }
 
     async init(r, ctx) {
         const device = r.device, S = GPUShaderStage;

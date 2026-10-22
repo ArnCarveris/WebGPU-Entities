@@ -77,13 +77,14 @@ const atmosphereWorld = type => ({
     // its planned buildings' portal visibility (the building kit's RoomVis): floor map, traversal, frames on the handheld
     get inspector() { return this.app?.frameWriter?.roomVis?.inspector || null; },
 
-    // its sun (or moon by night), what lights the other sites (the host's world.sunlight): { dir (toward it, the same
-    // everywhere), color (its radiance), zenith, horizon, ambient (its sky's), exposure }, in its own radiance
+    // its sun (or moon by night), what lights the other sites (the host's world.sunlight): { toward(p) (the direction to
+    // it from p: the same everywhere), color (its radiance), zenith, horizon, ambient (its sky's), exposure }, in its own
+    // radiance
     sunlight() {
         const a = this.app, s = a?.sun, w = a?.world;
         if (!s || !w) return null;
         const sky = kits.weather.Sky.compute(s.azimuth, s.elevation, s.intensity, w.weather.cur, s.moon);
-        return { dir: sky.dir, color: sky.sun, zenith: sky.zenith, horizon: sky.horizon, ambient: sky.ambient, exposure: s.exposure };
+        return { toward: () => sky.dir, color: sky.sun, zenith: sky.zenith, horizon: sky.horizon, ambient: sky.ambient, exposure: s.exposure };
     },
 
     // toward its sun (or moon by night), the same everywhere: what lights the worlds under it in a composition

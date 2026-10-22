@@ -7,6 +7,7 @@ const {
     DEPTH_FORMAT, STENCIL, portalWgsl, PORTAL_MODULES,
 } = kit;
 const { buildPipelines, RenderExtensions } = engine.kits.gpu;
+const GLOBAL_BYTES = 240;           // the Globals uniform (render/shaders.js)
 
 // The renderer: pipelines for the scene, sky, stencil marks, water, glass / fog veils and debug lines, and one render pass
 // that executes a command list built by FrameBuilder, into the canvas or a view target (render(f, target), with its
@@ -36,10 +37,10 @@ class RendererExtension {
     static key = 'interior';
     // what it draws with alone (Renderer.frameSpec): display values, standard depth, 4x MSAA; it can draw in reversed depth
     static frame = { display: 'display', depth: 'standard', depthFormat: DEPTH_FORMAT, samples: 4, near: 0.05,
-        depths: ['standard', 'reversed'], formats: { standard: DEPTH_FORMAT, reversed: 'depth32float-stencil8' } };
+        depths: ['standard', 'reversed'], formats: { standard: DEPTH_FORMAT, reversed: 'depth32float-stencil8' }, ranks: { sky: 1 } };
     // what it answers on the Renderer (Common.Composite)
     static exposes = ['H', 'W', 'bgl0', 'bgl1', 'depth', 'depthSample', 'device', 'format', 'fx', 'info', 'init',
-        'onError', 'overlays', 'pipes', 'regions', 'render', 'resize', 'stencil', 'upload'];
+        'onError', 'overlays', 'pipes', 'regions', 'render', 'resize', 'stencil', 'upload', 'viewFormat'];
     // fx: the feature context (the host's device and canvas target; see js/engine/host.js)
     constructor(renderer, fx) {
         this.renderer = renderer;
@@ -71,13 +72,20 @@ class RendererExtension {
     // the extensions FrameBuilder asks for overlay commands
     get overlays() { return this.renderer.extensions.filter(x => x.overlay); }
 
+    // In a frame it shares with a kit that maps radiance to the canvas (frameSpec.shared), its scene draws into that
+    // kit's targets: its pipelines at the frame's samples, its tone curve mapped on to that kit's radiance (TONEMAP:
+    // G.scene.x, the reciprocal of that kit's exposure). Its view targets (CCTV, the phone camera: viewFormat) keep
+    // pipelines of their own (display values, its own samples), in the frame's depth convention: two sets (sets.scene,
+    // sets.view), each with the extensions' pipelines too (useSet)
     async init() {
-        const device = this.device = this.fx.device;
-        this.format = this.fx.format;
+        const device = this.device = this.fx.device, spec = this.renderer.frameSpec;
+        this.shared = !!spec.shared;
+        this.format = this.shared ? 'rgba16float' : this.fx.format;
+        this.viewFormat = this.fx.format;
         this.depthFormat = this.renderer.sceneDepthFormat();
 
         const U = GPUBufferUsage;
-        this.globalBuf = device.createBuffer({ size: 224, usage: U.UNIFORM | U.COPY_DST });
+        this.globalBuf = device.createBuffer({ size: GLOBAL_BYTES, usage: U.UNIFORM | U.COPY_DST });
         this.drawBuf = device.createBuffer({ size: MAX_DRAWS * DRAW_STRIDE, usage: U.UNIFORM | U.COPY_DST });
         this.lineBuf = device.createBuffer({ size: MAX_LINE_VERTS * 28, usage: U.VERTEX | U.COPY_DST });
         this.polyBuf = device.createBuffer({ size: MAX_POLY_VERTS * POLY_FLOATS * 4, usage: U.VERTEX | U.COPY_DST });
@@ -94,17 +102,8 @@ class RendererExtension {
         ] });
         this.drawBG = device.createBindGroup({ layout: this.bgl1, entries: [{ binding: 0, resource: { buffer: this.drawBuf, size: DRAW_FLOATS * 4 } }] });
 
-        // its shaders: the core's chunks, the extensions' over them, each module the chunks it names; the far depth the
-        // frame's
-        this.wgsl = portalWgsl();
-        if (this.renderer.frameSpec.depth === 'reversed') this.wgsl.replace('DEPTH', 'const FAR_Z: f32 = 0.0;');
-        const modules = Object.fromEntries(Object.entries(PORTAL_MODULES).map(([k, v]) => [k, [...v]]));
-        this.renderer.each('wgsl', this.wgsl, modules);
-        const mod = names => device.createShaderModule({ code: this.wgsl.code(...names) });
-        const ctx = {
-            device, format: this.format, depthFormat: this.depthFormat, samples: this.renderer.frameSpec.samples, stencil: this.stencil,
-            depth: this.renderer.frameSpec.depth,
-            modules: Object.fromEntries(Object.entries(modules).map(([k, names]) => [k, mod(names)])),
+        const base = {
+            device, depthFormat: this.depthFormat, stencil: this.stencil, depth: spec.depth,
             layouts: {
                 world: device.createPipelineLayout({ bindGroupLayouts: [this.bgl0, this.bgl1] }),
                 base: device.createPipelineLayout({ bindGroupLayouts: [this.bgl0] }),
@@ -126,13 +125,26 @@ class RendererExtension {
             },
             blends: { alpha: { color: { srcFactor: 'src-alpha', dstFactor: 'one-minus-src-alpha' }, alpha: { srcFactor: 'one', dstFactor: 'one-minus-src-alpha' } } },
         };
-        for (const x of this.renderer.extensions) await x.init?.(this.renderer, ctx);
+        // its shaders: the core's chunks, the extensions' over them, each module the chunks it names; the far depth the
+        // frame's, the tone curve the set's
+        const set = (format, samples, radiance) => {
+            const wgsl = portalWgsl(radiance);
+            if (spec.depth === 'reversed') wgsl.replace('DEPTH', 'const FAR_Z: f32 = 0.0;');
+            const modules = Object.fromEntries(Object.entries(PORTAL_MODULES).map(([k, v]) => [k, [...v]]));
+            this.renderer.each('wgsl', wgsl, modules);
+            const mod = names => device.createShaderModule({ code: wgsl.code(...names) });
+            return { format, samples, wgsl, ctx: { ...base, format, samples, modules: Object.fromEntries(Object.entries(modules).map(([k, names]) => [k, mod(names)])) } };
+        };
+        this.sets = { scene: set(this.format, spec.samples, this.shared) };
+        this.sets.view = this.shared ? set(this.viewFormat, RendererExtension.frame.samples, false) : this.sets.scene;
+        this.wgsl = this.sets.scene.wgsl;
+        for (const x of this.renderer.extensions) await x.init?.(this.renderer, this.sets.scene.ctx);
         const R = ['portal.regions'], M = ['portal.mark'];
         // stencil mode draws inside its entry's region; scissor / none modes draw unmasked
         const masked = { stencil: { stencil: { test: R } }, plain: {} };
         const poly = fs => ({ layout: 'base', module: 'poly', vs: 'vs', fs, buffers: 'poly' });
         const lines = compare => ({ layout: 'base', module: 'lines', vs: 'vs', fs: 'fs', buffers: 'lines', topology: 'line-list', blend: 'alpha', depth: { compare } });
-        this.pipes = buildPipelines(ctx, {
+        const table = {
             world: { layout: 'world', module: 'world', vs: 'vs', fs: 'fs', buffers: 'world', cull: 'back', depth: { write: true, compare: 'less' }, variants: masked },
             sky: { layout: 'base', module: 'sky', vs: 'vs', fs: 'fs', depth: { compare: 'less-equal' }, variants: masked },
             // three passes over the child's clipped portal polygon:
@@ -147,8 +159,19 @@ class RendererExtension {
             glass: { ...poly('fsGlass'), blend: 'alpha', depth: { compare: 'less-equal' } },
             lineDepth: lines('less-equal'),
             lineOverlay: lines('always'),
-        });
-        for (const x of this.renderer.extensions) if (x.pipelines) x.pipes = buildPipelines(ctx, x.pipelines(ctx));
+        };
+        for (const S of new Set(Object.values(this.sets))) {
+            S.pipes = buildPipelines(S.ctx, table);
+            S.ext = new Map(this.renderer.extensions.filter(x => x.pipelines).map(x => [x, buildPipelines(S.ctx, x.pipelines(S.ctx))]));
+        }
+        this.useSet(this.sets.scene);
+    }
+
+    // the pipelines a call draws with (its own and its extensions'): the scene's, or a view target's (sets)
+    useSet(S) {
+        this.set = S;
+        this.pipes = S.pipes;
+        for (const [x, p] of S.ext) x.pipes = p;
     }
 
     upload(world) {
@@ -172,6 +195,7 @@ class RendererExtension {
     resize(W, H) {
         if (this.W === W && this.H === H) return;
         this.W = W; this.H = H;
+        if (this.shared) return;
         this.msaa?.destroy(); this.depth?.destroy();
         const n = this.renderer.frameSpec.samples;
         this.msaa = this.device.createTexture({ size: [W, H], sampleCount: n, format: this.format, usage: GPUTextureUsage.RENDER_ATTACHMENT });
@@ -184,9 +208,9 @@ class RendererExtension {
     attachments(target) {
         let a = this.targets.get(target);
         if (!a) {
-            const size = [target.width, target.height], U = GPUTextureUsage, n = this.renderer.frameSpec.samples;
+            const size = [target.width, target.height], U = GPUTextureUsage, n = this.sets.view.samples;
             a = {
-                msaa: this.device.createTexture({ size, sampleCount: n, format: this.format, usage: U.RENDER_ATTACHMENT }).createView(),
+                msaa: this.device.createTexture({ size, sampleCount: n, format: this.sets.view.format, usage: U.RENDER_ATTACHMENT }).createView(),
                 depth: this.device.createTexture({ size, sampleCount: n, format: this.depthFormat, usage: U.RENDER_ATTACHMENT }).createView(),
             };
             this.targets.set(target, a);
@@ -223,7 +247,7 @@ class RendererExtension {
         let b = (this.sets ??= [])[i - 1];
         if (!b) {
             b = this.sets[i - 1] = {
-                global: d.createBuffer({ size: 224, usage: U.UNIFORM | U.COPY_DST }),
+                global: d.createBuffer({ size: GLOBAL_BYTES, usage: U.UNIFORM | U.COPY_DST }),
                 draw: d.createBuffer({ size: MAX_DRAWS * DRAW_STRIDE, usage: U.UNIFORM | U.COPY_DST }),
                 line: d.createBuffer({ size: MAX_LINE_VERTS * 28, usage: U.VERTEX | U.COPY_DST }),
                 poly: d.createBuffer({ size: MAX_POLY_VERTS * POLY_FLOATS * 4, usage: U.VERTEX | U.COPY_DST }),
@@ -249,7 +273,8 @@ class RendererExtension {
     // fr.draws: one { o, fog } per draw slot; fog = the portals it is seen through, nearest first
     // target: a view target (js/kits/media/views.js) instead of the canvas
     // Its stages (Renderer.encode, into the frame encoder): compute (the extensions' prepare), then the scene pass:
-    // indoor (the command list), late (the lines)
+    // indoor (the command list), late (the lines); in a shared frame the main view's in that frame's scene pass (bind),
+    // a view target's in a pass of its own at once
     render(fr, target = null) {
         const d = this.device, q = d.queue, W = target ? target.width : this.W, H = target ? target.height : this.H;
         const B = this.callBuffers();
@@ -277,7 +302,7 @@ class RendererExtension {
     compute(f) { this.renderer.each('prepare', f.fr, f.enc, f.target); }
 
     scene(f) {
-        const { target, W, H, B } = f;
+        const { target } = f;
         const into = target ? { ...this.attachments(target), resolve: target.colorView } : { msaa: this.msaa.createView(), depth: this.depth.createView(), resolve: this.fx.target() };
         const pass = f.enc.beginRenderPass({
             colorAttachments: [{ view: into.msaa, resolveTarget: into.resolve,
@@ -285,6 +310,13 @@ class RendererExtension {
             depthStencilAttachment: { view: into.depth, depthClearValue: this.renderer.frameSpec.depthClear, depthLoadOp: 'clear', depthStoreOp: 'store',
                 stencilClearValue: 0, stencilLoadOp: 'clear', stencilStoreOp: 'discard' },
         });
+        return this.bind(f, pass);
+    }
+
+    // its state on the scene pass (its own, or a shared frame's after another kit drew in it): the scissor and pipeline
+    // helpers, its globals and index buffer
+    bind(f, pass = f.pass) {
+        const { W, H, B } = f;
         f.scissor = r => {
             const x0 = Math.max(0, Math.floor(r[0])), y0 = Math.max(0, Math.floor(r[1])), x1 = Math.min(W, Math.ceil(r[2])), y1 = Math.min(H, Math.ceil(r[3]));
             if (x1 <= x0 || y1 <= y0) return false;
@@ -301,9 +333,11 @@ class RendererExtension {
         return pass;
     }
 
-    // the command list
+    // the command list (its sky: the frame's, in a frame it shares, already drawn where the outdoors is seen)
     indoor(f) {
         const { fr, target, B, pass, scissor, use } = f;
+        this.useSet(target ? this.sets.view : this.sets.scene);
+        const ownSky = !this.shared || !!target;
         const P = this.pipes, variant = fr.stencil ? 'stencil' : 'plain', L = this.stencil, R = this.regions;
         const worldPipe = P.world[variant], skyPipe = P.sky[variant];
         // what an extension's commands draw with: the pass, pipeline / vertex buffer switching, the mode's pipeline
@@ -331,6 +365,7 @@ class RendererExtension {
                     pass.drawIndexed(c.chunk.count, 1, c.chunk.first, c.chunk.baseVertex, 0);
                     break;
                 case 'sky':
+                    if (!ownSky) break;
                     use(skyPipe);
                     pass.setStencilReference(R.ref(c.ref));
                     pass.draw(3);
@@ -360,6 +395,7 @@ class RendererExtension {
     late(f) {
         const { fr, pass, use, lineVerts, B, W, H } = f;
         if (!lineVerts) return;
+        this.useSet(f.target ? this.sets.view : this.sets.scene);
         pass.setScissorRect(0, 0, W, H);
         const P = this.pipes, nd = Math.min(fr.lineDepthCount, lineVerts);
         if (nd) { use(P.lineDepth, B.line); pass.draw(nd, 1, 0); }

@@ -35,12 +35,12 @@ fn cutout(a: f32) -> f32 {
 }
 `;
 
-// shared: its passes write radiance into another kit's scene, at one sample (above)
-function imposterWgsl(shared = false) {
+// radiance: its passes write radiance into another kit's scene; samples: the scene's (one: cutouts)
+function imposterWgsl(radiance = false, samples = 4) {
     const L = new kits.gpu.WgslLibrary();
     L.define('SHADOW', NO_SHADOW);
-    L.define('OUTPUT', shared ? RADIANCE : DISPLAY);
-    L.define('CUTOUT', shared ? CUTOUT : COVERAGE);
+    L.define('OUTPUT', radiance ? RADIANCE : DISPLAY);
+    L.define('CUTOUT', samples > 1 ? COVERAGE : CUTOUT);
     L.define('COMMON', WGSL_COMMON, { needs: ['SHADOW', 'OUTPUT'] });
     L.define('SKY', WGSL_SKY, { needs: ['COMMON'] });
     L.define('MESH', WGSL_MESH, { needs: ['COMMON', 'CUTOUT'] });

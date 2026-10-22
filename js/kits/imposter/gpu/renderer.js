@@ -53,7 +53,8 @@ class RendererExtension {
         }
         const spec = this.renderer.frameSpec;
         this.shared = !!spec?.shared;
-        this.format = this.shared ? 'rgba16float' : this.fx.format;
+        this.radiance = this.shared && spec.display === 'radiance';
+        this.format = this.radiance ? 'rgba16float' : this.fx.format;
         this.samples = this.shared ? spec.samples : MSAA;
         this.depthFormat = this.shared ? spec.depthFormat : DEPTH_FORMAT;
         this.width = this.height = 0;
@@ -86,7 +87,7 @@ class RendererExtension {
 
         const layout = (...bgls) => device.createPipelineLayout({ bindGroupLayouts: bgls });
         // its shaders: the core's chunks, the extensions' over them, each module the chunks it names
-        this.wgsl = imposterWgsl(this.shared);
+        this.wgsl = imposterWgsl(this.radiance, this.samples);
         const modules = Object.fromEntries(Object.entries(IMPOSTER_MODULES).map(([k, v]) => [k, [...v]]));
         this.renderer.each('wgsl', this.wgsl, modules);
         const M = Object.fromEntries(Object.entries(modules).map(([k, names]) => [k, device.createShaderModule({ code: this.wgsl.code(...names) })]));

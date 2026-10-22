@@ -25,7 +25,7 @@ class MediaLibrary {
         const { photo, video } = this.cfg;
         this.photoAtlas = renderer.device.createTexture({
             size: [photo.atlas, photo.atlas],
-            format: renderer.format,
+            format: renderer.viewFormat ?? renderer.format,
             usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST
         });
         renderer.registerMaterial('photos', 'gui', this.photoAtlas.createView());
@@ -33,7 +33,7 @@ class MediaLibrary {
         const [vw, vh] = video.size;
         this.framePool = renderer.device.createTexture({
             size: [vw, vh, video.pool],
-            format: renderer.format,
+            format: renderer.viewFormat ?? renderer.format,
             usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
         });
         this.layerViews = Array.from({ length: video.pool }, (_, i) =>

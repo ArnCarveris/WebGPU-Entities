@@ -367,7 +367,7 @@ async function capture(base, sid, dir) {
         }
         if (state !== 'ready') {
             const msg = state ? await s.evaluate(`document.getElementById('error-message').textContent`) : 'timed out';
-            return { sid, failed: String(msg).split('\n').slice(0, 3).join(' | '), errors: s.errors() };
+            return { sid, failed: String(msg).split('\n').slice(0, +(process.env.STACK || 3)).join(' | '), errors: s.errors() };
         }
         await settle(s);
         await s.send('Page.bringToFront');
@@ -621,7 +621,7 @@ try {
         for (const sid of list) {
             const B = manifest.scenarios[sid];
             const r = await capture(base, sid, path.join(cdir, sid));
-            if (r.failed) { console.log(`${sid}: FAILED`); fail(`${sid}: ${r.failed}`); continue; }
+            if (r.failed) { console.log(`${sid}: FAILED`); fail(`${sid}: ${r.failed}`); for (const e of [...new Set(r.errors || [])].slice(0, 6)) fail(`${sid}: ${e}`); continue; }
             const lines = [];
             if (!B) { console.log(`${sid}: no baseline`); fail(`${sid}: no baseline`); continue; }
             // pixels: exact, or within the scenario's recorded noise: up to twice the share of pixels two sessions differed

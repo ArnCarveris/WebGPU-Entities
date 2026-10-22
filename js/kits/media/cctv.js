@@ -26,7 +26,7 @@ class CctvSystem {
 
     init(renderer) {
         const [w, h] = this.cfg.resolution;
-        this.target = new ViewTarget(renderer.device, renderer.format, w, h, { material: 'cctv' });
+        this.target = new ViewTarget(renderer.device, renderer.viewFormat ?? renderer.format, w, h, { material: 'cctv' });
         renderer.registerMaterial('cctv', 'cctv', this.target.colorView);
     }
 

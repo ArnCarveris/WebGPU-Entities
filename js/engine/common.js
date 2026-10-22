@@ -384,8 +384,8 @@ class PointerInput {
 // Several kits on one host: scope(host, key) is the host as one of them sees it (a site of the scenario and its kit).
 // Through its scope a kit has an own extension of its own (scope.extend), composes its own (scope.compose), and its
 // hook lists, its ext and the members its extensions expose are its own: two kits may each expose a camera, a world or
-// a frame without a clash, each reading its own. Everything else is the host's: its fields and methods (called on the
-// scope), and the members only one kit exposes. The host itself answers a name one kit exposes; one that several kits
+// a frame without a clash, each reading its own; another kit's members it does not see. The host's fields and methods
+// are shared (called on the scope). The host itself answers a name one kit exposes; one that several kits
 // expose reads undefined on it (with an error, once). Its hook lists hold every kit's composed extensions, and a
 // scope's ext sees the host's (an extension shared between kits is made once). A field a kit sets that nobody exposes
 // stays its own, and so do the World's entities (SCOPED).
@@ -442,7 +442,7 @@ const SCOPE_FORWARD = {
         if (typeof k !== 'string' || k in sc.target) return Reflect.get(sc.target, k, sc.proxy);
         const x = scopeOwner(sc, k);
         if (x) return member(sc.bound, x, k);
-        return hasOwn(sc.local, k) ? sc.local[k] : sc.host[k];
+        return sc.local[k];
     },
     set(sc, k, v) {
         if (hasOwn(sc.fields, k)) sc.fields[k] = v;
@@ -454,7 +454,7 @@ const SCOPE_FORWARD = {
         }
         return true;
     },
-    has(sc, k) { return hasOwn(sc.fields, k) || k in sc.target || !!scopeOwner(sc, k) || hasOwn(sc.local, k) || k in sc.host; },
+    has(sc, k) { return hasOwn(sc.fields, k) || k in sc.target || !!scopeOwner(sc, k) || hasOwn(sc.local, k); },
 };
 const Composite = {
     of(host) {

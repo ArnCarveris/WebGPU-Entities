@@ -32,7 +32,7 @@ class Host {
     static DROPPED = 'dropped';
     // the kits whose sites share the one World, Renderer and App with other kits' sites (docs/single-world-plan.md Phase 6:
     // one kit more each step)
-    static SHARED = ['atmosphere', 'hydrology', 'imposter'];
+    static SHARED = ['atmosphere', 'hydrology', 'imposter', 'interior'];
 
     // two views { pos, fwd } the same, but for rounding (a site's camera holds the one it is given in its own terms)
     static sameView(a, b) { return Host.same(a.pos, b.pos) && Host.same(a.fwd, b.fwd); }
@@ -51,6 +51,7 @@ class Host {
         this.time = 0;
         this.frameNo = 0;
         this.fly = null;
+        this.controller = null;         // several sites: the site whose own camera drives the one camera (camera.controller)
         this.canvasView = null;
         this.site = null;               // the one site of a scenario of one: { id, type, kit, label, def, ui, ctx, world (its Site), ready }
         this.sites = [];                // every site (the handheld lists what they offer)
@@ -228,8 +229,9 @@ class Host {
             this.renderer.share(this.device, made.map(({ root, module, native }) => {
                 const E = module[Kits.KITS[root.kit].site.extends.renderer];
                 return { key: E.key, E, fx: { native } };
-            }));
+            }), { format: this.format, size: () => [this.width, this.height], target: () => this.swapView() });
             this.world.sunlight = null;
+            this.world.shelter = null;
         }
         for (const { root, features, module, native } of made) this.sites.push(this.createSite(root, module, features, native, ui));
         if (!shared) this.site = this.sites[0];
@@ -241,9 +243,10 @@ class Host {
             await site.world.init();
             site.ready = true;
         }
-        // the frame's order: the sky's site first (its sun lights the others), then as the scenario has them
+        // the frame's order: the sites that make room for the others last (a sky: where the camera is sheltered decides
+        // what of it is seen, world.shelter), the others as the scenario has them
         const sky = this.renderer.shared?.sky;
-        this.order = shared ? [...this.sites].sort((a, b) => (b.renderKey === sky) - (a.renderKey === sky)) : this.sites;
+        this.order = shared ? [...this.sites].sort((a, b) => !!a.spec.makesRoom - !!b.spec.makesRoom) : this.sites;
         this.skySite = shared ? this.order.find(s => s.renderKey === sky && s.world.sunlight) || null : null;
     }
 
@@ -257,7 +260,7 @@ class Host {
             root, $: name => root.querySelector(`[data-hud="${name}"]`),
             // (what of the screen the in-world labels may show: all of it; how much a point of the screen d m away is hidden:
             // by what an atmosphere's sky hides, veilOf; a frame number: every kit's labels on the one canvas, cleared once)
-            region: () => null, veil: (x, y, W, H, d) => this.veilOf(x, y, W, H, d), frame: () => this.frameNo,
+            region: () => this.world.shelter?.outdoors ?? null, veil: (x, y, W, H, d) => this.veilOf(x, y, W, H, d), frame: () => this.frameNo,
         };
     }
 
@@ -324,14 +327,19 @@ class Host {
 
     configure(scenario) {
         const ents = scenario.entities || [];
-        // camera: a site's, or the engine's (several sites: always the engine's, starting at a site's start view)
+        // The camera: a site's (one site), or the engine's (camera.controller: fly). With several sites there is one camera,
+        // driven by the engine (starting at camera.start: that site's start view) or by a site's own (camera.controller:
+        // its id; its player walking and colliding the site's way) that the engine's follows; every other site's camera
+        // follows it in its frame
         const cam = this.cameraDef = ents.find(e => e.type === 'camera' && ScenarioFormat.isEngine(e)) || {};
         if (cam.controller === 'fly' || this.shared) {
             this.fly = new FlyCamera(cam, this.router.scope('engine'), (x, y, z) => this.floorAt(x, y, z));
-            this.router.always.add('engine');
-            for (const s of this.sites) s.ctx.cameraLocked = true;
-            const start = this.sites.find(s => s.id === (cam.start ?? [].concat(cam.from ?? [])[0]));
+            this.controller = this.controllerSite = this.shared && this.sites.find(s => s.id === cam.controller) || null;
+            if (!this.controller) this.router.always.add('engine');
+            for (const s of this.sites) s.ctx.cameraLocked = s !== this.controller;
+            const start = this.controller || this.sites.find(s => s.id === (cam.start ?? [].concat(cam.from ?? [])[0]));
             if (this.shared && start?.world.view) this.fly.view = this.frameOf(start).toWorld(start.world.view);
+            this.startSite = this.shared && !this.controller ? start || null : null;
             // (what each site's camera holds now: one it moves before the first frame, a world loading on, is followed)
             if (this.shared) for (const s of this.sites) s.sent = s.world.view;
         }
@@ -396,23 +404,43 @@ class Host {
     // The camera's mode, the engine's to switch (the handheld's Walk, camera.mode): the site's camera walks its own way
     // (Site.moves / move / setMove), on fx.floor; the engine's camera walks on every site's ground. Walking looks with the
     // mouse taken (pointer lock), flying by dragging
-    get moves() { return this.fly ? ['fly', 'walk'] : ['fly', 'walk'].filter(m => (this.site?.world.moves || ['fly']).includes(m)); }
-    get move() { return this.fly ? this.fly.eye.mode : this.site?.world.move || 'fly'; }
+    // the site whose camera drives the one camera: the one site's (but under the engine's), a controller site's, or none
+    get driver() { return this.controller || (this.shared || this.fly ? null : this.site); }
+    get moves() { const d = this.driver; return d && !this.shared ? ['fly', 'walk'].filter(m => (d.world.moves || ['fly']).includes(m)) : ['fly', 'walk']; }
+    get move() { const d = this.driver; return d ? d.world.move || 'fly' : this.fly?.eye.mode || 'fly'; }
 
     setMove(mode, say = true) {
         if (mode === this.move) return;
-        if (!this.moves.includes(mode)) { if (say) this.hud.toast(`${this.site?.label || 'This camera'} cannot ${mode}`, 1500); return; }
-        if (this.fly) this.fly.eye.setMode(mode);
-        else this.site.world.setMove(mode);
+        const d = this.driver;
+        if (!this.moves.includes(mode)) { if (say) this.hud.toast(`${d?.label || 'This camera'} cannot ${mode}`, 1500); return; }
+        if (this.shared) this.shareMove(mode);
+        else if (d) d.world.setMove(mode);
+        else this.fly.eye.setMode(mode);
         if (mode !== 'walk' && document.pointerLockElement === this.canvas) document.exitPointerLock();
         if (say) this.hud.toast(`${mode === 'walk' ? 'Walking' : 'Flying'}: ${this.keyHelp()}`, 4000);
+    }
+
+    // Several sites: the camera's controller for a mode (the handheld's Walk). The controller site's camera when it can
+    // (camera.controller: its own walking or flight), else the engine's, walking on every site's ground: each takes over
+    // from where the camera is
+    shareMove(mode) {
+        const site = this.controllerSite, view = this.fly.view;
+        const to = site && (site.world.moves || ['fly']).includes(mode) ? site : null;
+        if (to !== this.controller) {
+            this.controller = to;
+            for (const s of this.sites) s.ctx.cameraLocked = s !== to;
+            if (to) { this.router.always.delete('engine'); to.world.setView?.(this.frameOf(to).toLocal(view)); }
+            else { this.router.always.add('engine'); this.fly.view = view; }
+        }
+        if (to) { if (to.world.move !== mode) to.world.setMove(mode); }
+        else this.fly.eye.setMode(mode);
     }
 
     // the keys there are, as a line for a toast: the site's camera's (Site.keys: [keys, what it does]) or the engine
     // camera's, and the handheld's, which holds everything else
     keyHelp() {
         const { Site } = Features.kits.world;
-        const keys = this.fly ? (this.fly.eye.mode === 'walk' ? Site.WALK_KEYS : Site.FLY_KEYS) : this.site?.world.keys || [];
+        const d = this.driver, keys = d ? d.world.keys || [] : this.fly.eye.mode === 'walk' ? Site.WALK_KEYS : Site.FLY_KEYS;
         return [...keys, ['Tab', 'handheld (every option)']].map(([k, what]) => `${k} ${what}`).join(' · ');
     }
 
@@ -455,18 +483,29 @@ class Host {
         return out;
     }
 
-    // go to a view of viewList: a site's view moves its camera, which the engine's takes over
+    // go to a view of viewList: a site's view moves its camera, which the one camera takes over
     goView(v) {
         v.go();
         this.viewKey = v.key;
-        if (this.fly && v.inst) this.fly.view = this.shared ? this.frameOf(v.inst).toWorld(v.inst.world.view) : v.inst.world.view;
+        const s = v.inst, d = this.driver;
+        if (!this.fly || !s || s === d) return;
+        if (!this.shared) { this.fly.view = s.world.view; return; }
+        this.setWorldView(this.frameOf(s).toWorld(s.world.view));
+    }
+
+    // the one camera to a view in the world (several sites): the controller site's, else the engine's
+    setWorldView(view) {
+        const d = this.controller;
+        if (d) d.world.setView?.(this.frameOf(d).toLocal(view));
+        this.fly.view = view;
     }
 
     // a view entity: the camera there, looking at `look`
     jumpView(v) {
         const pos = v.pos || [0, 100, 0], fwd = CamMath.norm(CamMath.sub(v.look || [pos[0], pos[1], pos[2] - 1], pos));
         const right = CamMath.norm(CamMath.cross(fwd, [0, 1, 0])), view = { pos: [...pos], fwd, up: CamMath.cross(right, fwd), fov: (v.fov || 60) * Math.PI / 180 };
-        if (this.fly) this.fly.view = view;
+        if (this.shared) this.setWorldView(view);
+        else if (this.fly) this.fly.view = view;
         else this.site?.world.setView?.(view);
         this.hud.toast(v.name || 'view', 1500);
     }
@@ -542,26 +581,61 @@ class Host {
         }
     }
 
-    // several sites: the camera moves (to where a site moved its own camera since the last frame: a reset once its world
-    // is loaded, a view of its own), each site's camera follows it in its frame, each site updates and renders (the sky's
+    // several sites: the camera moves (to where the start site moved its own camera since the last frame: a reset once its
+    // world is loaded, a view of its own), each site's camera follows it in its frame, each site updates and renders (the sky's
     // first: its sun, world.sunlight, lights the others), then the one frame is encoded (Renderer.encodeFrame)
     frameSites(now, dt) {
-        for (const site of this.order) {
-            const v = site.sent && site.world.view;
+        const ctrl = this.controller;
+        if (ctrl) {
+            // (a controller site moves the camera itself, first)
+            ctrl.world.frame(now, dt);
+            this.fly.view = this.frameOf(ctrl).toWorld(ctrl.world.view);
+        } else {
+            const site = this.startSite, v = site?.sent && site.world.view;
             if (v && !Host.sameView(v, site.sent)) this.fly.view = this.frameOf(site).toWorld(v);
+            this.fly.update(dt);
         }
-        this.fly.update(dt);
         const view = this.eye = this.fly.view;
+        let sheltered = false;
         for (const site of this.order) {
+            if (site === ctrl) continue;
+            if (site.spec.makesRoom && !sheltered) { this.shelter(view); sheltered = true; }
             site.world.setView?.(this.frameOf(site).toLocal(view));
             site.sent = site.world.view;
             site.world.frame(now, dt);
             if (site === this.skySite) {
-                const s = site.world.sunlight();
-                this.world.sunlight = s && { ...s, dir: this.frameOf(site).dir(s.dir) };
+                const s = site.world.sunlight(), F = this.frameOf(site);
+                this.world.sunlight = s && { ...s, toward: p => F.dir(s.toward(F.local(p))) };
             }
         }
+        if (!sheltered) this.shelter(view);
         this.renderer.encodeFrame();
+    }
+
+    // The camera inside an interior of a site (Site.sheltered: a building, a vehicle's cabin, a portal area) is inside for
+    // the whole world: world.shelter = { by (that site's id), outdoors (what of the outdoors it sees from there,
+    // Site.outdoors: null all of it, or { seen, rect, W, H }) }, or null outdoors. Every other site sees the outdoors only
+    // there (fx.outdoors: an atmosphere draws its sky, clouds and weather only there; the in-world labels show only there)
+    // and keeps its rain and snow off it (set('indoors'), unless a link drives that itself). One point query per site
+    shelter(v) {
+        let by = null, region = null;
+        for (const s of this.order) {
+            if (!s.ready || !s.world.sheltered) continue;
+            const p = this.frameOf(s).local(v.pos);
+            if (!s.world.sheltered(p)) continue;
+            by = s;
+            const od = s.world.outdoors?.(p);
+            region = od ? { seen: od.seen, rect: od.rect || null, W: this.width, H: this.height } : null;
+            break;
+        }
+        this.world.shelter = by && { by: by.id, outdoors: region };
+        for (const s of this.sites) {
+            s.ctx.outdoors = by && s !== by ? region : null;
+            const indoors = !!by && s !== by;
+            if (s.indoors === indoors || this.links.some(l => l.site === s && l.param === 'indoors')) continue;
+            s.indoors = indoors;
+            s.world.set?.('indoors', indoors);
+        }
     }
 
     // the sites' readouts kept on the screen (EngineHud side panels), a few times a second: the portal traversal tree of

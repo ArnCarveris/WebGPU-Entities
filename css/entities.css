@@ -79,7 +79,7 @@ canvas#view.drag { cursor: grabbing; }
 #world-huds { transition: opacity 0.25s; }
 body.handheld-up #world-huds canvas.labels { opacity: 0.35; }
 /* portal: crosshair */
-.fhud[data-world=portal] [data-hud=crosshair] { position: fixed; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border: 1px solid rgba(255,255,255,0.6); border-radius: 50%; pointer-events: none; }
+.fhud[data-world=portal] [data-hud=crosshair], .fhud[data-world=""] [data-hud=crosshair] { position: fixed; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border: 1px solid rgba(255,255,255,0.6); border-radius: 50%; pointer-events: none; }
 .fhud[data-world=portal].unfocused [data-hud=crosshair] { display: none !important; }
 
 @media (max-width: 700px) {
