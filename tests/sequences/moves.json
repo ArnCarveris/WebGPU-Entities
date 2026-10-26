@@ -1,0 +1,13 @@
+{
+  "description": "Every scenario looks and moves in each camera mode it offers: in fly and in walk, a drag turns the camera and W held moves the eye (on the page's own input: the camera mode as the handheld's Walk switch sets it, then the mouse and the keys).",
+  "scenarios": "*",
+  "steps": [
+    { "action": "open" },
+    { "action": "step", "frames": 20 },
+    { "if": "entities.moves.includes('fly')", "action": "travel", "mode": "fly" },
+    { "if": "entities.moves.includes('walk')", "action": "travel", "mode": "walk" },
+    { "if": "entities.moves.includes('fly')", "action": "travel", "mode": "fly", "note": "and back" },
+    { "action": "counts", "expect": { "World": 1, "Renderer": 1, "App": 1 } },
+    { "action": "errors" }
+  ]
+}

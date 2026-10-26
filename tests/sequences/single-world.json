@@ -1,0 +1,7 @@
+{
+  "description": "G8, the single-world guard (tools/check-single-world.mjs): one `new World(` / `Renderer(` / `App(` in js/, none of the cross-world machinery's identifiers, no manifest `worlds:` key, no scenario field `layer`. The code is checked on the first case, each scenario on its own. No browser.",
+  "scenarios": "*",
+  "steps": [
+    { "action": "singleWorld" }
+  ]
+}

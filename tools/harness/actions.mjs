@@ -150,6 +150,36 @@ export class Move extends Action {
     }
 }
 
+// the camera mode (as move), then a look and a move in it, on the page's own input: a drag by `turn` from `at` (pixels:
+// flying drags, walking takes the mouse with the press) must turn the camera, `code` held `hold` frames must move the
+// eye; each fails on its own. `turn` null: no look. The look goes first: a move may bring a GUI screen in reach, which
+// takes the press
+const VIEW = `(() => { const v = entities.camera?.view || (entities.worldView ? entities.worldView() : null); return v ? { pos: [...v.pos].map(Number), fwd: [...v.fwd].map(Number) } : null; })()`;
+const apart = (a, b) => Math.hypot(...a.map((x, i) => x - b[i]));
+export class Travel extends Action {
+    static params = { mode: undefined, code: 'KeyW', hold: 30, turn: [160, 0], at: [W * 0.2, H * 0.8], frames: 20 };
+    async run(ctx) {
+        const s = page(ctx), m = this.p.mode;
+        await s.evaluate(`entities.setMove(${JSON.stringify(m)})`);
+        await step(ctx, this.p.frames);
+        const now = await s.evaluate('entities.move');
+        if (now !== m) return ctx.fail(`move is ${now}, not ${m}`);
+        let v = await s.evaluate(VIEW);
+        if (!v) throw new Abort('no camera view');
+        if (this.p.turn) {
+            const c = this.p.at;
+            await new Drag({ from: c, to: [c[0] + this.p.turn[0], c[1] + this.p.turn[1]], moves: 8, after: 2 }).run(ctx);
+            const was = v, t = apart(was.fwd, (v = await s.evaluate(VIEW)).fwd);
+            if (t < 1e-3) ctx.fail(`${m}: a drag by ${JSON.stringify(this.p.turn)} did not turn the camera (mouse ${await s.evaluate("document.pointerLockElement ? 'taken' : 'not taken'")})`);
+            else ctx.note(`${m}: the drag turned the camera by ${t.toFixed(3)}`);
+        }
+        await new Key({ code: this.p.code, hold: this.p.hold, after: 2 }).run(ctx);
+        const d = apart(v.pos, (await s.evaluate(VIEW)).pos);
+        if (d < 1e-3) ctx.fail(`${m}: ${this.p.code} held ${this.p.hold} frames, the eye did not move`);
+        else ctx.note(`${m}: ${this.p.code} moved the eye ${d.toFixed(3)}`);
+    }
+}
+
 // ----------------------------------------------------------------------------------------------- input
 // the page takes the harness's input from here on (window.__input; real input over the test window stays dropped
 // otherwise); every key / pointer step turns it on
@@ -516,6 +546,18 @@ export class FormatGolden extends Action {
     }
 }
 
+// the single-world guard (§6.2 G8, tools/check-single-world.mjs) on the served files: the code once a run (on its first
+// case), the case's scenario every case
+export class SingleWorld extends Action {
+    static pageless = true;
+    async run(ctx) {
+        const { checkCode, checkScenario } = await import('../check-single-world.mjs'), root = ctx.runner.served;
+        const found = [...(ctx.runner.singleWorldCode ? [] : (ctx.runner.singleWorldCode = true, checkCode(root))), ...checkScenario(ctx.sid, root)];
+        for (const f of found) ctx.fail(`${f.at}: ${f.what}`);
+        if (!found.length) ctx.note('single world: clean');
+    }
+}
+
 // ----------------------------------------------------------------------------------------------- the registry
-export const ACTIONS = Object.fromEntries([Open, Settle, Step, Wait, Close, View, Views, Eye, Move, Input, Key, KeyDown, KeyUp, Click, Drag, Handheld,
-    Eval, Expect, Log, Save, Counts, Submits, Kits, Errors, Bindings, Trace, Capture, Compare, Perf, FormatGolden].map(A => [A.key, A]));
+export const ACTIONS = Object.fromEntries([Open, Settle, Step, Wait, Close, View, Views, Eye, Move, Travel, Input, Key, KeyDown, KeyUp, Click, Drag, Handheld,
+    Eval, Expect, Log, Save, Counts, Submits, Kits, Errors, Bindings, Trace, Capture, Compare, Perf, FormatGolden, SingleWorld].map(A => [A.key, A]));

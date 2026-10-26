@@ -75,6 +75,7 @@ differences printed, not failures), `--frames N` / `--view-frames N`, `--port N`
 | `views` | `frames`, `compare` (null / "baseline"), `report` | every view in turn, captured as `view-<key>`, compared with the baseline's |
 | `eye` | `as` ("eye") | stores the camera's position |
 | `move` | `mode`, `frames` (10) | `entities.setMove(mode)`, fails if not taken |
+| `travel` | `mode`, `turn` ([160, 0]), `at` ([192, 480]), `code` ("KeyW"), `hold` (30), `frames` (20) | the mode (as `move`), then a drag by `turn` from `at` must turn the camera and `code` held must move the eye, on the page's own input; `turn` null: no look |
 | `input` | `enabled` (true) | the page takes the harness's input (key and pointer steps turn it on) |
 | `key` | `code`, `key`, `hold` (1), `after` (1) | a key press: down, hold frames, up, after frames |
 | `keyDown` / `keyUp` | `code`, `key`, `frames` (0) | one key event |
@@ -94,6 +95,7 @@ differences printed, not failures), `--frames N` / `--view-frames N`, `--port N`
 | `compare` | `name`, `against` ("baseline" / "sidecar" / "capture"), `file`, `other`, `noise` ("baseline", `{ frac, max }`, 0), `report`, `expectDiffer` | a capture against a picture, with a heat map of any difference |
 | `perf` | `revs` (["HEAD~1", "HEAD"]), `rounds` (2), `frames` (40), `measure` (20), `expect` `{ maxRatio }` | GPU time per frame A/B, alternated (pageless) |
 | `formatGolden` | `dir` ("baselines/format") | the scenario's format golden (pageless) |
+| `singleWorld` | | G8, `tools/check-single-world.mjs`: the code on the first case, the case's scenario (pageless) |
 
 ## The sequences
 
@@ -104,6 +106,8 @@ differences printed, not failures), `--frames N` / `--view-frames N`, `--port N`
 | `bindings` | the binding budget of every scenario |
 | `depth-reversed` | `render.depth=reversed` on the portal and gui scenarios (pixels reported) |
 | `format-golden` | G3 (no browser) |
+| `single-world` | G8: `tools/check-single-world.mjs` (no browser) |
+| `moves` | every scenario looks (a drag) and moves (W) in fly and in walk, where it offers them |
 | `perf-ab` | G7: GPU time A/B, previous commit against this one |
 | `camera-start` | the camera starts at `camera.start`'s site view, and that site's camera follows |
 | `walk-handover` | Walk hands the camera to the controller site's player and Fly hands it back |
