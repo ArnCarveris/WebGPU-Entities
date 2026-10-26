@@ -1,0 +1,7 @@
+{
+  "description": "G3, format goldens: what each scenario's data becomes for the engine (per site: type, kits, features, native), key for key equal to baselines/format/<scenario>.json. No browser. What `format-golden.mjs --check` checks.",
+  "scenarios": "*",
+  "steps": [
+    { "action": "formatGolden" }
+  ]
+}

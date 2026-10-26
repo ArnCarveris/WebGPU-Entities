@@ -554,6 +554,10 @@ From [[brave-webgpu-testing]], as in `docs/sdf-kit-plan.md` §6.2:
 - `Page.bringToFront` before each capture;
 - fail on any `uncapturederror` (GPU validation) or console error.
 
+The gates below are committed as data-driven test sequences: `tests/sequences/*.json`, each an ordered list of steps
+(`Action` subclasses in `tools/harness/actions.mjs`) run by `node tools/seq.mjs run`, which shares this page set-up with
+`tools/pixel-harness.mjs` (`tools/harness/browser.mjs`). A new check is a JSON edit, not throwaway code: `tests/README.md`.
+
 ### 6.2 Gates
 
 | Gate | When | Check |

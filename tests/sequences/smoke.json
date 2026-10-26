@@ -1,0 +1,27 @@
+{
+  "description": "G6, the key smoke run on every scenario: WASD moves the view, E, F, Tab shows and hides the handheld, the Walk switch (where there is one), a click-drag to look, Esc; no errors. What `pixel-harness.mjs smoke` checks.",
+  "scenarios": "*",
+  "steps": [
+    { "action": "open" },
+    { "action": "input" },
+    { "action": "step", "frames": 10 },
+    { "action": "eye", "as": "p0" },
+    { "action": "key", "code": "KeyW", "hold": 30, "after": 2 },
+    { "action": "key", "code": "KeyA", "hold": 10, "after": 2 },
+    { "action": "key", "code": "KeyS", "hold": 10, "after": 2 },
+    { "action": "key", "code": "KeyD", "hold": 10, "after": 2 },
+    { "action": "eye", "as": "p1" },
+    { "action": "expect", "var": "p1", "notEquals": { "$": "p0" }, "label": "WASD moves the view" },
+    { "action": "key", "code": "KeyE", "after": 5 },
+    { "action": "key", "code": "KeyF", "after": 5 },
+    { "action": "handheld", "shown": true },
+    { "action": "handheld", "shown": false },
+    { "if": "entities.moves.includes('walk')", "action": "move", "mode": "walk" },
+    { "if": "entities.move === 'walk'", "action": "eye", "as": "w0" },
+    { "if": "entities.move === 'walk'", "action": "key", "code": "KeyW", "hold": 30, "after": 2 },
+    { "if": "entities.move === 'walk' && entities.moves.includes('fly')", "action": "move", "mode": "fly", "frames": 5, "note": "the gui scenarios only walk" },
+    { "action": "drag", "to": [540, 320], "after": 5 },
+    { "action": "key", "code": "Escape", "after": 5 },
+    { "action": "errors" }
+  ]
+}

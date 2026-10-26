@@ -1,0 +1,15 @@
+{
+  "description": "The reversed-depth variant (render.depth=reversed, Phase 3) of the scenarios with their own depth conventions: starts, one World / Renderer / App, one submit, no errors; pixel differences from the baselines reported, not failures (Phase 3 measured up to 1.3 % on the bunker's edges and coplanar decals).",
+  "scenarios": ["portal-bunker-compound", "gui-sector-07", "gui-stress", "gui-swarm"],
+  "options": { "query": ["render.depth=reversed"], "report": true },
+  "steps": [
+    { "action": "open" },
+    { "action": "step", "frames": 40 },
+    { "action": "capture", "name": "start" },
+    { "action": "compare", "name": "start", "against": "baseline" },
+    { "action": "views", "compare": "baseline" },
+    { "action": "counts", "expect": { "World": 1, "Renderer": 1, "App": 1 } },
+    { "action": "submits", "expect": 1 },
+    { "action": "errors" }
+  ]
+}

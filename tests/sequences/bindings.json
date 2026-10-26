@@ -1,0 +1,10 @@
+{
+  "description": "The binding budget (Phase 2): every pipeline layout of every scenario within WebGPU's default limits per shader stage, at most 4 bind groups. What `pixel-harness.mjs check --bindings` checks.",
+  "scenarios": "*",
+  "steps": [
+    { "action": "open", "bindings": true },
+    { "action": "step", "frames": 40 },
+    { "action": "bindings" },
+    { "action": "errors" }
+  ]
+}

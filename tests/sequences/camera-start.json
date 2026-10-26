@@ -1,0 +1,15 @@
+{
+  "description": "Phase 6: with several sites and the engine's camera, camera.start names the site whose start view the one camera starts at (storm-riverlands: the river). The camera is there before the first frame, and the river site's own camera follows it.",
+  "scenarios": ["compose-storm-riverlands"],
+  "steps": [
+    { "action": "open" },
+    { "action": "expect", "expr": "entities.startSite?.id", "equals": "river" },
+    { "action": "expect", "expr": "entities.controller", "equals": null, "label": "no site drives the camera" },
+    { "action": "expect", "label": "the camera starts at the river's start view", "expr": "(() => { const s = entities.startSite, v = entities.frameOf(s).toWorld(s.world.view); return entities.fly.view.pos.map((x, i) => Math.abs(x - v.pos[i])); })()", "near": [[0, 0, 0], 0.001] },
+    { "action": "eye", "as": "start" },
+    { "action": "expect", "var": "start", "golden": "start-eye.json", "tolerance": 0.01 },
+    { "action": "step", "frames": 40 },
+    { "action": "expect", "label": "the river's camera follows the one camera", "expr": "(() => { const s = entities.startSite, v = entities.frameOf(s).toWorld(s.world.view); return entities.fly.view.pos.map((x, i) => Math.abs(x - v.pos[i])); })()", "near": [[0, 0, 0], 0.01] },
+    { "action": "errors" }
+  ]
+}

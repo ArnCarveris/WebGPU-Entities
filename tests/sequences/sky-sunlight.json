@@ -1,0 +1,12 @@
+{
+  "description": "Phase 6: one sun. The sky's site (the plains' atmosphere) lights every other site through world.sunlight once it has framed: the valley under the plains' weather is lit by the plains' sun. Its value is a sidecar golden (record it: node tools/seq.mjs record sky-sunlight).",
+  "scenarios": ["compose-valley-weather", "compose-storm-riverlands", "compose-grand-tour"],
+  "steps": [
+    { "action": "open" },
+    { "action": "step", "frames": 40 },
+    { "action": "expect", "expr": "entities.skySite?.id", "golden": "${scenario}/sky-site.json" },
+    { "action": "expect", "expr": "!!entities.world.sunlight", "equals": true, "label": "world.sunlight is set" },
+    { "action": "expect", "expr": "JSON.parse(JSON.stringify(entities.world.sunlight))", "golden": "${scenario}/sunlight.json", "tolerance": 0.0001 },
+    { "action": "errors" }
+  ]
+}

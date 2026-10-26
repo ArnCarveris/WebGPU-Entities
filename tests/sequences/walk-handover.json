@@ -1,0 +1,23 @@
+{
+  "description": "Phase 6: camera.controller lists the sites whose own cameras drive the one camera; the Walk switch hands over to the first that walks (moonbase: from Sol's flight to the sector's player, carry false: the player goes on from where it was) and back.",
+  "scenarios": ["compose-moonbase-sector07"],
+  "steps": [
+    { "action": "open" },
+    { "action": "step", "frames": 20 },
+    { "action": "expect", "expr": "entities.controller?.id", "equals": "sol" },
+    { "action": "expect", "expr": "entities.moves", "includes": ["fly", "walk"] },
+    { "action": "eye", "as": "flying" },
+    { "action": "move", "mode": "walk", "frames": 20 },
+    { "action": "expect", "expr": "entities.controller?.id", "equals": "sector", "label": "Walk hands the camera to the sector's player" },
+    { "action": "expect", "expr": "entities.sites.filter(s => !s.ctx.cameraLocked).map(s => s.id)", "equals": ["sector"], "label": "only the controller's camera is unlocked" },
+    { "action": "eye", "as": "walking" },
+    { "action": "expect", "var": "walking", "notEquals": { "$": "flying" }, "label": "the player goes on from where it was (carry false)" },
+    { "action": "key", "code": "KeyW", "hold": 30, "after": 2 },
+    { "action": "eye", "as": "walked" },
+    { "action": "expect", "var": "walked", "notEquals": { "$": "walking" }, "label": "W walks the player" },
+    { "action": "move", "mode": "fly", "frames": 20 },
+    { "action": "expect", "expr": "entities.controller?.id", "equals": "sol", "label": "Fly hands it back to Sol" },
+    { "action": "counts", "expect": { "World": 1, "Renderer": 1, "App": 1 } },
+    { "action": "errors" }
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "description": "G7, GPU time per frame A/B: the previous commit against this one (--revs a,b for others), alternated, two rounds each, on two compositions. The laptop's GPU throttles: only the ratio within this run means anything, and only a large one fails.",
+  "scenarios": ["compose-storm-riverlands", "compose-grand-tour"],
+  "steps": [
+    { "action": "perf", "revs": ["HEAD~1", "HEAD"], "rounds": 2, "expect": { "maxRatio": 1.6 } }
+  ]
+}

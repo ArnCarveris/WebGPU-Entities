@@ -1,0 +1,15 @@
+{
+  "description": "G1/G2/G4/G5: every scenario, every view of the handheld's View list, against baselines/ (within each scenario's recorded noise); one World, Renderer and App, one submit per frame, the baseline's kits, no errors. What `pixel-harness.mjs check` checks.",
+  "scenarios": "*",
+  "steps": [
+    { "action": "open" },
+    { "action": "step", "frames": 40 },
+    { "action": "capture", "name": "start" },
+    { "action": "compare", "name": "start", "against": "baseline" },
+    { "action": "views", "compare": "baseline" },
+    { "action": "counts", "expect": { "World": 1, "Renderer": 1, "App": 1 } },
+    { "action": "submits", "expect": 1 },
+    { "action": "kits", "expect": "baseline" },
+    { "action": "errors" }
+  ]
+}
