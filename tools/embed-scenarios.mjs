@@ -34,7 +34,7 @@ for (const file of files) {
         if (!raw[inc]) throw new Error(`${file}: include of unknown scenario "${inc}"`);
         return structuredClone(raw[inc]);
     });
-    const roots = ScenarioFormat.roots(full);
+    const roots = ScenarioFormat.sites(full);
     if (!roots.length) throw new Error(`${file}: no world`);
     for (const r of roots) ScenarioFormat.toNative(full, r);   // and on entities that don't fit their feature
     embedded[`scenarios/${file}`] = s;

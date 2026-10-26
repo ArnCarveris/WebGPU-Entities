@@ -506,7 +506,7 @@ export class FormatGolden extends Action {
         const SF = createRequire(import.meta.url)(path.join(ctx.runner.served, 'js/engine/scenario-format.js'));
         const load = async id => JSON.parse(fs.readFileSync(path.join(ctx.runner.served, 'scenarios', `${id}.json`), 'utf8'));
         const scenario = await SF.resolveIncludes(await load(ctx.sid), load), golden = {};
-        for (const root of SF.roots(scenario))
+        for (const root of SF.sites(scenario))
             golden[root.id] = { type: root.type, kits: SF.kitsOf(scenario, root), features: SF.featuresOf(scenario, root), native: SF.toNative(scenario, root) };
         const file = path.join(ROOT, this.p.dir, `${ctx.sid}.json`);
         if (ctx.mode === 'record') { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, JSON.stringify(golden, null, 1) + '\n'); return ctx.note(`wrote ${path.relative(ROOT, file)}`); }

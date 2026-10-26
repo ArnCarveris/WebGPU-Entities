@@ -116,8 +116,7 @@ const ScenarioFormat = (() => {
     for (const [type, w] of Object.entries(Types.WORLDS)) KIT_WORLD[w.kit] ??= type;
     const kitOfWorld = type => Types.WORLDS[type]?.kit;
 
-    // a site entity, or a root entity of a world type (read as a site of its kit)
-    const isSite = e => e?.type === 'site' || !!SCHEMAS[e?.type];
+    const isSite = e => e?.type === 'site';
 
     // the world type of a site entity: its `world`, its kit's, or, a site with no kit, the one that takes the most of
     // the entities `of` it
@@ -134,16 +133,15 @@ const ScenarioFormat = (() => {
         return best.w;
     }
 
-    // the sites of a scenario, each a world for now: [{ type (its world type), kit, id, def, site (false: a root entity
-    // of a world type, read as a site) }]
-    function roots(scenario) {
+    // the sites of a scenario: [{ type (its site type), kit, id, def }]
+    function sites(scenario) {
         const out = [];
         for (const def of scenario.entities || []) {
             if (def.type === 'site') {
                 if (!def.id) throw new Error('site: needs an id');
                 const type = siteWorld(scenario, def);
-                out.push({ type, kit: kitOfWorld(type), id: def.id, def, site: true });
-            } else if (SCHEMAS[def.type]) out.push({ type: def.type, kit: kitOfWorld(def.type), id: def.id || def.type, def, site: false });
+                out.push({ type, kit: kitOfWorld(type), id: def.id, def });
+            } else if (SCHEMAS[def.type]) throw new Error(`{ type: "${def.type}" } is not a site: write { type: "site", kit: "${kitOfWorld(def.type)}" } (tools/migrate-single-world.mjs)`);
         }
         return out;
     }
@@ -170,15 +168,15 @@ const ScenarioFormat = (() => {
 
     // the entities of one world, in scenario order
     function childrenOf(scenario, root) {
-        const all = roots(scenario);
+        const all = sites(scenario);
         return (scenario.entities || []).filter(e => isChild(e) && worldOf(e, all).id === root.id);
     }
 
     // a site's entities -> the native scenario object its kit reads: toNative(scenario, kit, site) (site: its id; by
-    // default the kit's only one), or toNative(scenario, root) with a root of roots()
+    // default the kit's only one), or toNative(scenario, root) with a root of sites()
     function toNative(scenario, root, site) {
         if (typeof root === 'string') {
-            const kit = root, all = roots(scenario).filter(r => r.kit === kit && (site === undefined || r.id === site));
+            const kit = root, all = sites(scenario).filter(r => r.kit === kit && (site === undefined || r.id === site));
             if (all.length !== 1) throw new Error(`toNative: ${all.length ? 'several' : 'no'} sites of kit "${kit}"${site ? ` with id "${site}"` : ''}`);
             root = all[0];
         }
@@ -217,7 +215,7 @@ const ScenarioFormat = (() => {
     // the kits a site's entities need (each type's implementation's kit), beyond the site's own; without a site, every
     // site's and their own kits: what the scenario loads
     function kitsOf(scenario, root) {
-        if (!root) return [...new Set(roots(scenario).flatMap(r => [r.kit, ...kitsOf(scenario, r)]))];
+        if (!root) return [...new Set(sites(scenario).flatMap(r => [r.kit, ...kitsOf(scenario, r)]))];
         return [...new Set(childrenOf(scenario, root).flatMap(e => Types.kitsFor(root.type, e.type)))];
     }
 
@@ -235,7 +233,7 @@ const ScenarioFormat = (() => {
     // entity it replaces had), and the entities it was brought in for name it (`of`), as do its `defaults` (a sky's
     // ground) of a type the scenario gives it none of. A scenario of plain entities (no site) gets its one site so.
     function complete(scenario) {
-        const ents = scenario.entities || [], have = roots(scenario);
+        const ents = scenario.entities || [], have = sites(scenario);
         // a data type of no world here goes to the only world, which reads what it wants of it (worldOf), as before
         let left = ents.filter(e => isChild(e) && !e.of && Types.has(e.type) && !have.some(r => takes(r.type, e.type)) &&
             !(have.length === 1 && !(e.type in Types.IMPLS)));
@@ -327,14 +325,14 @@ const ScenarioFormat = (() => {
             let inc = await resolveIncludes(await load(e.scenario), load, depth + 1);
             // (a scenario of plain entities included `as` a site: the site it implies, renamed; without `as` a part of a
             // scenario, plans or GUI pages, whose entities go to the scenario's sites)
-            if (e.as && !roots(inc).length && (inc.entities || []).some(isChild)) {
+            if (e.as && !sites(inc).length && (inc.entities || []).some(isChild)) {
                 inc = complete(inc);
                 // (named as the scenario it is: what its root entity said)
                 inc = { ...inc, entities: inc.entities.map(x => (x.type === 'site' && !x.name && inc.name ? { ...x, name: inc.name } : x)) };
             }
             const skip = [].concat(e.skip || []).map(glob), only = e.only ? [].concat(e.only).map(glob) : null;
             const keep = x => typeof x.type !== 'string' ? !e.only : !skip.some(r => r.test(x.type)) && (!only || only.some(r => r.test(x.type)) || isSite(x));
-            const root = roots(inc)[0], over = e.site || e.root;
+            const root = sites(inc)[0], over = e.site;
             const from = root ? root.id : null, to = e.as || from;
             for (let x of inc.entities) {
                 if (!keep(x)) continue;
@@ -343,7 +341,7 @@ const ScenarioFormat = (() => {
                     else if (x.of === from) x = { ...x, of: to };
                     if (isEngine(x) && x.type !== 'site') x = rename(x, from, to);
                 }
-                if (over && isSite(x) && x.id === to) x = { ...x, ...over, layer: { ...(x.layer || {}), ...(over.layer || {}) } };
+                if (over && isSite(x) && x.id === to) x = { ...x, ...over };
                 // a world's entities name it: the scenario it goes into may have other worlds that take their types
                 if (to && isChild(x) && !x.of) x = { ...x, of: to };
                 out.push(x);
@@ -353,7 +351,7 @@ const ScenarioFormat = (() => {
         return depth ? done : complete(done);
     }
 
-    return { SCHEMAS, KIT_WORLD, roots, isSite, childrenOf, worldOf, isEngine, takes, kitsOf, featuresOf, complete, toNative, fromNative, resolveIncludes, isObj };
+    return { SCHEMAS, KIT_WORLD, sites, isSite, childrenOf, worldOf, isEngine, takes, kitsOf, featuresOf, complete, toNative, fromNative, resolveIncludes, isObj };
 })();
 
 if (typeof module !== 'undefined') module.exports = ScenarioFormat;

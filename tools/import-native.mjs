@@ -81,7 +81,7 @@ export function importNative(feature, source, out, meta = {}) {
     for (const k of Object.keys(meta)) if (meta[k] === undefined) delete meta[k];
     const scenario = { name: native.name || feature, group: ScenarioFormat.SCHEMAS[feature].title, ...meta, entities };
     // round trip: entities -> native must give back the source
-    const back = ScenarioFormat.toNative(scenario, ScenarioFormat.roots(scenario)[0]);
+    const back = ScenarioFormat.toNative(scenario, ScenarioFormat.sites(scenario)[0]);
     if (!native.name) delete back.name;
     if (!native.entities) delete back.entities;
     const diff = firstDiff(native, back);

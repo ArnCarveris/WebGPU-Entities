@@ -35,7 +35,7 @@ let bad = 0;
 for (const id of ids) {
     const scenario = await ScenarioFormat.resolveIncludes(await load(id), load);
     const golden = {};
-    for (const root of ScenarioFormat.roots(scenario)) {
+    for (const root of ScenarioFormat.sites(scenario)) {
         golden[root.id] = { type: root.type, kits: ScenarioFormat.kitsOf(scenario, root), features: ScenarioFormat.featuresOf(scenario, root),
             native: ScenarioFormat.toNative(scenario, root) };
     }

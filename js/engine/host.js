@@ -202,29 +202,28 @@ class Host {
     // the scenario's sites: the kits of each one's entities, its kit's features its data asks for, its kit's site parts;
     // then each one's context (fx) and its Site beside the App, the HUD root and the input scope they share
     async createSites(scenario) {
-        const roots = ScenarioFormat.roots(scenario);
-        if (!roots.length) throw new Error(`Scenario "${scenario.name}" has nothing in it (no site, and no entity any kit takes)`);
-        for (const r of roots) if (!r.site) console.info(`${scenario.name}: the root entity { type: "${r.type}" } is read as a site of the ${r.kit} kit`);
-        const engine = this.engine, shared = this.shared = roots.length > 1;
-        const ui = this.createHud(roots.map(r => r.type));
+        const places = ScenarioFormat.sites(scenario);
+        if (!places.length) throw new Error(`Scenario "${scenario.name}" has nothing in it (no site, and no entity any kit takes)`);
+        const engine = this.engine, shared = this.shared = places.length > 1;
+        const ui = this.createHud(places.map(r => r.type));
         const made = [];
-        for (const root of roots) {
-            for (const k of ScenarioFormat.kitsOf(scenario, root)) await Features.loadKit(k, engine);
+        for (const place of places) {
+            for (const k of ScenarioFormat.kitsOf(scenario, place)) await Features.loadKit(k, engine);
             const features = {};
-            for (const name of ScenarioFormat.featuresOf(scenario, root)) features[name] = await Features.loadFeature(root.type, name, engine);
-            const module = await Features.load(root.type, engine);
-            made.push({ root, features, module, native: ScenarioFormat.toNative(scenario, root) });
+            for (const name of ScenarioFormat.featuresOf(scenario, place)) features[name] = await Features.loadFeature(place.type, name, engine);
+            const module = await Features.load(place.type, engine);
+            made.push({ place, features, module, native: ScenarioFormat.toNative(scenario, place) });
         }
         // one frame for every site: its conventions from their kits' Renderer extensions (Renderer.share)
         if (shared) {
-            this.renderer.share(this.device, made.map(({ root, module, native }) => {
-                const E = module[Kits.KITS[root.kit].site.extends.renderer];
+            this.renderer.share(this.device, made.map(({ place, module, native }) => {
+                const E = module[Kits.KITS[place.kit].site.extends.renderer];
                 return { key: E.key, E, fx: { native } };
             }), { format: this.format, size: () => [this.width, this.height], target: () => this.swapView() });
             this.world.sunlight = null;
             this.world.shelter = null;
         }
-        for (const { root, features, module, native } of made) this.sites.push(this.createSite(root, module, features, native, ui));
+        for (const { place, features, module, native } of made) this.sites.push(this.createSite(place, module, features, native, ui));
         if (!shared) this.site = this.sites[0];
         // the sites that make room in their ground for the others' (fx.footprints) after those
         const later = this.sites.filter(s => s.spec.makesRoom && shared);
@@ -257,41 +256,41 @@ class Host {
         };
     }
 
-    createSite(root, module, features, native, ui) {
-        const def = root.def, shared = this.shared;
+    createSite(place, module, features, native, ui) {
+        const def = place.def, shared = this.shared;
         const site = {
-            id: root.id, type: root.type, kit: root.kit, label: def.label || def.name || root.id, def, spec: module.spec || {},
+            id: place.id, type: place.type, kit: place.kit, label: def.label || def.name || place.id, def, spec: module.spec || {},
             // (its at: { pos, yaw, on }, on: an entity of another site it rides on)
             frameDef: { offset: def.at?.pos, yaw: def.at?.yaw, on: def.at?.on },
             ui: shared ? ui : { ...ui, veil: () => 0, frame: undefined },
         };
         const { Composite } = Common;
         const ctx = site.ctx = {
-            id: root.id, type: root.type, def, native,
+            id: place.id, type: place.type, def, native,
             features,                      // its kit's features its data asks for: { <name>: their exports }
             host: this,
             device: this.device, format: this.format, adapter: this.adapter,
             frame: this.gpuFrame,          // the frame's one encoder and submit (GpuFrame)
             canvas: this.canvas,
             // the one World, Renderer and App (several sites: as its kit sees them, Composite.scope)
-            world: shared ? Composite.scope(this.world, root.id) : this.world,
-            renderer: shared ? Composite.scope(this.renderer, root.id) : this.renderer,
-            app: shared ? Composite.scope(this.app, root.id) : this.app,
+            world: shared ? Composite.scope(this.world, place.id) : this.world,
+            renderer: shared ? Composite.scope(this.renderer, place.id) : this.renderer,
+            app: shared ? Composite.scope(this.app, place.id) : this.app,
             ui: site.ui,
             io: this.router.scope('app'),
             cameraLocked: shared,          // set while the engine drives the camera (several sites, camera.controller: fly)
             outdoors: null,
             // where it is in the world (several sites): { id, frame (its SiteFrame this frame) }
-            site: shared ? { id: root.id, frame: () => this.frameOf(site) } : null,
+            site: shared ? { id: place.id, frame: () => this.frameOf(site) } : null,
             size: () => [this.width, this.height],
             target: () => this.swapView(),
-            emit: (name, payload) => this.emit(root.id, name, payload),
+            emit: (name, payload) => this.emit(place.id, name, payload),
             toast: (msg, ms) => this.hud.toast(msg, ms),
             sound: { toggle: () => this.audio.toggle() },
             fail: err => showFallback(err),
             floor: (x, y, z) => this.floorIn(site, x, y, z),
         };
-        site.renderKey = module[Kits.KITS[root.kit].site.extends.renderer]?.key;
+        site.renderKey = module[Kits.KITS[place.kit].site.extends.renderer]?.key;
         site.world = shared ? new Features.kits.world.Site(ctx.app, ctx, module.spec) : this.app.attach('site', Features.kits.world.Site, ctx, module.spec);
         // its HUD elements, those the root has not yet
         const tmp = document.createElement('div');
