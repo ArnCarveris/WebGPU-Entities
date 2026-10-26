@@ -3,25 +3,24 @@
 //
 // A scenario is one flat list of entities: { name, group, description, entities: [ { type, id?, of?, ...fields } ] }.
 // Every type is one of the kit manifest's (js/kits/manifest.js, Kits): an engine type, an entity type a kit implements,
-// a data type a kit or world reads, or a world type. Engine entities (camera, view, link, include, site, features,
-// hud.toast, handheld, handheld.page, sound.*) drive the host. A site is a named place in the world ({ type: "site", id:
+// a data type a kit reads, or a site type. Engine entities (camera, view, link, include, site, features, hud.toast,
+// handheld, handheld.page, sound.*) drive the host. A site is a named place in the one world ({ type: "site", id:
 // "river", label, kit: "hydrology", at: { pos, yaw, on } }); everything there is an entity of a plain type: terrain
 // stamps, lakes, storm cells, materials, models, views, lighting presets, config blocks ({ type: "light" }, { type:
-// "mountain" }). Such an entity stands in the site named by `of`, or else in the only site of the scenario whose kit
-// takes its type (any site when there is only one). A scenario of plain entities has no site at all: one is implied, of
-// the kit that takes them (complete()), with the id of its world type, as the root entity it replaces had. A site of a
-// kit is, for now, one world of that kit's world type (the host makes one per site); it takes the entity types whose
-// implementation's base it has and whose needs it provides, and the data types of its schema (Kits.implsIn). `camera`
-// and `view` are the engine's unless they have `of` (then they are that site's camera block / one of its views).
-// A root entity of a world type ({ type: "water", id: "river" }), what scenarios had before sites, is read as a site of
-// its kit; tools/migrate-single-world.mjs rewrites them.
+// "mountain" }). Such an entity stands in the site named by `of` (`of` names a site, nothing else), or else in the only
+// site of the scenario whose kit takes its type (any site when there is only one). A scenario of plain entities has no
+// site at all: one is implied, of the kit that takes them (complete()), with the id of its kit's site type. A site of a
+// kit is of that kit's site type (manifest: <kit>.site.type); it takes the entity types whose implementation's base it
+// has and whose needs it provides, and the data types of its schema (Kits.implsIn). `camera` and `view` are the
+// engine's unless they have `of` (then they are that site's camera block / one of its views). An entity of a site type
+// ({ type: "water" }) is an error: tools/migrate-single-world.mjs rewrites old scenarios into sites.
 //
 // Any kit's entity works in any scenario: an entity no site of the scenario takes brings in a site of a kit that does (an
 // implicit site: complete()), beside the others; a scenario of plain entities needs no site at all.
 //
-// Each world still reads its own native layout (materials as a map, views as a list, ...). Its schema (the manifest's
-// worlds.<type>.schema, SCHEMAS here) says how its entities map onto it, so toNative / fromNative convert both ways
-// without per-world code:
+// Each site still reads its own native layout (materials as a map, views as a list, ...). Its schema (the manifest's
+// <kit>.site.schema, SCHEMAS here) says how its entities map onto it, so toNative / fromNative convert both ways
+// without per-kit code:
 //
 //   config   singleton blocks: native key -> one entity of that type holding its fields (non-objects as `value`);
 //            `rename` gives a block whose key is taken (a feature's name, an engine type) another type
@@ -30,13 +29,13 @@
 //   lists    native list -> one entity of that type per item, in order
 //            (a map value's or list item's own `type` field is kept in the field named after its slot type:
 //            a water tool { type: "pour" } is { type: "tool", tool: "pour" })
-//   (entity types: the world's native `entities` list, each { type, ...fields })
+//   (entity types: the site's native `entities` list, each { type, ...fields })
 //
 // include { scenario, as, skip, only, site }: the entities of another scenario, spliced in its place (resolveIncludes).
 // `as` renames its site (the site's id, `of` fields, and the site's name in the engine entities' expressions; a
-// scenario with no site gets the one it implies), `skip` / `only` filter by type ("view", "sound.*"), `site` (`root`,
-// as before) merges fields into its site (label, at, layer settings). The included site's entities get its `of`. A
-// composition is a few includes plus what joins them.
+// scenario with no site gets the one it implies), `skip` / `only` filter by type ("view", "sound.*"), `site` merges
+// fields into its site (label, at). The included site's entities get its `of`. A tour of several sites is a few
+// includes plus the links and the camera between them.
 //
 // features { <name>: true | false }: an engine entity turning features on or off whatever the data says, for every
 // site (a site's own `features` over it).
@@ -45,7 +44,7 @@ const ScenarioFormat = (() => {
     // js/kits/manifest.js: a script before this one in the page, a module in node
     const Types = typeof Kits !== 'undefined' ? Kits : require('../kits/manifest.js');
 
-    // each world type's schema: { title, config, rename, maps, lists }
+    // each site type's schema: { title, config, rename, maps, lists }
     const SCHEMAS = Object.fromEntries(Object.entries(Types.WORLDS).map(([type, w]) =>
         [type, { title: w.title || type, config: [], maps: {}, lists: {}, ...w.schema }]));
 
@@ -111,14 +110,14 @@ const ScenarioFormat = (() => {
     // an entity that stands in a site
     const isChild = e => typeof e.type === 'string' && !SCHEMAS[e.type] && !isEngine(e);
 
-    // a kit's world type (a site of the kit is one world of it): the first it offers, or the site's `world`
+    // a kit's site type: the first it offers, or the site's `world`
     const KIT_WORLD = {};
     for (const [type, w] of Object.entries(Types.WORLDS)) KIT_WORLD[w.kit] ??= type;
     const kitOfWorld = type => Types.WORLDS[type]?.kit;
 
     const isSite = e => e?.type === 'site';
 
-    // the world type of a site entity: its `world`, its kit's, or, a site with no kit, the one that takes the most of
+    // the site type of a site entity: its `world`, its kit's, or, a site with no kit, the one that takes the most of
     // the entities `of` it
     function siteWorld(scenario, def) {
         if (def.world) return def.world;
@@ -173,7 +172,7 @@ const ScenarioFormat = (() => {
     }
 
     // a site's entities -> the native scenario object its kit reads: toNative(scenario, kit, site) (site: its id; by
-    // default the kit's only one), or toNative(scenario, root) with a root of sites()
+    // default the kit's only one), or toNative(scenario, root) with one of sites()
     function toNative(scenario, root, site) {
         if (typeof root === 'string') {
             const kit = root, all = sites(scenario).filter(r => r.kit === kit && (site === undefined || r.id === site));
@@ -219,7 +218,7 @@ const ScenarioFormat = (() => {
         return [...new Set(childrenOf(scenario, root).flatMap(e => Types.kitsFor(root.type, e.type)))];
     }
 
-    // the features of its kit a world's data asks for (Kits.featuresOf: its entities' types, its native data, its root's
+    // the features of its kit a world's data asks for (Kits.featuresOf: its entities' types, its native data, its site's
     // `features` overrides)
     function featuresOf(scenario, root) {
         const types = [...new Set(childrenOf(scenario, root).map(e => e.type))];
@@ -228,8 +227,8 @@ const ScenarioFormat = (() => {
     }
 
     // Implicit sites: the entities that no site of the scenario takes (and name none with `of`) bring in sites of kits
-    // that take them: first of the world type that takes the most of them (on a tie one with `defaults`, then the
-    // manifest's order), then for what is left, and so on. Each new site goes first, id = its world type (as the root
+    // that take them: first of the site type that takes the most of them (on a tie one with `defaults`, then the
+    // manifest's order), then for what is left, and so on. Each new site goes first, id = its site type (as the
     // entity it replaces had), and the entities it was brought in for name it (`of`), as do its `defaults` (a sky's
     // ground) of a type the scenario gives it none of. A scenario of plain entities (no site) gets its one site so.
     function complete(scenario) {
@@ -260,7 +259,7 @@ const ScenarioFormat = (() => {
         return { ...scenario, entities: [...out, ...ents.map(e => (via.has(e) ? { ...e, of: via.get(e) } : e))] };
     }
 
-    // a world's native scenario -> entities (the root first); used to import scenarios made for the single demos
+    // a world's native scenario -> entities (the site first); used to import scenarios made for the single demos
     function fromNative(world, native, id = world) {
         const schema = SCHEMAS[world];
         if (!schema) throw new Error(`unknown world type "${world}"`);
@@ -327,7 +326,7 @@ const ScenarioFormat = (() => {
             // scenario, plans or GUI pages, whose entities go to the scenario's sites)
             if (e.as && !sites(inc).length && (inc.entities || []).some(isChild)) {
                 inc = complete(inc);
-                // (named as the scenario it is: what its root entity said)
+                // (named as the scenario it is: what its site said)
                 inc = { ...inc, entities: inc.entities.map(x => (x.type === 'site' && !x.name && inc.name ? { ...x, name: inc.name } : x)) };
             }
             const skip = [].concat(e.skip || []).map(glob), only = e.only ? [].concat(e.only).map(glob) : null;

@@ -123,8 +123,8 @@ function terrainStamps(Base, { peakLabel = 10, lake: lakeOpts = {} } = {}) {
         }
     }
 
-    // Levels the ground to `level` over a rectangle (size [x, z] m, yaw degrees) or a disc (radius): a site where another
-    // world of a composition stands (an atmosphere makes one under each world's footprint: Host.footprintsIn). The ground
+    // Levels the ground to `level` over a rectangle (size [x, z] m, yaw degrees) or a disc (radius): where another site
+    // stands (an atmosphere makes one under each site's footprint: Host.footprintsIn). The ground
     // eases back to the terrain over `blend` m, outside the site; with `inset` inside it instead, so the terrain meets the
     // other world's edge at its own height and the levelled ground stays hidden under that world. `water` paints the
     // site as water; `bare` keeps plants and the procedural detail off it.
@@ -144,7 +144,7 @@ function terrainStamps(Base, { peakLabel = 10, lake: lakeOpts = {} } = {}) {
                 f.h[idx] = lerp(d.level, f.h[idx], k);
                 if (d.water) f.wet(idx, 1 - smoothstep(0, f.cell, sd));
             });
-            // `bare`: nothing grows on the site (another world covers it)
+            // `bare`: nothing grows on the site (another site covers it)
             if (d.bare) f.keepBare?.(cx - reach, cz - reach, cx + reach, cz + reach, (x, z) => edge(x, z) < 0);
         }
     }

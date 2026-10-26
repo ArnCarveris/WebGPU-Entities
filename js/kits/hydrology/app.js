@@ -163,29 +163,25 @@ class AppExtension {
         F.set([wt.flowScale, L.scale ?? 1, 0, 0], 108);
     }
 
-    // update: input, camera, tools, world, sim; render: the frame. The host runs both, or (in a composition) the
-    // camera's world updates before the others render
-    frame(now, dt, { update = true, render = true } = {}) {
+    // update: input, camera, tools, world, sim; render: the frame.
+    frame(now, dt) {
         const r = this.renderer, w = this.world, flow = this.flow;
-        if (update) {
-            if (dt > 0) this.fps = this.fps * 0.95 + (1 / dt) * 0.05;
-            if (!this.paused) this.time += dt;
-            const io = this.input.consume();
-            if (!this.fx.cameraLocked) this.camera.control(dt, io, this.input.keys, this.fx.floor);
+        if (dt > 0) this.fps = this.fps * 0.95 + (1 / dt) * 0.05;
+        if (!this.paused) this.time += dt;
+        const io = this.input.consume();
+        if (!this.fx.cameraLocked) this.camera.control(dt, io, this.input.keys, this.fx.floor);
 
-            // cursor ray -> terrain, tools
-            const rect = this.canvas.getBoundingClientRect();
-            const mx = this.input.mouse[0] - rect.left, my = this.input.mouse[1] - rect.top;
-            const hit = this.hit = w.field.raycast(this.camera.pos, this.camera.ray(mx, my, rect.width, rect.height));
-            this.extraSources = [];
-            this.acting = !!(hit && this.input.acting && this.tool && !this.paused);
-            if (this.acting) this.tool.apply(this.app, hit, dt);
+        // cursor ray -> terrain, tools
+        const rect = this.canvas.getBoundingClientRect();
+        const mx = this.input.mouse[0] - rect.left, my = this.input.mouse[1] - rect.top;
+        const hit = this.hit = w.field.raycast(this.camera.pos, this.camera.ray(mx, my, rect.width, rect.height));
+        this.extraSources = [];
+        this.acting = !!(hit && this.input.acting && this.tool && !this.paused);
+        if (this.acting) this.tool.apply(this.app, hit, dt);
 
-            if (!this.paused) w.update(dt, this.time);
-            if (w.field.dirty) flow.uploadTerrain();
-            this.simDt = dt;
-        }
-        if (!render) return;
+        if (!this.paused) w.update(dt, this.time);
+        if (w.field.dirty) flow.uploadTerrain();
+        this.simDt = dt;
         r.resize();
         let sim = null;
         if (!this.paused) {

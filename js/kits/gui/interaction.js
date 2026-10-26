@@ -4,7 +4,7 @@
 Features.kit('gui', (engine, kit) => {
 // Routes a pointer to EntityGUIs, like Doom 3 tracing the view against gui surfaces. Each frame hover() asks `aim` for
 // the view ray ({ eye, dir }, or null while nothing may be aimed at: the mouse looks around, the handheld has the
-// cursor, the camera is another world's) and traces it against every GUI of `guis`; the nearest one hit gets the cursor
+// cursor, the camera is another site's) and traces it against every GUI of `guis`; the nearest one hit gets the cursor
 // when it is in its use range (gui.inRange(eye, hit)), else, nearer than its hintRange, its "move closer" hint. A GUI
 // holding the pointer (a drag) keeps the cursor even out of range. Presses, drags and the wheel go to the GUI with the
 // cursor; the feature's input calls pointerDown / pointerUp / wheel.

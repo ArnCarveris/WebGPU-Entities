@@ -629,7 +629,7 @@ fn groundNoise(xz: vec2f) -> vec4f { return textureSampleLevel(shapeTex, repSamp
 
 // the ground's colour from afar (linear albedo), as fsTerrain draws it where a pixel spans many fields: fieldColor's
 // average crop colour, or a real place's naturalColor at its moisture (terrain: the world's terrain entity). What shows
-// of it from further still: the planet it stands on in a composition (its footprint's albedo)
+// of it from further still: the planet it stands on, as another site (its footprint's albedo)
 const groundAlbedo = t => {
     if (t.style !== 'natural') return [0.30, 0.25, 0.17];
     const m = Math.min(Math.max((t.moisture ?? 0.5) - 0.15, 0), 1);

@@ -19,8 +19,8 @@ class Toast {
 
 // What of the outdoors the eye sees from inside an interior: null, all of it (the eye is outdoors), or { seen (any of it),
 // rect ([x0, y0, x1, y1] px of a W x H frame: the screen rectangle of the portals it is seen through; null: the whole
-// screen), W, H }: a world's own (its portal traversal's) or the composition's (fx.outdoors: the camera inside another
-// world's interior, Host.inside)
+// screen), W, H }: a world's own (its portal traversal's) or the other sites' (fx.outdoors: the camera inside another
+// site's interior, Host.inside)
 const Outdoors = {
     SEALED: { seen: false, rect: null },
 
@@ -53,8 +53,8 @@ const Outdoors = {
 };
 
 // in-world labels on a 2D canvas over the world: begin() sizes and clears it, place() projects a point, mark() draws one.
-// What of the outdoors they may show: their world's own `region` and the composition's (outer(): fx.outdoors); how much
-// the composition's other worlds hide a point beyond them (veil(x, y, W, H, d): fx.ui.veil, an atmosphere's daytime sky
+// What of the outdoors they may show: their world's own `region` and the other sites' (outer(): fx.outdoors); how much
+// the other sites hide a point beyond them (veil(x, y, W, H, d): fx.ui.veil, an atmosphere's daytime sky
 // what is in space). frame(): the frame's number, when the canvas is shared by every kit's labels (cleared once a frame)
 class LabelLayer {
     constructor(canvas, outer = null, veil = null, frame = null) {
@@ -85,7 +85,7 @@ class LabelLayer {
 
     // canvas pixel [x, y, alpha] of world point p under viewProj, or null behind the eye or well off the screen, or where
     // what of the outdoors the eye sees from inside (Outdoors: its `region`, the world's portal traversal's, and the
-    // composition's) hides it; d (m from the eye, if given): faded by what the other worlds hide of it (veil), null where
+    // other sites') hides it; d (m from the eye, if given): faded by what the other sites hide of it (veil), null where
     // they hide it all
     place(viewProj, p, d) {
         const clip = m4.project(viewProj, p);

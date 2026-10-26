@@ -16,7 +16,7 @@
 //
 // Several sites (docs/single-world-plan.md Phase 6): each kit extends the one World, Renderer and App through a scope of
 // its own (Common.Composite.scope: its own extensions and the names they expose, everything else shared), its site placed
-// in the world by its `at` (a position and a yaw, on an entity another site answers anchor() for: frameOf), and they draw
+// in the world by its `at` (a position and a yaw, on an entity another site answers anchor() for: siteFrame), and they draw
 // one frame (Renderer.share: one scene, one depth, one sky, the post of the kit that maps radiance to the canvas). There is
 // one camera: the engine's flies or walks over every site's ground (floorAt), or a site's own drives it (its controller),
 // and each site's own camera follows it in the site's frame. The sky's site lights the others (world.sunlight), its sun
@@ -281,7 +281,7 @@ class Host {
             cameraLocked: shared,          // set while the engine drives the camera (several sites, camera.controller: fly)
             outdoors: null,
             // where it is in the world (several sites): { id, frame (its SiteFrame this frame) }
-            site: shared ? { id: place.id, frame: () => this.frameOf(site) } : null,
+            site: shared ? { id: place.id, frame: () => this.siteFrame(site) } : null,
             size: () => [this.width, this.height],
             target: () => this.swapView(),
             emit: (name, payload) => this.emit(place.id, name, payload),
@@ -302,12 +302,12 @@ class Host {
     // the ground each of `sites` covers (Site.footprint), in site a's frame: [{ id, pos: [x, z] (its centre), size: [w, d],
     // yaw (deg, as a terrain stamp turns), floor (its lowest ground's height), ground }]
     footprintsIn(a, sites) {
-        const Fa = this.frameOf(a), out = [];
+        const Fa = this.siteFrame(a), out = [];
         for (const s of sites) {
             let fp = null;
             try { fp = s.world.footprint?.(); } catch (err) { console.warn(`${s.id}: footprint()`, err); }
             if (!fp) continue;
-            const Fs = this.frameOf(s), p = Fa.local(Fs.point([(fp.lo[0] + fp.hi[0]) / 2, fp.floor, (fp.lo[1] + fp.hi[1]) / 2]));
+            const Fs = this.siteFrame(s), p = Fa.local(Fs.point([(fp.lo[0] + fp.hi[0]) / 2, fp.floor, (fp.lo[1] + fp.hi[1]) / 2]));
             const x = Fa.localDir(Fs.dir([1, 0, 0]));
             out.push({ id: s.id, pos: [p[0], p[2]], size: [fp.hi[0] - fp.lo[0], fp.hi[1] - fp.lo[1]], yaw: Math.atan2(x[2], x[0]) * 180 / Math.PI,
                 floor: p[1], ground: !!fp.ground });
@@ -332,7 +332,7 @@ class Host {
             if (!this.controller) this.router.always.add('engine');
             for (const s of this.sites) s.ctx.cameraLocked = s !== this.controller;
             const start = this.controller || this.sites.find(s => s.id === cam.start);
-            if (this.shared && start?.world.view) this.fly.view = this.frameOf(start).toWorld(start.world.view);
+            if (this.shared && start?.world.view) this.fly.view = this.siteFrame(start).toWorld(start.world.view);
             this.startSite = this.shared && !this.controller ? start || null : null;
             // (what each site's camera holds now: one it moves before the first frame, a world loading on, is followed)
             if (this.shared) for (const s of this.sites) s.sent = s.world.view;
@@ -363,7 +363,7 @@ class Host {
 
     // ------------------------------------------------------------------------------------------- sites
     // where a site is in the world: its frame (a site's `at`, riding on the entity another site answers anchor() for)
-    frameOf(site) {
+    siteFrame(site) {
         const t = site.frameDef, local = SiteFrame.fromDef(t);
         if (t.on) {
             const owner = site.anchorOwner ? [site.anchorOwner] : this.sites.filter(s => s !== site);
@@ -386,7 +386,7 @@ class Host {
         let most = 0;
         for (const s of this.sites) {
             if (!s.ready || !s.world.veil) continue;
-            const F = this.frameOf(s);
+            const F = this.siteFrame(s);
             let a = 0;
             try { a = s.world.veil(F.local(v.pos), F.localDir(dir), d) || 0; } catch { a = 0; }
             if (a > most) most = a;
@@ -426,7 +426,7 @@ class Host {
             for (const s of this.sites) s.ctx.cameraLocked = s !== to;
             if (to) {
                 this.router.always.delete('engine');
-                to.world.setView?.(this.cameraDef.carry === false && to.left ? to.left : this.frameOf(to).toLocal(view));
+                to.world.setView?.(this.cameraDef.carry === false && to.left ? to.left : this.siteFrame(to).toLocal(view));
             } else { this.router.always.add('engine'); this.fly.view = view; }
         }
         if (to) { if (to.world.move !== mode) to.world.setMove(mode); }
@@ -449,7 +449,7 @@ class Host {
             const w = s.world;
             if (!w?.ground) continue;
             if (!this.shared) { const g = w.ground([x, y, z]); return g == null ? -Infinity : g; }
-            const F = this.frameOf(s), lp = F.local([x, y, z]), g = w.ground(lp);
+            const F = this.siteFrame(s), lp = F.local([x, y, z]), g = w.ground(lp);
             if (g == null || g === -Infinity) continue;
             const h = F.point([lp[0], g, lp[2]])[1];
             if (h > best) best = h;
@@ -460,7 +460,7 @@ class Host {
     // ... at a point of site's frame, in its frame (fx.floor)
     floorIn(site, x, y, z) {
         if (!this.shared) return this.floorAt(x, y, z);
-        const F = this.frameOf(site), w = F.point([x, y, z]), g = this.floorAt(w[0], w[1], w[2]);
+        const F = this.siteFrame(site), w = F.point([x, y, z]), g = this.floorAt(w[0], w[1], w[2]);
         return g === -Infinity ? g : F.local([w[0], g, w[2]])[1];
     }
 
@@ -487,13 +487,13 @@ class Host {
         const s = v.inst, d = this.driver;
         if (!this.fly || !s || s === d) return;
         if (!this.shared) { this.fly.view = s.world.view; return; }
-        this.setWorldView(this.frameOf(s).toWorld(s.world.view));
+        this.setWorldView(this.siteFrame(s).toWorld(s.world.view));
     }
 
     // the one camera to a view in the world (several sites): the controller site's, else the engine's
     setWorldView(view) {
         const d = this.controller;
-        if (d) d.world.setView?.(this.frameOf(d).toLocal(view));
+        if (d) d.world.setView?.(this.siteFrame(d).toLocal(view));
         this.fly.view = view;
     }
 
@@ -587,10 +587,10 @@ class Host {
             // (a controller site moves the camera itself, first)
             ctrl.world.frame(now, dt);
             this.lightFrom(ctrl);
-            this.fly.view = this.frameOf(ctrl).toWorld(ctrl.world.view);
+            this.fly.view = this.siteFrame(ctrl).toWorld(ctrl.world.view);
         } else {
             const site = this.startSite, v = site?.sent && site.world.view;
-            if (v && !Host.sameView(v, site.sent)) this.fly.view = this.frameOf(site).toWorld(v);
+            if (v && !Host.sameView(v, site.sent)) this.fly.view = this.siteFrame(site).toWorld(v);
             this.fly.update(dt);
         }
         const view = this.eye = this.fly.view;
@@ -598,7 +598,7 @@ class Host {
         for (const site of this.order) {
             if (site === ctrl) continue;
             if (site.spec.makesRoom && !sheltered) { this.shelter(view); sheltered = true; }
-            site.world.setView?.(this.frameOf(site).toLocal(view));
+            site.world.setView?.(this.siteFrame(site).toLocal(view));
             site.sent = site.world.view;
             site.world.frame(now, dt);
             this.lightFrom(site);
@@ -611,12 +611,12 @@ class Host {
     // of a solar system), once it has framed: the sky's sun stands where it does, seen from the sky's site
     lightFrom(site) {
         if (site === this.starSite) {
-            const s = site.world.sunlight(), Fs = this.frameOf(site), F = this.frameOf(this.skySite);
+            const s = site.world.sunlight(), Fs = this.siteFrame(site), F = this.siteFrame(this.skySite);
             const d = s && F.localDir(Fs.dir(s.toward(Fs.local(F.pos))));
             if (d && !Host.same(d, this.starDir)) { this.starDir = d; this.skySite.world.set?.('sunDir', d); }
         }
         if (site !== this.skySite) return;
-        const s = site.world.sunlight(), F = this.frameOf(site);
+        const s = site.world.sunlight(), F = this.siteFrame(site);
         this.world.sunlight = s && { ...s, toward: p => F.dir(s.toward(F.local(p))) };
     }
 
@@ -629,7 +629,7 @@ class Host {
         let by = null, region = null;
         for (const s of this.order) {
             if (!s.ready || !s.world.sheltered) continue;
-            const p = this.frameOf(s).local(v.pos);
+            const p = this.siteFrame(s).local(v.pos);
             if (!s.world.sheltered(p)) continue;
             by = s;
             const od = s.world.outdoors?.(p);

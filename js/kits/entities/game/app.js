@@ -117,7 +117,7 @@ class AppExtension {
         F.set([this.lighting.exposure, this.lighting.sun, this.writeCovers(F, 44), 1 / Math.max(this.fx.world.sunlight?.exposure ?? 1, 1e-4)], 40);
     }
 
-    // The ground of the worlds standing on its bodies in a composition (their Site.footprint with an albedo: an
+    // The ground of the sites standing on its bodies (their Site.footprint with an albedo: an
     // atmosphere's map) into F at o, MAX_COVERS at most: [direction from the body's centre (world axes), body index]
     // [albedo, angular radius] each. Its surface takes that colour there, easing back to its own over some eight times
     // that (surfaceColor), so the ground beyond their maps is theirs. Returns how many
@@ -130,7 +130,7 @@ class AppExtension {
             let fp = null;
             try { fp = i.world.footprint?.(); } catch { fp = null; }
             if (!fp?.albedo) continue;
-            const p = host.frameOf(self).local(host.frameOf(i).point([(fp.lo[0] + fp.hi[0]) / 2, fp.floor, (fp.lo[1] + fp.hi[1]) / 2]));
+            const p = host.siteFrame(self).local(host.siteFrame(i).point([(fp.lo[0] + fp.hi[0]) / 2, fp.floor, (fp.lo[1] + fp.hi[1]) / 2]));
             const r = Math.hypot(fp.hi[0] - fp.lo[0], fp.hi[1] - fp.lo[1]) / 2;
             this.world.bodies.some((b, k) => {
                 const d = v3.sub(p, b.frame.pos.metres()), len = v3.len(d);
@@ -142,23 +142,19 @@ class AppExtension {
         return n;
     }
 
-    // update: input, camera, world, rebase; render: the frame. The host runs both, or (in a composition) the
-    // camera's world updates before the others render
-    frame(now, dt, { update = true, render = true } = {}) {
+    // update: input, camera, world, rebase; render: the frame.
+    frame(now, dt) {
         const r = this.renderer, w = this.world, f = this.floating;
-        if (update) {
-            if (dt > 0) this.fps = this.fps * 0.95 + (1 / dt) * 0.05;
-            if (!this.paused) this.time += dt;
-            const io = this.input.consume();
-            const near = w.proximity(this.camera.pos);
-            if (!this.fx.cameraLocked) this.controller.update(dt, io, f.origin, near, this.minAlt, f.scale ? 6 : f.cfg.maxScaleExp);
-            if (this.controller.atEdge) { this.controller.atEdge = false; this.hud.toast('Edge of the world: ±2^30 cells'); }
-            w.update(dt, this.time);
-            const count = f.stats.count;
-            this.prox = f.update(this.camera.pos, w);         // O(1) rebase when needed
-            if (f.stats.count !== count) this.fx.emit('rebase', { reason: f.stats.reason, scale: f.origin.scale });
-        }
-        if (!render) return;
+        if (dt > 0) this.fps = this.fps * 0.95 + (1 / dt) * 0.05;
+        if (!this.paused) this.time += dt;
+        const io = this.input.consume();
+        const near = w.proximity(this.camera.pos);
+        if (!this.fx.cameraLocked) this.controller.update(dt, io, f.origin, near, this.minAlt, f.scale ? 6 : f.cfg.maxScaleExp);
+        if (this.controller.atEdge) { this.controller.atEdge = false; this.hud.toast('Edge of the world: ±2^30 cells'); }
+        w.update(dt, this.time);
+        const count = f.stats.count;
+        this.prox = f.update(this.camera.pos, w);         // O(1) rebase when needed
+        if (f.stats.count !== count) this.fx.emit('rebase', { reason: f.stats.reason, scale: f.origin.scale });
         const prox = this.prox ||= f.update(this.camera.pos, w);
         r.resize();
         this.writeFrame(prox);

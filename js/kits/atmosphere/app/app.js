@@ -129,7 +129,7 @@ class AppExtension {
     }
 
     load(scenario) {
-        // the ground the composition's other worlds cover (fx.footprints): its terrain makes room under each (bare clearings,
+        // the ground the scenario's other sites cover (fx.footprints): its terrain makes room under each (bare clearings,
         // after its own stamps): a world with its own ground to its edges sinks the terrain inside them a little below its
         // lowest ground, the terrain meeting them at its own height; a building gets a pad at its floor
         const room = (this.fx.footprints || []).map(fp => ({
@@ -161,32 +161,28 @@ class AppExtension {
         this.reset = true;
     }
 
-    // update: input, camera, weather, buses, doors, what falls on the camera; render: the frame. The host runs both, or
-    // (in a composition) the camera's world updates before the others render
-    frame(now, dt, { update = true, render = true } = {}) {
+    // update: input, camera, weather, buses, doors, what falls on the camera; render: the frame.
+    frame(now, dt) {
         const r = this.renderer, w = this.world, locked = this.fx.cameraLocked;
-        if (update) {
-            if (dt > 0) this.fps = this.fps * 0.95 + (1 / dt) * 0.05;
-            const io = this.input.consume();
-            this.keys.keyboard(io.pressed);
-            this.keys.clicks(io.clicks);
-            const before = this.lastCam || [...this.camera.pos];
-            if (!this.walker.active && !locked) this.camera.control(dt, io, this.input.keys, this.fx.floor);
+        if (dt > 0) this.fps = this.fps * 0.95 + (1 / dt) * 0.05;
+        const io = this.input.consume();
+        this.keys.keyboard(io.pressed);
+        this.keys.clicks(io.clicks);
+        const before = this.lastCam || [...this.camera.pos];
+        if (!this.walker.active && !locked) this.camera.control(dt, io, this.input.keys, this.fx.floor);
 
-            const wdt = this.wdt = this.paused ? 0 : dt * this.timeScale;
-            if (!this.paused) { this.time += dt; this.weatherTime += wdt; }
-            w.busBoost = this.busFast ? 10 : 1;     // the bus menu's ×10: the buses run ten times as fast
-            w.update(this.paused ? 0 : dt, wdt, this.time);
-            this.app.each('update', dt, io);
-            // on foot after the bus has moved, so a rider's eye is where the bus is this frame
-            if (this.walker.active && !locked) this.walker.update(dt, io, this.input, this.app);
-            this.app.each('afterWalk', dt, io, now);
-            if (v3.len(v3.sub(before, this.camera.pos)) > 3000) this.reset = true;
-            this.surroundings.update(dt);
-            this.app.each('sounds');
-            this.footsteps.update();
-        }
-        if (!render) return;
+        const wdt = this.wdt = this.paused ? 0 : dt * this.timeScale;
+        if (!this.paused) { this.time += dt; this.weatherTime += wdt; }
+        w.busBoost = this.busFast ? 10 : 1;     // the bus menu's ×10: the buses run ten times as fast
+        w.update(this.paused ? 0 : dt, wdt, this.time);
+        this.app.each('update', dt, io);
+        // on foot after the bus has moved, so a rider's eye is where the bus is this frame
+        if (this.walker.active && !locked) this.walker.update(dt, io, this.input, this.app);
+        this.app.each('afterWalk', dt, io, now);
+        if (v3.len(v3.sub(before, this.camera.pos)) > 3000) this.reset = true;
+        this.surroundings.update(dt);
+        this.app.each('sounds');
+        this.footsteps.update();
         // how much of its air there is about the eye (airAt): above it none of its scene, only its post over what lies
         // behind it (space, drawn under its sky in a frame it shares)
         const air = this.airHere = this.airAt(this.camera.pos);

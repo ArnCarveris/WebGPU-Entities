@@ -77,7 +77,7 @@ const imposterWorld = {
         if (key === 'light' && g.lighting.names.includes(v) && v !== g.lighting.name) g.relight('preset', v);
         else if (key === 'lod' && LOD_MODES.includes(v)) g.set('lodMode', v);
         else if (key === 'shadows') g.set('shadows', !!v);
-        // a direction in this world's frame (another world's sun: Host.lights, or a link), kept whatever preset
+        // a direction in this site's frame (another site's sun: Host.lights, or a link), kept whatever preset
         else if (key === 'sunDir' && Array.isArray(v)) g.lighting.follow(v);
     },
 };

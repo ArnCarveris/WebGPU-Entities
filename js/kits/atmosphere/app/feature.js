@@ -85,7 +85,7 @@ const atmosphereWorld = type => ({
     veil(p, dir, d) { return this.app?.airHides(p, dir, d) ?? 0; },
 
     // the ground it covers (Site.footprint): its terrain's map, with its colour from afar (groundAlbedo): a planet
-    // it stands on in a composition shows it there
+    // another site stands on shows it there
     footprint() {
         const w = this.app?.world, f = w?.field;
         return f ? { lo: [f.origin, f.origin], hi: [f.origin + f.size, f.origin + f.size], floor: f.base, ground: true, albedo: kit.groundAlbedo(w.terrain) } : null;

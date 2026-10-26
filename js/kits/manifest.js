@@ -5,13 +5,13 @@
 //   <kit>: {
 //     about, uses (the kits it builds on), parts (js/kits/<kit>/<part>.js, in load order),
 //     types:  entity types it implements, by factory: <factory>: { base, needs, types: { <type>: [Class, about, { uses }] } }
-//             kits.<kit>.<factory>(Base, options) makes the classes over a world's entity base (Base: the world's
-//             `bases[base]`); a world takes the types of every factory whose base it has and whose `needs` it provides.
+//             kits.<kit>.<factory>(Base, options) makes the classes over a site's entity base (Base: the site's
+//             `bases[base]`); a site takes the types of every factory whose base it has and whose `needs` it provides.
 //             A factory that returns one class (not a set of them) names none ([null, about]). A type's `uses`: kits it
 //             needs beyond its kit's (an easel's paint), loaded only with an entity of it.
-//     data:   data types it reads (config blocks, presets, plans): { <type>: about }; a world with one of them loads it
-//     site:   what a site of this kit is (a scenario's sites: ScenarioFormat; each one world for now): { type (the
-//             world type its sites are, the id of a site its entities imply), sites ('one' | 'many': how many a
+//     data:   data types it reads (config blocks, presets, plans): { <type>: about }; a site with one of them loads it
+//     site:   what a site of this kit is (a scenario's sites: ScenarioFormat; all of them on the one World): { type
+//             (the site type its sites are, the id of a site its entities imply), sites ('one' | 'many': how many a
 //             scenario may have), extends: { world, renderer, app } (the exports of its parts it extends the one World,
 //             Renderer and App with), title, about, uses, parts (js/kits/<kit>/<part>.js, registered with
 //             Features.world(type, fn), loaded only with a site of it, after the kit), bases (the entity bases it has),
@@ -24,7 +24,7 @@
 //             <name>: { about, uses, parts, when, requires }. parts: js/kits/<kit>/features/<name>/<part>.js
 //             (Features.feature('<kit>/<name>', fn)), loaded with the kits it uses. when: { types (any of these entity
 //             types), needs (an entity whose implementation needs one of these), data (any of these paths of the
-//             world's native data is set; through a list, in any of its items: entities.screen), features (any of these
+//             site's native data is set; through a list, in any of its items: entities.screen), features (any of these
 //             features is on) }; requires: features it builds on
 //             (on with it). A `features` entity (or a site's `features`) { <name>: true | false } turns one on or off.
 //   }
@@ -38,7 +38,7 @@ const Kits = (() => {
         site: 'a named place in the world (id, label, kit, at: { pos, yaw, on }): the entities `of` it stand there',
         features: 'turns features on or off for the whole world: { <name>: true | false }',
         camera: 'which world drives the camera, or the engine\'s free camera; with `of`: that world\'s camera settings',
-        view: 'a viewpoint in composition space; with `of`: one of that world\'s views (`each` + `follow` per member)',
+        view: 'a viewpoint in the world; with `of`: one of that site\'s views (`each` + `follow` per member)',
         link: 'sets a world parameter from an expression',
         handheld: 'the engine\'s handheld phone',
         'handheld.page': 'a page of the handheld',
@@ -59,7 +59,7 @@ const Kits = (() => {
             data: { player: 'the player (FirstPersonView: start, speeds, walk)' },
         },
         world: {
-            about: 'entity bases, the one World and App every world type extends, HUD layers, pages and the Site adapter (what the host asks of a site)',
+            about: 'entity bases, the one World and App the sites of every kit extend, HUD layers, pages and the Site adapter (what the host asks of a site)',
             parts: ['entity', 'world', 'app', 'hud', 'pages', 'site'],
             data: { lighting: 'which lighting preset starts, and lighting settings', light: 'a lighting preset (sun, sky, fog...)' },
         },
@@ -355,7 +355,7 @@ const Kits = (() => {
             },
         },
         gpu: {
-            about: 'the one Renderer every world type extends, stencil layouts, pipeline tables, render extensions, WGSL libraries, lines, half floats, profiling, dynamic scale',
+            about: 'the one Renderer the sites of every kit extend, stencil layouts, pipeline tables, render extensions, WGSL libraries, lines, half floats, profiling, dynamic scale',
             parts: ['stencil', 'pipelines', 'extensions', 'renderer', 'wgsl-library', 'lines', 'half', 'profiler', 'dynamic-scale'],
         },
         gui: {
@@ -461,7 +461,7 @@ const Kits = (() => {
     }
 
     // ------------------------------------------------------------------------------------------- derived
-    // the kits' sites by world type: { kit, ...site }
+    // the kits' sites by site type: { kit, ...site }
     const WORLDS = {};
     for (const [kit, k] of Object.entries(KITS)) {
         const w = k.site;
@@ -497,7 +497,7 @@ const Kits = (() => {
     const isEngine = type => type in ENGINE;
 
     // The features of a world of type `world` its data asks for, in the manifest's order (each after those it requires):
-    // native its native data, types its entities' types, overrides { <name>: bool } (its root's `features`)
+    // native its native data, types its entities' types, overrides { <name>: bool } (its site's `features`)
     // a world's features: its kit's, then its own (names unique between them)
     const featuresIn = world => {
         const k = KITS[WORLDS[world].kit].features || {}, w = WORLDS[world].features || {};
@@ -505,7 +505,7 @@ const Kits = (() => {
         return { ...k, ...w };
     };
 
-    // where a world's feature is: { spec, kit, world (the world type for one of its own, else null) }
+    // where a site's feature is: { spec, kit, world (the site type for one of its own, else null) }
     const featureOf = (world, name) => {
         const W = WORLDS[world], own = W.features?.[name];
         const spec = own || KITS[W.kit].features?.[name];

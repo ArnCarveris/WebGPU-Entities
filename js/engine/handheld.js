@@ -9,10 +9,10 @@
 // scenario's own pages, then the engine's options (scenario, view, walk, sound, GPU).
 //
 //   handheld       { startShown, title, fovDeg, showSeconds, pose, screen, virtual, zOffset, model, materials, sounds }
-//                  merged over HANDHELD_DEFAULTS, later entities winning (a composition overrides what it includes)
+//                  merged over HANDHELD_DEFAULTS, later entities winning (a scenario overrides what it includes)
 //   handheld.page  { id, of, title, nav: { section, sub, icon }, sections: [{ header, cells: [...], footer }] }
-//                  a list page; `of` ties it to a world (its id becomes "<of>:<id>" and its nav cell names the world in a
-//                  composition), `nav` adds a cell for it to that section of the root page. Cells as in PhoneGUI:
+//                  a list page; `of` ties it to a site (its id becomes "<of>:<id>" and its nav cell names the site in a
+//                  scenario of several), `nav` adds a cell for it to that section of the root page. Cells as in PhoneGUI:
 //                  nav, label, text, switch, slider, picker, action; `label` / `text` take `expr`, a template read
 //                  against the frame scope ("{sky.rain|pct}", see js/engine/expr.js).
 //
@@ -158,12 +158,10 @@ class Handheld {
         GpuChoice.probe?.();
 
         const { RendererExtension, MaterialTable, MeshBuilder, GuiAtlas, DeviceContext, PhoneGUI } = Features.kits.gui;
-        const { Renderer } = Features.kits.gpu;
         const host = this.host;
         // its GUI renderer: the gui kit's, beside the one Renderer's own extension (renderer.ext.handheld), drawing over the
-        // finished frame into a depth-stencil target of its own (a host of worlds: a Renderer of its own)
-        const R = host.renderer || new Renderer();
-        const r = this.renderer = R.attach('handheld', RendererExtension, {
+        // finished frame into a depth-stencil target of its own
+        const r = this.renderer = host.renderer.attach('handheld', RendererExtension, {
             device: host.device, format: host.format, frame: host.gpuFrame, stencilTarget: 'handheld',
             size: () => [host.width, host.height],
             target: () => host.swapView(),
@@ -217,7 +215,7 @@ class Handheld {
                 else pages[id] = page;
             }
         }
-        // a world's section: its name in a composition, its scenario's name alone ("Water · Riverlands" -> RIVERLANDS)
+        // a site's section: its name beside other sites, its scenario's name alone ("Water · Riverlands" -> RIVERLANDS)
         const worldSection = inst => {
             const [kind, name] = inst.label.split(' · ');
             return section((host.sites.length > 1 || !name ? kind : name).toUpperCase());

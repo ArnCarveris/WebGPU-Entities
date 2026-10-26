@@ -148,8 +148,6 @@ class AppExtension {
         else this.hud.toast(`${best.name}: ${best.target > 0.5 ? 'opening' : 'closing'}`);
     }
 
-    // update: world (vehicles first, so riding players use this frame's pose), player; render: visibility, the
-    // frame. The host runs both, or (in a composition) the camera's world updates before the others render
     // In a world lit by another site's sky (world.sunlight: the frame's one sun): its outdoors' sun where that one is
     // (toward it, in this site's frame), and its display values taken into the frame's radiance by that sky's exposure
     // (sceneScale, G.scene.x)
@@ -161,18 +159,17 @@ class AppExtension {
         this.sceneScale = 1 / Math.max(s.exposure, 1e-4);
     }
 
-    frame(now, dt, { update = true, render = true } = {}) {
+    // update: world (vehicles first, so riding players use this frame's pose), player; render: visibility, the frame
+    frame(now, dt) {
         dt = Math.min(0.05, dt);
         const t = now / 1000;
         const { world: w, player, stats } = this;
-        if (update) {
-            this.followSun();
-            stats.fps = stats.fps * 0.93 + (1 / Math.max(dt, 1e-4)) * 0.07;
-            w.update(dt, t, [player.cam.pos]);
-            if (!this.fx.cameraLocked) player.update(dt, this.input.keys);
-            this.soundEvents(dt);
-        }
-        if (render) this.tick(now, t);
+        this.followSun();
+        stats.fps = stats.fps * 0.93 + (1 / Math.max(dt, 1e-4)) * 0.07;
+        w.update(dt, t, [player.cam.pos]);
+        if (!this.fx.cameraLocked) player.update(dt, this.input.keys);
+        this.soundEvents(dt);
+        this.tick(now, t);
     }
 
     // events for the scenario's sound cues: footsteps while walking on the ground, every stride

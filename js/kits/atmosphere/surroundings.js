@@ -22,7 +22,7 @@ class Surroundings {
         a.inBus = false;
         a.each('surround', cp);
         a.probe = a.renderer.weatherPass.probe;
-        // another world's roof (a composition's link: set('indoors')) keeps the rain off as this world's own do
+        // another site's roof (a site link: set('indoors')) keeps the rain off as this site's own do
         const target = a.forceIndoors ? { rain: 0, snow: 0 } : this.nearPrecip();
         // eased towards the target (the probe reads back in steps, and crossing the cloud base or a link's roof would
         // cut it): the emitters thin out or fill in over about a second instead of popping; a jump snaps it

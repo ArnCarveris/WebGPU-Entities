@@ -69,7 +69,7 @@ class Lighting {
 
     cycle() { const n = this.names; this.set(n[(n.indexOf(this.name) + 1) % n.length]); }
 
-    // the sun of another world (Host.lights): its direction d (toward it, this world's frame) in every preset from now on
+    // the sun of another site (Host.lights): its direction d (toward it, this site's frame) in every preset from now on
     follow(d) {
         this.sunAlong = v3.norm(d);
         this.along(this.target);

@@ -246,21 +246,17 @@ class AppExtension {
         return 1 / Math.max(s.exposure, 1e-4);
     }
 
-    // update: input, lighting, world; render: the frame. The host runs both, or (in a composition) the camera's world
-    // updates before the others render
-    frame(now, dt, { update = true, render = true } = {}) {
+    // update: input, lighting, world; render: the frame.
+    frame(now, dt) {
         const t0 = performance.now(), w = this.world, cam = this.camera;
-        if (update) {
-            this.time += dt;
-            this.sunScale = this.followSun();
-            this.input.update(dt);
-            this.lighting.update(dt);
-            if (w) {
-                w.update(dt, this.time);
-                if (!this.fx.cameraLocked) cam.pos[1] = Math.max(cam.pos[1], w.heightAt(cam.pos[0], cam.pos[2]) + 0.5);
-            }
+        this.time += dt;
+        this.sunScale = this.followSun();
+        this.input.update(dt);
+        this.lighting.update(dt);
+        if (w) {
+            w.update(dt, this.time);
+            if (!this.fx.cameraLocked) cam.pos[1] = Math.max(cam.pos[1], w.heightAt(cam.pos[0], cam.pos[2]) + 0.5);
         }
-        if (!render) return;
         this.updateFocus();
         const f = this.focusInfo;
         this.renderer.render(w, cam, this.settings, this.time, f && this.settings.atlasView !== 'off' ? f : null, this.lighting.env, this.sunScale);

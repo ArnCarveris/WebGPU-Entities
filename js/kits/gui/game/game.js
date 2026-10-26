@@ -163,13 +163,12 @@ class AppExtension {
         return this.world.guis;
     }
 
-    // update: player, world, GUIs; render: views, render targets, passes. The host runs both, or (in a
-    // composition) the camera's world updates before the others render
-    frame(now, dt, { update = true, render = true } = {}) {
+    // update: player, world, GUIs; render: views, render targets, passes.
+    frame(now, dt) {
         dt = Math.min(0.05, dt);
         const t = now / 1000;
-        if (update) this.update(now, dt, t);
-        if (render) this.render(now, dt, t);
+        this.update(now, dt, t);
+        this.render(now, dt, t);
     }
 
     update(now, dt, t) {

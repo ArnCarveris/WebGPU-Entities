@@ -109,11 +109,11 @@ class StructuresApp {
         // the lift cars the traversal reached (their areas), the landing doors and counterweights near
         // each building drawn in the frame of its storey nearest the eye (its Origin's level, kits.interior), so what is
         // near the camera is a few metres from its origin in f32 at any height
-        const frameOf = b => b.interior.origin.level(b.interior.origin.levelNear(cam.pos));
-        R.boxGroups = S.lifts.instances(cam.pos, R.boxData, fw.roomVis.cars, fw.roomVis.ranges, b => frameOf(b).M[13]);
+        const levelOf = b => b.interior.origin.level(b.interior.origin.levelNear(cam.pos));
+        R.boxGroups = S.lifts.instances(cam.pos, R.boxData, fw.roomVis.cars, fw.roomVis.ranges, b => levelOf(b).M[13]);
         // the doors' leaves in the rooms drawn, after them (the same boxes)
         const lifted = R.boxGroups.reduce((n, g) => n + g.count, 0);
-        R.boxGroups.push(...S.innerDoors.instances(cam.pos, R.boxData, lifted, fw.roomVis.seen, b => frameOf(b).M[13]));
+        R.boxGroups.push(...S.innerDoors.instances(cam.pos, R.boxData, lifted, fw.roomVis.seen, b => levelOf(b).M[13]));
         R.boxCount = R.boxGroups.reduce((n, g) => n + g.count, 0);
         // each building drawn, in its Origin's frame: its model-view built in doubles about the camera, in an object frame
         // of busData (the interiors' and the lifts' draws name it)

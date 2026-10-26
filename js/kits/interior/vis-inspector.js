@@ -53,7 +53,7 @@ class VisInspector {
     }
 
     // what of the outdoors the eye of the last traversal sees (PortalVis.outdoorsOf; null: all of it): what the world tells
-    // the others of a composition while the camera is inside it (Site.outdoors)
+    // the other sites while the camera is inside it (Site.outdoors)
     outdoors() { return this.opts.culling ? PortalVis.outdoorsOf(this.vis) : null; }
 
     // what to call area i
