@@ -120,7 +120,10 @@ None of them makes a device, a frame loop, a scene or a camera, and none is reac
 
 There is exactly one `World`, one `Renderer` and one `App` ([[webgpu-entities-one-host]]). A kit never has its own
 world, renderer, app, game, loop or registry; all it can do is extend those three. So the sdf kit is three extension
-classes, each with `static key = 'sdf'`, composed onto the host with `host.compose(...)` like every feature's:
+classes, each with `static key = 'sdf'`, composed onto the host with `host.compose(...)` like every feature's. That holds
+for every scenario, however many sites it has: `docs/single-world-plan.md` (done through Phase 7) puts each site on the
+one World, Renderer and App through `Composite.scope`, and its §1.7 says what replaced the cross-world mechanisms, so
+the field sees every site's entities in one frame and there is nothing to inject between worlds.
 
 | Extension | Mounted on | What it does | Hooks it answers |
 |---|---|---|---|

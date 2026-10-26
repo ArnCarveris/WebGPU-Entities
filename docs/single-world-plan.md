@@ -1,10 +1,13 @@
 # One World, one Renderer, one App: every scenario on a single instance (plan)
 
-Status: Phases 0-6 done. Phases 0-5 on branch `claude/single-world-177086` (2026-10-22): the harness and baselines,
+Status: Phases 0-7 done. Phases 0-5 on branch `claude/single-world-177086` (2026-10-22): the harness and baselines,
 Composite with many extensions, one encoder and submit, frame conventions, the scenario format with sites, the single-site
 scenarios on one World, Renderer and App. Phase 6 on `claude/single-world-phase6-2b119d` (2026-10-23): every composition
 on one World, Renderer and App (6a-6g; Q1-Q6 answered, §8), the legacy host, compositor, inject / behindTex, layer roles
-and joins, the old sun and camera hand-over deleted. Next: Phase 7. Written 2026-10-21 against `main` at 756d5ee (soft
+and joins, the old sun and camera hand-over deleted. Phase 7 on `claude/single-world-phase7-fc4fbd` (2026-10-26): root
+entities are an error (ScenarioFormat.sites), the headers and comments say sites, the kits' frame() lost its opts,
+`host.frameOf` is `siteFrame`, and `tools/check-single-world.mjs` (the `single-world` sequence, G8) guards it; the
+`moves` sequence checks a look and a move in fly and walk in every scenario. Next: Phase 8 (optional, Q9). Written 2026-10-21 against `main` at 756d5ee (soft
 shadows), with `docs/sdf-kit-plan.md` uncommitted beside it.
 
 The goal, in the user's words: the worlds (cloud, portal, water, gui, origin, imposter) "are from separate
@@ -484,7 +487,8 @@ Gate per step: §6.2 G2. Single-world scenarios stay pixel-identical throughout.
 - `tools/check-single-world.mjs`, run by the harness and before commits, fails on: more than one
   `new World|Renderer|App(` in `js/`; the identifiers `instances`, `frameOf`, `composed`, `Compositor`, `inject`,
   `behindTex`, `byRole`, `cameraOwner`, `sunFrom`, `holder`, `layer.role`; a manifest `worlds:` key; any scenario
-  field `layer`.
+  field `layer`. (As built: code only, comments and strings are prose; `instances` only in `js/engine`, since the kits'
+  renderers use it for GPU instances.)
 - Docs: `docs/sdf-kit-plan.md` §1.2a refers to this plan. The memory notes [[webgpu-entities-no-world-toggles]] and
   [[webgpu-entities-single-world]] are updated: the composition rules they describe are superseded by §1.7.
 
