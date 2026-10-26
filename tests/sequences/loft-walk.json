@@ -1,0 +1,21 @@
+{
+  "description": "Fly, Walk, the bunker's Loft view, W: walking goes on from the Loft (regression 2026-10-27, Every kit: Walk handed the camera to the facility's player, the Loft view put that player at the bunker, and its first step took it back into its rooms, 14 km away). Every scenario with the bunker.",
+  "scenarios": ["compose-every-kit", "compose-grand-tour", "compose-bunker-reservoir", "portal-bunker-compound"],
+  "steps": [
+    { "action": "open" },
+    { "action": "step", "frames": 20 },
+    { "action": "eval", "expr": "entities.viewList.find(v => v.name === 'Loft')?.key ?? null", "as": "loft" },
+    { "if": "entities.moves.includes('fly')", "action": "move", "mode": "fly" },
+    { "if": "entities.moves.includes('walk')", "action": "move", "mode": "walk", "frames": 20 },
+    { "action": "view", "key": { "$": "loft" }, "frames": 20 },
+    { "action": "eye", "as": "at" },
+    { "action": "expect", "expr": "entities.move", "equals": "walk", "label": "still walking at the Loft" },
+    { "action": "key", "code": "KeyW", "hold": 30, "after": 2 },
+    { "action": "step", "frames": 30 },
+    { "action": "eye", "as": "walked" },
+    { "action": "expect", "var": "walked", "near": [{ "$": "at" }, 5], "label": "W walks on from the Loft" },
+    { "action": "capture", "name": "walked" },
+    { "action": "counts", "expect": { "World": 1, "Renderer": 1, "App": 1 } },
+    { "action": "errors" }
+  ]
+}

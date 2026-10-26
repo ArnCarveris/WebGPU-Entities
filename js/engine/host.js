@@ -490,11 +490,29 @@ class Host {
         this.setWorldView(this.siteFrame(s).toWorld(s.world.view));
     }
 
-    // the one camera to a view in the world (several sites): the controller site's, else the engine's
+    // the one camera to a view in the world (several sites): the controller site's where its camera can be, else the
+    // engine's, in the same mode (the facility's player keeps to its rooms: put at the bunker's loft, its first step
+    // would take it back)
     setWorldView(view) {
         const d = this.controller;
-        if (d) d.world.setView?.(this.siteFrame(d).toLocal(view));
+        if (d && !this.holds(d, view.pos)) {
+            const mode = this.move;
+            d.left = d.world.view;
+            this.controller = null;
+            for (const s of this.sites) s.ctx.cameraLocked = true;
+            this.router.always.add('engine');
+            this.fly.eye.setMode(mode);
+        } else if (d) d.world.setView?.(this.siteFrame(d).toLocal(view));
         this.fly.view = view;
+    }
+
+    // whether site's camera can be at world point p: anywhere, but a building's (Site.footprint, ground false) only in it
+    holds(site, p) {
+        let fp = null;
+        try { fp = site.world.footprint?.(); } catch { fp = null; }
+        if (!fp || fp.ground) return true;
+        const q = this.siteFrame(site).local(p);
+        return q[0] >= fp.lo[0] && q[0] <= fp.hi[0] && q[2] >= fp.lo[1] && q[2] <= fp.hi[1];
     }
 
     // a view entity: the camera there, looking at `look`

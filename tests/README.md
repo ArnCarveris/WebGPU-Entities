@@ -111,6 +111,7 @@ differences printed, not failures), `--frames N` / `--view-frames N`, `--port N`
 | `perf-ab` | G7: GPU time A/B, previous commit against this one |
 | `camera-start` | the camera starts at `camera.start`'s site view, and that site's camera follows |
 | `walk-handover` | Walk hands the camera to the controller site's player and Fly hands it back |
+| `loft-walk` | fly, walk, the bunker's Loft view, W: walking goes on from the Loft (not back to the facility's player) |
 | `sky-sunlight` | the sky's site lights the other sites through `world.sunlight` (sidecar goldens) |
 
 Traps: the imposter's foliage differs between Brave sessions (the baseline gate allows twice the recorded noise);
