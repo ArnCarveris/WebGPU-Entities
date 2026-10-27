@@ -17,6 +17,17 @@ const HURRICANE = [null,
     { name: 'Cat 5', kmh: '252+', eye: 7500, top: 12200, bands: 5, outer: 68000, precip: 1.6, bandTop: 9000, eyeFloor: 0.15, ragged: 0.04, wind: 76 },
 ];
 
+// a hurricane of category cat for the GPU (12 floats: the weather kit's hurricaneShape): [x, z, eye radius, strength]
+// [eyewall top, turn (rad), rain bands, outer radius] [precipitation, band top, eye floor cover, raggedness]. pos: its eye
+// ([x, z], m); grow: how far it organised (0 .. 1: its eye contracting); turn: how far it turned; top: its eyewall's
+// highest (m, the category's by default); scale: its radii's (the weather map's are scaled down, a planet's are not)
+function hurricaneData(cat, { pos = [0, 0], grow = 1, turn = 0, top, scale = 1 } = {}) {
+    const k = HURRICANE[cat], t = top ?? k.top;
+    return [pos[0], pos[1], k.eye * scale * (1.6 - 0.6 * smoothstep(0, 1, grow)), smoothstep(0, 1, grow),
+        t, turn, k.bands, k.outer * scale,
+        k.precip, Math.min(k.bandTop, t - 1000), k.eyeFloor, k.ragged];
+}
+
 // tornado categories (Fujita): funnel radius (m) at the ground and up in the wall cloud, how much of its height the
 // condensation reaches down (1: to the ground), flare (how it widens upwards), lean (x its height), debris cloud
 // radius (m), wind (m/s), subvortices
@@ -271,5 +282,5 @@ function weatherTypes(Base) {
     return { StormCell, Supercell, SquallLine, Spawner };
 }
 
-return { HURRICANE, TORNADO, weatherTypes };
+return { HURRICANE, TORNADO, hurricaneData, weatherTypes };
 });

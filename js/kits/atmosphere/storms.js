@@ -4,9 +4,8 @@
 // hides), a hurricane with an eye and a tornado under a supercell.
 
 Features.world('cloud', (engine, kit) => {
-const { Common } = engine;
-const { smoothstep } = Common;
 const { StormCell, Supercell, HURRICANE, SquallLine, Spawner } = kit;
+const { hurricaneData } = engine.kits.weather;
 
 class Storms {
     static key = 'storms';
@@ -58,14 +57,12 @@ class Storms {
         if (host) out.tornado = host.tornado(this.tornadoCat, this.tornadoGrow);
     }
 
-    // the hurricane for the GPU (12 floats, see the weather pass and hurricaneKeep)
+    // the hurricane for the GPU (12 floats, the weather kit's hurricaneData: the weather pass, hurricaneKeep)
     hurricane(maxTop) {
         if (!this.hurricaneCat || this.hurricaneGrow <= 0) return null;
-        const k = HURRICANE[this.hurricaneCat], g = this.hurricaneGrow, base = this.world.weather.cur.base;
-        const top = Math.max(Math.min(k.top, maxTop - 300), base + 3000);
-        return [...this.hurricanePos, k.eye * (1.6 - 0.6 * smoothstep(0, 1, g)), smoothstep(0, 1, g),
-            top, this.hurricaneTurn, k.bands, k.outer,
-            k.precip, Math.min(k.bandTop, top - 1000), k.eyeFloor, k.ragged];
+        const k = HURRICANE[this.hurricaneCat], base = this.world.weather.cur.base;
+        return hurricaneData(this.hurricaneCat, { pos: this.hurricanePos, grow: this.hurricaneGrow, turn: this.hurricaneTurn,
+            top: Math.max(Math.min(k.top, maxTop - 300), base + 3000) });
     }
 }
 

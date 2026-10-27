@@ -2,10 +2,12 @@
 // WGSL: the weather map, the cloud shadow map and the ground state (snow, wetness).
 
 Features.kit('atmosphere', (engine, kit) => {
-const { MAX_LAYERS, CLEAR_WIDE } = engine.kits.weather;
+const { MAX_LAYERS, CLEAR_WIDE, StormWGSL } = engine.kits.weather;
 
-// weather map: layer coverage from large-scale noise advected by the wind, plus every storm cell
+// weather map: layer coverage from large-scale noise advected by the wind, plus every storm cell (their shapes the
+// weather kit's, as a planet seen from space draws them)
 const WGSL_WEATHER = /* wgsl */`
+${StormWGSL}
 // the genus layers' precipitation scale (x) and cover scale (y) at xz: the state's (F.rain.z, 1), or along the bus route
 // in mixed rain the zones' (RainZones): a Gaussian-weighted mean of the route points near xz, faded in by their summed
 // weight. A clear stretch (cover 0) opens the decks: a flat-topped hole around each of its points, F.zoneInfo.w along
@@ -82,27 +84,14 @@ fn weather(@builtin(global_invocation_id) g: vec3u) {
         let c = cells[i];
         let dist = length(xz - c.a.xy);
         if (dist > c.a.z * 3.4) { continue; }                          // beyond every footprint of this cell (anvil reach)
-        // anvil: tall cells spread a sheet downwind under the tropopause. It spreads at the equilibrium level, under the
-        // overshooting top (the cell's top, the tower's dome over the updraft rises out of it); its top sinks away from
-        // the updraft and is lumpy (the outline's noise), so seen from above it is no flat lid
-        let tall = sat((c.a.w - F.cloud.y - 2500.0) / 4000.0) * sat(c.b.x * 2.0);
-        if (tall > 0.0) {
-            let ad = xz - c.a.xy - wd * c.a.z * 0.8;
-            let along = dot(ad, wd);
-            let fo = fbm2(xz / 5000.0 + c.b.z * 7.0, 3);
-            let ra = length(vec2f(along * 0.6, dot(ad, vec2f(-wd.y, wd.x)))) / (c.a.z * 1.6) * (0.8 + 0.4 * fo);
-            let ga = sat(1.0 - ra);
-            let a = ga * ga * (3.0 - 2.0 * ga) * tall * 0.85;
-            let sink = sat(dist / (c.a.z * 3.0));
-            let at = c.a.w - 400.0 - 0.1 * (c.a.w - F.cloud.x) - 1100.0 * sink * sink + (fo - 0.5) * 1000.0;
-            if (a > 0.005) { anvCov = max(anvCov, a); anvTop = max(anvTop, at); }
-        }
+        // anvil: tall cells spread a sheet downwind under the tropopause (the weather kit's cellAnvil)
+        let an = cellAnvil(xz, xz - c.a.xy, dist, c.a.z, c.a.w, c.b.x, c.b.z, wd, F.cloud.xy);
+        if (an.x > 0.005) { anvCov = max(anvCov, an.x); anvTop = max(anvTop, an.y); }
         if (dist > c.a.z * 1.45) { continue; }                         // the rest (body, shelf, rain core) is closer in
         let d = xz - c.a.xy;
-        let outline = fbm2((xz - F.wind.zw * 0.5) / (c.a.z * 0.7) + c.b.z * 31.0, 3);
-        let r = length(d) / c.a.z * (0.75 + 0.5 * outline);
-        let g = sat(1.0 - r);
-        let gs = g * g * (3.0 - 2.0 * g);
+        let tower = cellTower(xz, d, c.a.z, c.b.z, F.wind.zw);
+        let gs = tower.x;
+        let outline = tower.y;
         // shelf cloud: a wedge band on the leading (downwind) edge, along the gust front
         if (c.d.x > 0.0) {
             let len = max(length(d), 1.0);
@@ -135,18 +124,10 @@ fn weather(@builtin(global_invocation_id) g: vec3u) {
     if (H0.w > 0.001) {
         let H1 = F.hurricane[1];
         let H2 = F.hurricane[2];
-        let rel = xz - H0.xy;
-        let r = length(rel);
-        let a = atan2(rel.y, rel.x);
-        let re = H0.z;
-        let rag = fbm2(xz / 7000.0 - H1.y * 3.0, 3) - 0.5;
-        let rn = r * (1.0 + rag * H2.w);
-        let wall = smoothstep(re * 0.9, re * 1.1, rn) * (1.0 - smoothstep(re * 2.0, re * 3.2, rn));
-        // log spiral: inwards the bands turn the way the storm does; bands fray and break up
-        let ph = a - H1.y + log(max(r, re) / re) * 2.4;
-        let bn = fbm2(xz / 9000.0 + H1.y * 2.0, 4);
-        let band = smoothstep(0.4, 0.85, 0.5 + 0.5 * cos(H1.z * ph) + (bn - 0.5) * 0.7)
-            * smoothstep(re * 1.6, re * 2.6, r) * (1.0 - smoothstep(H1.w * 0.55, H1.w, r)) * (0.55 + 0.45 * sat(1.0 - r / H1.w));
+        let hs = hurricaneShape(xz, xz - H0.xy, H0, H1, H2);
+        let wall = hs.wall;
+        let band = hs.band;
+        let bn = hs.bn;
         let hc = max(wall, band * 0.9) * H0.w;
         cov = max(cov, hc);
         top = max(top, max(mix(F.cloud.y, H1.x, wall * H0.w), mix(F.cloud.y, H2.y, band * H0.w * (0.7 + 0.6 * bn))));
@@ -155,10 +136,10 @@ fn weather(@builtin(global_invocation_id) g: vec3u) {
         pr += hp * (1.0 - sat(pr * 0.5));
         vs += hp;
         // central dense overcast: the outflow sheet spreading from the eyewall top
-        let cdo = (1.0 - smoothstep(H1.w * 0.25, H1.w * 0.55, rn)) * smoothstep(re * 1.0, re * 1.6, rn) * H0.w;
+        let cdo = hs.cdo * H0.w;
         if (cdo > anvCov) { anvCov = cdo * 0.95; anvTop = max(anvTop, H1.x); }
         // the eye
-        let eye = (1.0 - smoothstep(re * 0.8, re * 1.0, rn)) * H0.w;
+        let eye = hs.eye * H0.w;
         let eyeFloor = H2.z * smoothstep(0.45, 0.75, lf + 0.2);
         cov = mix(cov, eyeFloor, eye);
         top = mix(top, F.cloud.x + 900.0, eye);

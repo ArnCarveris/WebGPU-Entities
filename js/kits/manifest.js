@@ -191,7 +191,7 @@ const Kits = (() => {
         weather: {
             about: 'storm cells, the climate, the sky and cloud layers, lightning',
             uses: ['noise'],
-            parts: ['storms', 'climate', 'sky', 'lightning'],
+            parts: ['storms', 'climate', 'sky', 'lightning', 'wgsl'],
             types: {
                 weatherTypes: {
                     base: 'terrain', needs: ['weather'],
