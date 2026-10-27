@@ -89,12 +89,21 @@ fn tiles(@builtin(global_invocation_id) gid: vec3u) {
     var m = vec2u(0u);
     if (span.y > span.x) {
         for (var b = tileBin(span.x); b <= tileBin(span.y); b++) {
-            let f = (f32(b) + 0.5) / 64.0;
-            let t = clamp(f * f * F.march.z, span.x, span.y);
-            let p = curveToWorld(ro + dir * t);
-            if (p.y <= F.layerInfo.z || p.y >= F.features.z) { continue; }
-            if (cloudSampleN(p, weatherAt(p.xz), 1, 0xffffffffu, cloudPossible(p)).x > 0.0) {
-                if (b < 32u) { m.x |= 1u << b; } else { m.y |= 1u << (b - 32u); }
+            let fa = f32(b) / 64.0;
+            let fb = f32(b + 1u) / 64.0;
+            let ta = max(fa * fa * F.march.z, span.x);
+            let tb = min(fb * fb * F.march.z, span.y);
+            // a steep ray crosses the whole cloud layer in a bin or two (a kilometre and more each from high up): one
+            // sample per bin missed the clouds between its heights, which the march then cut along the tiles, in
+            // rings. A sample per 300 m of height (up to 4); a level ray keeps one
+            let k = clamp(u32(ceil(abs(dir.y) * (tb - ta) / 300.0)), 1u, 4u);
+            for (var j = 0u; j < k; j++) {
+                let p = curveToWorld(ro + dir * mix(ta, tb, (f32(j) + 0.5) / f32(k)));
+                if (p.y <= F.layerInfo.z || p.y >= F.features.z) { continue; }
+                if (cloudSampleN(p, weatherAt(p.xz), 1, 0xffffffffu, cloudPossible(p)).x > 0.0) {
+                    if (b < 32u) { m.x |= 1u << b; } else { m.y |= 1u << (b - 32u); }
+                    break;
+                }
             }
         }
     }

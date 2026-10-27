@@ -183,18 +183,20 @@ fn convectiveDensity(p: vec3f, w: vec4f, an: vec4f, st: vec4f, detail: bool) -> 
         let plate = abs(fract(p.y / 950.0 + 0.3 * sin(p.x / 4200.0) + 0.3 * cos(p.z / 5100.0)) * 2.0 - 1.0);
         d = mix(d, d * (0.72 + 0.28 * smoothstep(0.05, 0.4, plate)) + 0.12 * prof, st.x);
     }
-    d = sat(remap(d, 1.0 - cov, 1.0, 0.0, 1.0)) * cov;
+    d = sat(remap(d, 1.0 - cov, 1.0, 0.0, 1.0));
     if (d <= 0.0) { return 0.0; }
-    // smooth: no detail noise; within the detail distance it is trimmed by what the erosion takes on average, so the
-    // near clouds keep the same mass without the fetch
-    if (detail && F.look.x > 0.5) { d = sat(remap(d, F.noise.z * 0.5, 1.0, 0.0, 1.0)); }
-    else if (detail) {
+    // the detail erosion works on the shape (0..1), before the coverage scales it: eroding the scaled density took all
+    // of a thin cloud (fair cumulus, coverage ~0.35, under the erosion's 0.32), a hole of the detail distance's radius
+    // around the camera under the shadows of clouds that were not drawn. It is centred on the noise's mean (0.48), carving
+    // and swelling the edges alike: one that only took away left the near clouds thinner than the far ones and their
+    // shadows (which have no detail noise). smooth (F.look.x): no detail noise near either
+    if (detail && F.look.x < 0.5) {
         let n = textureSampleLevel(detailTex, repSamp, q / F.noise.y + vec3f(0.0, F.up.w * 0.0004, 0.0), 0.0);
         let dw = n.x * 0.625 + n.y * 0.25 + n.z * 0.125;
         let e = mix(dw, 1.0 - dw, sat(h * 5.0));                     // wispy bases, billowy tops
-        d = sat(remap(d, e * F.noise.z * (1.0 - 0.75 * st.x), 1.0, 0.0, 1.0));
+        d = sat(remap(d, (e - 0.5) * F.noise.z * (1.0 - 0.75 * st.x), 1.0, 0.0, 1.0));
     }
-    return d * F.cloud.z;
+    return d * cov * F.cloud.z;
 }
 
 // shelf cloud: a tiered wedge along a storm's gust front, low and dark underneath
@@ -242,13 +244,13 @@ fn layerDensity(p: vec3f, i: i32, cov: f32, detail: bool) -> f32 {
         prof = sat(h / 0.05) * sat((1.0 - h) / 0.4);
     }
     let cv = min(cov + covBoost, 1.0);
-    var d = sat(remap(n * prof, 1.0 - cv, 1.0, 0.0, 1.0)) * cv;
+    var d = sat(remap(n * prof, 1.0 - cv, 1.0, 0.0, 1.0));
     if (d <= 0.0) { return 0.0; }
-    if (detail && B.w > 0.0) {
+    if (detail && B.w > 0.0) {                                  // eroding the shape, before the coverage (convectiveDensity)
         let dn = textureSampleLevel(detailTex, repSamp, lp / (B.y * 0.2) + C.w, 0.0);
         d = sat(remap(d, (dn.x * 0.625 + dn.y * 0.25 + dn.z * 0.125) * B.w, 1.0, 0.0, 1.0));
     }
-    return d * A.w;
+    return d * cv * A.w;
 }
 
 fn bez(a: vec2f, c: vec2f, b: vec2f, t: f32) -> vec2f { let u = 1.0 - t; return u * u * a + 2.0 * u * t * c + t * t * b; }
