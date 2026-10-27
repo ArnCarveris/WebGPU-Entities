@@ -232,7 +232,8 @@ class Footsteps {
 
     update() {
         const a = this.app, cam = a.camera.pos, wk = a.walker;
-        if (wk.active && !wk.bus && this.stepPos) {
+        // (its camera following another site's: no walking of its own, though its walker is still on)
+        if (wk.active && !wk.bus && this.stepPos && !a.fx.cameraLocked) {
             const keys = a.input.keys, run = keys.has('ShiftLeft') || keys.has('ShiftRight');
             const dx = Math.hypot(cam[0] - this.stepPos[0], cam[2] - this.stepPos[2]);
             this.stepDist += dx < 5 ? dx : 0;

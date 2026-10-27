@@ -4,10 +4,11 @@
 //   camera { controller: "fly", pos, look, fov, speed, clearance }   the engine flies it (WASD, drag, wheel, Space / C)
 //   camera { ..., mode: "walk" }                                     ... walking (the handheld switches): on every site's ground
 //   camera { start: "<site>" }                                       (several sites) the engine's camera starts at that site's start view
-//   camera { controller: "<site>" | ["<site>", ...], carry }         that site's own camera (its flight, its player) drives it;
-//                                                                    the handheld's Walk picks the first that walks or flies (else
-//                                                                    the engine's), from where the camera is (carry false: from
-//                                                                    where that one was)
+//   camera { controller: "<site>" | ["<site>", ...] }                that site's own camera (its flight, its player) drives it;
+//                                                                    the handheld's Walk picks the first that walks or flies where
+//                                                                    the camera is (a building's player: in its rooms), else the
+//                                                                    engine's walks there, on the site under it; from where the
+//                                                                    camera is, falling to the ground
 //
 // Each site stands in the world by its `at`: { pos: [x, y, z], yaw: deg, on: "<entity>" } (on: an entity another site
 // answers anchor() for, a pad on a planet, resolved every frame). The camera is a view { pos, fwd, up, fov } (metres,
@@ -76,8 +77,17 @@ class FlyCamera {
         if (def.look) this.eye.lookAt(def.look);
     }
 
-    update(dt) { this.eye.control(dt, this.input.consume(), this.input.keys, this.floor); }
+    update(dt) { this.eye.control(dt, this.input.consume(), this.input.keys, this.on ? this.floorOn : this.floor); }
 
-    get view() { return this.eye.view; }
-    set view(v) { this.eye.setView(v); }
+    // walking on a site (on: () => its SiteFrame, floorOn(x, y, z) in that frame; null: the world's): the eye in that
+    // frame, riding along with it (a planet's surface turns and moves), walking and looking up its up
+    walkOn(on, floorOn) {
+        const v = this.view;
+        this.on = on;
+        this.floorOn = floorOn;
+        this.view = v;
+    }
+
+    get view() { const v = this.eye.view; return this.on ? this.on().toWorld(v) : v; }
+    set view(v) { this.eye.setView(this.on ? this.on().toLocal(v) : v); }
 }

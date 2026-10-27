@@ -92,6 +92,8 @@ differences printed, not failures), `--frames N` / `--view-frames N`, `--port N`
 | `bindings` | | the binding budget of every pipeline layout (open with `bindings`) |
 | `trace` | | what each host answers through its extensions (open with `trace`) |
 | `capture` | `name`, `region` [x, y, w, h] | a screenshot |
+| `sky` | `name`, `region` [x, y, w, h], `as` ("sky"), `min`, `atLeast`, `slack` (0.1) | how much of a capture is sky (blue at least as much as red and green), stored; fails under `min` or another capture's less `slack`: the ground drawn over the eye |
+| `sheet` | `names` (every capture), `cols` (4), `width` (240), `file` ("sheet") | a contact sheet of the case's captures, `<work>/<sequence>/<scenario>/sheet.png` |
 | `compare` | `name`, `against` ("baseline" / "sidecar" / "capture"), `file`, `other`, `noise` ("baseline", `{ frac, max }`, 0), `report`, `expectDiffer` | a capture against a picture, with a heat map of any difference |
 | `perf` | `revs` (["HEAD~1", "HEAD"]), `rounds` (2), `frames` (40), `measure` (20), `expect` `{ maxRatio }` | GPU time per frame A/B, alternated (pageless) |
 | `formatGolden` | `dir` ("baselines/format") | the scenario's format golden (pageless) |
@@ -110,8 +112,8 @@ differences printed, not failures), `--frames N` / `--view-frames N`, `--port N`
 | `moves` | every scenario looks (a drag) and moves (W) in fly and in walk, where it offers them |
 | `perf-ab` | G7: GPU time A/B, previous commit against this one |
 | `camera-start` | the camera starts at `camera.start`'s site view, and that site's camera follows |
-| `walk-handover` | Walk hands the camera to the controller site's player and Fly hands it back |
-| `loft-walk` | fly, walk, the bunker's Loft view, W: walking goes on from the Loft (not back to the facility's player) |
+| `walk-handover` | Walk walks from where the camera is (the engine's camera, or the sector's player in its rooms, its screens taking the cursor), never jumping; Fly hands it back to Sol |
+| `loft-walk` | walking shows what flying does (`sky` above the horizon on the deck and the dock, then a `sheet`); fly, walk (falls, no jump), then at the Loft, outdoors and on the cargo ship (sailing): the bunker's player falls to the floor, looks around, walks on there |
 | `sky-sunlight` | the sky's site lights the other sites through `world.sunlight` (sidecar goldens) |
 
 Traps: the imposter's foliage differs between Brave sessions (the baseline gate allows twice the recorded noise);

@@ -439,6 +439,53 @@ export class Capture extends Action {
     static params = { name: undefined, region: null };
     async run(ctx) { await capture(ctx, ctx.value(this.p.name), this.p.region); }
 }
+
+// how much of a capture's `region` ([x, y, w, h], its pixels; null: all) is sky: blue at least as much as red and green
+// (blue sky, grey and white cloud, haze), not ground (green grass, olive and brown terrain). Stored as `as`; fails under
+// `min`, or under `atLeast` (a number or { "$": var }: another capture's) less `slack`. A level view's band above the
+// horizon catches the ground drawn over the eye (2026-10-27: the plains' terrain as a slanted wall)
+export class Sky extends Action {
+    static params = { name: undefined, region: null, as: 'sky', min: null, atLeast: null, slack: 0.1 };
+    async run(ctx) {
+        const name = ctx.value(this.p.name), file = ctx.captures[name];
+        if (!file) return ctx.fail(`no capture ${name}`);
+        const img = PNG.decode(fs.readFileSync(file)), [x0, y0, w, h] = this.p.region || [0, 0, img.width, img.height];
+        let sky = 0, n = 0;
+        for (let y = y0; y < Math.min(y0 + h, img.height); y++) for (let x = x0; x < Math.min(x0 + w, img.width); x++) {
+            const i = (y * img.width + x) * 4, [r, g, b] = [img.data[i], img.data[i + 1], img.data[i + 2]];
+            n++;
+            if (b + 6 >= r && b + 6 >= g) sky++;
+        }
+        const f = ctx.vars[this.p.as] = n ? sky / n : 0, least = this.p.atLeast == null ? null : ctx.value(this.p.atLeast) - this.p.slack;
+        ctx.note(`${name}: ${(100 * f).toFixed(1)} % sky`);
+        if (this.p.min != null && f < this.p.min) ctx.fail(`${name}: ${(100 * f).toFixed(1)} % sky, under ${100 * this.p.min} %`);
+        if (least != null && f < least) ctx.fail(`${name}: ${(100 * f).toFixed(1)} % sky, under ${(100 * least).toFixed(1)} % (ground over the eye?)`);
+    }
+}
+
+// a contact sheet: captures (`names`, default every capture of the case so far) scaled to `width` px, `cols` a row, to
+// <work>/<sequence>/<scenario>/<file>.png: one picture to look at per case
+export class Sheet extends Action {
+    static params = { names: null, cols: 4, width: 240, file: 'sheet' };
+    async run(ctx) {
+        const names = (this.p.names || Object.keys(ctx.captures)).filter(n => ctx.captures[n]);
+        if (!names.length) return ctx.note('sheet: no captures');
+        const imgs = names.map(n => PNG.decode(fs.readFileSync(ctx.captures[n]))), W2 = this.p.width;
+        const cell = imgs.map(i => Math.round(i.height * W2 / i.width)), rowH = Math.max(...cell), cols = Math.min(this.p.cols, imgs.length);
+        const out = { width: W2 * cols, height: rowH * Math.ceil(imgs.length / cols), data: null };
+        out.data = new Uint8Array(out.width * out.height * 4);
+        imgs.forEach((img, k) => {
+            const ox = (k % cols) * W2, oy = Math.floor(k / cols) * rowH, s = img.width / W2;
+            for (let y = 0; y < cell[k]; y++) for (let x = 0; x < W2; x++) {
+                const i = (Math.min(img.height - 1, Math.floor(y * s)) * img.width + Math.min(img.width - 1, Math.floor(x * s))) * 4, o = ((oy + y) * out.width + ox + x) * 4;
+                out.data.set(img.data.subarray(i, i + 4), o);
+            }
+        });
+        const file = ctx.path('work', fileOf(this.p.file) + '.png');
+        fs.writeFileSync(file, PNG.encode(out));
+        ctx.note(`sheet ${file}: ${names.join(', ')}`);
+    }
+}
 async function capture(ctx, name, region = null) {
     const s = page(ctx);
     await s.send('Page.bringToFront');
@@ -560,4 +607,4 @@ export class SingleWorld extends Action {
 
 // ----------------------------------------------------------------------------------------------- the registry
 export const ACTIONS = Object.fromEntries([Open, Settle, Step, Wait, Close, View, Views, Eye, Move, Travel, Input, Key, KeyDown, KeyUp, Click, Drag, Handheld,
-    Eval, Expect, Log, Save, Counts, Submits, Kits, Errors, Bindings, Trace, Capture, Compare, Perf, FormatGolden, SingleWorld].map(A => [A.key, A]));
+    Eval, Expect, Log, Save, Counts, Submits, Kits, Errors, Bindings, Trace, Capture, Sky, Sheet, Compare, Perf, FormatGolden, SingleWorld].map(A => [A.key, A]));

@@ -41,10 +41,11 @@ class FirstPersonView {
         this.mode = 'fly';
         this.vy = 0;                    // walking: falling speed (m/s, up +)
         this.lag = 0;                   // walking: eye height still to catch up after a step
+        this.grounded = false;          // walking: standing on the floor (not falling)
         this.setMode(o.mode || 'fly');
     }
 
-    // 'fly' or 'walk' (walking starts on the floor under the eye)
+    // 'fly' or 'walk' (walking falls from where the eye is to the floor under it)
     setMode(mode) {
         if (mode === this.mode) return;
         this.mode = mode;
@@ -124,13 +125,18 @@ class FirstPersonView {
         const x = this.pos[0] + (l ? mx / l * speed * dt : 0), z = this.pos[2] + (l ? mz / l * speed * dt : 0);
         let feet = this.pos[1] - W.eye - this.lag;
         const g = floor(x, this.landing ? feet : feet + W.step, z);
-        if (g === -Infinity) { this.vy = 0; return; }                  // nothing to stand on there: stay
-        if (this.landing) { feet = g; this.landing = false; }
-        if (g >= feet) { this.lag -= g - feet; feet = g; this.vy = 0; }
+        if (g === -Infinity) {                                          // nothing to stand on there: stay (at an edge), or
+            this.vy = 0; this.grounded = false;                         // with nothing under the eye either, walk on level
+            if (floor(this.pos[0], feet + W.step, this.pos[2]) === -Infinity) this.pos = [x, this.pos[1], z];
+            return;
+        }
+        this.landing = false;
+        if (g >= feet) { this.lag -= g - feet; feet = g; this.vy = 0; this.grounded = true; }
         else {
             this.vy -= W.gravity * dt;
             feet = Math.max(g, feet + this.vy * dt);
             if (feet === g) this.vy = 0;
+            this.grounded = feet === g;
         }
         this.lag *= Math.exp(-dt * 10);
         if (Math.abs(this.lag) < 1e-3) this.lag = 0;

@@ -18,8 +18,8 @@
         {"$comment":"out on the Moon the facility doesn't fade into its room's darkness, and the sunlit ground lights its walls a little"},
         {"type":"facility","fog":0.0005,"ambient":0.12},
 
-        {"$comment":"the camera: sol's flight, or (walking: the handheld's Walk) the facility's player, each going on from where it was"},
-        {"type":"camera","controller":["sol","sector"],"carry":false},
+        {"$comment":"the camera: sol's flight, or (walking: the handheld's Walk) the facility's player in its rooms, else walking from where the camera is"},
+        {"type":"camera","controller":["sol","sector"]},
 
         {"type":"hud.toast","text":"The handheld's Walk takes you into the facility","ms":5000},
         {"$comment":"the handheld's pages: scenarios/gui/compose-moonbase-sector07.json","type":"include","scenario":"gui/compose-moonbase-sector07"}

@@ -321,14 +321,11 @@ class Host {
         // driven by the engine (starting at camera.start: that site's start view) or by a site's own (camera.controller:
         // its id, or several: the first drives, the Walk switch picks the first that walks or flies; its player walking and
         // colliding the site's way) that the engine's follows; every other site's camera follows it in its frame.
-        // camera.carry false: a controller taking over goes on from where it was, not from where the camera is
         const cam = this.cameraDef = ents.find(e => e.type === 'camera' && ScenarioFormat.isEngine(e)) || {};
         if (cam.controller === 'fly' || this.shared) {
             this.fly = new FlyCamera(cam, this.router.scope('engine'), (x, y, z) => this.floorAt(x, y, z));
             this.controllerSites = this.shared ? [].concat(cam.controller ?? []).map(id => this.sites.find(s => s.id === id)).filter(Boolean) : [];
             this.controller = this.controllerSites[0] || null;
-            // (where each other controller's camera is: with carry false it goes on from there when it takes over)
-            for (const s of this.controllerSites.slice(1)) s.left = s.world.view;
             if (!this.controller) this.router.always.add('engine');
             for (const s of this.sites) s.ctx.cameraLocked = s !== this.controller;
             const start = this.controller || this.sites.find(s => s.id === cam.start);
@@ -414,23 +411,62 @@ class Host {
         if (say) this.hud.toast(`${mode === 'walk' ? 'Walking' : 'Flying'}: ${this.keyHelp()}`, 4000);
     }
 
-    // Several sites: the camera's controller for a mode (the handheld's Walk). The controller site's camera when it can
-    // (camera.controller: its own walking or flight), else the engine's, walking on every site's ground: each takes over
-    // from where the camera is
-    shareMove(mode) {
-        const view = this.fly.view, to = this.controllerSites.find(s => (s.world.moves || ['fly']).includes(mode)) || null;
-        if (to !== this.controller) {
-            const was = this.controller;
-            if (was) was.left = was.world.view;
-            this.controller = to;
-            for (const s of this.sites) s.ctx.cameraLocked = s !== to;
-            if (to) {
-                this.router.always.delete('engine');
-                to.world.setView?.(this.cameraDef.carry === false && to.left ? to.left : this.siteFrame(to).toLocal(view));
-            } else { this.router.always.add('engine'); this.fly.view = view; }
-        }
+    // Several sites: the camera's controller for a mode (the handheld's Walk). The controller site's camera where it can
+    // be (camera.controller: its own walking or flight; Host.holds), else the engine's, walking on the site under it
+    // (Host.walkOn): each goes on from where the camera is (walking falls to the ground there, never jumps to it)
+    shareMove(mode, view = this.fly.view) {
+        const w = mode === 'walk' && this.walkerAt(view.pos);
+        const to = mode === 'walk' ? (w && this.onGround(w, view.pos) ? w : null)
+            : this.controllerSites.find(s => (s.world.moves || ['fly']).includes(mode) && this.holds(s, view.pos)) || null;
+        if (to !== this.controller) this.handTo(to, view);
+        else if (to) to.world.setView?.(this.siteFrame(to).toLocal(view));
         if (to) { if (to.world.move !== mode) to.world.setMove(mode); }
-        else this.fly.eye.setMode(mode);
+        else { this.fly.eye.setMode(mode); this.fly.view = view; this.walkOn(view); }
+    }
+
+    // whether world point p (an eye) stands on site's ground: a site's player takes over there, never higher up (it would
+    // jump down); above, the engine's camera falls, and hands over when it lands (frameSites)
+    onGround(site, p) {
+        if (this.footprintOf(site)?.ground === false) return true;      // a building: in its rooms (covers)
+        const q = this.siteFrame(site).local(p), g = this.floorIn(site, q[0], q[1], q[2]);
+        return g !== -Infinity && q[1] - g <= 2.2;
+    }
+
+    // who walks at world point p: the site's own player under it (the smallest footprint holding p of the sites that walk:
+    // the facility's in its rooms, colliding and using its screens; the bunker's on its island, its docks and its moving
+    // ship), else a controller site that walks there, else null (the engine's camera)
+    walkerAt(p) {
+        let best = null, least = Infinity;
+        for (const s of this.sites) {
+            if (!(s.world.moves || ['fly']).includes('walk')) continue;
+            const fp = this.covers(s, p), a = fp ? (fp.hi[0] - fp.lo[0]) * (fp.hi[1] - fp.lo[1]) : Infinity;
+            if (a < least) { least = a; best = s; }
+        }
+        return best || this.controllerSites.find(s => (s.world.moves || ['fly']).includes('walk') && this.holds(s, p)) || null;
+    }
+
+    // the one camera to controller site `to` (null: the engine's), at view
+    handTo(to, view) {
+        this.controller = to;
+        for (const s of this.sites) s.ctx.cameraLocked = s !== to;
+        if (to) {
+            this.router.always.delete('engine');
+            this.fly.walkOn(null, null);
+            to.world.setView?.(this.siteFrame(to).toLocal(view));
+        } else this.router.always.add('engine');
+        this.fly.view = view;
+    }
+
+    // The engine's camera walks in the frame of the site under view (the smallest footprint holding it: the bunker's
+    // island on the plains, both on sol's turning Earth), on every site's ground there (Host.floorIn), up its up; flying,
+    // in the world's
+    walkOn(view) {
+        let site = null, least = Infinity;
+        if (this.fly.eye.mode === 'walk') for (const s of this.sites) {
+            const fp = this.covers(s, view.pos), a = fp ? (fp.hi[0] - fp.lo[0]) * (fp.hi[1] - fp.lo[1]) : Infinity;
+            if (a < least) { least = a; site = s; }
+        }
+        this.fly.walkOn(site && (() => this.siteFrame(site)), site && ((x, y, z) => this.floorIn(site, x, y, z)));
     }
 
     // the keys there are, as a line for a toast: the site's camera's (Site.keys: [keys, what it does]) or the engine
@@ -457,11 +493,20 @@ class Host {
         return best;
     }
 
-    // ... at a point of site's frame, in its frame (fx.floor)
+    // ... at a point of site's frame, in its frame, up its up (fx.floor; each site's ground mapped through both frames:
+    // on a planet the frames tilt)
     floorIn(site, x, y, z) {
         if (!this.shared) return this.floorAt(x, y, z);
-        const F = this.siteFrame(site), w = F.point([x, y, z]), g = this.floorAt(w[0], w[1], w[2]);
-        return g === -Infinity ? g : F.local([w[0], g, w[2]])[1];
+        const F = this.siteFrame(site), w = F.point([x, y, z]);
+        let best = -Infinity;
+        for (const s of this.sites) {
+            if (!s.world?.ground) continue;
+            const Fs = s === site ? F : this.siteFrame(s), lp = Fs.local(w), g = s.world.ground(lp);
+            if (g == null || g === -Infinity) continue;
+            const h = F.local(Fs.point([lp[0], g, lp[2]]))[1];
+            if (h > best) best = h;
+        }
+        return best;
     }
 
     // the camera
@@ -495,24 +540,31 @@ class Host {
     // would take it back)
     setWorldView(view) {
         const d = this.controller;
-        if (d && !this.holds(d, view.pos)) {
-            const mode = this.move;
-            d.left = d.world.view;
-            this.controller = null;
-            for (const s of this.sites) s.ctx.cameraLocked = true;
-            this.router.always.add('engine');
-            this.fly.eye.setMode(mode);
-        } else if (d) d.world.setView?.(this.siteFrame(d).toLocal(view));
+        if (this.move === 'walk') { this.shareMove('walk', view); return; }
+        if (d && !this.holds(d, view.pos)) { const mode = this.move; this.handTo(null, view); this.fly.eye.setMode(mode); }
+        else if (d) d.world.setView?.(this.siteFrame(d).toLocal(view));
         this.fly.view = view;
+        if (!this.controller) this.walkOn(view);
     }
 
     // whether site's camera can be at world point p: anywhere, but a building's (Site.footprint, ground false) only in it
     holds(site, p) {
-        let fp = null;
-        try { fp = site.world.footprint?.(); } catch { fp = null; }
-        if (!fp || fp.ground) return true;
+        const fp = this.footprintOf(site);
+        return !fp || fp.ground || !!this.covers(site, p);
+    }
+
+    // site's footprint when it holds world point p, else null
+    covers(site, p) {
+        const fp = this.footprintOf(site);
+        if (!fp) return null;
         const q = this.siteFrame(site).local(p);
-        return q[0] >= fp.lo[0] && q[0] <= fp.hi[0] && q[2] >= fp.lo[1] && q[2] <= fp.hi[1];
+        if (!(q[0] >= fp.lo[0] && q[0] <= fp.hi[0] && q[2] >= fp.lo[1] && q[2] <= fp.hi[1])) return null;
+        // (a building: in its rooms, not above or below them)
+        return fp.ground || site.world.sheltered?.(q) ? fp : null;
+    }
+
+    footprintOf(site) {
+        try { return site.world.footprint?.() || null; } catch { return null; }
     }
 
     // a view entity: the camera there, looking at `look`
@@ -610,9 +662,16 @@ class Host {
             const site = this.startSite, v = site?.sent && site.world.view;
             if (v && !Host.sameView(v, site.sent)) this.fly.view = this.siteFrame(site).toWorld(v);
             this.fly.update(dt);
+            // (walking, landing on a site whose player walks there: it takes over)
+            const e = this.fly.eye, landed = e.mode === 'walk' && e.grounded;
+            if (landed && !this.landed && this.walkerAt(this.fly.view.pos)) this.shareMove('walk');
+            this.landed = landed;
         }
-        const view = this.eye = this.fly.view;
-        let sheltered = false;
+        // A controller site's camera is in its frame, which may ride on another site (the bunker on sol's Earth): each
+        // site gets it through the frames as they are when it frames, and again after it framed if it moved them (an
+        // anchor's owner: the Earth goes on hundreds of metres a frame; a stale frame put the plains' ground over the eye)
+        const local = ctrl && ctrl.world.view, current = () => local ? this.siteFrame(ctrl).toWorld(local) : this.fly.view;
+        let view = this.eye = current(), sheltered = false;
         for (const site of this.order) {
             if (site === ctrl) continue;
             if (site.spec.makesRoom && !sheltered) { this.shelter(view); sheltered = true; }
@@ -620,7 +679,14 @@ class Host {
             site.sent = site.world.view;
             site.world.frame(now, dt);
             this.lightFrom(site);
+            const moved = local && current();
+            if (moved && !Host.sameView(moved, view)) {
+                view = this.eye = moved;
+                site.world.setView?.(this.siteFrame(site).toLocal(view));
+                site.sent = site.world.view;
+            }
         }
+        if (local) this.fly.view = view;
         if (!sheltered) this.shelter(view);
         this.renderer.encodeFrame();
     }
