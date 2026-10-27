@@ -12,8 +12,9 @@ const { SHADOW_NEAR } = kit;
 // no bindings
 const WGSL_MATH = /* wgsl */`
 const PI = 3.14159265;
-struct Cell { a: vec4f, b: vec4f, c: vec4f, d: vec4f };
-// a: x, z, radius, top   b: coverage, precip, seed, virga   c: core, core offset x, z, -   d: shelf, laminar, green, wall cloud (m)
+struct Cell { a: vec4f, b: vec4f, c: vec4f, d: vec4f, e: vec4f };
+// a: x, z, radius, top   b: coverage, precip, seed, virga   c: core, core offset x, z, anvil spread   d: shelf, laminar, green, wall cloud (m)
+// e: the wind aloft its anvil spreads with (x, z m/s; 0: the layer's), -, -
 
 fn sat(x: f32) -> f32 { return clamp(x, 0.0, 1.0); }
 fn remap(x: f32, a: f32, b: f32, c: f32, d: f32) -> f32 { return c + (x - a) / (b - a) * (d - c); }

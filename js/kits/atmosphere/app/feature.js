@@ -95,15 +95,15 @@ const atmosphereWorld = type => ({
         return f ? { lo: [f.origin, f.origin], hi: [f.origin + f.size, f.origin + f.size], floor: f.base, ground: true, albedo: kit.groundAlbedo(w.terrain) } : null;
     },
 
-    // the clouds it makes (Site.clouds): its weather's layer, its hurricane and its biggest storm cells, all it draws
-    // itself about an eye in its air, out to its march's reach
+    // the clouds it makes (Site.clouds): its weather's layer, its hurricane and its biggest storm cells (the one its
+    // tornado hangs from marked), all it draws itself about an eye in its air, out to its march's reach
     clouds() {
         const a = this.app, w = a?.world;
         if (!w) return null;
-        const c = w.weather.cur, h = w.hurricaneData(a.cfg.maxTop), big = e => e.radius * e.coverage;
+        const c = w.weather.cur, h = w.hurricaneData(a.cfg.maxTop), big = e => e.radius * e.coverage, host = w.ext.storms?.tornadoHost;
         const cells = w.gpuCells(a.camera.pos).sort((p, q) => big(q) - big(p)).slice(0, CLOUD_STORMS);
         return { coverage: c.coverage, base: c.base, top: c.top, wind: c.wind, air: a.airHere ?? 1, reach: a.cfg.maxDistance,
-            storms: [...(h ? [{ hurricane: h }] : []), ...cells.map(cell => ({ cell }))] };
+            storms: [...(h ? [{ hurricane: h }] : []), ...cells.map(cell => ({ cell, tornado: !!host && cell.x === host.pos[0] && cell.z === host.pos[1] }))] };
     },
 
     set(key, v) {

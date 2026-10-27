@@ -174,8 +174,8 @@ class AppExtension {
     // 'hurricane', cat, lat, lon, scale }) and those the sites standing on them make (Site.clouds: their hurricane and
     // their biggest cells), each [direction from the body's centre (world axes), body index] then a hurricane's [1, eye
     // radius, strength, seed] [eyewall top, turn, bands, outer radius] [precipitation, band top, eye floor, raggedness]
-    // (the weather kit's hurricaneData, m) or a cell's [2, radius, coverage, seed] [top, the wind's direction (world
-    // axes)] [0]. Returns how many
+    // (the weather kit's hurricaneData, m) or a cell's [2, radius, coverage, seed] [top, the direction (world axes) of
+    // the wind its anvil spreads with] [anvil spread, 1: a tornado under it, 0, 0]. Returns how many
     writeStorms(F, o, on) {
         const w = this.world, out = w.bodies.flatMap((b, k) => (b.def.clouds?.storms || []).map((s, i) => {
             const n = v3.norm(v3.sub(w.resolve({ surface: { parent: b.id, lat: s.lat, lon: s.lon } }).pos.metres(), b.frame.pos.metres()));
@@ -191,8 +191,8 @@ class AppExtension {
     siteStorm({ k, clouds, floor, dir }, s) {
         const H = s.hurricane, c = s.cell;
         if (H) return [...dir([H[0], floor, H[1]]), k, 1, H[2], H[3], 3.17, ...H.slice(4)];
-        const n = dir([c.x, floor, c.z]), wd = v3.sub(dir([c.x + clouds.wind[0], floor, c.z + clouds.wind[1]]), n);
-        return [...n, k, 2, c.radius, c.coverage, c.seed, c.top, ...wd, 0, 0, 0, 0];
+        const w = c.aloft || clouds.wind, n = dir([c.x, floor, c.z]), wd = v3.sub(dir([c.x + w[0], floor, c.z + w[1]]), n);
+        return [...n, k, 2, c.radius, c.coverage, c.seed, c.top, ...wd, c.anvil || 1, s.tornado ? 1 : 0, 0, 0];
     }
 
     // update: input, camera, world, rebase; render: the frame.

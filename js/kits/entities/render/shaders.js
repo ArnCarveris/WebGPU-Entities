@@ -211,7 +211,7 @@ fn cloudField(b: Body, bi: u32, n: vec3f, fine: f32) -> CloudField {
         let s3 = frame.storm[k * 4u + 3u];
         let hurricane = s1.x < 1.5;
         // (beyond its outer bands, or its anvil's reach: nothing of it)
-        if (u32(s0.w) != bi || dot(n, s0.xyz) < cos(select(s1.y * 3.4, s2.w, hurricane) / Rm)) { continue; }
+        if (u32(s0.w) != bi || dot(n, s0.xyz) < cos(select(s1.y * 3.4 * s3.x, s2.w, hurricane) / Rm)) { continue; }
         // its ground plane about it (m)
         let e1 = normalize(cross(select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(s0.y) > 0.99), s0.xyz));
         let e2 = cross(s0.xyz, e1);
@@ -229,11 +229,15 @@ fn cloudField(b: Body, bi: u32, n: vec3f, fine: f32) -> CloudField {
             f.anv *= 1.0 - eye;
         } else {
             let wv = vec2f(dot(s2.yzw, e1), dot(s2.yzw, e2));
-            let an = cellAnvil(xz, rel, length(rel), s1.y, s2.x, s1.z, s1.w, select(vec2f(1.0, 0.0), normalize(wv), length(wv) > 1e-12), layer.yz);
+            let wd = select(vec2f(1.0, 0.0), normalize(wv), length(wv) > 1e-12);
+            let an = cellAnvil(xz, rel, length(rel), s1.y, s2.x, s1.z, s1.w, wd, layer.yz, s3.x);
             if (an.x > 0.005) { f.anv = max(f.anv, an.x); f.anvTop = max(f.anvTop, an.y); }
             let gs = cellTower(xz, rel, s1.y, s1.w, vec2f(0.0)).x;
-            f.cov = max(f.cov, gs * s1.z * 0.9);
-            f.top = max(f.top, mix(layer.z, s2.x, pow(gs, 0.55) * clamp(s1.z * 3.0, 0.0, 1.0)));       // domed towers
+            // domed towers, a supercell's overshooting top over them; under a tornado's, the clear slot round it
+            f.cov = max(f.cov, gs * s1.z * 0.9) * (1.0 - s3.y * rearSlot(rel, s1.y, wd));
+            f.top = max(f.top, mix(layer.z, s2.x, pow(gs, 0.55) * clamp(s1.z * 3.0, 0.0, 1.0)));
+            let ov = cellOvershoot(rel, s1.y, s3.x);
+            if (ov > 0.0) { f.top = max(f.top, s2.x + ov); }
         }
     }
     return f;
@@ -290,7 +294,10 @@ fn cloudMarch(b: Body, bi: u32, oc: vec3f, dir: vec3f, ta: f32, tb: f32, L: vec3
     // height of the storms' anvils (their sheets, and the towers rising to them, shade what is below them)
     let pm = oc + dir * (t0 + t1) * 0.5;
     let hm = (length(pm) - R) / upm;
-    let fs = cloudField(b, bi, toWorldDir(normalize(pm + L * max(10000.0 - hm, 0.0) * upm / max(dot(normalize(pm), L), 0.08))), 0.0);
+    let mus = max(dot(normalize(pm), L), 0.08);
+    let fs = cloudField(b, bi, toWorldDir(normalize(pm + L * max(10000.0 - hm, 0.0) * upm / mus)), 0.0);
+    // (and where it reaches over the anvils: the overshooting tops rising out of them shade them)
+    let fo = cloudField(b, bi, toWorldDir(normalize(pm + L * max(12800.0 - hm, 0.0) * upm / mus)), 0.0);
     // the billows: some 4 km across, gone before they are finer than a pixel
     let billow = R / upm / 4000.0;
     let fineD = 1.0 - smoothstep(0.15, 0.4, t0 * frame.sun.w * billow / R);
@@ -313,9 +320,12 @@ fn cloudMarch(b: Body, bi: u32, oc: vec3f, dir: vec3f, ta: f32, tb: f32, L: vec3
         // the sun through the column above it to its top (thinned: most of what it scatters goes on down), half of it
         // always getting through (scattered on), and the sky's
         let mu = dot(nl, L);
-        let od = 0.0006 * max(max(f.top, f.anvTop) - h, 0.0) * max(f.cov, f.anv) / max(mu, 0.15);
-        let shade = max(clamp(fs.anv * 1.5, 0.0, 1.0) * (1.0 - smoothstep(fs.anvTop - 2500.0, fs.anvTop - 1500.0, h)),
-            fs.cov * smoothstep(9000.0, 10500.0, fs.top) * (1.0 - smoothstep(8000.0, 9500.0, h)));
+        // (above it: up to where the column's cloud ends (cloudDensity's low cloud gone), or the anvil's top over it)
+        let ends = f.base + clamp((f.cov * (0.75 + 0.5 * detail) - 0.15) / 0.85, 0.0, 1.15) * max(f.top - f.base, 100.0);
+        let od = 0.0006 * max(max(ends, select(0.0, f.anvTop, f.anv > 0.1)) - h, 0.0) * max(f.cov, f.anv) / max(mu, 0.15);
+        let shade = max(max(clamp(fs.anv * 1.5, 0.0, 1.0) * (1.0 - smoothstep(fs.anvTop - 2500.0, fs.anvTop - 1500.0, h)),
+            fs.cov * smoothstep(9000.0, 10500.0, fs.top) * (1.0 - smoothstep(8000.0, 9500.0, h))),
+            smoothstep(12800.0, 13300.0, fo.top) * (1.0 - smoothstep(12500.0, 12800.0, f.top)) * (1.0 - smoothstep(12300.0, 12800.0, h)));
         let light = 0.95 * frame.misc.y * (max(mu, 0.0) * (0.5 + 0.5 * exp(-od)) * (1.0 - 0.75 * shade) + 0.004) * frame.eye.x;
         o.light += o.through * a * vec3f(light);
         if (o.through >= 0.5 && o.through * (1.0 - a) < 0.5) { o.front = t; }

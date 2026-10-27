@@ -83,9 +83,10 @@ fn weather(@builtin(global_invocation_id) g: vec3u) {
     for (var i = 0u; i < u32(F.near.w); i++) {
         let c = cells[i];
         let dist = length(xz - c.a.xy);
-        if (dist > c.a.z * 3.4) { continue; }                          // beyond every footprint of this cell (anvil reach)
+        let spread = max(c.c.w, 1.0);
+        if (dist > c.a.z * 3.4 * spread) { continue; }                 // beyond every footprint of this cell (anvil reach)
         // anvil: tall cells spread a sheet downwind under the tropopause (the weather kit's cellAnvil)
-        let an = cellAnvil(xz, xz - c.a.xy, dist, c.a.z, c.a.w, c.b.x, c.b.z, wd, F.cloud.xy);
+        let an = cellAnvil(xz, xz - c.a.xy, dist, c.a.z, c.a.w, c.b.x, c.b.z, select(wd, normalize(c.e.xy), length(c.e.xy) > 0.1), F.cloud.xy, spread);
         if (an.x > 0.005) { anvCov = max(anvCov, an.x); anvTop = max(anvTop, an.y); }
         if (dist > c.a.z * 1.45) { continue; }                         // the rest (body, shelf, rain core) is closer in
         let d = xz - c.a.xy;
@@ -108,6 +109,8 @@ fn weather(@builtin(global_invocation_id) g: vec3u) {
         style.z = max(style.z, c.d.w * wr * wr * (3.0 - 2.0 * wr) * sat(c.b.x * 2.0));
         cov = max(cov, gs * c.b.x * 0.9);
         top = max(top, mix(F.cloud.y, c.a.w, pow(gs, 0.55) * sat(c.b.x * 3.0)));      // domed towers
+        let ov = cellOvershoot(d, c.a.z, spread);
+        if (ov > 0.0) { top = max(top, c.a.w + ov); }                // a supercell's overshooting top
         // precipitation core: c.c.x of the radius, offset towards the forward flank
         let rp = length(d - c.c.yz) / c.a.z * (0.75 + 0.5 * outline);
         if (c.b.y <= 0.0 || rp > c.c.x * 1.5) { continue; }           // no precipitation core here

@@ -81,7 +81,8 @@ class Site {
     footprint() { return null; }
 
     // the clouds it makes, its own frame: { coverage, base, top (its cloud layer's, m), wind ([x, z], m/s), storms: [{
-    // hurricane: 12 floats (the weather kit's hurricaneData) } | { cell: { x, z, radius, top, coverage, seed } }], air (how
+    // hurricane: 12 floats (the weather kit's hurricaneData) } | { cell: { x, z, radius, top, coverage, seed, anvil, aloft }, tornado
+    // (one hangs from it) }], air (how
     // much of them it draws itself about the eye, 0 .. 1), reach (m: out to where) }, or null (none). A planet it stands
     // on draws them over its ground beyond that (the origin's bodies: their clouds), so they are seen from space
     clouds() { return null; }

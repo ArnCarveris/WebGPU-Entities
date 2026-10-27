@@ -146,8 +146,8 @@ class FrameWriter {
 
         const cells = w.gpuCells(cam.pos), cd = r.cellData;
         cd.fill(0);
-        cells.forEach((s, i) => cd.set([s.x, s.z, s.radius, s.top, s.coverage, s.precip, s.seed, s.virga, s.core, s.offset[0], s.offset[1], 0,
-            s.shelf || 0, s.laminar || 0, s.green || 0, s.wall || 0], i * CELL_FLOATS));
+        cells.forEach((s, i) => cd.set([s.x, s.z, s.radius, s.top, s.coverage, s.precip, s.seed, s.virga, s.core, s.offset[0], s.offset[1], s.anvil,
+            s.shelf || 0, s.laminar || 0, s.green || 0, s.wall || 0, ...(s.aloft || [0, 0]), 0, 0], i * CELL_FLOATS));
         const feat = w.features();
         feat.ms.forEach((m, i) => F.set('ms', m, i * 12));
         feat.shelves.forEach((sl, i) => F.set('shelves', sl, i * 16));

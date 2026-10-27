@@ -40,17 +40,37 @@ fn cellTower(xz: vec2f, d: vec2f, radius: f32, seed: f32, drift: vec2f) -> vec2f
 // a tall cell's anvil at xz, d from its centre, dist = length(d): the sheet it spreads downwind (wd, unit) under the
 // tropopause, at the equilibrium level under the overshooting top (top, the tower's dome rises out of it); its top
 // sinks away from the updraft and is lumpy, so seen from above it is no flat lid. cloud: the layer's [base, top];
-// coverage: the cell's. vec2f(cover, top), cover 0 for a cell too low for one
-fn cellAnvil(xz: vec2f, d: vec2f, dist: f32, radius: f32, top: f32, coverage: f32, seed: f32, wd: vec2f, cloud: vec2f) -> vec2f {
+// coverage: the cell's; spread: how many times a cell's length its plume reaches downwind (1: a cell's; a supercell's
+// some 4: a plume hundreds of km long, half as wide, its edges sharp, spread out flat under the tropopause), and
+// the reach of every cell's anvil (3.4 radii x spread). vec2f(cover, top), cover 0 for a cell too low for one
+fn cellAnvil(xz: vec2f, d: vec2f, dist: f32, radius: f32, top: f32, coverage: f32, seed: f32, wd: vec2f, cloud: vec2f, spread: f32) -> vec2f {
     let tall = clamp((top - cloud.y - 2500.0) / 4000.0, 0.0, 1.0) * clamp(coverage * 2.0, 0.0, 1.0);
     if (tall <= 0.0) { return vec2f(0.0); }
-    let ad = d - wd * radius * 0.8;
+    let ad = d - wd * radius * 0.8 * spread;
     let along = dot(ad, wd);
     let fo = fbm2(xz / 5000.0 + seed * 7.0, 3);
-    let ra = length(vec2f(along * 0.6, dot(ad, vec2f(-wd.y, wd.x)))) / (radius * 1.6) * (0.8 + 0.4 * fo);
-    let ga = clamp(1.0 - ra, 0.0, 1.0);
-    let sink = clamp(dist / (radius * 3.0), 0.0, 1.0);
+    let ra = length(vec2f(along * 0.6 / spread, dot(ad, vec2f(-wd.y, wd.x)) / (0.5 + 0.5 * spread))) / (radius * 1.6) * (0.8 + 0.4 * fo);
+    let ga = clamp((1.0 - ra) * spread, 0.0, 1.0);
+    let sink = clamp(dist / (radius * 3.0 * spread), 0.0, 1.0);
     return vec2f(ga * ga * (3.0 - 2.0 * ga) * tall * 0.85, top - 400.0 - 0.1 * (top - cloud.x) - 1100.0 * sink * sink + (fo - 0.5) * 1000.0);
+}
+
+// how far a cell's overshooting top rises above its top at d from its centre (m): a dome over the updraft, as wide as
+// its radius, the higher the stronger the storm (spread, as cellAnvil's: none for an ordinary cell's 1, 2 km
+// for a supercell's 4), throwing its shadow on the anvil about it
+fn cellOvershoot(d: vec2f, radius: f32, spread: f32) -> f32 {
+    let q = clamp(1.0 - length(d) / (radius * 0.5), 0.0, 1.0);
+    return clamp((spread - 1.0) * 700.0, 0.0, 2000.0) * sqrt(q * q * (3.0 - 2.0 * q));
+}
+
+// the clear slot a tornadic supercell's rear-flank downdraft cuts round its updraft (at d from its centre, wd the
+// wind): a crescent on its upwind, right-hand flank, wrapping round the wall cloud the tornado hangs from (0 .. 1:
+// how much of the low cloud it clears)
+fn rearSlot(d: vec2f, radius: f32, wd: vec2f) -> f32 {
+    let r = length(d) / radius;
+    let rear = normalize(-wd + vec2f(wd.y, -wd.x) * 0.8);
+    let a = dot(d / max(length(d), 1.0), rear);
+    return smoothstep(0.35, 0.75, a) * smoothstep(0.12, 0.2, r) * (1.0 - smoothstep(0.42, 0.55, r));
 }
 `;
 

@@ -5,7 +5,7 @@
 Features.kit('atmosphere', (engine, kit) => {
 const NEAR = 1.0;
 const MAX_CELLS = 64;
-const CELL_FLOATS = 16;
+const CELL_FLOATS = 20;
 const MAX_MOTHERSHIPS = 4;           // analytic storm structures (see mothershipDensity / shelfLineDensity)
 const MAX_SHELVES = 2;                // stratiform / cellular cloud genera besides the convective layer
 const MAX_LIGHTS = 64;               // point and spot lights in the frame uniform (LightWriter.write), the most important first

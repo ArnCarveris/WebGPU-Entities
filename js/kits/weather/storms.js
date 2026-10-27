@@ -47,7 +47,9 @@ function weatherTypes(Base) {
     // A storm cell (cumulus congestus -> cumulonimbus): grows, matures (rain or snow, lightning), decays (anvil lingers,
     // precipitation turns to virga). It drifts with the layer wind; `pinned` cells hold their place and stay mature, `hold`
     // cells only stay mature. Optional: `shelf` (shelf cloud on the gust front), `laminar` (mothership plates), `green`
-    // (green storm light), `wallCloud` (m the base lowers under the updraft).
+    // (green storm light), `wallCloud` (m the base lowers under the updraft), `anvil` (how many times a cell's length its
+    // anvil plume reaches downwind, and how high its overshooting top: StormWGSL's cellAnvil, cellOvershoot), `aloft`
+    // ([x, z] m/s: the wind high up its anvil spreads with, where it is not the layer's).
     class StormCell extends Base {
         constructor(def, world) {
             super(def, world);
@@ -108,7 +110,8 @@ function weatherTypes(Base) {
             const d = this.def, rain = sat01(s.precip * 3);
             return { x: this.pos[0], z: this.pos[1], radius: s.radius, top: s.top, coverage: s.coverage, precip: s.precip,
                 seed: this.seed, virga: s.virga, core: d.core ?? 0.45, offset: off,
-                shelf: (d.shelf || 0) * rain, laminar: (d.laminar || 0) * s.coverage, green: d.green || 0, wall: (d.wallCloud || 0) * rain };
+                shelf: (d.shelf || 0) * rain, laminar: (d.laminar || 0) * s.coverage, green: d.green || 0, wall: (d.wallCloud || 0) * rain,
+                anvil: d.anvil || 1, aloft: d.aloft || null };
         }
 
         // cloud genus for labels
