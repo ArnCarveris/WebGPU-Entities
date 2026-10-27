@@ -530,6 +530,11 @@ fn march(@builtin(global_invocation_id) gid: vec3u) {
         let N = max(24, i32(ceil(F.march.x * sqrt(min(span / 30000.0, 1.0)))));
         // per-pixel, per-frame step offset (hashed: interleaved gradient noise lines up into streaks at half resolution)
         let jitter = rnd(px.x * 1973u + px.y * 9277u + u32(frame) * 26699u);
+        // a second draw: which step of each pair empty air evaluates, and where between the distance LODs this pixel
+        // switches. Fixed by step index or distance, both lie on shells round the eye and show as rings that move with it
+        let jit2 = rnd(px.x * 7121u + px.y * 3911u + u32(frame) * 15731u);
+        let pairPhase = select(0, 1, jit2 < 0.5);
+        let lodBand = mix(0.8, 1.2, fract(jit2 * 2.0));
         let feat = featureMask(ro, dir, t0, t1);
         let detailDist = F.lod.w;
         var emptyRun = 0;           // consecutive cloud-free samples: in empty air clouds are evaluated every other step
@@ -589,16 +594,16 @@ fn march(@builtin(global_invocation_id) gid: vec3u) {
                 noise = false;
                 if (feat == 0u) { cloudy = false; emptyRun++; }
             }
-            if (cloudy && emptyRun >= 2 && (emptyRun & 1) == 0) { emptyRun++; }
+            if (cloudy && emptyRun >= 2 && ((i + pairPhase) & 1) == 0) { emptyRun++; }
             else if (cloudy) {
                 let w = weatherAt(p.xz);
                 // LOD by distance: detail erosion near, fine structure mid, shape only far
-                let lod = select(select(2, 1, t < detailDist * 2.5), 0, t < detailDist);
+                let lod = select(select(2, 1, t < detailDist * 2.5 * lodBand), 0, t < detailDist * lodBand);
                 let cs = cloudSampleN(p, w, lod, feat, noise);
                 let dc = cs.x;
                 if (dc > 0.0) {
                     let nl = i32(F.march.y);
-                    let ls = select(select(nl, max(nl - 1, 2), t > detailDist), 2, t > detailDist * 2.5);
+                    let ls = select(select(nl, max(nl - 1, 2), t > detailDist * lodBand), 2, t > detailDist * 2.5 * lodBand);
                     let tint = mix(vec3f(1.0), vec3f(0.62, 1.0, 0.72), cs.z);   // green storm light
                     let side = select(0.0, exp(-odIn * 0.35), airSeen);
                     S += dc * cloudLight(p, mu, dir.y, w, ls, clamp(t / detailDist, 1.0, 3.0), cs.y, side, dc) * tint;
