@@ -8,6 +8,7 @@ Features.kit('atmosphere', (engine, kit) => {
 const { kits } = engine;
 const { Site } = kits.world, { HUD } = Site;
 const { NEAR, QUALITY, AppExtension, phonePages } = kit;
+const CLOUD_STORMS = 3;      // the most storm cells it hands a planet it stands on (Site.clouds): the biggest
 
 // the world of a world type (type: its spec) as the engine runs it (a Site's hooks)
 const atmosphereWorld = type => ({
@@ -92,6 +93,17 @@ const atmosphereWorld = type => ({
     footprint() {
         const w = this.app?.world, f = w?.field;
         return f ? { lo: [f.origin, f.origin], hi: [f.origin + f.size, f.origin + f.size], floor: f.base, ground: true, albedo: kit.groundAlbedo(w.terrain) } : null;
+    },
+
+    // the clouds it makes (Site.clouds): its weather's layer, its hurricane and its biggest storm cells, all it draws
+    // itself about an eye in its air, out to its march's reach
+    clouds() {
+        const a = this.app, w = a?.world;
+        if (!w) return null;
+        const c = w.weather.cur, h = w.hurricaneData(a.cfg.maxTop), big = e => e.radius * e.coverage;
+        const cells = w.gpuCells(a.camera.pos).sort((p, q) => big(q) - big(p)).slice(0, CLOUD_STORMS);
+        return { coverage: c.coverage, base: c.base, top: c.top, wind: c.wind, air: a.airHere ?? 1, reach: a.cfg.maxDistance,
+            storms: [...(h ? [{ hurricane: h }] : []), ...cells.map(cell => ({ cell }))] };
     },
 
     set(key, v) {

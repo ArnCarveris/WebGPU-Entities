@@ -80,6 +80,12 @@ class Site {
     // (Host.footprintsIn, fx.footprints); a planet it stands on takes its albedo there (the origin's bodies: covers)
     footprint() { return null; }
 
+    // the clouds it makes, its own frame: { coverage, base, top (its cloud layer's, m), wind ([x, z], m/s), storms: [{
+    // hurricane: 12 floats (the weather kit's hurricaneData) } | { cell: { x, z, radius, top, coverage, seed } }], air (how
+    // much of them it draws itself about the eye, 0 .. 1), reach (m: out to where) }, or null (none). A planet it stands
+    // on draws them over its ground beyond that (the origin's bodies: their clouds), so they are seen from space
+    clouds() { return null; }
+
     // how much of a point d m from p along dir (unit; p and dir in this site's frame) this site hides from an eye at p:
     // 0 .. 1 (an atmosphere's air: its daytime sky hides what is in space). The in-world labels fade by it (Host.veilOf,
     // fx.ui.veil)

@@ -1,5 +1,5 @@
 {
-  "description": "Clouds from space: Earth's clouds are its cloud source's (its layer and the storms in it), so the hurricane off Baja shows its eye (the sea) in its eyewall and dense overcast (white) from 400 km.",
+  "description": "Clouds from space: Earth's clouds are its cloud source's (its layer and the storms in it, and those of the atmosphere standing on it), so the hurricane off Baja shows its eye (the sea) in its eyewall and dense overcast (white) from 400 km.",
   "scenarios": [
     "compose-every-kit",
     "origin-sol-transit"
@@ -66,6 +66,15 @@
       "where": "r > 160 && g > 160 && b > 160",
       "as": "west",
       "min": 0.6
+    },
+    {
+      "only": [
+        "compose-every-kit"
+      ],
+      "action": "expect",
+      "expr": "entities.sites.find(s => s.id === 'sol').world.app.renderer.frameData[48]",
+      "gte": 2,
+      "label": "the plains' storm cells are in Earth's clouds (Site.clouds), beside its hurricane"
     },
     {
       "action": "errors"
