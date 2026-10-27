@@ -56,7 +56,11 @@ class Hud extends kits.world.WorldHud {
             if (placed.some(p => Math.abs(p[0] - x) < 140 * dpr && Math.abs(p[1] - y) < 13 * dpr)) continue;
             placed.push(at);
             const body = e instanceof Body;
-            L.mark(at, body ? 'rgba(110,220,255,0.85)' : 'rgba(255,201,74,0.85)', `${e.label}  ${fmtDist(body ? d - e.radius : d)}`);
+            // a body's marker round its disc (its radius on the screen), not over it; a diamond on one that fills much
+            // of the screen
+            const R = body ? Math.tan(Math.asin(Math.min(e.radius / d, 1))) / Math.tan(cam.fov / 2) * L.H / 2 : 0;
+            L.mark(at, body ? 'rgba(110,220,255,0.85)' : 'rgba(255,201,74,0.85)', `${e.label}  ${fmtDist(body ? d - e.radius : d)}`,
+                body && R < 60 * dpr ? R : null);
         }
     }
 }

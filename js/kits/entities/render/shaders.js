@@ -210,21 +210,32 @@ fn surfaceColor(b: Body, bi: u32, n: vec3f, t: f32) -> vec3f {
         o.depth = clamp(near / (t * fd), 0.0, 1.0);
         return o;
     }
-    // missed: distant bodies still read as a dot, stars get a halo
+    // missed: a body smaller than a pixel still reads as a dot, stars get a glare
     if (bb >= 0.0) { discard; }
     let dist = length(oc);
     let ang = length(oc - dir * bb) / dist;
     let angR = R / dist;
     let pix = frame.sun.w;
-    let dotW = clamp((4.0 * pix - angR) / (3.0 * pix), 0.0, 1.0);
-    let spot = exp(-pow(ang / (angR + 1.3 * pix), 2.0)) * dotW;
+    // the dot: a pixel or so as bright as the disc would be, only while the disc is smaller than a pixel: one drawn
+    // whole gets no ring of light round it
+    let dotW = 1.0 - smoothstep(0.5 * pix, 1.5 * pix, angR);
+    let spot = exp(-pow(ang / (0.8 * pix), 2.0)) * dotW;
+    // how bright the disc is as a whole: a star its own light; else sunlit by its phase (a Lambert sphere: the disc's
+    // mean of n.l, 2/3 full, none new)
+    var lum = b.color.w;
+    if (b.color.w <= 0.0) {
+        let ca = clamp(dot(normalize(frame.sun.xyz - b.center.xyz), normalize(oc)), -1.0, 1.0);
+        let a = acos(ca);
+        lum = frame.misc.y * (2.0 / 3.0) * (sin(a) + (3.14159265 - a) * ca) / 3.14159265;
+    }
     var halo = 0.0;
     if (b.color.w > 0.0) {
-        // the billboard's edge: the glow fades out before it, so the quad never shows as a box
+        // a glare a few pixels wide round it (an eye's or a lens's, not the star's size); the billboard's edge: the glow
+        // fades out before it, so the quad never shows as a box
         let angQ = max(R * max(b.shape.w, 1.02) / dist, pix * 8.0);
-        halo = exp(-max(ang - angR, 0.0) / (angR * 0.6 + pix * 3.0)) * 0.8 * (1.0 - smoothstep(0.5, 1.0, (ang - angR) / max(angQ - angR, 1e-9)));
+        halo = exp(-max(ang - angR, 0.0) / (angR * 0.1 + pix * 1.5)) * 0.6 * (1.0 - smoothstep(0.5, 1.0, (ang - angR) / max(angQ - angR, 1e-9)));
     }
-    let col = b.color.rgb * (spot * select(1.4, b.color.w, b.color.w > 0.0) + halo * 2.0);
+    let col = b.color.rgb * (spot * lum + halo * 1.2);
     // the glow is blended over the sky (alpha = its brightness), not painted over it: a dark box round every star
     let t = tone(col);
     let a = max(t.r, max(t.g, t.b));

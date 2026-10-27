@@ -97,16 +97,19 @@ class LabelLayer {
         return a > 0.02 ? [x, y, Math.min(a, 1)] : null;
     }
 
-    // a diamond at [x, y] and the text to its right (alpha: how much of it shows)
-    mark([x, y, alpha = 1], color, text) {
+    // a diamond at [x, y] and the text to its right (alpha: how much of it shows); or, round a disc of radius `ring` px
+    // (a body, seen whole), a circle just outside it, not over it
+    mark([x, y, alpha = 1], color, text, ring = null) {
         const g = this.g, dpr = this.dpr;
         g.globalAlpha = alpha;
         g.strokeStyle = g.fillStyle = color;
         g.lineWidth = dpr;
         g.beginPath();
-        g.moveTo(x, y - 4 * dpr); g.lineTo(x + 4 * dpr, y); g.lineTo(x, y + 4 * dpr); g.lineTo(x - 4 * dpr, y); g.closePath();
+        let r = 4 * dpr;
+        if (ring !== null) { r = Math.max(ring + 4 * dpr, 7 * dpr); g.arc(x, y, r, 0, 2 * Math.PI); }
+        else { g.moveTo(x, y - r); g.lineTo(x + r, y); g.lineTo(x, y + r); g.lineTo(x - r, y); g.closePath(); }
         g.stroke();
-        g.fillText(text, x + 8 * dpr, y);
+        g.fillText(text, x + r + 4 * dpr, y);
         g.globalAlpha = 1;
     }
 }

@@ -127,7 +127,8 @@ class FrameWriter {
         // how far the wind carried the clouds since the last frame: the resolve reprojects the history along with them
         const off = this.offset = [...w.weather.offset], prev = this.prevOffset || off;
         F.set('look', [q.smooth || 0, off[0] - prev[0], off[1] - prev[1], q.steady || 0]);
-        F.set('bloom', [a.bloom ? cfg.bloom : 0, cfg.bloomThreshold, cfg.bloomKnee, r.bloomViews?.length || 1]);
+        // (none above its air: no bloom pass runs there, and the last one's texture would stay on the screen)
+        F.set('bloom', [a.bloom && a.airHere > 0 ? cfg.bloom : 0, cfg.bloomThreshold, cfg.bloomKnee, r.bloomViews?.length || 1]);
         // heavy rain: up to three times the drops (big drops, past intensity 0.6)
         const drops = this.drops = w.rainZones.drops(cam.pos[0], cam.pos[2], c.drops);
         this.rainParticles = Math.round(cfg.particles * (1 + 2 * sat01((a.near.rain - 0.6) / 0.8) * drops));
