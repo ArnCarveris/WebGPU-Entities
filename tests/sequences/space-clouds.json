@@ -1,5 +1,5 @@
 {
-  "description": "Clouds from space: Earth's clouds are its cloud source's (its layer and the storms in it, and those of the atmosphere standing on it), so the hurricane off Baja shows its eye (the sea) in its eyewall and dense overcast (white) from 400 km.",
+  "description": "Clouds from space: Earth's clouds are its cloud source's (its layer and the storms in it, and those of the atmosphere standing on it), so the hurricane off Baja shows its eye (the sea) in its eyewall and dense overcast (white) from 400 km, and every kit's tornadic supercell its anvil over the plains, brighter than the clouds about it (the plains' low afternoon sun: a lower threshold).",
   "scenarios": [
     "compose-every-kit",
     "origin-sol-transit"
@@ -75,6 +75,88 @@
       "expr": "entities.sites.find(s => s.id === 'sol').world.app.renderer.frameData[48]",
       "gte": 2,
       "label": "the plains' storm cells are in Earth's clouds (Site.clouds), beside its hurricane"
+    },
+    {
+      "only": [
+        "compose-every-kit"
+      ],
+      "action": "expect",
+      "expr": "entities.sites.find(s => s.id === 'sky').world.app.world.ext.storms.tornadoHost?.id",
+      "equals": "twister",
+      "label": "a tornado under the supercell"
+    },
+    {
+      "only": [
+        "compose-every-kit"
+      ],
+      "action": "eval",
+      "expr": "entities.viewList.find(v => v.name === 'Supercell from orbit')?.key",
+      "as": "supercell"
+    },
+    {
+      "only": [
+        "compose-every-kit"
+      ],
+      "action": "view",
+      "key": {
+        "$": "supercell"
+      },
+      "frames": 30
+    },
+    {
+      "only": [
+        "compose-every-kit"
+      ],
+      "action": "capture",
+      "name": "supercell-400km"
+    },
+    {
+      "only": [
+        "compose-every-kit"
+      ],
+      "action": "pixels",
+      "name": "supercell-400km",
+      "region": [
+        475,
+        282,
+        20,
+        16
+      ],
+      "where": "r > 135 && g > 135 && b > 135",
+      "as": "anvil",
+      "min": 0.6
+    },
+    {
+      "only": [
+        "compose-every-kit"
+      ],
+      "action": "pixels",
+      "name": "supercell-400km",
+      "region": [
+        420,
+        290,
+        20,
+        20
+      ],
+      "where": "r > 135 && g > 135 && b > 135",
+      "as": "west-of-it",
+      "max": 0.4
+    },
+    {
+      "only": [
+        "compose-every-kit"
+      ],
+      "action": "pixels",
+      "name": "supercell-400km",
+      "region": [
+        540,
+        290,
+        20,
+        20
+      ],
+      "where": "r > 135 && g > 135 && b > 135",
+      "as": "east-of-it",
+      "max": 0.4
     },
     {
       "action": "errors"

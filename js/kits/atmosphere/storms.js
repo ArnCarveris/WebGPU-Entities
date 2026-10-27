@@ -19,8 +19,12 @@ class Storms {
 
     // (the lit town by default where the hurricane is)
     centre() { return this.world.scenario.hurricane?.pos || [0, 0]; }
-    // the persistent clouds hidden until the cloud picker (or a view on one) shows them
-    spawned() { for (const e of this.persistent) this.setOff(e, true); }
+    // the persistent clouds hidden until the cloud picker (or a view on one) shows them, but those the scenario shows
+    // from the start (`shown`); a tornado under one of those that has one (`tornado`: its category)
+    spawned() {
+        for (const e of this.persistent) this.setOff(e, !e.def.shown);
+        this.tornadoCat = Math.max(0, ...this.persistent.filter(e => !e.off && e instanceof Supercell).map(e => e.def.tornado || 0));
+    }
 
     get cells() { return this.world.entities.filter(e => e instanceof StormCell); }
     get spawner() { return this.world.entities.find(e => e instanceof Spawner); }

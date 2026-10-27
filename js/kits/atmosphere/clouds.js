@@ -26,13 +26,10 @@ class Clouds {
 
     get storms() { return this.app.world.ext.storms; }
 
-    // a new world: its persistent clouds, no tornado or hurricane yet
+    // a new world: its persistent clouds, the tornado and hurricane its scenario starts with
     load(world) {
-        const S = world.ext.storms;
-        this.persistent = S.persistent;
+        this.persistent = world.ext.storms.persistent;
         this.focus = 0;
-        S.hurricaneCat = 0;
-        S.tornadoCat = 0;
         this.app.menus.sync();
     }
 
