@@ -177,6 +177,7 @@ fn hazeIntegrate(@builtin(global_invocation_id) gid: vec3u) {
 
 const WGSL_MARCH = /* wgsl */`
 const SPRAY = ${SPRAY.toFixed(4)};
+const MOON_CORONA: f32 = 0.2;                     // the corona's share of the moonlight thin cloud scatters
 @group(1) @binding(0) var depthTex: texture_depth_2d;
 @group(1) @binding(1) var outColor: texture_storage_2d<rgba16float, write>;
 @group(1) @binding(2) var outDepth: texture_storage_2d<r32float, write>;
@@ -254,6 +255,9 @@ fn cloudLight(p: vec3f, mu: f32, dirY: f32, w: vec4f, lightSteps: i32, stepScale
         sun += a * exp(-od * b) * mix(hg(mu, 0.8 * c), hg(mu, -0.25 * c), 0.3);
         a *= 0.55; b *= 0.35; c *= 0.6;
     }
+    // by night round the Moon (a body in space, F.shellInfo.z) thin cloud lights up in a corona: the droplets' narrow
+    // forward diffraction, as bright as the Moon is full (a crescent's far weaker)
+    if (F.sunDir.w > 0.0 && F.shellInfo.z > 0.5) { sun += exp(-od * 0.3) * hg(mu, 0.97) * MOON_CORONA * F.sunDir.w * F.sunDir.w; }
     // smooth look: the powder effect. Thin cloud scatters little of the sun back (in-scattering builds up with depth),
     // so seen with the sun behind the eye the fringes and the clefts between billows go dim and the billows read round;
     // towards the sun the forward peak keeps the edges bright (the silver lining)

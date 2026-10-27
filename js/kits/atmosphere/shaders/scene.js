@@ -222,7 +222,7 @@ fn skyAt(ndc: vec2f) -> vec4f {
     let d = rayDir(ndc);
     var c = skyColor(d);
     let mu = dot(d, F.sunDir.xyz);
-    if (F.sunDir.w > 0.0) { c += moonDisc(d, mu) + stars(d); }
+    if (F.sunDir.w > 0.0) { c += moonDisc(d, mu) + moonGlow(mu) + stars(d); }
     else { c += F.sunCol.rgb * 30.0 * smoothstep(0.99990, 0.99996, mu); }
     return vec4f(c, 0.0);
 }
@@ -271,6 +271,16 @@ fn moonDisc(d: vec3f, mu: f32) -> vec3f {
     let lit = smoothstep(-0.05, 0.05, dot(n, vec3f(sqrt(max(1.0 - ca * ca, 0.0)), 0.0, ca)));
     let maria = 1.0 - 0.4 * smoothstep(0.45, 0.7, fbm2(q * 1.7 + 3.0, 4));
     return F.sunCol.rgb * 0.22 * edge * maria * (lit + 0.012);
+}
+
+// the glow round the moon by night where it is a body in space (F.shellInfo.z; drawn there, its own disc's brightness
+// the eye's): a bright aureole hugging the disc and a wide faint one, the sky a little lighter round it; weaker as it
+// wanes (its brightness falls off faster than its lit fraction)
+fn moonGlow(mu: f32) -> vec3f {
+    if (F.shellInfo.z < 0.5) { return vec3f(0.0); }
+    let a = sqrt(max(2.0 * (1.0 - mu), 0.0));                  // the angle from it (radians)
+    let k = F.sunDir.w * F.sunDir.w;
+    return F.sunCol.rgb * k * (0.08 * exp(-a / 0.012) + 0.03 * exp(-a / 0.06) + 0.02 * exp(-a / 0.25));
 }
 
 // the stars: one in some of the cells of a grid of directions, few bright and many faint, twinkling a little; they sink

@@ -5,6 +5,9 @@ Features.world('origin', (engine, kit) => {
 const { Common } = engine;
 const { DEG, clamp, v3, PointerInput } = Common;
 const { BODY_FLOATS, MAX_COVERS, NEAR, quat, m4, RendererExtension, WorldExtension, FloatingOrigin, Camera, CameraController, Hud } = kit;
+// how much brighter a sunlit body reads to the night-adapted eye under the air (the full Moon a white, slightly
+// overexposed disc with its maria still showing)
+const NIGHT_EYE = 8;
 
 class AppExtension {
     static key = 'origin';
@@ -103,7 +106,7 @@ class AppExtension {
         const sun = o.toLocal(this.world.sunPos);
         F.set([sun[0], sun[1], sun[2], 2 * tanH / r.height], 32);
         // sky: inside an atmosphere on the day side
-        let sky = [0, 0, 0], starVis = 1;
+        let sky = [0, 0, 0], starVis = 1, eye = 1;
         const b = prox.body;
         if (b && b.atmosphere) {
             const k = Math.pow(clamp(1 - prox.alt / b.atmosphere.height, 0, 1), 1.5);
@@ -111,10 +114,13 @@ class AppExtension {
             const day = clamp((v3.dot(upW, sunW) + 0.15) / 0.4, 0, 1);
             sky = v3.mul(b.atmosphere.color, k * day * 0.9);
             starVis = 1 - clamp(k * day * 3, 0, 1);
+            // by night under the air the eye is adapted to the dark: the Moon (any sunlit body) shines near white
+            eye = 1 + (NIGHT_EYE - 1) * k * (1 - clamp((v3.dot(upW, sunW) + 0.2) / 0.25, 0, 1));
         }
         F.set([sky[0], sky[1], sky[2], starVis], 36);
         // (w: in a frame another kit maps from radiance, the reciprocal of that kit's exposure: its sky's, world.sunlight)
-        F.set([this.lighting.exposure, this.lighting.sun, this.writeCovers(F, 44), 1 / Math.max(this.fx.world.sunlight?.exposure ?? 1, 1e-4)], 40);
+        F.set([this.lighting.exposure, this.lighting.sun, this.writeCovers(F, 48), 1 / Math.max(this.fx.world.sunlight?.exposure ?? 1, 1e-4)], 40);
+        F.set([eye, 0, 0, 0], 44);
     }
 
     // The ground of the sites standing on its bodies (their Site.footprint with an albedo: an

@@ -26,6 +26,7 @@ struct Frame {
     sun: vec4f,         // sun in origin space, w = radians per pixel
     sky: vec4f,         // atmosphere colour, w = star visibility
     misc: vec4f,        // exposure, sun intensity, covers
+    eye: vec4f,         // x: the night-adapted eye's gain on sunlit bodies (1 by day and from space)
     cover: array<vec4f, ${MAX_COVERS * 2}>,   // the ground of worlds standing on the bodies (AppExtension.writeCovers)
 };
 struct Origin { cell: vec4i, local: vec4f, ax: vec4f, ay: vec4f, az: vec4f };
@@ -196,7 +197,7 @@ fn surfaceColor(b: Body, bi: u32, n: vec3f, t: f32) -> vec3f {
             let alb = surfaceColor(b, v.bi, toWorldDir(n), t);
             let L = normalize(frame.sun.xyz - p);
             let ndl = dot(n, L);
-            col = alb * (max(ndl, 0.0) * frame.misc.y + 0.004);
+            col = alb * (max(ndl, 0.0) * frame.misc.y + 0.004) * frame.eye.x;
             if (u32(b.shape.y) == 2u) { col += vec3f(0.6) * pow(max(dot(n, normalize(L - dir)), 0.0), 60.0) * max(ndl, 0.0) * 0.3; }
             if (b.atmo.w > 0.0) {
                 // the air between the eye and the ground: all of it from space; from within the air, only as much as the
@@ -226,7 +227,7 @@ fn surfaceColor(b: Body, bi: u32, n: vec3f, t: f32) -> vec3f {
     if (b.color.w <= 0.0) {
         let ca = clamp(dot(normalize(frame.sun.xyz - b.center.xyz), normalize(oc)), -1.0, 1.0);
         let a = acos(ca);
-        lum = frame.misc.y * (2.0 / 3.0) * (sin(a) + (3.14159265 - a) * ca) / 3.14159265;
+        lum = frame.misc.y * (2.0 / 3.0) * (sin(a) + (3.14159265 - a) * ca) / 3.14159265 * frame.eye.x;
     }
     var halo = 0.0;
     if (b.color.w > 0.0) {
