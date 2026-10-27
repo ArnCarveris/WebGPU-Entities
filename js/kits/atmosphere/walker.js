@@ -131,10 +131,11 @@ class Walker {
         const l = Math.hypot(mx, mz), speed = (k.has('ShiftLeft') || k.has('ShiftRight') ? WALK.run : WALK.speed) * (k.has('AltLeft') ? 0.3 : 1);
         if (l > 0) { mx *= speed * dt / l; mz *= speed * dt / l; }
         if (this.bus) {
-            // aboard: move in the bus's frame, against its walls, seats and doors; out through an open door
+            // aboard: move in the bus's frame, against its walls, seats and doors; out through an open door (its doorway,
+            // past the floor's box but not yet out, stood on at the floor's height: no falling out of the world there)
             const d = this.bus.toLocal([mx, 0, mz], 0), p = this.feet, y0 = p[1];
             p[0] += d[0]; p[2] += d[2];
-            const g = collideWalker(p, this.bus.colliders(), -Infinity);
+            const g = collideWalker(p, this.bus.colliders(), this.bus.body.floor);
             this.settle(g, y0, dt);
             if (Math.abs(p[0]) > this.bus.body.hl || Math.abs(p[2]) > this.bus.body.hw) {
                 this.feet = this.bus.toWorld(p);
