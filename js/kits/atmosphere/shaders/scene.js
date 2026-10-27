@@ -256,9 +256,9 @@ struct SkyOver { @location(0) c: vec4f, @builtin(frag_depth) d: f32 }
 }
 
 // the moon by night (at F.sunDir): a disc lit from one side by its phase (F.sunDir.w its lit fraction), with darker
-// maria, and a little earthshine on its dark side
+// maria, and a little earthshine on its dark side; none where the moon is a body in space, drawn there (F.shellInfo.z)
 fn moonDisc(d: vec3f, mu: f32) -> vec3f {
-    if (mu < 0.9998) { return vec3f(0.0); }
+    if (mu < 0.9998 || F.shellInfo.z > 0.5) { return vec3f(0.0); }
     let m = F.sunDir.xyz;
     let r = normalize(cross(m, vec3f(0.0, 1.0, 0.0)));
     let u = cross(r, m);

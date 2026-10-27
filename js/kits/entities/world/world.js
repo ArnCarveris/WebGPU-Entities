@@ -13,9 +13,9 @@ const PACE_REACH = 30;      // s
 class WorldExtension {
     static key = 'origin';
     // what it answers on the World (Common.Composite)
-    static exposes = ['addDynamic', 'bodies', 'density', 'destroy', 'dynamic', 'geometry', 'instanceCount', 'landmarks',
-        'materials', 'meshes', 'modelList', 'models', 'proximity', 'resolve', 'scenario', 'store', 'sun', 'sunPos',
-        'surfaces', 'types', 'update'];
+    static exposes = ['addDynamic', 'bodies', 'carry', 'daylight', 'density', 'destroy', 'dynamic', 'geometry', 'instanceCount',
+        'landmarks', 'materials', 'meshes', 'modelList', 'models', 'moon', 'proximity', 'resolve', 'scenario', 'store', 'sun',
+        'sunPos', 'surfaces', 'types', 'update'];
     constructor(world, scenario, device, density = 1) {
         this.world = world;
         this.scenario = scenario;
@@ -28,6 +28,7 @@ class WorldExtension {
         this.landmarks = [];
         this.dynamic = [];
         this.sun = null;
+        this.moon = null;               // the moon a time of day placed (daylight): by night the sky's light
         this.surfaces = SURFACES;       // a body's surface name -> its shader's index
         // the common mesh interface (kits.mesh): model instances (poses { pos: a WorldPos, q, scale }; opts tint, seed),
         // re-uploaded when set once the store exists; rotations [yaw, pitch, roll] in degrees
@@ -70,7 +71,7 @@ class WorldExtension {
         let pos, q = quat.identity();
         if (spec.orbit) {
             const o = spec.orbit, P = this.need(o.parent), r = o.radius ?? P.radius + (o.altitude || 0);
-            const qo = quat.mul(quat.mul(P.frame.q, quat.axisAngle([0, 1, 0], (o.node || 0) * DEG)), quat.axisAngle([1, 0, 0], (o.incl || 0) * DEG));
+            const qo = quat.mul(quat.mul(P.axes || P.frame.q, quat.axisAngle([0, 1, 0], (o.node || 0) * DEG)), quat.axisAngle([1, 0, 0], (o.incl || 0) * DEG));
             const a = (o.angle || 0) * DEG, local = [Math.cos(a) * r, 0, -Math.sin(a) * r];
             const radial = quat.rotate(qo, v3.norm(local)), along = v3.cross(quat.rotate(qo, [0, 1, 0]), radial);
             pos = P.pos.add(quat.rotate(qo, local));
@@ -91,6 +92,66 @@ class WorldExtension {
         }
         if (spec.rot) q = quat.mul(q, quat.euler(spec.rot));
         return { pos, q };
+    }
+
+    // Moves entity e rigidly (m { pos(WorldPos), q(q) }), and everything placed on it (its surface, an offset from it; with
+    // `orbits` what orbits it as well), in scenario order: an entity only ever stands on an earlier one
+    carry(e, m, orbits = false) {
+        const moved = new Set([e]);
+        e.carry(m);
+        for (const x of this.world.entities) {
+            const d = x.def, on = d.orbit ? orbits && d.orbit.parent : d.surface?.parent ?? d.parent;
+            if (x === e || !on || !x.carry || !moved.has(this.world.get(on))) continue;
+            moved.add(x);
+            x.carry(m);
+        }
+    }
+
+    // A time of day for what stands on entity `on` (on a planet's surface): the planet turns about its own axis until,
+    // seen from there, the sun stands toward `toward` (a direction in world axes, at `on` as it is now). By night (moon:
+    // the lit fraction wanted) the planet's moon goes along its orbit to where it is lit that much (on either side of the
+    // sun: the one that suits), and the planet turns until the moon stands there instead, the sun under the ground (with
+    // no moon, the sun alone goes under). What stands on the planet turns with it (carry); what orbits it stays. As near
+    // as a turn can (the sun and the moon keep to their circles in its sky): the height first, then the bearing. Returns
+    // the turn ({ about: the planet's centre, q, radius }) or null
+    daylight(on, toward, moon = 0) {
+        const e = this.need(on);
+        let P = e;
+        while (P && !this.bodies.includes(P) && !P.def.orbit) P = this.world.get(P.def.surface?.parent ?? P.def.parent);
+        if (!P || !this.bodies.includes(P) || !this.sun || P === e) return null;
+        const C = P.pos, axis = quat.rotate(P.frame.q, [0, 1, 0]), rel = e.pos.sub(C), ie = quat.conj(e.frame.q);
+        const M = moon > 0 ? this.bodies.find(b => b.def.orbit?.parent === P.id) : null;
+        const t = quat.rotate(ie, v3.mul(v3.norm(toward), moon > 0 && !M ? -1 : 1));        // (in e's frame: y up)
+        // (where point x is seen from e, the planet turned by a; how far that is from t, with the moon x the sun kept 6°
+        // under the ground; the turn that puts it nearest)
+        const seen = (x, a) => quat.rotate(ie, v3.norm(v3.sub(quat.rotate(quat.axisAngle(axis, -a), x.sub(C)), rel)));
+        const off = (x, a) => {
+            const d = seen(x, a), up = x === this.sunPos ? 0 : Math.max(0, seen(this.sunPos, a)[1] + 0.1);
+            return 50 * (d[1] - t[1]) ** 2 + 1 - v3.dot(d, t) + 100 * up * up;
+        };
+        const best = x => {
+            let a = 0, err = Infinity;
+            for (let i = 0; i < 720; i++) { const f = off(x, i * Math.PI / 360); if (f < err) { err = f; a = i * Math.PI / 360; } }
+            for (let h = Math.PI / 720; h > 1e-7; h /= 2) for (const b of [a - h, a + h]) { const f = off(x, b); if (f < err) { err = f; a = b; } }
+            return { a, err };
+        };
+        let turn = M ? { err: Infinity } : best(this.sunPos), at = null;
+        if (M) {
+            // (lit fraction k at elongation E from the sun: k = (1 - cos E) / 2)
+            const o = M.def.orbit, E = Math.acos(Common.clamp(1 - 2 * moon, -1, 1));
+            const qo = quat.mul(quat.mul(P.axes, quat.axisAngle([0, 1, 0], (o.node || 0) * DEG)), quat.axisAngle([1, 0, 0], (o.incl || 0) * DEG));
+            const u = quat.rotate(quat.conj(qo), this.sunPos.sub(C)), sun = Math.atan2(-u[2], u[0]) / DEG;
+            for (const s of [1, -1]) {
+                const x = this.resolve({ orbit: { ...o, angle: sun + s * E / DEG } }).pos, b = best(x);
+                if (b.err < turn.err) { turn = b; at = x; }
+            }
+            const d = at.sub(M.pos);
+            this.carry(M, { pos: p => p.add(d), q: q => q }, true);
+            this.moon = M;
+        }
+        const R = quat.axisAngle(axis, turn.a);
+        this.carry(P, { pos: p => C.add(quat.rotate(R, p.sub(C))), q: q => quat.norm(quat.mul(R, q)) });
+        return { about: C, q: R, radius: P.radius };
     }
 
     update(dt, t) {

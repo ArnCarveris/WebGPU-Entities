@@ -26,12 +26,14 @@ class Controls {
         a.menus.sync();
     }
 
-    // a preset's sun (or moon) and exposure; its direction the one followed, if any (follow)
+    // a preset's sun (or moon) and exposure; its direction the one followed, if any (follow). The preset as picked, this.preset
+    // (a time of day for the sun followed: sunlight().preset)
     setLight(name) {
         const a = this.app, p = a.lightPresets[name] || {}, d = a.sunAlong;
         a.lightName = name || 'default';
         a.sun = { azimuth: (p.azimuth ?? 150) * DEG, elevation: (p.elevation ?? 35) * DEG, intensity: p.intensity ?? 12, exposure: p.exposure ?? 0.45,
             moon: p.moon ? clamp(p.moon, 0.02, 1) : 0 };
+        if (this.preset?.name !== a.lightName) this.preset = { name: a.lightName, azimuth: a.sun.azimuth, elevation: a.sun.elevation, moon: a.sun.moon };
         if (d) { a.sun.azimuth = Math.atan2(d[0], -d[2]); a.sun.elevation = Math.asin(clamp(d[1], -1, 1)); }
     }
 

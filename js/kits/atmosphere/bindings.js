@@ -50,7 +50,7 @@ const FRAME_LAYOUT = [
     ['lod', 'vec4f'],       // march interleave (1, 2, 4), shadow map slices, slice this frame, detail distance (m)
     ['froxel', 'vec4f'],    // near, far (m), froxels on, -
     ['shell', 'vec4f'],     // where its air ends (render.airTop: AppExtension.airShell): on (round), K (R + the eye's height), C ((R + top)² - K²), top - height (flat)
-    ['shellInfo', 'vec4f'], // how much its sky hides beyond it (0 .. 1), 1 above its air (in a frame it shares: none of it drawn), -, -
+    ['shellInfo', 'vec4f'], // how much its sky hides beyond it (0 .. 1), 1 above its air (in a frame it shares: none of it drawn), 1 with its moon a body in space (no disc of its own), -
     ['post', 'vec4f'],      // cloud blur radius (volumetric texels), cloud tile pre-pass on, radar top (fraction of the screen height), bolt bloom gain
     ['look', 'vec4f'],      // smooth clouds (0 .. 1: broad soft billows, no detail erosion, powder), cloud drift since the last frame x, z (m), steady resolve (the fresh march's weight scale, 0 off)
     ['bloom', 'vec4f'],     // strength (0 off), threshold, soft knee (exposed radiance), levels in the chain

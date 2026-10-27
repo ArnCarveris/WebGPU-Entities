@@ -30,7 +30,7 @@ class AppExtension {
         'frameWriter', 'froxels', 'fx', 'hud', 'inBus', 'indoors', 'input', 'inspect', 'keys', 'liftControl',
         'lightName', 'lightNames', 'lightPresets', 'lights', 'load', 'menus', 'mode', 'near', 'nearBus', 'paused',
         'probe', 'quality', 'radar', 'radarTop', 'renderer', 'reset', 'rideBus', 'rideCar', 'scenario', 'sheltered',
-        'start', 'sun', 'sunAlong', 'tiles', 'time', 'timeScale', 'title', 'viewIndex', 'views', 'walker',
+        'start', 'sun', 'sunAlong', 'moonBody', 'tiles', 'time', 'timeScale', 'title', 'viewIndex', 'views', 'walker',
         'weatherTime', 'world'];
 
     // world(scenario): the world (World, with the world type's extensions); extensions: AppExtension classes; title: the
@@ -196,6 +196,8 @@ class AppExtension {
         // (from inside, with the outdoors out of sight through the portals: no volumetrics, no rain; FrameWriter.outdoors)
         const out = fw.outdoors?.seen !== false && air > 0;
         r.air = this.airShell(this.camera.pos);
+        // (by night the moon followed a body in space shows itself: set('moonBody'); its own disc gives way)
+        r.moonBody = !!this.moonBody && this.sun.moon > 0;
         r.render({ probeTexel: fw.probeTexel, particles: out ? particles : 0, bolts: out ? w.lightning.count : 0, interleave: QUALITY[this.quality].interleave,
             shadowSlices: fw.shadowSlices, froxels: this.froxels && out, volumetrics: this.mode !== 1 && out, tiles: this.tiles,
             bloom: this.bloom && this.cfg.bloom > 0 && air > 0, air });

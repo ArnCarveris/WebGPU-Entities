@@ -45,7 +45,7 @@ class RendererExtension {
     static exposes = ['air', 'bloom', 'bloomViews', 'boltBuf', 'busData', 'busGroup', 'busLayout', 'cellBuf',
         'cellData', 'clampSamp', 'cloudPass', 'createPipelines', 'depth', 'depthFormat', 'depthSampleView', 'depthView',
         'device', 'encodeBloom', 'format', 'frame', 'frameBuf', 'froxelPass', 'fx',
-        'height', 'heightView', 'init', 'lineLayer', 'modules', 'noise', 'outdoors', 'profiler', 'render', 'repSamp',
+        'height', 'heightView', 'init', 'lineLayer', 'modules', 'moonBody', 'noise', 'outdoors', 'profiler', 'render', 'repSamp',
         'resize', 'scale', 'sceneModule', 'setWorld', 'stencilBits', 'terrainIndex', 'terrainLod', 'terrainNodes',
         'useFrames', 'vegetation', 'weatherPass', 'wgsl', 'width', 'worldGroup', 'worldSet'];
     // fx: the site's context (the host's device, canvas size, target, the features on in it (fx.features); see
@@ -291,7 +291,7 @@ class RendererExtension {
         const q = this.device.queue, prof = this.profiler, enc = f.enc;
         const air = this.air;
         this.frame.set('shell', air ? air.shell : [0, 0, 0, 0]);
-        this.frame.set('shellInfo', [air ? air.hides : 0, f.air <= 0 ? 1 : 0, 0, 0]);
+        this.frame.set('shellInfo', [air ? air.hides : 0, f.air <= 0 ? 1 : 0, this.moonBody ? 1 : 0, 0]);
         q.writeBuffer(this.frameBuf, 0, this.frame.data);
         q.writeBuffer(this.cellBuf, 0, this.cellData);
         if (this.framesUsed) q.writeBuffer(this.busUBuf, 0, this.busData, 0, this.framesUsed * BUS_UNIFORM / 4);

@@ -240,6 +240,7 @@ class Host {
         this.skySite = shared ? this.order.find(s => s.renderKey === sky && s.world.sunlight) || null : null;
         // (a site whose sun is a star in space, when another's sky lights the world: that sky follows it)
         this.starSite = shared ? this.order.find(s => s !== this.skySite && s.world.sunlight?.()?.star) || null : null;
+        this.daylit = null;
     }
 
     // the HUD root: the elements the sites ask for (their specs' hud: Site.HUD), once each
@@ -692,16 +693,32 @@ class Host {
     }
 
     // the sky's site, once it has framed: its sun is the world's (world.sunlight, in world space). A star's site (the Sun
-    // of a solar system), once it has framed: the sky's sun stands where it does, seen from the sky's site
+    // of a solar system), once it has framed: the sky's sun stands where it does, seen from the sky's site; by night (its
+    // lighting a moon's) the star's site's moon (sunlight().moon), its own disc giving way to it (set('moonBody'))
     lightFrom(site) {
         if (site === this.starSite) {
             const s = site.world.sunlight(), Fs = this.siteFrame(site), F = this.siteFrame(this.skySite);
-            const d = s && F.localDir(Fs.dir(s.toward(Fs.local(F.pos))));
+            const by = this.daylit?.moon > 0 && s?.moon || s, moon = !!s && by === s.moon;
+            const d = by && F.localDir(Fs.dir(by.toward(Fs.local(F.pos))));
             if (d && !Host.same(d, this.starDir)) { this.starDir = d; this.skySite.world.set?.('sunDir', d); }
+            if (moon !== this.moonBody) { this.moonBody = moon; this.skySite.world.set?.('moonBody', moon); }
         }
         if (site !== this.skySite) return;
         const s = site.world.sunlight(), F = this.siteFrame(site);
         this.world.sunlight = s && { ...s, toward: p => F.dir(s.toward(F.local(p))) };
+        if (this.starSite) this.daylight(s?.preset);
+    }
+
+    // The sky's lighting picked (its sunlight().preset: { azimuth, elevation (rad, in its frame), moon }) is a time of day
+    // for the star's site: the planet the sky stands on (its `at.on`) turns until the sun stands there, by night its moon
+    // (set('daylight'): World.daylight); the sky then follows them (lightFrom)
+    daylight(p) {
+        const on = this.skySite.frameDef.on;
+        if (!p || p === this.daylit || !on) return;
+        this.daylit = p;
+        const ce = Math.cos(p.elevation), d = [ce * Math.sin(p.azimuth), Math.sin(p.elevation), -ce * Math.cos(p.azimuth)];
+        const F = this.siteFrame(this.skySite), Fs = this.siteFrame(this.starSite);
+        this.starSite.world.set?.('daylight', { on, toward: Fs.localDir(F.dir(d)), moon: p.moon || 0 });
     }
 
     // The camera inside an interior of a site (Site.sheltered: a building, a vehicle's cabin, a portal area) is inside for

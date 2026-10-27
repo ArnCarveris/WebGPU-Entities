@@ -73,12 +73,14 @@ const atmosphereWorld = type => ({
 
     // its sun (or moon by night), what lights the other sites (the host's world.sunlight): { toward(p) (the direction to
     // it from p: the same everywhere), color (its radiance), zenith, horizon, ambient (its sky's), exposure }, in its own
-    // radiance
+    // radiance; preset: the lighting picked ({ name, azimuth, elevation (rad, where its preset has it), moon }: a time
+    // of day for the sun it follows, Host.daylight)
     sunlight() {
         const a = this.app, s = a?.sun, w = a?.world;
         if (!s || !w) return null;
         const sky = kits.weather.Sky.compute(s.azimuth, s.elevation, s.intensity, w.weather.cur, s.moon);
-        return { toward: () => sky.dir, color: sky.sun, zenith: sky.zenith, horizon: sky.horizon, ambient: sky.ambient, exposure: s.exposure };
+        return { toward: () => sky.dir, color: sky.sun, zenith: sky.zenith, horizon: sky.horizon, ambient: sky.ambient, exposure: s.exposure,
+            preset: a.controls.preset };
     },
 
     // how much it hides a point beyond it: the walls of the interior p is in (AppExtension.hides), its air (airHides: its
@@ -102,6 +104,7 @@ const atmosphereWorld = type => ({
         else if (key === 'timeScale' && +v > 0) a.timeScale = +v;
         else if (key === 'indoors') a.forceIndoors = !!v;
         else if (key === 'sunDir' && Array.isArray(v)) a.controls.follow(v);
+        else if (key === 'moonBody') a.moonBody = !!v;
         else if (key === 'radar') a.radar = !!v;
     },
 });

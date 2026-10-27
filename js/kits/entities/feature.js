@@ -51,12 +51,28 @@ const originWorld = {
     },
 
     // the Sun, what lights the other sites (the host's world.sunlight): { toward(p) (the direction to it from p, metres in
-    // this site's frame), exposure, star (a sky lighting the world follows it) }
+    // this site's frame), exposure, star (a sky lighting the world follows it), moon (the moon a time of day placed,
+    // daylight: by night the sky's light; { toward(p), lit(p) (how much of it is lit seen from p, 0 new .. 1 full) }) }
     sunlight() {
         const w = this.app?.world;
         if (!w?.sun) return null;
-        const at = w.sunPos.metres();
-        return { toward: p => v3.norm(v3.sub(at, p)), exposure: this.app.lighting?.exposure ?? 1, star: true };
+        const at = w.sunPos.metres(), m = w.moon?.pos.metres();
+        const moon = m && { toward: p => v3.norm(v3.sub(m, p)), lit: p => (1 + v3.dot(v3.norm(v3.sub(at, m)), v3.norm(v3.sub(p, m)))) / 2 };
+        return { toward: p => v3.norm(v3.sub(at, p)), exposure: this.app.lighting?.exposure ?? 1, star: true, moon };
+    },
+
+    // A time of day (the host's, from a sky's lighting preset: { on, toward, moon }, World.daylight); the camera near
+    // what stands there (within a quarter of the planet's radius) turns with the planet, staying over the same ground
+    daylight({ on, toward, moon }) {
+        const a = this.app, e = a?.world?.get(on), cam = a?.camera;
+        if (!e?.frame) return;
+        const near = v3.len(cam.pos.sub(e.pos)), turn = a.world.daylight(on, toward, moon);
+        if (!turn || near > turn.radius / 4) return;
+        const rel = cam.pos.sub(turn.about);
+        cam.pos = turn.about.add(quat.rotate(turn.q, rel));
+        cam.q = quat.norm(quat.mul(turn.q, cam.q));
+        cam.vel = quat.rotate(turn.q, cam.vel);
+        a.floating.force = true;
     },
 
     // the direction to the sun in the frame of every entity marked `sunProbe` (for expressions: a link can light a world
@@ -92,6 +108,7 @@ const originWorld = {
         else if (key === 'translate' || key === 'rotate' || key === 'scale') f[key] = !!v;
         else if (key === 'everyFrame') f.everyFrame = !!v;
         else if (key === 'labels') a.hud.showLabels = !!v;
+        else if (key === 'daylight' && v?.on) this.daylight(v);
     },
 };
 

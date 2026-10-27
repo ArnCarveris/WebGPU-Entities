@@ -10,6 +10,7 @@ const { spinQuat } = kit;
 // An entity its world places: spawn() takes its frame ({ pos: a WorldPos, q }) from world.resolve(def) (pos, or on a
 // parent entity: lat / lon / alt...), so an entity can use any earlier one as its parent. `radius` is its size,
 // `spacing` the proximity floor inside it (fields), and `speed` how fast it travels (m/s; flight near it keeps ahead).
+// carry(m) moves it rigidly with what it stands on (m { pos(WorldPos), q(q) }: World.carry).
 class SpaceEntity extends kits.world.Entity {
     constructor(def, world) {
         super(def, world);
@@ -22,6 +23,8 @@ class SpaceEntity extends kits.world.Entity {
     get pos() { return this.frame.pos; }
 
     spawn() { this.frame = this.world.resolve(this.def); }
+
+    carry(m) { this.frame = { pos: m.pos(this.frame.pos), q: m.q(this.frame.q) }; }
 }
 
 // a scale: a number or [x, y, z]
@@ -38,6 +41,7 @@ function spaceTypes(Base) {
             super.spawn();
             const d = this.def;
             this.frame.q = this.world.meshes.rotation(d.rot || [0, 0, 0]);     // bodies keep world axes: lat / lon stay predictable
+            this.axes = this.frame.q;           // (unturned: its orbits' plane, whatever time of day it turns to: World.daylight)
             this.radius = d.radius;
             this.surface = this.world.surfaces[d.surface || 'rocky'];
             if (this.surface === undefined) throw new Error(`body "${this.id}": unknown surface "${d.surface}"`);
@@ -76,6 +80,11 @@ function spaceTypes(Base) {
             if (this.def.spin) this.world.addDynamic(this);
         }
 
+        carry(m) {
+            super.carry(m);
+            this.inst.set({ pos: this.frame.pos, q: this.frame.q, scale: this.scale });
+        }
+
         update(dt, t) {
             const q = spinQuat(quat, this.frame.q, this.def.spin, t, { rpm: 1 }, true);
             this.inst.set({ pos: this.frame.pos, q, scale: this.scale });
@@ -89,6 +98,7 @@ function spaceTypes(Base) {
             const d = this.def, w = this.world, rng = mulberry32(d.seed || 1), sh = d.shape || { sphere: 100 };
             const models = [].concat(d.model), n = Math.max(0, Math.round((d.count || 0) * w.density));
             const [smin, smax] = d.size || [1, 1], tintJ = d.tint ?? 0.15;
+            this.parts = [];            // (each instance's pose, to carry it)
             for (let i = 0; i < n; i++) {
                 const size = smin * Math.pow(smax / smin, rng() * rng());      // many small, few large
                 const off = this.sample(sh, rng, size);
@@ -96,12 +106,18 @@ function spaceTypes(Base) {
                 const scale = [size, size * (0.6 + 0.4 * rng()), size * (0.6 + 0.4 * rng())];
                 const k = 1 - tintJ + tintJ * 2 * rng();
                 const tint = [k * (0.95 + 0.1 * rng()), k, k * (0.95 + 0.1 * rng())];
-                w.meshes.instance(models[i % models.length], { pos: this.frame.pos.add(quat.rotate(this.frame.q, off)), q, scale }, { tint, seed: rng() * 100 });
+                const pose = { pos: this.frame.pos.add(quat.rotate(this.frame.q, off)), q, scale };
+                this.parts.push({ ...pose, h: w.meshes.instance(models[i % models.length], pose, { tint, seed: rng() * 100 }) });
             }
             this.count = n;
             this.radius = sh.sphere || (sh.ring && sh.ring[1]) || sh.disc || 0;
             this.spacing = n ? this.radius / Math.cbrt(n) : 0;
             if (this.label) w.landmarks.push(this);
+        }
+
+        carry(m) {
+            super.carry(m);
+            for (const p of this.parts) { p.pos = m.pos(p.pos); p.q = m.q(p.q); p.h.set(p); }
         }
 
         sample(sh, rng, size) {
@@ -132,6 +148,9 @@ function spaceTypes(Base) {
             if (this.label) this.world.landmarks.push(this);
             this.world.addDynamic(this);
         }
+
+        // (it follows its parent every frame)
+        carry() {}
 
         update(dt, t) {
             const o = this.def.orbit, P = this.parent.frame;
