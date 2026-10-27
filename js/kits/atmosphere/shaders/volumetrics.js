@@ -530,14 +530,11 @@ fn march(@builtin(global_invocation_id) gid: vec3u) {
         let N = max(24, i32(ceil(F.march.x * sqrt(min(span / 30000.0, 1.0)))));
         // per-pixel, per-frame step offset (hashed: interleaved gradient noise lines up into streaks at half resolution)
         let jitter = rnd(px.x * 1973u + px.y * 9277u + u32(frame) * 26699u);
-        // a second draw: which step of each pair empty air evaluates, and where between the distance LODs this pixel
-        // switches. Fixed by step index or distance, both lie on shells round the eye and show as rings that move with it
-        let jit2 = rnd(px.x * 7121u + px.y * 3911u + u32(frame) * 15731u);
-        let pairPhase = select(0, 1, jit2 < 0.5);
-        let lodBand = mix(0.8, 1.2, fract(jit2 * 2.0));
+        // a second draw: where between the distance LODs this pixel switches. Fixed by distance, the switches lie on
+        // shells round the eye and show as rings that move with it
+        let lodBand = mix(0.8, 1.2, rnd(px.x * 7121u + px.y * 3911u + u32(frame) * 15731u));
         let feat = featureMask(ro, dir, t0, t1);
         let detailDist = F.lod.w;
-        var emptyRun = 0;           // consecutive cloud-free samples: in empty air clouds are evaluated every other step
         // marchSide: how much open-air sky light reaches the medium at this step. The ray has to have come through
         // open air (a camera inside cloud or rain sees none), and it fades with the cloud and precipitation optical
         // depth crossed since: sky light from the side reaches only a few optical depths into the medium
@@ -583,19 +580,19 @@ fn march(@builtin(global_invocation_id) gid: vec3u) {
             // distance bins without cloud in the tile pre-pass
             if (cloudy && tiles) {
                 let b = tileBin(t);
-                // (odd: the first sample after a skipped stretch is evaluated, or where a sharp edge such as an eyewall
-                // starts would depend on how many bins this tile row skipped, and show as bands)
-                if (((select(tm.x, tm.y, b >= 32u) >> (b & 31u)) & 1u) == 0u) { cloudy = false; emptyRun = 1; }
+                if (((select(tm.x, tm.y, b >= 32u) >> (b & 31u)) & 1u) == 0u) { cloudy = false; }
             }
             // empty-space skipping: where the occupancy grid rules out noise cloud, only the analytic structures
             // this ray passes near are left to evaluate
             var noise = true;
             if (cloudy && !cloudPossible(p)) {
                 noise = false;
-                if (feat == 0u) { cloudy = false; emptyRun++; }
+                if (feat == 0u) { cloudy = false; }
             }
-            if (cloudy && emptyRun >= 2 && ((i + pairPhase) & 1) == 0) { emptyRun++; }
-            else if (cloudy) {
+            // (every step is evaluated: empty air evaluated every other step began a cloud up to a step late, at random,
+            // and far away, where steps are hundreds of metres long, its front was grainy. The tile pre-pass and the
+            // occupancy grid skip the empty air; the pairs saved little more)
+            if (cloudy) {
                 let w = weatherAt(p.xz);
                 // LOD by distance: detail erosion near, fine structure mid, shape only far
                 let lod = select(select(2, 1, t < detailDist * 2.5 * lodBand), 0, t < detailDist * lodBand);
@@ -609,8 +606,7 @@ fn march(@builtin(global_invocation_id) gid: vec3u) {
                     S += dc * cloudLight(p, mu, dir.y, w, ls, clamp(t / detailDist, 1.0, 3.0), cs.y, side, dc) * tint;
                     sigma += dc;
                     medium += dc;
-                    emptyRun = 0;
-                } else { emptyRun++; }
+                }
             }
             if (t > cab.x && t < cab.y) {
                 // in the bus: sheltered, nothing to take
@@ -808,8 +804,10 @@ fn resolve(@builtin(global_invocation_id) gid: vec3u) {
             o = mix(hist, cur, select(k, select(0.0, k * 0.25, fresh), smoothLook));
             // steady (ultra): an interleaved march at full detail, kept steady: a march weighs less, and the pixels not
             // marched this frame keep their history rather than take in their neighbours' mean (it shimmers as the
-            // marched pixel cycles)
-            if (steady && !smoothLook) { o = mix(hist, cur, select(0.0, k * F.look.w, fresh)); }
+            // marched pixel cycles). Far away, where the march's steps are hundreds of metres long and a march is
+            // noisier, it weighs half as much again: far cloud reprojects well, and kept as near, it shimmered
+            let far = mix(1.0, 0.5, smoothstep(0.3, 1.0, depth / F.lod.w));
+            if (steady && !smoothLook) { o = mix(hist, cur, select(0.0, k * F.look.w * far, fresh)); }
         }
     }
     textureStore(histOut, q, o);
