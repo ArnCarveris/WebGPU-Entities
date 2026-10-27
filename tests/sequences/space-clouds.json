@@ -117,14 +117,15 @@
       "action": "pixels",
       "name": "supercell-400km",
       "region": [
-        475,
-        282,
-        20,
-        16
+        450,
+        180,
+        60,
+        160
       ],
-      "where": "r > 135 && g > 135 && b > 135",
+      "where": "r > 140 && g > 140 && b > 140",
       "as": "anvil",
-      "min": 0.6
+      "min": 0.7,
+      "note": "the anvil: a plume some 250 km long north on the wind aloft, up the middle of the view, brighter than the cumulus"
     },
     {
       "only": [
@@ -133,14 +134,15 @@
       "action": "pixels",
       "name": "supercell-400km",
       "region": [
-        420,
-        290,
+        405,
+        200,
         20,
-        20
+        120
       ],
-      "where": "r > 135 && g > 135 && b > 135",
-      "as": "west-of-it",
-      "max": 0.4
+      "where": "r > 140 && g > 140 && b > 140",
+      "as": "shadow",
+      "max": 0.3,
+      "note": "its shadow on the cloud beside it"
     },
     {
       "only": [
@@ -149,14 +151,15 @@
       "action": "pixels",
       "name": "supercell-400km",
       "region": [
-        540,
-        290,
-        20,
-        20
+        120,
+        280,
+        60,
+        40
       ],
-      "where": "r > 135 && g > 135 && b > 135",
-      "as": "east-of-it",
-      "max": 0.4
+      "where": "r > 140 && g > 140 && b > 140",
+      "as": "upwind",
+      "max": 0.3,
+      "note": "the patchy cumulus away from it"
     },
     {
       "action": "errors"
