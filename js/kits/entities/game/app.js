@@ -9,13 +9,14 @@ const { BODY_FLOATS, MAX_COVERS, MAX_STORMS, NEAR, quat, m4, RendererExtension, 
 // how much brighter a sunlit body reads to the night-adapted eye under the air (the full Moon a white, slightly
 // overexposed disc with its maria still showing)
 const NIGHT_EYE = 8;
+const NO_CLOUDS = { coverage: 0, base: 0, top: 0, air: 0, reach: 0, storms: [] };     // a site's that makes none (Site.clouds: null)
 
 class AppExtension {
     static key = 'origin';
     // what it answers on the App (Common.Composite)
     static exposes = ['bookmarks', 'camera', 'canvas', 'controller', 'density', 'floating', 'fps', 'frame', 'fx',
         'handleKeys', 'hud', 'input', 'jump', 'lighting', 'load', 'paused', 'prox', 'renderer', 'scenario', 'start',
-        'standing', 'time', 'viewProj', 'world', 'writeCovers', 'writeStorms'];
+        'siteOn', 'siteStorm', 'standing', 'time', 'viewProj', 'world', 'writeCovers', 'writeStorms'];
     constructor(app, fx) {
         this.app = app;
         this.fx = fx;
@@ -125,8 +126,8 @@ class AppExtension {
         F.set([eye, 0, 0, 0], 44);
         // the clouds: how many storms, how much of their own clouds the sites on the bodies draw about the eye (their
         // air) and out to where (origin units), the origin's units per metre
-        const air = Math.max(0, ...on.map(i => i.clouds?.air ?? 0)), reach = Math.max(0, ...on.map(i => i.clouds?.reach ?? 0));
-        F.set([this.writeStorms(F, 52 + MAX_COVERS * 12, on), air, reach / o.scale, 1 / o.scale], 48);
+        const own = on.map(i => i.clouds || NO_CLOUDS);
+        F.set([this.writeStorms(F, 52 + MAX_COVERS * 12, on), Math.max(0, ...own.map(c => c.air)), Math.max(0, ...own.map(c => c.reach)) / o.scale, 1 / o.scale], 48);
     }
 
     // The sites standing on its bodies (their Site.footprint with an albedo: an atmosphere's map), MAX_COVERS at most,
@@ -135,21 +136,26 @@ class AppExtension {
     standing() {
         const host = this.fx.host, self = host?.sites?.find(i => i.ctx === this.fx);
         if (!self) return [];
-        const out = [], own = host.siteFrame(self);
-        for (const i of host.sites) {
-            if (i === self || !i.ready || out.length >= MAX_COVERS) continue;
-            let fp = null, clouds = null;
-            try { fp = i.world.footprint?.(); clouds = i.world.clouds?.(); } catch { fp = null; }
-            if (!fp?.albedo) continue;
-            const frame = host.siteFrame(i), at = q => own.local(frame.point(q));
-            const mid = at([(fp.lo[0] + fp.hi[0]) / 2, fp.floor, (fp.lo[1] + fp.hi[1]) / 2]);
-            const k = this.world.bodies.findIndex(b => Math.abs(v3.len(v3.sub(mid, b.frame.pos.metres())) - b.radius) <= Math.max(b.atmosphere?.height || 0, 0.02 * b.radius));
-            if (k < 0) continue;
-            const b = this.world.bodies[k], c = b.frame.pos.metres(), dir = q => v3.norm(v3.sub(at(q), c));
-            out.push({ k, n: dir([(fp.lo[0] + fp.hi[0]) / 2, fp.floor, (fp.lo[1] + fp.hi[1]) / 2]),
-                r: Math.hypot(fp.hi[0] - fp.lo[0], fp.hi[1] - fp.lo[1]) / 2 / b.radius, albedo: fp.albedo, clouds, floor: fp.floor, dir });
+        const own = host.siteFrame(self), out = [];
+        for (const i of host.sites.filter(i => i !== self && i.ready)) {
+            const on = this.siteOn(i, own);
+            if (on && out.push(on) >= MAX_COVERS) break;
         }
         return out;
+    }
+
+    // site i as standing() has it (own: this site's frame), or null: it has no ground with an albedo, or stands on no
+    // body (its middle further from one's surface than that body's air, or a fiftieth of its radius)
+    siteOn(i, own) {
+        let fp = null, clouds = null;
+        try { fp = i.world.footprint?.(); clouds = i.world.clouds?.(); } catch { return null; }
+        if (!fp?.albedo) return null;
+        const frame = this.fx.host.siteFrame(i), at = q => own.local(frame.point(q));
+        const middle = [(fp.lo[0] + fp.hi[0]) / 2, fp.floor, (fp.lo[1] + fp.hi[1]) / 2], mid = at(middle);
+        const k = this.world.bodies.findIndex(b => Math.abs(v3.len(v3.sub(mid, b.frame.pos.metres())) - b.radius) <= Math.max(b.atmosphere?.height || 0, 0.02 * b.radius));
+        if (k < 0) return null;
+        const b = this.world.bodies[k], c = b.frame.pos.metres(), dir = q => v3.norm(v3.sub(at(q), c));
+        return { k, n: dir(middle), r: Math.hypot(fp.hi[0] - fp.lo[0], fp.hi[1] - fp.lo[1]) / 2 / b.radius, albedo: fp.albedo, clouds, floor: fp.floor, dir };
     }
 
     // The ground and the cloud layer of the sites standing on its bodies (standing: on) into F at o: [n, body index]
@@ -157,7 +163,10 @@ class AppExtension {
     // and its clouds that layer, easing back to its own over some eight times that (surfaceColor, cloudField), so the
     // ground beyond their maps is theirs. Returns how many
     writeCovers(F, o, on) {
-        on.forEach(({ n, k, albedo, r, clouds: c }, i) => F.set([...n, k, ...albedo, r, c?.coverage ?? 0, c?.base ?? 0, c?.top ?? 0, c ? 1 : 0], o + i * 12));
+        on.forEach(({ n, k, albedo, r, clouds }, i) => {
+            const { coverage, base, top } = clouds || NO_CLOUDS;
+            F.set([...n, k, ...albedo, r, coverage, base, top, clouds ? 1 : 0], o + i * 12);
+        });
         return on.length;
     }
 
@@ -168,24 +177,22 @@ class AppExtension {
     // (the weather kit's hurricaneData, m) or a cell's [2, radius, coverage, seed] [top, the wind's direction (world
     // axes)] [0]. Returns how many
     writeStorms(F, o, on) {
-        const out = [], w = this.world;
-        w.bodies.forEach((b, k) => {
-            for (const s of b.def.clouds?.storms || []) {
-                const n = v3.norm(v3.sub(w.resolve({ surface: { parent: b.id, lat: s.lat, lon: s.lon } }).pos.metres(), b.frame.pos.metres()));
-                const H = hurricaneData(s.cat, { scale: s.scale });
-                out.push([...n, k, 1, H[2], H[3], out.length * 7.31, ...H.slice(4)]);
-            }
-        });
-        for (const { k, clouds, floor, dir } of on) {
-            for (const s of clouds?.storms || []) {
-                const H = s.hurricane, c = s.cell;
-                if (H) { out.push([...dir([H[0], floor, H[1]]), k, 1, H[2], H[3], 3.17, ...H.slice(4)]); continue; }
-                const n = dir([c.x, floor, c.z]), wd = v3.sub(dir([c.x + clouds.wind[0], floor, c.z + clouds.wind[1]]), n);
-                out.push([...n, k, 2, c.radius, c.coverage, c.seed, c.top, ...wd, 0, 0, 0, 0]);
-            }
-        }
+        const w = this.world, out = w.bodies.flatMap((b, k) => (b.def.clouds?.storms || []).map((s, i) => {
+            const n = v3.norm(v3.sub(w.resolve({ surface: { parent: b.id, lat: s.lat, lon: s.lon } }).pos.metres(), b.frame.pos.metres()));
+            const H = hurricaneData(s.cat, { scale: s.scale });
+            return [...n, k, 1, H[2], H[3], i * 7.31, ...H.slice(4)];
+        }));
+        for (const i of on) out.push(...(i.clouds || NO_CLOUDS).storms.map(s => this.siteStorm(i, s)));
         out.slice(0, MAX_STORMS).forEach((s, i) => F.set(s, o + i * 16));
         return Math.min(out.length, MAX_STORMS);
+    }
+
+    // storm s of site i standing on a body (standing), as writeStorms writes it
+    siteStorm({ k, clouds, floor, dir }, s) {
+        const H = s.hurricane, c = s.cell;
+        if (H) return [...dir([H[0], floor, H[1]]), k, 1, H[2], H[3], 3.17, ...H.slice(4)];
+        const n = dir([c.x, floor, c.z]), wd = v3.sub(dir([c.x + clouds.wind[0], floor, c.z + clouds.wind[1]]), n);
+        return [...n, k, 2, c.radius, c.coverage, c.seed, c.top, ...wd, 0, 0, 0, 0];
     }
 
     // update: input, camera, world, rebase; render: the frame.

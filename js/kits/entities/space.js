@@ -55,11 +55,12 @@ function spaceTypes(Base) {
         // top (m) }, none without): their layer, the storms in them are the frame's (AppExtension.writeStorms)
         pack(f32, o, origin, cam) {
             const s = origin.scale, c = origin.toLocal(this.frame.pos), d = this.def, col = d.color || [1, 1, 1];
-            const alt = (v3.len(cam.sub(this.frame.pos)) - this.radius) / s, a = this.atmosphere, k = d.clouds;
+            const alt = (v3.len(cam.sub(this.frame.pos)) - this.radius) / s, a = this.atmosphere;
+            const { coverage = 0.5, base = 1500, top = 6000 } = d.clouds || {};
             f32.set([c[0], c[1], c[2], this.radius / s, alt, this.surface, this.seed, d.halo || 0,
                 col[0], col[1], col[2], d.emissive || 0,
                 a ? a.color[0] : 0, a ? a.color[1] : 0, a ? a.color[2] : 0, a ? a.height / s : 0,
-                k ? k.coverage ?? 0.5 : 0, k?.base ?? 1500, k?.top ?? 6000, k ? 1 : 0], o);
+                coverage, base, top, d.clouds ? 1 : 0], o);
         }
     }
 
