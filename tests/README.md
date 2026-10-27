@@ -93,6 +93,7 @@ differences printed, not failures), `--frames N` / `--view-frames N`, `--port N`
 | `trace` | | what each host answers through its extensions (open with `trace`) |
 | `capture` | `name`, `region` [x, y, w, h] | a screenshot |
 | `sky` | `name`, `region` [x, y, w, h], `as` ("sky"), `min`, `atLeast`, `slack` (0.1) | how much of a capture is sky (blue at least as much as red and green), stored; fails under `min` or another capture's less `slack`: the ground drawn over the eye |
+| `pixels` | `name`, `region` [x, y, w, h], `where` (an expression of r, g, b), `as` ("pixels"), `min`, `max` | the share of a capture's pixels where `where` holds, stored; fails over `max` or under `min`: light that should not be on the walls, labels drawn over them |
 | `sheet` | `names` (every capture), `cols` (4), `width` (240), `file` ("sheet") | a contact sheet of the case's captures, `<work>/<sequence>/<scenario>/sheet.png` |
 | `compare` | `name`, `against` ("baseline" / "sidecar" / "capture"), `file`, `other`, `noise` ("baseline", `{ frac, max }`, 0), `report`, `expectDiffer` | a capture against a picture, with a heat map of any difference |
 | `perf` | `revs` (["HEAD~1", "HEAD"]), `rounds` (2), `frames` (40), `measure` (20), `expect` `{ maxRatio }` | GPU time per frame A/B, alternated (pageless) |
@@ -114,6 +115,7 @@ differences printed, not failures), `--frames N` / `--view-frames N`, `--port N`
 | `camera-start` | the camera starts at `camera.start`'s site view, and that site's camera follows |
 | `walk-handover` | Walk walks from where the camera is (the engine's camera, or the sector's player in its rooms, its screens taking the cursor), never jumping; Fly hands it back to Sol |
 | `loft-walk` | walking shows what flying does (`sky` above the horizon on the deck and the dock, then a `sheet`); fly, walk (falls, no jump), then at the Loft, outdoors and on the cargo ship (sailing): the bunker's player falls to the floor, looks around, walks on there |
+| `bus-ride` | aboard a moving bus on the plains (alone and in the Every kit), by day, dusk and night: the sky through its windscreen (`sky`), no salmon light on its walls (`pixels`: its own tail light, the low sun, only through its glass), no label's yellow over its walls and roof (`pixels`: labels only through its windows, `Interior.hides`); a `sheet` |
 | `sky-sunlight` | the sky's site lights the other sites through `world.sunlight` (sidecar goldens) |
 
 Traps: the imposter's foliage differs between Brave sessions (the baseline gate allows twice the recorded noise);

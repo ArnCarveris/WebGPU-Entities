@@ -52,6 +52,34 @@ fn throughGlass(q: vec3f, d: vec3f) -> f32 {
     return 0.0;                                                          // roof or floor
 }
 
+// the lights on p inside the cabin (q: p in the bus's frame), as lampsAt has them, but one outside the body only through
+// its glass (throughGlass): its own tail lights and headlights stand just outside it, and the body is no shelter box that
+// holds them (lightSeen lets them out)
+fn cabinLamps(p: vec3f, n: vec3f, v: vec3f, q: vec3f) -> Lamps {
+    var o = Lamps(vec3f(0.0), vec3f(0.0));
+    let m = lightCell(p);
+    for (var w = 0u; w < 2u; w++) {
+        var bits = m[w];
+        while (bits != 0u) {
+            let k = i32(w * 32u + countTrailingZeros(bits));
+            bits &= bits - 1u;
+            if ((u32(F.lights[k * 4 + 3].x) & ${LIGHT_CABIN}u) != 0u) { continue; }
+            var l = vec3f(0.0, 1.0, 0.0);
+            let c = lightAt(k, p, &l);
+            let nl = dot(n, l);
+            if (nl <= 0.0 || c.r + c.g + c.b < 1e-5) { continue; }
+            let a = (busU.inv * vec4f(F.lights[k * 4].xyz, 1.0)).xyz;
+            let inside = all(a > vec3f(${-BUS.hl}, ${BUS.skirt}, ${-BUS.hw})) && all(a < vec3f(${BUS.hl}, ${BUS.roof}, ${BUS.hw}));
+            let seen = lightSeen(k, p) * select(throughGlass(q, normalize(a - q)), 1.0, inside);
+            if (seen <= 0.0) { continue; }
+            o.d += c * nl * seen;
+            let h = normalize(l + v);
+            o.s += c * nl * seen * pow(max(dot(n, h), 0.0), 40.0) * 6.0 / PI;
+        }
+    }
+    return o;
+}
+
 // inside the cabin: sky light that comes in through the windows (less low down, under them), the sun where it shines in
 // through glass, and the ceiling lamps, whose light the eye adapts to (so they read the same at any exposure)
 fn shadeCabin(p: vec3f, nIn: vec3f, colIn: vec3f, mat: i32) -> vec3f {
@@ -70,7 +98,7 @@ fn shadeCabin(p: vec3f, nIn: vec3f, colIn: vec3f, mat: i32) -> vec3f {
     let lamp = vec3f(1.0, 0.93, 0.80) * 0.16 / max(F.sunCol.w, 0.2) * (0.35 + 0.65 * sat(-n.y * 0.5 + 0.5));
     let alb = colIn * (0.92 + 0.16 * vnoise2(vec2f(q.x + q.z, q.y) * 9.0));
     // the lights outside, through the windows, and a flashlight aboard (not the cabin's own glow: that is the lamps here)
-    let lp = lampsAt(p + n * 0.02, n, v, 40.0, ${LIGHT_CABIN}u);
+    let lp = cabinLamps(p + n * 0.02, n, v, q);
     var col = alb * (F.sunCol.rgb * max(dot(n, s), 0.0) * sh.x * sun * out.x + sky + lamp + lp.d);
     if (mat == 4) {
         let r = reflect(-v, n);

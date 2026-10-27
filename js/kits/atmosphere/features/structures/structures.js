@@ -172,6 +172,10 @@ class StructuresApp {
         return !!S.interiors.sheltered(p) || S.boxes.shelters(p, dir);
     }
 
+    // from p in an interior (a bus's cabin, a building), whether its walls hide what is d m along dir (Interior.hides:
+    // seen only through its windows and openings)
+    hides(p, dir, d) { return !!this.app.world.structures.interiors.at(p)?.hides(p, dir, d); }
+
     // ---------------------------------------------------------------------------------------------- the lights
     // by night: their lamps that can reach the camera, the lit rooms of the buildings near, the fake street lamps near
     // (real lights now)

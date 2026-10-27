@@ -31,6 +31,15 @@ class Interior {
     contains(p) { return this.area.contains(this.origin.toLocal(p)); }
     shelters(p) { return this.shelter && this.contains(p); }
 
+    // from p (world) inside it, whether its walls hide what is d m along dir (world, unit): past them, unless the ray
+    // leaves through a portal seen through now (VisArea.leave)
+    hides(p, dir, d) {
+        const q = this.origin.toLocal(p), u = this.origin.toLocal(dir, 0);
+        if (!this.area.contains(q)) return false;
+        const { t, out } = this.area.leave(q, u);
+        return d > t && !out;
+    }
+
     // its bounding sphere in the world: [x, y, z, r]
     sphere() { const c = this.origin.toWorld(this.area.centre); c.push(this.area.radius); return c; }
 

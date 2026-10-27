@@ -81,8 +81,9 @@ const atmosphereWorld = type => ({
         return { toward: () => sky.dir, color: sky.sun, zenith: sky.zenith, horizon: sky.horizon, ambient: sky.ambient, exposure: s.exposure };
     },
 
-    // how much its air hides a point beyond it (AppExtension.airHides): its daytime sky what is in space
-    veil(p, dir, d) { return this.app?.airHides(p, dir, d) ?? 0; },
+    // how much it hides a point beyond it: the walls of the interior p is in (AppExtension.hides), its air (airHides: its
+    // daytime sky what is in space)
+    veil(p, dir, d) { const a = this.app; return !a ? 0 : a.first('hides', p, dir, d) ? 1 : a.airHides(p, dir, d); },
 
     // the ground it covers (Site.footprint): its terrain's map, with its colour from afar (groundAlbedo): a planet
     // another site stands on shows it there

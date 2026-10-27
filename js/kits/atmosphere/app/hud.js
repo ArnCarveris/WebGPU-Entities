@@ -73,7 +73,7 @@ class Hud extends kits.world.WorldHud {
         for (const e of [...app.world.entities, ...app.world.buses]) {
             if (!e.label || e.off || (e === app.rideBus && app.inBus)) continue;
             const p = e.anchor, d = p && v3.len(v3.sub(p, app.camera.pos)), at = p && L.place(app.frameWriter.viewProj, app.world.curvature.toRender(p), d);
-            if (!at) continue;
+            if (!at || app.first('hides', app.camera.pos, v3.norm(v3.sub(p, app.camera.pos)), d)) continue;   // (behind the walls of the interior it is in)
             if (e.labelRange && d > e.labelRange) continue;          // (a place name: only near it)
             let s = null;
             for (const x of app.extensions) if ((s = x.label?.(e, d))) break;

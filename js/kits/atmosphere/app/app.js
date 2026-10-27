@@ -10,7 +10,7 @@
 // frame, after the world's update), afterWalk(dt, io, now) (after the walker moved), sounds() (the frame's sound events),
 // key(code) / click(hit) (KeyCommands), beforeJump / afterJump(v, e) (Controls.jump), syncMenus() (AppMenus), page(id)
 // (phonePages), air() / lines() / label(e, d) (Hud), stats(out) and set(key, v) (the host's, through atmosphereWorld); the
-// frame's: draws(fw, view), cabin(), shelter(fw, F, o) (FrameWriter), surround(p), shelters(p, dir) (Surroundings),
+// frame's: draws(fw, view), cabin(), shelter(fw, F, o) (FrameWriter), surround(p), shelters(p, dir) (Surroundings), hides(p, dir, d) (the labels),
 // lights(all, cam), lightMasks(lights, mask), writeFar(F, night, adapt), farLights(out) (LightWriter).
 
 Features.kit('atmosphere', (engine, kit) => {

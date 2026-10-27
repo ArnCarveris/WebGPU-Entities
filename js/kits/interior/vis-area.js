@@ -30,6 +30,22 @@ class VisArea {
         return q[0] > lo[0] && q[0] < hi[0] && q[1] > lo[1] && q[1] < hi[1] && q[2] > lo[2] && q[2] < hi[2];
     }
 
+    // a ray from q inside along unit d: where it leaves the box (t, m) and whether through a portal seen through now
+    // (out). The portals stand upright: h up, w across (n × up). O(portals)
+    leave(q, d) {
+        const { lo, hi } = this;
+        let t = Infinity;
+        for (let k = 0; k < 3; k++) if (d[k]) t = Math.min(t, ((d[k] > 0 ? hi[k] : lo[k]) - q[k]) / d[k]);
+        const e = [q[0] + d[0] * t, q[1] + d[1] * t, q[2] + d[2] * t];
+        const out = this.portals.some(p => {
+            if (p.n[0] * d[0] + p.n[1] * d[1] + p.n[2] * d[2] <= 0) return false;
+            const r = [e[0] - p.c[0], e[1] - p.c[1], e[2] - p.c[2]];
+            return Math.abs(r[0] * p.n[0] + r[1] * p.n[1] + r[2] * p.n[2]) < 0.05 && Math.abs(r[1]) < p.h / 2
+                && Math.abs(r[0] * p.n[2] - r[2] * p.n[0]) < p.w / 2 && p.open();
+        });
+        return { t, out };
+    }
+
     // one aperture per outward direction: the bounds of its portals (centre c, bounding radius r, normal n); `glass` when
     // one of them is a window or an opening (always seen through), else its doors are asked
     static walls(portals) {

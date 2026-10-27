@@ -463,6 +463,29 @@ export class Sky extends Action {
     }
 }
 
+// how much of a capture's `region` ([x, y, w, h]; null: all) is pixels where `where` holds (an expression of r, g, b,
+// 0..255): stored as `as`; fails over `max` or under `min`. A view of walls catches light that should not be on them
+// (2026-10-27: a bus's cabin salmon with the sunset through its walls, the in-world labels' yellow drawn over them)
+export class Pixels extends Action {
+    static params = { name: undefined, region: null, where: undefined, as: 'pixels', min: null, max: null };
+    async run(ctx) {
+        const name = ctx.value(this.p.name), file = ctx.captures[name];
+        if (!file) return ctx.fail(`no capture ${name}`);
+        const img = PNG.decode(fs.readFileSync(file)), [x0, y0, w, h] = this.p.region || [0, 0, img.width, img.height];
+        const test = new Function('r', 'g', 'b', `return ${this.p.where};`);
+        let hit = 0, n = 0;
+        for (let y = y0; y < Math.min(y0 + h, img.height); y++) for (let x = x0; x < Math.min(x0 + w, img.width); x++) {
+            const i = (y * img.width + x) * 4;
+            n++;
+            if (test(img.data[i], img.data[i + 1], img.data[i + 2])) hit++;
+        }
+        const f = ctx.vars[this.p.as] = n ? hit / n : 0, pc = v => (100 * v).toFixed(2);
+        ctx.note(`${name}: ${pc(f)} % ${this.p.as}`);
+        if (this.p.max != null && f > this.p.max) ctx.fail(`${name}: ${pc(f)} % ${this.p.as} (${this.p.where}), over ${pc(this.p.max)} %`);
+        if (this.p.min != null && f < this.p.min) ctx.fail(`${name}: ${pc(f)} % ${this.p.as} (${this.p.where}), under ${pc(this.p.min)} %`);
+    }
+}
+
 // a contact sheet: captures (`names`, default every capture of the case so far) scaled to `width` px, `cols` a row, to
 // <work>/<sequence>/<scenario>/<file>.png: one picture to look at per case
 export class Sheet extends Action {
@@ -607,4 +630,4 @@ export class SingleWorld extends Action {
 
 // ----------------------------------------------------------------------------------------------- the registry
 export const ACTIONS = Object.fromEntries([Open, Settle, Step, Wait, Close, View, Views, Eye, Move, Travel, Input, Key, KeyDown, KeyUp, Click, Drag, Handheld,
-    Eval, Expect, Log, Save, Counts, Submits, Kits, Errors, Bindings, Trace, Capture, Sky, Sheet, Compare, Perf, FormatGolden, SingleWorld].map(A => [A.key, A]));
+    Eval, Expect, Log, Save, Counts, Submits, Kits, Errors, Bindings, Trace, Capture, Sky, Pixels, Sheet, Compare, Perf, FormatGolden, SingleWorld].map(A => [A.key, A]));

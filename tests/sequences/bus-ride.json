@@ -1,0 +1,157 @@
+{
+  "description": "Aboard a moving bus (regression 2026-10-27, Every kit): the cabin is lit by its lamps and by what comes in through its glass, not through its body (its own tail light lit the walls salmon), and the in-world labels show only through its windows, never over its walls and roof (Interior.hides). By day ahead, dusk and night behind (the tail light), on the plains alone and in the Every kit; captured, a sheet.",
+  "scenarios": [
+    "compose-every-kit",
+    "cloud-high-plains"
+  ],
+  "steps": [
+    {
+      "action": "open"
+    },
+    {
+      "action": "step",
+      "frames": 20
+    },
+    {
+      "if": "entities.moves.includes('walk')",
+      "action": "move",
+      "mode": "walk",
+      "frames": 1
+    },
+    {
+      "action": "eval",
+      "frames": 30,
+      "print": true,
+      "expr": "(() => { const s = entities.sites.find(s => s.world.app?.world?.buses?.length), a = s.world.app, b = a.world.buses.find(b => Math.abs(b.v) > 3) || a.world.buses[0], wk = a.walker, B = entities.engine.kits.transit.BUS; if (entities.shared) entities.setWorldView(entities.siteFrame(s).toWorld({ pos: b.toWorld([0, 3, 0]), fwd: [1, 0, 0], up: [0, 1, 0], fov: 1 })); wk.place(a, b.pose.x, b.pose.z); Object.assign(wk, { bus: b, seat: null, feet: [-1.0, B.floor, 0], busYaw: b.yaw }); wk.eye(a); return b.label; })()",
+      "note": "into the plains, by a moving bus"
+    },
+    {
+      "action": "eval",
+      "frames": 30,
+      "expr": "(() => { const s = entities.sites.find(s => s.world.app?.world?.buses?.length), a = s.world.app, b = a.world.buses.find(b => Math.abs(b.v) > 3) || a.world.buses[0], wk = a.walker, B = entities.engine.kits.transit.BUS; if (entities.shared) entities.setWorldView(entities.siteFrame(s).toWorld({ pos: b.toWorld([0, 3, 0]), fwd: [1, 0, 0], up: [0, 1, 0], fov: 1 })); wk.place(a, b.pose.x, b.pose.z); Object.assign(wk, { bus: b, seat: null, feet: [-1.0, B.floor, 0], busYaw: b.yaw }); wk.eye(a); return b.label; })()",
+      "note": "aboard, standing"
+    },
+    {
+      "action": "expect",
+      "expr": "entities.sites.find(s => s.world.app?.world?.buses?.length).world.app.inBus",
+      "equals": true,
+      "label": "aboard a moving bus"
+    },
+    {
+      "action": "eval",
+      "frames": 60,
+      "note": "day (the sun where the eye looks), ahead",
+      "expr": "(() => { const s = entities.sites.find(s => s.world.app?.world?.buses?.length), a = s.world.app; entities.starSite = null; a.camera.yaw = a.walker.bus.yaw + 0; a.camera.pitch = -0.1; const f = a.camera.basis().fwd, h = Math.hypot(f[0], f[2]); s.world.set(\"sunDir\", [f[0] / h * 0.58, 0.6, f[2] / h * 0.58]); return a.inBus; })()"
+    },
+    {
+      "action": "capture",
+      "name": "day-ahead"
+    },
+    {
+      "action": "sky",
+      "name": "day-ahead",
+      "region": [
+        300,
+        40,
+        360,
+        60
+      ],
+      "min": 0.5
+    },
+    {
+      "action": "eval",
+      "frames": 60,
+      "note": "dusk (the sun where the eye looks), behind",
+      "expr": "(() => { const s = entities.sites.find(s => s.world.app?.world?.buses?.length), a = s.world.app; entities.starSite = null; a.camera.yaw = a.walker.bus.yaw + Math.PI; a.camera.pitch = -0.1; const f = a.camera.basis().fwd, h = Math.hypot(f[0], f[2]); s.world.set(\"sunDir\", [f[0] / h * 1.00, 0.04, f[2] / h * 1.00]); return a.inBus; })()"
+    },
+    {
+      "action": "capture",
+      "name": "dusk-behind"
+    },
+    {
+      "action": "pixels",
+      "name": "dusk-behind",
+      "where": "r > g + 40 && r > b + 30",
+      "as": "salmon",
+      "max": 0.02
+    },
+    {
+      "action": "eval",
+      "frames": 60,
+      "note": "dusk (the sun behind the eye, through the windscreen), behind (its light on the seats facing it is real: no salmon check)",
+      "expr": "(() => { const s = entities.sites.find(s => s.world.app?.world?.buses?.length), a = s.world.app; entities.starSite = null; a.camera.yaw = a.walker.bus.yaw + Math.PI; a.camera.pitch = -0.1; const f = a.camera.basis().fwd, h = Math.hypot(f[0], f[2]); s.world.set(\"sunDir\", [-f[0] / h * 0.99, 0.03, -f[2] / h * 0.99]); return a.inBus; })()"
+    },
+    {
+      "action": "capture",
+      "name": "dusk-sun-behind"
+    },
+    {
+      "action": "eval",
+      "frames": 60,
+      "note": "night (the sun where the eye looks), behind: the tail light",
+      "expr": "(() => { const s = entities.sites.find(s => s.world.app?.world?.buses?.length), a = s.world.app; entities.starSite = null; a.camera.yaw = a.walker.bus.yaw + Math.PI; a.camera.pitch = -0.1; const f = a.camera.basis().fwd, h = Math.hypot(f[0], f[2]); s.world.set(\"sunDir\", [f[0] / h * 0.95, -0.3, f[2] / h * 0.95]); return a.inBus; })()"
+    },
+    {
+      "action": "capture",
+      "name": "night-behind"
+    },
+    {
+      "action": "pixels",
+      "name": "night-behind",
+      "where": "r > g + 40 && r > b + 30",
+      "as": "salmon",
+      "max": 0.02
+    },
+    {
+      "action": "pixels",
+      "name": "night-behind",
+      "region": [
+        0,
+        0,
+        960,
+        250
+      ],
+      "where": "r > 200 && g > 150 && g < 225 && b < 110",
+      "as": "labels",
+      "max": 0.0005
+    },
+    {
+      "action": "eval",
+      "frames": 60,
+      "note": "night (the sun where the eye looks), the doors side",
+      "expr": "(() => { const s = entities.sites.find(s => s.world.app?.world?.buses?.length), a = s.world.app; entities.starSite = null; a.camera.yaw = a.walker.bus.yaw + Math.PI / 2; a.camera.pitch = -0.1; const f = a.camera.basis().fwd, h = Math.hypot(f[0], f[2]); s.world.set(\"sunDir\", [f[0] / h * 0.95, -0.3, f[2] / h * 0.95]); return a.inBus; })()"
+    },
+    {
+      "action": "capture",
+      "name": "night-side"
+    },
+    {
+      "action": "pixels",
+      "name": "night-side",
+      "where": "r > g + 40 && r > b + 30",
+      "as": "salmon",
+      "max": 0.02
+    },
+    {
+      "action": "expect",
+      "expr": "entities.sites.find(s => s.world.app?.world?.buses?.length).world.app.inBus",
+      "equals": true,
+      "label": "aboard a moving bus"
+    },
+    {
+      "action": "sheet",
+      "cols": 4
+    },
+    {
+      "action": "counts",
+      "expect": {
+        "World": 1,
+        "Renderer": 1,
+        "App": 1
+      }
+    },
+    {
+      "action": "errors"
+    }
+  ]
+}
