@@ -4,7 +4,8 @@
 Features.world('origin', (engine, kit) => {
 const { kits } = engine;
 const { NoiseWGSL } = kits.noise;
-const { CELL, VERTEX_FLOATS, MAX_COVERS, MeshBuilder } = kit;
+const { StormWGSL } = kits.weather;
+const { CELL, VERTEX_FLOATS, MAX_COVERS, MAX_STORMS, CLOUD_TOP, MeshBuilder } = kit;
 
 function cubeWGSL() {
     // 36 corners of the unit cube, counter-clockwise seen from outside
@@ -27,12 +28,14 @@ struct Frame {
     sky: vec4f,         // atmosphere colour, w = star visibility
     misc: vec4f,        // exposure, sun intensity, covers
     eye: vec4f,         // x: the night-adapted eye's gain on sunlit bodies (1 by day and from space)
-    cover: array<vec4f, ${MAX_COVERS * 2}>,   // the ground of worlds standing on the bodies (AppExtension.writeCovers)
+    clouds: vec4f,      // storms, the air of the worlds on the bodies (their own clouds about the eye), its reach, units per m
+    cover: array<vec4f, ${MAX_COVERS * 3}>,   // the ground and cloud layer of worlds standing on the bodies (AppExtension.writeCovers)
+    storm: array<vec4f, ${MAX_STORMS * 4}>,   // the storms in the bodies' clouds (AppExtension.writeStorms)
 };
 struct Origin { cell: vec4i, local: vec4f, ax: vec4f, ay: vec4f, az: vec4f };
 struct Material { albedo: vec4f, emissive: vec4f, params: vec4f };
 struct Instance { cell: vec4i, local: vec4f, ax: vec4f, ay: vec4f, az: vec4f, tint: vec4f };
-struct Body { center: vec4f, shape: vec4f, color: vec4f, atmo: vec4f };
+struct Body { center: vec4f, shape: vec4f, color: vec4f, atmo: vec4f, clouds: vec4f };
 
 @group(0) @binding(0) var<uniform> frame: Frame;
 @group(0) @binding(1) var<uniform> origin: Origin;
@@ -54,6 +57,10 @@ fn toWorldDir(d: vec3f) -> vec3f { return normalize(origin.ax.xyz * d.x + origin
 ${NoiseWGSL.hash13('hash3')}
 ${NoiseWGSL.value3('noise3', 'hash3')}
 ${NoiseWGSL.fbm('fbm', 'noise3', { dim: 3, octaves: 'param', shift: [1.7, 9.2, 3.1] })}
+${NoiseWGSL.hash12('hash12')}
+${NoiseWGSL.value2('vnoise2', 'hash12')}
+${NoiseWGSL.fbm('fbm2', 'vnoise2', { octaves: 'param', shift: [17.1, -9.3], normalize: true })}
+${StormWGSL}
 fn tone(c: vec3f) -> vec3f { return pow(vec3f(1.0) - exp(-c * frame.misc.x), vec3f(1.0 / 2.2)); }
 
 // ---- sky ---------------------------------------------------------------------------------------
@@ -92,6 +99,9 @@ fn stars(d: vec3f) -> vec3f {
     return vec4f(tone(frame.sky.rgb + stars(w) * frame.sky.w), 1.0);
 }
 
+// a pixel's dither (interleaved gradient noise): where the clouds' march starts within its first step
+fn jitterAt(px: vec2f) -> f32 { return fract(52.9829189 * fract(dot(px, vec2f(0.06711056, 0.00583715)))); }
+
 // ---- celestial bodies: exact ray / sphere per pixel -------------------------------------------------
 // center.xyz origin space, center.w radius; shape = (altitude, surface, seed, halo); color.w emissive;
 // atmo.w atmosphere height. The altitude comes from the CPU in doubles so the surface stays exact at 1 m.
@@ -119,8 +129,8 @@ struct BodyFrag { @location(0) color: vec4f, @builtin(frag_depth) depth: f32 };
 fn coverAt(bi: u32, n: vec3f) -> vec4f {
     var o = vec4f(0.0);
     for (var k = 0u; k < u32(frame.misc.z); k++) {
-        let c = frame.cover[k * 2u];
-        let d = frame.cover[k * 2u + 1u];
+        let c = frame.cover[k * 3u];
+        let d = frame.cover[k * 3u + 1u];
         if (u32(c.w) != bi) { continue; }
         let w = 1.0 - smoothstep(d.w, d.w * 8.0, length(n - c.xyz));
         if (w > o.a) { o = vec4f(d.rgb, w); }
@@ -148,14 +158,7 @@ fn surfaceColor(b: Body, bi: u32, n: vec3f, t: f32) -> vec3f {
         let mottle = 1.0 + (fbm(n * 2.0e3, 2) - 0.5) * 1.6 * near1 + (fbm(n * 2.0e4, 3) - 0.5) * 0.8 * near2;
         let green = smoothstep(0.42, 0.62, fbm(n * 5.0e3 + vec3f(7.0), 2)) * near1 * (1.0 - smoothstep(0.08, 0.25, px * 5.0e3)) * 0.8;
         var c = mix(vec3f(0.015, 0.06, 0.18), mix(landCol, landCol * vec3f(0.72, 1.08, 0.66), green) * mottle, land);
-        c = mix(c, vec3f(0.9), smoothstep(0.82, 0.9, abs(n.y) + 0.1 * h));
-        // its clouds painted on: a stand-in for clouds seen from afar, broken up into fields of them with gaps from some
-        // 3000 km in, and thinning out within some 250 km of the eye (no flat white deck on the ground close by: an
-        // atmosphere standing on it draws its own clouds there)
-        let nearC = 1.0 - smoothstep(b.center.w * 0.1, b.center.w * 0.5, t);
-        let deck = fbm(q * 4.0 + vec3f(3.1), 5) + (fbm(n * 90.0 + vec3f(5.3), 4) - 0.5) * 0.45 * nearC;
-        let cloud = smoothstep(0.5 + 0.06 * nearC, 0.72, deck) * smoothstep(b.center.w * 0.01, b.center.w * 0.04, t);
-        return mix(c, vec3f(0.95), cloud * 0.85);
+        return mix(c, vec3f(0.9), smoothstep(0.82, 0.9, abs(n.y) + 0.1 * h));
     }
     if (kind == 3u || kind == 4u) {                                 // gas / ice giant
         let w = fbm(q * vec3f(2.0, 10.0, 2.0), 5);
@@ -171,6 +174,169 @@ fn surfaceColor(b: Body, bi: u32, n: vec3f, t: f32) -> vec3f {
     var c = base * (0.55 + 0.7 * h + d);
     if (kind == 5u) { c = mix(c, base * vec3f(0.45, 0.35, 0.3), smoothstep(0.55, 0.65, fbm(q * 5.0, 4))); }
     return mix(c, cov.rgb, cov.a);
+}
+
+// ---- a body's clouds: a shell of its cloud source's layer and storms, marched ---------------------------------------
+// The clouds over body b (bi) at world direction n, on its ground (m): the coverage and top of its layer (b.clouds:
+// coverage, base, top; about a world standing on it, that world's layer, its covers'), with the storms in it
+// (frame.storm: the weather kit's shapes, which the atmosphere's weather map draws too), and an anvil sheet's cover and
+// top (a cell's anvil, a hurricane's dense overcast). fine: how much of the fields finer than the continents shows
+// (0 .. 1, gone before they are finer than a pixel)
+struct CloudField { cov: f32, top: f32, anv: f32, anvTop: f32, base: f32 };
+
+fn cloudField(b: Body, bi: u32, n: vec3f, fine: f32) -> CloudField {
+    var layer = b.clouds.xyz;
+    for (var k = 0u; k < u32(frame.misc.z); k++) {
+        let c = frame.cover[k * 3u];
+        let e = frame.cover[k * 3u + 2u];
+        if (u32(c.w) != bi || e.w <= 0.0) { continue; }
+        let r = frame.cover[k * 3u + 1u].w;
+        layer = mix(layer, e.xyz, 1.0 - smoothstep(r, r * 8.0, length(n - c.xyz)));
+    }
+    let Rm = b.center.w / frame.clouds.w;
+    // the layer: fields of cloud with gaps between them, broken up finer from some 3000 km in, finer still close by
+    var deck = fbm((n + vec3f(b.shape.z)) * 4.0 + vec3f(3.1), 5) + (fbm(n * 90.0 + vec3f(5.3), 3) - 0.5) * 0.45;
+    if (fine > 0.0) { deck += (fbm(n * 900.0, 2) - 0.5) * 0.35 * fine; }
+    let lo = 0.62 - 0.25 * layer.x;
+    var f: CloudField;
+    f.base = layer.y;
+    f.cov = smoothstep(lo, lo + 0.2, deck);
+    f.top = mix(layer.y + 500.0, layer.z, smoothstep(lo, lo + 0.35, deck));
+    f.anv = 0.0;
+    f.anvTop = 0.0;
+    for (var k = 0u; k < u32(frame.clouds.x); k++) {
+        let s0 = frame.storm[k * 4u];
+        let s1 = frame.storm[k * 4u + 1u];
+        let s2 = frame.storm[k * 4u + 2u];
+        let s3 = frame.storm[k * 4u + 3u];
+        let hurricane = s1.x < 1.5;
+        // (beyond its outer bands, or its anvil's reach: nothing of it)
+        if (u32(s0.w) != bi || dot(n, s0.xyz) < cos(select(s1.y * 3.4, s2.w, hurricane) / Rm)) { continue; }
+        // its ground plane about it (m)
+        let e1 = normalize(cross(select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(s0.y) > 0.99), s0.xyz));
+        let e2 = cross(s0.xyz, e1);
+        let rel = vec2f(dot(n, e1), dot(n, e2)) * Rm;
+        let xz = rel + vec2f(s1.w * 1000.0);
+        if (hurricane) {
+            let hs = hurricaneShape(xz, rel, vec4f(0.0, 0.0, s1.y, s1.z), s2, s3);
+            f.cov = max(f.cov, max(hs.wall, hs.band * 0.9) * s1.z);
+            f.top = max(f.top, max(mix(layer.z, s2.x, hs.wall * s1.z), mix(layer.z, s3.y, hs.band * s1.z * (0.7 + 0.6 * hs.bn))));
+            f.anv = max(f.anv, hs.cdo * s1.z * 0.95);
+            f.anvTop = max(f.anvTop, s2.x);
+            let eye = hs.eye * s1.z;
+            f.cov = mix(f.cov, s3.z * smoothstep(0.45, 0.75, deck + 0.2), eye);
+            f.top = mix(f.top, layer.y + 900.0, eye);
+            f.anv *= 1.0 - eye;
+        } else {
+            let wv = vec2f(dot(s2.yzw, e1), dot(s2.yzw, e2));
+            let an = cellAnvil(xz, rel, length(rel), s1.y, s2.x, s1.z, s1.w, select(vec2f(1.0, 0.0), normalize(wv), length(wv) > 1e-12), layer.yz);
+            if (an.x > 0.005) { f.anv = max(f.anv, an.x); f.anvTop = max(f.anvTop, an.y); }
+            let gs = cellTower(xz, rel, s1.y, s1.w, vec2f(0.0)).x;
+            f.cov = max(f.cov, gs * s1.z * 0.9);
+            f.top = max(f.top, mix(layer.z, s2.x, pow(gs, 0.55) * clamp(s1.z * 3.0, 0.0, 1.0)));       // domed towers
+        }
+    }
+    return f;
+}
+
+// how dense the clouds of field f are h m up (0 .. 1): a column filled up to its top where it is covered all over,
+// domed at its edges (less of it the higher), from its base; an anvil sheet some 1.5 km thick under its top; detail:
+// the billows' noise (0 .. 1)
+fn cloudDensity(f: CloudField, h: f32, detail: f32) -> f32 {
+    let hf = (h - f.base) / max(f.top - f.base, 100.0);
+    let low = clamp((f.cov * (0.75 + 0.5 * detail) - 0.15 - 0.85 * hf) * 4.0, 0.0, 1.0) * smoothstep(f.base - 100.0, f.base + 300.0, h)
+        * (1.0 - smoothstep(1.0, 1.15, hf));
+    let sheet = clamp(f.anv * 2.0 - 0.2, 0.0, 1.0) * smoothstep(f.anvTop - 2000.0, f.anvTop - 1200.0, h) * (1.0 - smoothstep(f.anvTop - 300.0, f.anvTop, h));
+    return max(low, sheet * (0.8 + 0.4 * detail));
+}
+
+fn mixField(a: CloudField, b: CloudField, x: f32) -> CloudField {
+    var f: CloudField;
+    f.cov = mix(a.cov, b.cov, x);
+    f.top = mix(a.top, b.top, x);
+    f.anv = mix(a.anv, b.anv, x);
+    f.anvTop = mix(a.anvTop, b.anvTop, x);
+    f.base = mix(a.base, b.base, x);
+    return f;
+}
+
+// the clouds of body b (bi) on the ray from oc (the eye, from its centre) along dir, between ta and tb (origin units),
+// lit by the sun along L: their light, what they let through, and where they are, to the eye, as a surface (where
+// half the light is gone; tb if it never is: what lies behind them drawn over them shows there). The field at three
+// points along the way (the costly part: it changes little across the shell), the march between them mixing theirs,
+// only where they reach up and down to; its noise on top. Within the air of a world standing on it (frame.clouds.y),
+// out to that world's own clouds' reach, it gives way to those
+struct Clouds { light: vec3f, through: f32, front: f32 };
+
+fn cloudMarch(b: Body, bi: u32, oc: vec3f, dir: vec3f, ta: f32, tb: f32, L: vec3f, jitter: f32) -> Clouds {
+    let upm = frame.clouds.w;
+    let R = b.center.w;
+    var o = Clouds(vec3f(0.0), 1.0, tb);
+    // (wholly within the air of a world standing on it: from where that world's own give way to them)
+    let tn = max(ta, select(0.0, frame.clouds.z * 0.6, frame.clouds.y >= 0.999));
+    if (tn >= tb) { return o; }
+    let fine = 1.0 - smoothstep(0.1, 0.3, tn * frame.sun.w / R * 900.0);
+    let f0 = cloudField(b, bi, toWorldDir(oc + dir * tn), fine);
+    let f1 = cloudField(b, bi, toWorldDir(oc + dir * (tn + tb) * 0.5), fine);
+    let f2 = cloudField(b, bi, toWorldDir(oc + dir * tb), fine);
+    if (max(max(f0.cov, f1.cov), f2.cov) + max(max(f0.anv, f1.anv), f2.anv) < 0.02) { return o; }
+    // between the highest of their tops and the lowest of their bases
+    let hi = shellSpan(b, oc, dir, max(max(max(f0.top, f1.top), f2.top), max(max(f0.anvTop, f1.anvTop), f2.anvTop)) + 300.0);
+    let lo = shellSpan(b, oc, dir, min(min(f0.base, f1.base), f2.base) - 150.0);
+    let t0 = max(tn, hi.x);
+    let t1 = min(min(tb, hi.y), select(tb, lo.x, lo.y > lo.x && lo.x > 0.0));
+    if (t1 <= t0) { return o; }
+    // what stands between the sun and the middle of the way: the field where the sun's ray from there reaches the
+    // height of the storms' anvils (their sheets, and the towers rising to them, shade what is below them)
+    let pm = oc + dir * (t0 + t1) * 0.5;
+    let hm = (length(pm) - R) / upm;
+    let fs = cloudField(b, bi, toWorldDir(normalize(pm + L * max(10000.0 - hm, 0.0) * upm / max(dot(normalize(pm), L), 0.08))), 0.0);
+    // the billows: some 4 km across, gone before they are finer than a pixel
+    let billow = R / upm / 4000.0;
+    let fineD = 1.0 - smoothstep(0.15, 0.4, t0 * frame.sun.w * billow / R);
+    let N = 14;
+    let ds = (t1 - t0) / f32(N) / upm;          // m
+    for (var i = 0; i < N; i++) {
+        let t = mix(t0, t1, (f32(i) + jitter) / f32(N));
+        let x = (t - tn) / (tb - tn);
+        let p = oc + dir * t;
+        let r = length(p);
+        let nl = p / r;
+        let h = (r - R) / upm;
+        var f = mixField(f0, f1, x * 2.0);
+        if (x >= 0.5) { f = mixField(f1, f2, x * 2.0 - 1.0); }
+        let detail = mix(0.5, noise3(toWorldDir(nl) * billow), fineD);
+        let near = 1.0 - frame.clouds.y * (1.0 - smoothstep(frame.clouds.z * 0.6, frame.clouds.z, t));
+        let d = cloudDensity(f, h, detail) * near;
+        if (d <= 0.002) { continue; }
+        let a = 1.0 - exp(-0.004 * d * ds);
+        // the sun through the column above it to its top (thinned: most of what it scatters goes on down), half of it
+        // always getting through (scattered on), and the sky's
+        let mu = dot(nl, L);
+        let od = 0.0006 * max(max(f.top, f.anvTop) - h, 0.0) * max(f.cov, f.anv) / max(mu, 0.15);
+        let shade = max(clamp(fs.anv * 1.5, 0.0, 1.0) * (1.0 - smoothstep(fs.anvTop - 2500.0, fs.anvTop - 1500.0, h)),
+            fs.cov * smoothstep(9000.0, 10500.0, fs.top) * (1.0 - smoothstep(8000.0, 9500.0, h)));
+        let light = 0.95 * frame.misc.y * (max(mu, 0.0) * (0.5 + 0.5 * exp(-od)) * (1.0 - 0.75 * shade) + 0.004) * frame.eye.x;
+        o.light += o.through * a * vec3f(light);
+        if (o.through >= 0.5 && o.through * (1.0 - a) < 0.5) { o.front = t; }
+        o.through *= 1.0 - a;
+        if (o.through < 0.01) { break; }
+    }
+    return o;
+}
+
+// where the ray from oc along dir (unit) passes through the sphere hm m over body b's ground: vec2f(in (0 from
+// within), out), out < in for none (alt: the eye's altitude, exact, as in fsBody)
+fn shellSpan(b: Body, oc: vec3f, dir: vec3f, hm: f32) -> vec2f {
+    let R = b.center.w;
+    let top = hm * frame.clouds.w;
+    let alt = b.shape.x;
+    let bb = dot(oc, dir);
+    let c = (alt - top) * (alt + top + 2.0 * R);    // |oc|^2 - (R + top)^2 without cancellation
+    let disc = bb * bb - c;
+    if (disc < 0.0 || (c > 0.0 && bb >= 0.0)) { return vec2f(0.0, -1.0); }
+    let s = sqrt(disc);
+    return vec2f(select(0.0, c / (-bb + s), c > 0.0), -bb + s);
 }
 
 @fragment fn fsBody(v: BodyOut) -> BodyFrag {
@@ -189,6 +355,7 @@ fn surfaceColor(b: Body, bi: u32, n: vec3f, t: f32) -> vec3f {
         let t = c / (-bb + sqrt(disc));             // stable root: exact close to the surface
         let n = normalize(dir * t + oc);
         let p = frame.cam.xyz + dir * t;
+        var depthT = t;
         var col: vec3f;
         if (u32(b.shape.y) == 0u) {
             let g = fbm(toWorldDir(n) * 9.0 + vec3f(frame.cam.w * 0.01), 5);
@@ -199,6 +366,21 @@ fn surfaceColor(b: Body, bi: u32, n: vec3f, t: f32) -> vec3f {
             let ndl = dot(n, L);
             col = alb * (max(ndl, 0.0) * frame.misc.y + 0.004) * frame.eye.x;
             if (u32(b.shape.y) == 2u) { col += vec3f(0.6) * pow(max(dot(n, normalize(L - dir)), 0.0), 60.0) * max(ndl, 0.0) * 0.3; }
+            if (b.clouds.w > 0.0) {
+                // its clouds between the eye and the ground; where the ground shows through them, their shadow on it (the
+                // field where the sun's ray meets their layer's middle, and where it meets the storms' anvils)
+                let span = shellSpan(b, oc, dir, ${CLOUD_TOP}.0);
+                let cl = cloudMarch(b, v.bi, oc, dir, span.x, min(span.y, t), L, jitterAt(v.clip.xy));
+                if (cl.through > 0.05) {
+                    let up = frame.clouds.w / max(ndl, 0.2);
+                    let fl = cloudField(b, v.bi, toWorldDir(normalize(n * R + L * (b.clouds.y + b.clouds.z) * 0.5 * up)), 0.0);
+                    let fa = cloudField(b, v.bi, toWorldDir(normalize(n * R + L * 10000.0 * up)), 0.0);
+                    col *= mix(1.0, 0.35, clamp(max(max(fl.cov, fl.anv), fa.anv) * 1.3, 0.0, 1.0));
+                }
+                col = col * cl.through + cl.light;
+                // (as deep as they are where they hide the ground: what other worlds draw of it stays under them)
+                depthT = min(depthT, cl.front);
+            }
             if (b.atmo.w > 0.0) {
                 // the air between the eye and the ground: all of it from space; from within the air, only as much as the
                 // way through it holds (t against its height), so the ground close by keeps its colour
@@ -208,8 +390,21 @@ fn surfaceColor(b: Body, bi: u32, n: vec3f, t: f32) -> vec3f {
             }
         }
         o.color = vec4f(tone(col), 1.0);
-        o.depth = clamp(near / (t * fd), 0.0, 1.0);
+        o.depth = clamp(near / (depthT * fd), 0.0, 1.0);
         return o;
+    }
+    // missed: the clouds over its limb, blended over what lies behind (their light, as much as they hide)
+    if (b.clouds.w > 0.0) {
+        let span = shellSpan(b, oc, dir, ${CLOUD_TOP}.0);
+        if (span.y > span.x) {
+            let L = normalize(frame.sun.xyz - frame.cam.xyz - dir * span.x);
+            let cl = cloudMarch(b, v.bi, oc, dir, span.x, span.y, L, jitterAt(v.clip.xy));
+            if (cl.through < 0.996) {
+                o.color = vec4f(tone(cl.light / (1.0 - cl.through)), 1.0 - cl.through);
+                o.depth = clamp(near / (cl.front * fd), 0.0, 1.0);
+                return o;
+            }
+        }
     }
     // missed: a body smaller than a pixel still reads as a dot, stars get a glare
     if (bb >= 0.0) { discard; }

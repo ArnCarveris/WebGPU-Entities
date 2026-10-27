@@ -388,6 +388,7 @@
     "noise",
     "terrain",
     "view",
+    "weather",
     "world"
    ],
    "noise": 0.04563715277777778,
@@ -530,6 +531,7 @@
     "noise",
     "paint",
     "view",
+    "weather",
     "world"
    ],
    "noise": 0.00003125,
@@ -1494,6 +1496,7 @@
     "mesh",
     "noise",
     "view",
+    "weather",
     "world"
    ],
    "noise": 0,

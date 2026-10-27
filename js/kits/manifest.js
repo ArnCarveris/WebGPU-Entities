@@ -107,6 +107,7 @@ const Kits = (() => {
                 extends: { world: 'WorldExtension', renderer: 'RendererExtension', app: 'AppExtension' },
                 title: 'Entity Origin',
                 about: 'a real-scale solar system under a floating origin',
+                uses: ['weather'],          // its bodies' clouds: the storms' shapes and the hurricane categories
                 parts: [
                     'core/config', 'core/math', 'core/world-pos', 'core/origin', 'render/mesh', 'render/materials',
                     'render/instances', 'render/shaders', 'render/renderer', 'world/entities', 'world/world', 'game/floating',

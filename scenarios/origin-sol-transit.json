@@ -79,8 +79,13 @@
         {"type":"body","id":"sun","label":"Sun","pos":[0,0,0],"radius":695700000,"surface":"star","color":[1,0.78,0.5],"emissive":14,"halo":6,"star":true},
         {
             "type": "body", "id": "earth", "label": "Earth", "pos": [149600000000,0,0], "radius": 6371000, "surface": "earth", "color": [0.3,0.5,0.9],
-            "atmosphere": {"color":[0.32,0.55,1],"height":100000}
+            "atmosphere": {"color":[0.32,0.55,1],"height":100000},
+            "$comment": "its clouds: a layer over all of it, a Cat 5 hurricane off Baja California at its true size (the weather map's are scaled down)",
+            "clouds": {"coverage":0.5,"base":1500,"top":7000,"storms":[{"type":"hurricane","cat":5,"lat":25,"lon":-122,"scale":4}]}
         },
+        {"type":"prop","id":"hurricane-eye","model":"marker","surface":{"parent":"earth","lat":25,"lon":-122}},
+        {"type":"bookmark","name":"Hurricane from orbit","at":{"surface":{"parent":"earth","lat":23,"lon":-122,"alt":400000}},"look":"hurricane-eye"},
+        {"type":"bookmark","name":"Hurricane from 2000 km","at":{"surface":{"parent":"earth","lat":15,"lon":-122,"alt":2000000}},"look":"hurricane-eye"},
         {
             "type": "body", "id": "moon", "label": "Moon", "orbit": {"parent":"earth","radius":384400000,"angle":90}, "radius": 1737400, "surface": "rocky",
             "color": [0.44,0.44,0.42]

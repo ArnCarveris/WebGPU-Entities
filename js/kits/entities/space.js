@@ -51,13 +51,15 @@ function spaceTypes(Base) {
             if (d.star && !this.world.sun) this.world.sun = this;
         }
 
-        // per frame: origin-relative centre and camera altitude, both computed in doubles
+        // per frame: origin-relative centre and camera altitude, both computed in doubles; its clouds ({ coverage, base,
+        // top (m) }, none without): their layer, the storms in them are the frame's (AppExtension.writeStorms)
         pack(f32, o, origin, cam) {
             const s = origin.scale, c = origin.toLocal(this.frame.pos), d = this.def, col = d.color || [1, 1, 1];
-            const alt = (v3.len(cam.sub(this.frame.pos)) - this.radius) / s, a = this.atmosphere;
+            const alt = (v3.len(cam.sub(this.frame.pos)) - this.radius) / s, a = this.atmosphere, k = d.clouds;
             f32.set([c[0], c[1], c[2], this.radius / s, alt, this.surface, this.seed, d.halo || 0,
                 col[0], col[1], col[2], d.emissive || 0,
-                a ? a.color[0] : 0, a ? a.color[1] : 0, a ? a.color[2] : 0, a ? a.height / s : 0], o);
+                a ? a.color[0] : 0, a ? a.color[1] : 0, a ? a.color[2] : 0, a ? a.height / s : 0,
+                k ? k.coverage ?? 0.5 : 0, k?.base ?? 1500, k?.top ?? 6000, k ? 1 : 0], o);
         }
     }
 

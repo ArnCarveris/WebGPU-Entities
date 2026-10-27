@@ -1,0 +1,74 @@
+{
+  "description": "Clouds from space: Earth's clouds are its cloud source's (its layer and the storms in it), so the hurricane off Baja shows its eye (the sea) in its eyewall and dense overcast (white) from 400 km.",
+  "scenarios": [
+    "compose-every-kit",
+    "origin-sol-transit"
+  ],
+  "steps": [
+    {
+      "action": "open"
+    },
+    {
+      "action": "step",
+      "frames": 40
+    },
+    {
+      "action": "eval",
+      "expr": "entities.viewList.find(v => v.name === 'Hurricane from orbit')?.key",
+      "as": "hurricane"
+    },
+    {
+      "action": "view",
+      "key": {
+        "$": "hurricane"
+      },
+      "frames": 30
+    },
+    {
+      "action": "capture",
+      "name": "hurricane-400km"
+    },
+    {
+      "action": "pixels",
+      "name": "hurricane-400km",
+      "region": [
+        470,
+        290,
+        20,
+        20
+      ],
+      "where": "r > 160 && g > 160 && b > 160",
+      "as": "eye",
+      "max": 0.25
+    },
+    {
+      "action": "pixels",
+      "name": "hurricane-400km",
+      "region": [
+        540,
+        290,
+        40,
+        20
+      ],
+      "where": "r > 160 && g > 160 && b > 160",
+      "as": "east",
+      "min": 0.6
+    },
+    {
+      "action": "pixels",
+      "name": "hurricane-400km",
+      "region": [
+        380,
+        290,
+        40,
+        20
+      ],
+      "where": "r > 160 && g > 160 && b > 160",
+      "as": "west",
+      "min": 0.6
+    },
+    {
+      "action": "errors"
+    }
+  ]
+}
