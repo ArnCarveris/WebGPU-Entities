@@ -486,6 +486,33 @@ export class Pixels extends Action {
     }
 }
 
+// how much texture a capture's `region` ([x, y, w, h]; null: all) has: the mean luminance step (0..255) from each
+// pixel to its right and lower neighbours, of the pixels where `where` holds (all if none): stored as `as`; fails under
+// `min` or over `max`. Relief catches it where a share of bright pixels cannot (2026-10-28: a supercell's anvil from
+// orbit a smooth flat sheet, as bright as a sunlit one with a dome, ripples and frayed edges)
+export class Texture extends Action {
+    static params = { name: undefined, region: null, where: null, as: 'texture', min: null, max: null };
+    async run(ctx) {
+        const name = ctx.value(this.p.name), file = ctx.captures[name];
+        if (!file) return ctx.fail(`no capture ${name}`);
+        const img = PNG.decode(fs.readFileSync(file)), [x0, y0, w, h] = this.p.region || [0, 0, img.width, img.height];
+        const test = this.p.where ? new Function('r', 'g', 'b', `return ${this.p.where};`) : () => true;
+        const lum = (x, y) => { const i = (y * img.width + x) * 4; return 0.2126 * img.data[i] + 0.7152 * img.data[i + 1] + 0.0722 * img.data[i + 2]; };
+        let sum = 0, n = 0;
+        for (let y = y0; y < Math.min(y0 + h, img.height) - 1; y++) for (let x = x0; x < Math.min(x0 + w, img.width) - 1; x++) {
+            const i = (y * img.width + x) * 4;
+            if (!test(img.data[i], img.data[i + 1], img.data[i + 2])) continue;
+            const l = lum(x, y);
+            sum += (Math.abs(lum(x + 1, y) - l) + Math.abs(lum(x, y + 1) - l)) / 2;
+            n++;
+        }
+        const t = ctx.vars[this.p.as] = n ? sum / n : 0;
+        ctx.note(`${name}: ${this.p.as} ${t.toFixed(2)} (${n} px)`);
+        if (this.p.max != null && t > this.p.max) ctx.fail(`${name}: ${this.p.as} ${t.toFixed(2)}, over ${this.p.max}`);
+        if (this.p.min != null && t < this.p.min) ctx.fail(`${name}: ${this.p.as} ${t.toFixed(2)}, under ${this.p.min}`);
+    }
+}
+
 // a contact sheet: captures (`names`, default every capture of the case so far) scaled to `width` px, `cols` a row, to
 // <work>/<sequence>/<scenario>/<file>.png: one picture to look at per case
 export class Sheet extends Action {
@@ -630,4 +657,4 @@ export class SingleWorld extends Action {
 
 // ----------------------------------------------------------------------------------------------- the registry
 export const ACTIONS = Object.fromEntries([Open, Settle, Step, Wait, Close, View, Views, Eye, Move, Travel, Input, Key, KeyDown, KeyUp, Click, Drag, Handheld,
-    Eval, Expect, Log, Save, Counts, Submits, Kits, Errors, Bindings, Trace, Capture, Sky, Pixels, Sheet, Compare, Perf, FormatGolden, SingleWorld].map(A => [A.key, A]));
+    Eval, Expect, Log, Save, Counts, Submits, Kits, Errors, Bindings, Trace, Capture, Sky, Pixels, Texture, Sheet, Compare, Perf, FormatGolden, SingleWorld].map(A => [A.key, A]));

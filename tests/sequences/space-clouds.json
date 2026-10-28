@@ -162,6 +162,104 @@
       "note": "the patchy cumulus away from it"
     },
     {
+      "only": [
+        "compose-every-kit"
+      ],
+      "action": "texture",
+      "name": "supercell-400km",
+      "region": [
+        450,
+        180,
+        60,
+        160
+      ],
+      "as": "anvilTexture",
+      "min": 9,
+      "note": "its top no flat sheet: the overshooting dome lit on its sunward side and dark on the other, bubbly, the gravity waves rippling out over the anvil from it"
+    },
+    {
+      "only": [
+        "compose-every-kit"
+      ],
+      "action": "eval",
+      "expr": "entities.viewList.find(v => v.name === 'Supercell from 2000 km')?.key",
+      "as": "supercell-2000km"
+    },
+    {
+      "only": [
+        "compose-every-kit"
+      ],
+      "action": "view",
+      "key": {
+        "$": "supercell-2000km"
+      },
+      "frames": 30
+    },
+    {
+      "only": [
+        "compose-every-kit"
+      ],
+      "action": "capture",
+      "name": "supercell-2000km"
+    },
+    {
+      "only": [
+        "compose-every-kit"
+      ],
+      "action": "texture",
+      "name": "supercell-2000km",
+      "as": "texture2000",
+      "region": [
+        462,
+        262,
+        26,
+        42
+      ],
+      "min": 9,
+      "note": "from 2000 km still the dome lit and shadowed, and the frayed plume"
+    },
+    {
+      "only": [
+        "compose-every-kit"
+      ],
+      "action": "eval",
+      "expr": "entities.viewList.find(v => v.name === 'Supercell, oblique')?.key",
+      "as": "supercell-oblique"
+    },
+    {
+      "only": [
+        "compose-every-kit"
+      ],
+      "action": "view",
+      "key": {
+        "$": "supercell-oblique"
+      },
+      "frames": 30
+    },
+    {
+      "only": [
+        "compose-every-kit"
+      ],
+      "action": "capture",
+      "name": "supercell-oblique"
+    },
+    {
+      "only": [
+        "compose-every-kit"
+      ],
+      "action": "texture",
+      "name": "supercell-oblique",
+      "as": "textureOblique",
+      "region": [
+        380,
+        215,
+        280,
+        110
+      ],
+      "min": 8,
+      "note": "seen slanting from 110 km: the dome standing out of the sheet, the ripples across it, the edge feathered downwind"
+    },
+    {
       "action": "errors"
     }
   ]
