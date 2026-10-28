@@ -181,8 +181,28 @@ fn surfaceColor(b: Body, bi: u32, n: vec3f, t: f32) -> vec3f {
 // coverage, base, top; about a world standing on it, that world's layer, its covers'), with the storms in it
 // (frame.storm: the weather kit's shapes, which the atmosphere's weather map draws too), and an anvil sheet's cover and
 // top (a cell's anvil, a hurricane's dense overcast). fine: how much of the fields finer than the continents shows
-// (0 .. 1, gone before they are finer than a pixel)
-struct CloudField { cov: f32, top: f32, anv: f32, anvTop: f32, base: f32 };
+// (0 .. 1, gone before they are finer than a pixel); slope: how its top tilts (world, m/m: the ripples on a storm's
+// anvil, for the sun to light one side of them and not the other); dome: the storm (its index + 1, 0 none) whose
+// overshooting dome may stand here, and lift: how far it stands out of the anvil sheet (m: the sheet's own top, anvTop,
+// what the anvils' shadows fall from). The dome is small beside the field's spacing along a slanting ray, so the
+// march draws it, step by step (domeAt)
+struct CloudField { cov: f32, top: f32, anv: f32, anvTop: f32, base: f32, lift: f32, slope: vec3f, dome: f32 };
+
+// a storm's ground plane about c (its centre, world): its axes (world, unit)
+fn stormAxes(c: vec3f) -> mat2x3f {
+    let e1 = normalize(cross(select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(c.y) > 0.99), c));
+    return mat2x3f(e1, cross(c, e1));
+}
+
+// storm k's overshooting dome at world direction n (Rm: the body's radius, m): vec4f(its top (m; 0 off it), its slope
+// (world))
+fn domeAt(k: u32, n: vec3f, Rm: f32) -> vec4f {
+    let s0 = frame.storm[k * 4u];
+    let s1 = frame.storm[k * 4u + 1u];
+    let e = stormAxes(s0.xyz);
+    let ov = overshootRelief(vec2f(dot(n, e[0]), dot(n, e[1])) * Rm, s1.y, frame.storm[k * 4u + 3u].x, s1.w);
+    return vec4f(select(0.0, frame.storm[k * 4u + 2u].x + ov.x, ov.x > 0.0), e * ov.yz);
+}
 
 fn cloudField(b: Body, bi: u32, n: vec3f, fine: f32) -> CloudField {
     var layer = b.clouds.xyz;
@@ -204,6 +224,9 @@ fn cloudField(b: Body, bi: u32, n: vec3f, fine: f32) -> CloudField {
     f.top = mix(layer.y + 500.0, layer.z, smoothstep(lo, lo + 0.35, deck));
     f.anv = 0.0;
     f.anvTop = 0.0;
+    f.lift = 0.0;
+    f.slope = vec3f(0.0);
+    f.dome = 0.0;
     for (var k = 0u; k < u32(frame.clouds.x); k++) {
         let s0 = frame.storm[k * 4u];
         let s1 = frame.storm[k * 4u + 1u];
@@ -213,8 +236,9 @@ fn cloudField(b: Body, bi: u32, n: vec3f, fine: f32) -> CloudField {
         // (beyond its outer bands, or its anvil's reach: nothing of it)
         if (u32(s0.w) != bi || dot(n, s0.xyz) < cos(select(s1.y * 3.4 * s3.x, s2.w, hurricane) / Rm)) { continue; }
         // its ground plane about it (m)
-        let e1 = normalize(cross(select(vec3f(0.0, 1.0, 0.0), vec3f(1.0, 0.0, 0.0), abs(s0.y) > 0.99), s0.xyz));
-        let e2 = cross(s0.xyz, e1);
+        let e = stormAxes(s0.xyz);
+        let e1 = e[0];
+        let e2 = e[1];
         let rel = vec2f(dot(n, e1), dot(n, e2)) * Rm;
         let xz = rel + vec2f(s1.w * 1000.0);
         if (hurricane) {
@@ -231,13 +255,20 @@ fn cloudField(b: Body, bi: u32, n: vec3f, fine: f32) -> CloudField {
             let wv = vec2f(dot(s2.yzw, e1), dot(s2.yzw, e2));
             let wd = select(vec2f(1.0, 0.0), normalize(wv), length(wv) > 1e-12);
             let an = cellAnvil(xz, rel, length(rel), s1.y, s2.x, s1.z, s1.w, wd, layer.yz, s3.x);
-            if (an.x > 0.005) { f.anv = max(f.anv, an.x); f.anvTop = max(f.anvTop, an.y); }
+            if (an.x > 0.005) {
+                let ar = anvilRelief(rel, s1.y, s3.x, wd);
+                f.anv = max(f.anv, an.x);
+                f.anvTop = max(f.anvTop, an.y + ar.x);
+                f.slope += (ar.y * e1 + ar.z * e2) * smoothstep(0.1, 0.4, an.x);
+            }
             let gs = cellTower(xz, rel, s1.y, s1.w, vec2f(0.0)).x;
             // domed towers, a supercell's overshooting top over them; under a tornado's, the clear slot round it
             f.cov = max(f.cov, gs * s1.z * 0.9) * (1.0 - s3.y * rearSlot(rel, s1.y, wd));
             f.top = max(f.top, mix(layer.z, s2.x, pow(gs, 0.55) * clamp(s1.z * 3.0, 0.0, 1.0)));
+            // (its dome: here, its top for the shadow it casts; the march draws it)
             let ov = cellOvershoot(rel, s1.y, s3.x);
             if (ov > 0.0) { f.top = max(f.top, s2.x + ov); }
+            if (s3.x > 1.0) { f.dome = f32(k + 1u); }
         }
     }
     return f;
@@ -250,7 +281,8 @@ fn cloudDensity(f: CloudField, h: f32, detail: f32) -> f32 {
     let hf = (h - f.base) / max(f.top - f.base, 100.0);
     let low = clamp((f.cov * (0.75 + 0.5 * detail) - 0.15 - 0.85 * hf) * 4.0, 0.0, 1.0) * smoothstep(f.base - 100.0, f.base + 300.0, h)
         * (1.0 - smoothstep(1.0, 1.15, hf));
-    let sheet = clamp(f.anv * 2.0 - 0.2, 0.0, 1.0) * smoothstep(f.anvTop - 2000.0, f.anvTop - 1200.0, h) * (1.0 - smoothstep(f.anvTop - 300.0, f.anvTop, h));
+    let at = f.anvTop + f.lift;
+    let sheet = clamp(f.anv * 2.0 - 0.2, 0.0, 1.0) * smoothstep(f.anvTop - 2000.0, f.anvTop - 1200.0, h) * (1.0 - smoothstep(at - 300.0, at, h));
     return max(low, sheet * (0.8 + 0.4 * detail));
 }
 
@@ -261,6 +293,9 @@ fn mixField(a: CloudField, b: CloudField, x: f32) -> CloudField {
     f.anv = mix(a.anv, b.anv, x);
     f.anvTop = mix(a.anvTop, b.anvTop, x);
     f.base = mix(a.base, b.base, x);
+    f.lift = mix(a.lift, b.lift, x);
+    f.slope = mix(a.slope, b.slope, x);
+    f.dome = max(a.dome, b.dome);
     return f;
 }
 
@@ -285,7 +320,7 @@ fn cloudMarch(b: Body, bi: u32, oc: vec3f, dir: vec3f, ta: f32, tb: f32, L: vec3
     let f2 = cloudField(b, bi, toWorldDir(oc + dir * tb), fine);
     if (max(max(f0.cov, f1.cov), f2.cov) + max(max(f0.anv, f1.anv), f2.anv) < 0.02) { return o; }
     // between the highest of their tops and the lowest of their bases
-    let hi = shellSpan(b, oc, dir, max(max(max(f0.top, f1.top), f2.top), max(max(f0.anvTop, f1.anvTop), f2.anvTop)) + 300.0);
+    let hi = shellSpan(b, oc, dir, max(max(max(f0.top, f1.top), f2.top), max(max(f0.anvTop, f1.anvTop), f2.anvTop) + select(0.0, 2500.0, max(max(f0.dome, f1.dome), f2.dome) > 0.0)) + 300.0);
     let lo = shellSpan(b, oc, dir, min(min(f0.base, f1.base), f2.base) - 150.0);
     let t0 = max(tn, hi.x);
     let t1 = min(min(tb, hi.y), select(tb, lo.x, lo.y > lo.x && lo.x > 0.0));
@@ -302,6 +337,7 @@ fn cloudMarch(b: Body, bi: u32, oc: vec3f, dir: vec3f, ta: f32, tb: f32, L: vec3
     let billow = R / upm / 4000.0;
     let fineD = 1.0 - smoothstep(0.15, 0.4, t0 * frame.sun.w * billow / R);
     let N = 14;
+    let Lw = toWorldDir(L);                     // (the sun in the world, where the field's slopes are)
     let ds = (t1 - t0) / f32(N) / upm;          // m
     for (var i = 0; i < N; i++) {
         let t = mix(t0, t1, (f32(i) + jitter) / f32(N));
@@ -312,7 +348,14 @@ fn cloudMarch(b: Body, bi: u32, oc: vec3f, dir: vec3f, ta: f32, tb: f32, L: vec3
         let h = (r - R) / upm;
         var f = mixField(f0, f1, x * 2.0);
         if (x >= 0.5) { f = mixField(f1, f2, x * 2.0 - 1.0); }
-        let detail = mix(0.5, noise3(toWorldDir(nl) * billow), fineD);
+        let nw = toWorldDir(nl);
+        if (f.dome > 0.0) {
+            // (the overshooting dome standing out of the anvil sheet here, as dense as it)
+            let dm = domeAt(u32(f.dome) - 1u, nw, R / upm);
+            f.lift = max(dm.x - f.anvTop, 0.0);
+            f.slope += dm.yzw;
+        }
+        let detail = mix(0.5, noise3(nw * billow), fineD);
         let near = 1.0 - frame.clouds.y * (1.0 - smoothstep(frame.clouds.z * 0.6, frame.clouds.z, t));
         let d = cloudDensity(f, h, detail) * near;
         if (d <= 0.002) { continue; }
@@ -322,11 +365,13 @@ fn cloudMarch(b: Body, bi: u32, oc: vec3f, dir: vec3f, ta: f32, tb: f32, L: vec3
         let mu = dot(nl, L);
         // (above it: up to where the column's cloud ends (cloudDensity's low cloud gone), or the anvil's top over it)
         let ends = f.base + clamp((f.cov * (0.75 + 0.5 * detail) - 0.15) / 0.85, 0.0, 1.15) * max(f.top - f.base, 100.0);
-        let od = 0.0006 * max(max(ends, select(0.0, f.anvTop, f.anv > 0.1)) - h, 0.0) * max(f.cov, f.anv) / max(mu, 0.15);
+        let od = 0.0006 * max(max(ends, select(0.0, f.anvTop + f.lift, f.anv > 0.1)) - h, 0.0) * max(f.cov, f.anv) / max(mu, 0.15);
         let shade = max(max(clamp(fs.anv * 1.5, 0.0, 1.0) * (1.0 - smoothstep(fs.anvTop - 2500.0, fs.anvTop - 1500.0, h)),
             fs.cov * smoothstep(9000.0, 10500.0, fs.top) * (1.0 - smoothstep(8000.0, 9500.0, h))),
             smoothstep(12800.0, 13300.0, fo.top) * (1.0 - smoothstep(12500.0, 12800.0, f.top)) * (1.0 - smoothstep(12300.0, 12800.0, h)));
-        let light = 0.95 * frame.misc.y * (max(mu, 0.0) * (0.5 + 0.5 * exp(-od)) * (1.0 - 0.75 * shade) + 0.004) * frame.eye.x;
+        // (the sun on its top as it tilts: its domes and ripples lit on their sunward sides)
+        let mt = (mu - dot(f.slope, Lw)) / sqrt(1.0 + dot(f.slope, f.slope));
+        let light = 0.95 * frame.misc.y * (max(mt, 0.0) * (0.5 + 0.5 * exp(-od)) * (1.0 - 0.75 * shade) + 0.004) * frame.eye.x;
         o.light += o.through * a * vec3f(light);
         if (o.through >= 0.5 && o.through * (1.0 - a) < 0.5) { o.front = t; }
         o.through *= 1.0 - a;

@@ -55,12 +55,56 @@ fn cellAnvil(xz: vec2f, d: vec2f, dist: f32, radius: f32, top: f32, coverage: f3
     return vec2f(ga * ga * (3.0 - 2.0 * ga) * tall * 0.85, top - 400.0 - 0.1 * (top - cloud.x) - 1100.0 * sink * sink + (fo - 0.5) * 1000.0);
 }
 
+// the relief on a tall cell's anvil top at d from its centre (wd the wind), as cellAnvil spreads it (spread): the
+// gravity waves the overshooting top sets off, rings rippling out over the sheet from it some 0.9 radii apart, and the
+// plume of cirrus it blows above the anvil downwind. vec3f(how far it lifts the top (m), its slope along d's x, y): what
+// a sun low over it lights on one side of every ripple and not the other (none for an ordinary cell's 1)
+fn anvilRelief(d: vec2f, radius: f32, spread: f32, wd: vec2f) -> vec3f {
+    let s = clamp((spread - 1.0) / 3.0, 0.0, 1.0);
+    if (s <= 0.0) { return vec3f(0.0); }
+    let r = max(length(d), 1.0);
+    let k = 6.2832 / (radius * 0.9);
+    let env = smoothstep(radius * 0.4, radius * 0.7, r) * exp(-r / (radius * 4.0)) * 150.0 * s;
+    var o = vec3f(env * cos(k * r), -env * k * sin(k * r) * d / r);
+    // (the above-anvil plume: a ridge from the dome downwind, widening and settling as it goes)
+    let along = dot(d, wd);
+    let across = dot(d, vec2f(-wd.y, wd.x));
+    let w = radius * (0.3 + 0.15 * max(along, 0.0) / radius);
+    let p = 900.0 * s * exp(-across * across / (w * w)) * smoothstep(0.0, radius * 0.5, along) * (1.0 - smoothstep(radius * 1.5, radius * 6.0, along));
+    o += vec3f(p, -2.0 * p * across / (w * w) * vec2f(-wd.y, wd.x));
+    return o;
+}
+
 // how far a cell's overshooting top rises above its top at d from its centre (m): a dome over the updraft, as wide as
 // its radius, the higher the stronger the storm (spread, as cellAnvil's: none for an ordinary cell's 1, 2 km
 // for a supercell's 4), throwing its shadow on the anvil about it
 fn cellOvershoot(d: vec2f, radius: f32, spread: f32) -> f32 {
     let q = clamp(1.0 - length(d) / (radius * 0.5), 0.0, 1.0);
     return clamp((spread - 1.0) * 700.0, 0.0, 2000.0) * sqrt(q * q * (3.0 - 2.0 * q));
+}
+
+// cellOvershoot's dome with its slope, and the turrets boiling on it: rounded bubbles a quarter of its width and smaller, two sizes
+// of them, the creases between them dark (seed: the cell's). vec3f(height (m), slope along d's x, y): a sun low over it
+// lights its sunward flank and each bubble's sunward side, the far flank in its own shade
+fn overshootRelief(d: vec2f, radius: f32, spread: f32, seed: f32) -> vec3f {
+    let H = clamp((spread - 1.0) * 700.0, 0.0, 2000.0);
+    let R = radius * 0.5;
+    let r = max(length(d), 1.0);
+    let q = clamp(1.0 - r / R, 0.0, 1.0);
+    if (H <= 0.0 || q <= 0.0) { return vec3f(0.0); }
+    let u = q * q * (3.0 - 2.0 * q);
+    let dome = sqrt(u);
+    var o = vec3f(H * dome, -H * 3.0 * q * (1.0 - q) / max(dome, 1e-3) / R * d / r);
+    for (var i = 0; i < 2; i++) {
+        let k = 6.2832 / (R * select(0.9, 0.5, i == 1));
+        let a = seed * 5.0 + f32(i) * 1.7;
+        let m = mat2x2f(cos(a), sin(a), -sin(a), cos(a));
+        let v = m * d * k + vec2f(seed * 11.0, f32(i) * 3.3);
+        let c = cos(v.x) * cos(v.y);
+        let A = H * select(0.12, 0.05, i == 1) * sqrt(q);
+        o += vec3f(A * abs(c), A * sign(c) * k * (transpose(m) * vec2f(-sin(v.x) * cos(v.y), -cos(v.x) * sin(v.y))));
+    }
+    return o;
 }
 
 // the clear slot a tornadic supercell's rear-flank downdraft cuts round its updraft (at d from its centre, wd the

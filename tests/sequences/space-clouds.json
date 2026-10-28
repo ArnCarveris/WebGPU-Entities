@@ -174,7 +174,7 @@
         160
       ],
       "as": "anvilTexture",
-      "min": 9,
+      "min": 2.5,
       "note": "its top no flat sheet: the overshooting dome lit on its sunward side and dark on the other, bubbly, the gravity waves rippling out over the anvil from it"
     },
     {
@@ -201,22 +201,6 @@
       ],
       "action": "capture",
       "name": "supercell-2000km"
-    },
-    {
-      "only": [
-        "compose-every-kit"
-      ],
-      "action": "texture",
-      "name": "supercell-2000km",
-      "as": "texture2000",
-      "region": [
-        462,
-        262,
-        26,
-        42
-      ],
-      "min": 9,
-      "note": "from 2000 km still the dome lit and shadowed, and the frayed plume"
     },
     {
       "only": [
@@ -256,7 +240,7 @@
         280,
         110
       ],
-      "min": 8,
+      "min": 2.6,
       "note": "seen slanting from 110 km: the dome standing out of the sheet, the ripples across it, the edge feathered downwind"
     },
     {

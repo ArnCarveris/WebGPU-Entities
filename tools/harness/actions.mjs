@@ -487,23 +487,26 @@ export class Pixels extends Action {
 }
 
 // how much texture a capture's `region` ([x, y, w, h]; null: all) has: the mean luminance step (0..255) from each
-// pixel to its right and lower neighbours, of the pixels where `where` holds (all if none): stored as `as`; fails under
-// `min` or over `max`. Relief catches it where a share of bright pixels cannot (2026-10-28: a supercell's anvil from
-// orbit a smooth flat sheet, as bright as a sunlit one with a dome, ripples and frayed edges)
+// pixel to the ones `step` px right of and below it, the luminance first averaged over (2 `blur` + 1) px square (so the
+// marches' per-pixel jitter is not counted as texture), of the pixels where `where` holds (all if none): stored as
+// `as`; fails under `min` or over `max`. Relief catches it where a share of bright pixels cannot (2026-10-28: a
+// supercell's anvil from orbit a smooth flat sheet, as bright as a sunlit one with a dome, ripples and frayed edges)
 export class Texture extends Action {
-    static params = { name: undefined, region: null, where: null, as: 'texture', min: null, max: null };
+    static params = { name: undefined, region: null, where: null, as: 'texture', min: null, max: null, blur: 2, step: 3 };
     async run(ctx) {
         const name = ctx.value(this.p.name), file = ctx.captures[name];
         if (!file) return ctx.fail(`no capture ${name}`);
         const img = PNG.decode(fs.readFileSync(file)), [x0, y0, w, h] = this.p.region || [0, 0, img.width, img.height];
         const test = this.p.where ? new Function('r', 'g', 'b', `return ${this.p.where};`) : () => true;
-        const lum = (x, y) => { const i = (y * img.width + x) * 4; return 0.2126 * img.data[i] + 0.7152 * img.data[i + 1] + 0.0722 * img.data[i + 2]; };
+        const { blur: b, step: k } = this.p, W = img.width, Hh = img.height;
+        const px = (x, y) => { const i = (Math.min(Math.max(y, 0), Hh - 1) * W + Math.min(Math.max(x, 0), W - 1)) * 4; return 0.2126 * img.data[i] + 0.7152 * img.data[i + 1] + 0.0722 * img.data[i + 2]; };
+        const lum = (x, y) => { let s = 0; for (let j = -b; j <= b; j++) for (let i = -b; i <= b; i++) s += px(x + i, y + j); return s / (2 * b + 1) ** 2; };
         let sum = 0, n = 0;
-        for (let y = y0; y < Math.min(y0 + h, img.height) - 1; y++) for (let x = x0; x < Math.min(x0 + w, img.width) - 1; x++) {
-            const i = (y * img.width + x) * 4;
+        for (let y = y0; y < Math.min(y0 + h, Hh - k); y++) for (let x = x0; x < Math.min(x0 + w, W - k); x++) {
+            const i = (y * W + x) * 4;
             if (!test(img.data[i], img.data[i + 1], img.data[i + 2])) continue;
             const l = lum(x, y);
-            sum += (Math.abs(lum(x + 1, y) - l) + Math.abs(lum(x, y + 1) - l)) / 2;
+            sum += (Math.abs(lum(x + k, y) - l) + Math.abs(lum(x, y + k) - l)) / 2;
             n++;
         }
         const t = ctx.vars[this.p.as] = n ? sum / n : 0;
