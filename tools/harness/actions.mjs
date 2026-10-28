@@ -496,24 +496,30 @@ export class Texture extends Action {
     async run(ctx) {
         const name = ctx.value(this.p.name), file = ctx.captures[name];
         if (!file) return ctx.fail(`no capture ${name}`);
-        const img = PNG.decode(fs.readFileSync(file)), [x0, y0, w, h] = this.p.region || [0, 0, img.width, img.height];
+        const img = PNG.decode(fs.readFileSync(file));
         const test = this.p.where ? new Function('r', 'g', 'b', `return ${this.p.where};`) : () => true;
-        const { blur: b, step: k } = this.p, W = img.width, Hh = img.height;
-        const px = (x, y) => { const i = (Math.min(Math.max(y, 0), Hh - 1) * W + Math.min(Math.max(x, 0), W - 1)) * 4; return 0.2126 * img.data[i] + 0.7152 * img.data[i + 1] + 0.0722 * img.data[i + 2]; };
-        const lum = (x, y) => { let s = 0; for (let j = -b; j <= b; j++) for (let i = -b; i <= b; i++) s += px(x + i, y + j); return s / (2 * b + 1) ** 2; };
-        let sum = 0, n = 0;
-        for (let y = y0; y < Math.min(y0 + h, Hh - k); y++) for (let x = x0; x < Math.min(x0 + w, W - k); x++) {
-            const i = (y * W + x) * 4;
-            if (!test(img.data[i], img.data[i + 1], img.data[i + 2])) continue;
-            const l = lum(x, y);
-            sum += (Math.abs(lum(x + k, y) - l) + Math.abs(lum(x, y + k) - l)) / 2;
-            n++;
-        }
-        const t = ctx.vars[this.p.as] = n ? sum / n : 0;
+        const { t: tx, n } = luminanceSteps(img, this.p.region || [0, 0, img.width, img.height], test, this.p.blur, this.p.step);
+        const t = ctx.vars[this.p.as] = tx;
         ctx.note(`${name}: ${this.p.as} ${t.toFixed(2)} (${n} px)`);
         if (this.p.max != null && t > this.p.max) ctx.fail(`${name}: ${this.p.as} ${t.toFixed(2)}, over ${this.p.max}`);
         if (this.p.min != null && t < this.p.min) ctx.fail(`${name}: ${this.p.as} ${t.toFixed(2)}, under ${this.p.min}`);
     }
+}
+
+// Texture's measure of img over [x0, y0, w, h]: the mean luminance step and how many pixels it is of (test)
+function luminanceSteps(img, [x0, y0, w, h], test, b, k) {
+    const W = img.width, Hh = img.height;
+    const px = (x, y) => { const i = (Math.min(Math.max(y, 0), Hh - 1) * W + Math.min(Math.max(x, 0), W - 1)) * 4; return 0.2126 * img.data[i] + 0.7152 * img.data[i + 1] + 0.0722 * img.data[i + 2]; };
+    const lum = (x, y) => { let s = 0; for (let j = -b; j <= b; j++) for (let i = -b; i <= b; i++) s += px(x + i, y + j); return s / (2 * b + 1) ** 2; };
+    let sum = 0, n = 0;
+    for (let y = y0; y < Math.min(y0 + h, Hh - k); y++) for (let x = x0; x < Math.min(x0 + w, W - k); x++) {
+        const i = (y * W + x) * 4;
+        if (!test(img.data[i], img.data[i + 1], img.data[i + 2])) continue;
+        const l = lum(x, y);
+        sum += (Math.abs(lum(x + k, y) - l) + Math.abs(lum(x, y + k) - l)) / 2;
+        n++;
+    }
+    return { t: n ? sum / n : 0, n };
 }
 
 // a contact sheet: captures (`names`, default every capture of the case so far) scaled to `width` px, `cols` a row, to
@@ -595,25 +601,22 @@ async function compareWith(ctx, name, p) {
 // <work>/<seq>/<scenario>/perf.json
 export class Perf extends Action {
     static pageless = true;
-    static params = { revs: ['HEAD~1', 'HEAD'], rounds: 2, frames: 40, measure: 20, expect: null };
+    static params = { revs: ['HEAD~1', 'HEAD'], rounds: 2, frames: 40, measure: 20, expect: null, view: null };
     async run(ctx) {
         const revs = ctx.runner.revs || this.p.revs, runs = Object.fromEntries(revs.map(r => [r, []]));
         await ctx.runner.braveFor({ perf: true });
         const bases = [];
         for (const rev of revs) bases.push({ rev, base: await ctx.runner.serveRev(rev) });
         for (let k = 0; k < this.p.rounds; k++) for (const b of (k % 2 ? [...bases].reverse() : bases)) {
-            const { s, failed } = await open(ctx.runner.port, pageUrl(b.base, ctx.sid, ctx.opts.query), { perf: true });
-            try {
-                if (failed) { ctx.fail(`${ctx.sid} @ ${b.rev}: ${failed}`); continue; }
-                await settle(s);
-                await s.send('Page.bringToFront');
-                await s.evaluate(`__step(${this.p.frames})`);
-                const from = await s.evaluate('__harness.gpu.length');
-                await s.evaluate(`__step(${this.p.measure})`);
-                runs[b.rev].push(await gpuTime(s, from));
-            } finally { await s.close(); }
+            const r = await this.measure(ctx, b);
+            if (r) runs[b.rev].push(r);
         }
         await ctx.runner.braveFor({ perf: false });
+        this.judge(ctx, revs, runs);
+    }
+    // the runs of each revision written out, noted, their best median the var `perf`; fails without timings, or past
+    // expect.maxRatio of the first revision's
+    judge(ctx, revs, runs) {
         const best = rs => rs.length ? Math.min(...rs.map(r => r.median)) : NaN;
         fs.writeFileSync(ctx.path('work', 'perf.json'), JSON.stringify(Object.fromEntries(revs.map(r => [r, runs[r]])), null, 1));
         ctx.note(`GPU span ${revs.map(r => `${r} ${runs[r].map(x => x.median.toFixed(2)).join(' / ')}`).join('   ')} ms (best ${revs.map(r => best(runs[r]).toFixed(2)).join(' vs ')})`);
@@ -623,6 +626,22 @@ export class Perf extends Action {
             const q = best(runs[r]) / best(runs[revs[0]]);
             if (q > this.p.expect.maxRatio) ctx.fail(`${r} takes ${q.toFixed(2)}x the GPU time of ${revs[0]} (at most ${this.p.expect.maxRatio}x)`);
         }
+    }
+    // one page of revision b (its base URL): its GPU time over `measure` frames, after `frames`; null if it failed
+    async measure(ctx, b) {
+        const { s, failed } = await open(ctx.runner.port, pageUrl(b.base, ctx.sid, ctx.opts.query), { perf: true });
+        try {
+            if (failed) return ctx.fail(`${ctx.sid} @ ${b.rev}: ${failed}`), null;
+            await settle(s);
+            await s.send('Page.bringToFront');
+            // (from a view of the View list, by its name: what the start does not show)
+            if (this.p.view && !await s.evaluate(`(() => { const v = entities.viewList.find(v => v.name === ${JSON.stringify(this.p.view)}); if (v) entities.goView(v); return !!v; })()`))
+                return ctx.fail(`${ctx.sid} @ ${b.rev}: no view ${this.p.view}`), null;
+            await s.evaluate(`__step(${this.p.frames})`);
+            const from = await s.evaluate('__harness.gpu.length');
+            await s.evaluate(`__step(${this.p.measure})`);
+            return await gpuTime(s, from);
+        } finally { await s.close(); }
     }
 }
 

@@ -1,0 +1,7 @@
+{
+  "description": "GPU time per frame A/B at the every-kit supercell seen from orbit (400 km): the planet's raymarched clouds over its anvil, where the storms' relief is drawn (its dome per march step). The previous commit against this one (--revs a,b for others), alternated, two rounds each. The laptop's GPU throttles: only the ratio within this run means anything, and only a large one fails.",
+  "scenarios": ["compose-every-kit"],
+  "steps": [
+    { "action": "perf", "view": "Supercell from orbit", "revs": ["HEAD~1", "HEAD"], "rounds": 2, "expect": { "maxRatio": 1.3 } }
+  ]
+}
