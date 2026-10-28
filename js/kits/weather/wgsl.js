@@ -50,9 +50,14 @@ fn cellAnvil(xz: vec2f, d: vec2f, dist: f32, radius: f32, top: f32, coverage: f3
     let along = dot(ad, wd);
     let fo = fbm2(xz / 5000.0 + seed * 7.0, 3);
     let ra = length(vec2f(along * 0.6 / spread, dot(ad, vec2f(-wd.y, wd.x)) / (0.5 + 0.5 * spread))) / (radius * 1.6) * (0.8 + 0.4 * fo);
-    let ga = clamp((1.0 - ra) * spread, 0.0, 1.0);
+    // downwind it frays: the ice falling out of it is drawn into fibres along the wind, the edge soft and combed out,
+    // the plume thinning between them (upwind, where the updraft pushes it out against the wind, it stays sharp)
+    let dw = smoothstep(0.3, 1.0, along / (radius * 2.67 * spread));
+    let fib = smoothstep(0.35, 0.65, fbm2(vec2f(along / (radius * 3.0), dot(ad, vec2f(-wd.y, wd.x)) / (radius * 0.3)) + seed * 13.0, 3));
+    let ga = clamp((1.0 - ra - (fib - 0.5) * 0.8 * dw) * mix(spread, 1.2, dw), 0.0, 1.0);
     let sink = clamp(dist / (radius * 3.0 * spread), 0.0, 1.0);
-    return vec2f(ga * ga * (3.0 - 2.0 * ga) * tall * 0.85, top - 400.0 - 0.1 * (top - cloud.x) - 1100.0 * sink * sink + (fo - 0.5) * 1000.0);
+    return vec2f(ga * ga * (3.0 - 2.0 * ga) * tall * 0.85 * mix(1.0, 0.15 + 0.85 * fib, dw),
+        top - 400.0 - 0.1 * (top - cloud.x) - 1100.0 * sink * sink + (fo - 0.5) * 1000.0);
 }
 
 // the relief on a tall cell's anvil top at d from its centre (wd the wind), as cellAnvil spreads it (spread): the
